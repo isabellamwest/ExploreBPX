@@ -1,0 +1,6 @@
+# Explore_BPX dependencies.
+# BPX is pinned exactly: the app is built and tested against this version and
+# all BPX coupling is isolated in app/core/bpx_gateway.py.
+bpx==1.1.0
+streamlit>=1.36
+PyYAML>=6.0

@@ -1,53 +1,35 @@
 # Roadmap
 
-This is a work in progess, and open to change / editing. 
+Explore_BPX is built incrementally. Every version is useful on its own; later
+features build on the V1 foundation without requiring it to be rewritten.
 
-## Phase 1
+## V1 — Read-only explorer (current)
 
-Core Explorer
+The smallest genuinely useful version.
 
-- Open file
-- Save file
-- Parameter tree
-- Parameter editor
+- Open JSON/YAML BPX files, including invalid ones.
+- Navigate: Tree → Section → Parameter → Inspector.
+- Read-only display of every parameter kind (scalar, integer, enum, function,
+  table, section) with units and schema descriptions.
+- Continuous validation: inline issues on parameters plus a Validation tab that
+  links to the offending parameter.
+- Export / round-trip as JSON or YAML.
 
----
+**Excluded from V1:** editing, visualisation, JSON editing, file comparison,
+templates, multi-file handling, and any duplication of BPX logic.
 
-## Phase 2
+## V2 — Editing and visualisation
 
-Validation
+- Edit scalars and enums first, then functions and tables.
+- Re-validate after edits (continuous).
+- Visualise functions and interpolated tables (e.g. OCP plots) using
+  `Function.to_python_function()`.
+- Read-only raw JSON view.
 
-- Run validator
-- Display errors
-- Highlight affected fields
+## Future
 
----
-
-## Phase 3
-
-Visualisation
-
-- Function previews
-- Table previews
-- OCP plots
-
----
-
-## Phase 4
-
-Comparison
-
-- BPX vs BPX
-- Parameter differences
-- Graph overlays
-
----
-
-## Phase 5
-
-Templates
-
-- SPM
-- SPMe
-- DFN
-- Custom
+- Compare two BPX files (parameter diff and overlaid plots).
+- Templates / scaffolds for SPM, SPMe, DFN and Partial.
+- Multi-file library / data management.
+- Alternative frontend (PySide6 / web) reusing the `core` and `state` layers.
+- Modelling-assistant features (e.g. PyBaMM hand-off).
