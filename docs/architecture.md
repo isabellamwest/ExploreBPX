@@ -11,9 +11,23 @@ editor later, with validation throughout. It is not a BPX implementation and
 does not reimplement schema or validation logic; it delegates all of that to the
 official `bpx` package.
 
-The product question is *"how do humans interact with BPX files?"*, not *"how do
+The product question is *"how do people interact with BPX files?"*, not *"how do
 we validate BPX?"*. Validation is a property surfaced on every parameter, not a
 standalone feature.
+
+## Mission & ecosystem
+
+The wider project vision (per the BPX Explorer schematic) is a **standalone,
+dashboard-like app at the centre of the BPX ecosystem**: it connects parameter
+sources (experimental/modelling parameterisation and external BPX databases such
+as LIIONDB) to simulators (PyBOP, PyProBE), makes BPX easier to create, edit and
+visualise, validates beyond syntax, and advances standardisation — all to reduce
+friction and increase uptake.
+
+This architecture targets that hub, but **V1 deliberately ships only the
+read-only explorer** described above. The value of doing so is that V1 is a
+*small, well-layered framework* the later features bolt onto without a rewrite;
+the rest of this document records the seams that make that true.
 
 ## Layered architecture
 
@@ -115,3 +129,32 @@ The V1 foundation is designed so editing, visualisation and comparison bolt on
 without rework: the dict-based document is editing-ready, `AppState` can grow to
 hold multiple documents, and `to_python_function()` on BPX functions enables
 plotting. See [roadmap.md](roadmap.md).
+
+### Extension seams
+
+The schematic's future features each map to a defined plug-in point, so the
+read-only framework stays easy to extend:
+
+| Future feature (schematic) | Where it plugs in |
+|---|---|
+| Editing & creation (create/edit BPX) | The dict is already the source of truth and is mutation-ready; per-`ParameterKind` renderers gain edit widgets. No new architecture, only `ui`/`state` growth. |
+| Visualisation of functions/tables | `Function.to_python_function()` via `bpx_gateway.py`; a new `ui` plot panel. Already anticipated. |
+| Templates / scaffolds for SPM/SPMe/DFN/Partial | A `core` factory that emits a starting raw dict — sits beside `document.py`, reuses validation. |
+| External database import (LIIONDB, other BPX databases) | A **new anti-corruption adapter mirroring `bpx_gateway.py`** — one module that owns the third-party API and returns a raw BPX dict. |
+| Simulator hand-off (PyBOP, PyProBE) | Generalise `export.py` from "serialise to JSON/YAML" to "emit to a target", adding per-simulator writers behind the same interface. |
+| Compare files / compare against known cell | `AppState` grows from one document to several; `tree_model.py` diffing reuses the existing node tree. |
+
+### Design tension: the "sanity check" validator
+
+The schematic's *BPX Validator* is more than the schema/syntax validation V1
+delegates to `bpx`. It adds a **sanity check** — a *visual comparison of values
+against known cell parameters* — which requires a **reference dataset of domain
+knowledge** (typical/known parameter ranges).
+
+That conflicts with a core V1 principle: Explore_BPX holds **no domain logic** and
+delegates everything to the `bpx` package. The resolution is deliberate: keep
+sanity-checking **out of V1**, and when it arrives, isolate it as its own
+additive layer — e.g. a dedicated `core/sanity.py` plus a versioned reference
+dataset — so it never contaminates the schema-driven, delegate-everything design
+that the rest of the app relies on. Schema/syntax validation and plausibility
+("sanity") validation stay two distinct, independently-sourced concerns.
