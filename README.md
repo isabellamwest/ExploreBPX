@@ -1,12 +1,20 @@
 # Explore_BPX
 
 A lightweight application that makes [BPX](https://github.com/FaradayInstitution/BPX)
-(Battery Parameter eXchange) files easier to open, understand, validate and
-share — for both experimentalists and modellers.
+(Battery Parameter eXchange) files easier to create, open, understand, validate and
+share — for both experimentalists and modellers. 
 
-Explore_BPX is **not** a BPX implementation. It consumes the official `bpx`
-package for all parsing, validation and schema definitions, and focuses purely
-on the question: *how do humans interact with BPX files?*
+BPX files are designed to be machine-readable, but they can be difficult to inspect and navigate by hand, especially as they grow in size and complexity. Explore_BPX connects parameter *sources* to *simulators*, supports easier create/edit/visualise workflows, and validates beyond syntax.
+
+The project builds on the official bpx package and provides a graphical interface for working with BPX files without needing to manually inspect JSON or YAML.
+
+Explore_BPX does not implement the BPX specification itself. Parsing, validation and schema definitions are provided entirely by the official bpx package.
+
+The long-term vision is a **standalone, dashboard-like application at the heart
+of the BPX ecosystem** that simplifies BPX usage and increases adoption.
+
+**Version 1 is a read-only foundation** — a small, well-layered
+explorer that later versions extend without rewriting ([docs/roadmap.md](docs/roadmap.md) and [docs/architecture.md](docs/architecture.md)).
 
 ## Status — Version 1 (read-only explorer)
 
@@ -57,12 +65,11 @@ tests/               Headless tests (run without Streamlit)
 docs/                Architecture and roadmap
 ```
 
-## Architecture in one line
+## Architecture
 
 Strict layering — `ui → state → core → bpx` — so the frontend (Streamlit today,
 potentially PySide6 later) can be replaced without touching business logic. See
-[docs/architecture.md](docs/architecture.md) for the design decisions and
-trade-offs.
+[docs/architecture.md](docs/architecture.md) for the design decisions.
 
 ## BPX dependency
 
