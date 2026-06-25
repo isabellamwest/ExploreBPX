@@ -10,11 +10,13 @@ features build on the V1 foundation without requiring it to be rewritten.
 The smallest genuinely useful version, and the framework every later feature extends from.
 
 - Open JSON/YAML BPX files, including invalid ones.
-- Navigate: Tree → Section → Parameter → Inspector.
-- Read-only display of every parameter kind (scalar, integer, enum, function,
-  table, section) with units and schema descriptions.
-- Continuous validation: inline issues on parameters plus a Validation tab that
-  links to the offending parameter.
+- Navigate: Tree → object's parameter list → parameter detail (with a clickable
+  breadcrumb back up).
+- Read-only display of each parameter in its own detail view, typed by kind
+  (scalar, integer, enum, function, table, unknown) with units and schema
+  descriptions, plus a disabled "Advanced display" placeholder for future graphs.
+- Continuous validation: a marker on the affected parameter in the list, the full
+  message in the parameter detail, plus a Validation tab that links to it.
 - Export / round-trip as JSON or YAML.
 
 **Excluded from V1:** editing, visualisation, JSON editing, file comparison,
