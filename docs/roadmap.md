@@ -24,7 +24,18 @@ templates, multi-file handling, and any duplication of BPX logic.
 
 Creation, editing and visualisation are at the heart of the GUI, so creation is a first-class goal.
 
-- Edit scalars and enums first, then functions and tables.
+- Edit scalars and enums first, then functions and tables, via **per-kind
+  editing cards** — one editor widget per `ParameterKind` (scalar number+unit,
+  integer stepper, enum dropdown, function expression editor, editable table
+  grid, section add/remove), tailored by schema-derived `FieldMeta`. The `Model`
+  enum is the one special case, carrying a model-switch hook. See
+  [architecture.md](architecture.md).
+- **Actionable error workflows:** classify validation issues by an `IssueKind`
+  enum (edit value, move misplaced field, choose model, map materials, add
+  missing section, review warning) so the UI maps `kind → remediation` instead of
+  branching on the underlying exception. Backed by a pure, unit-testable
+  `core/remediation.py` that proposes fixed dicts. Includes closing the known gap
+  where warnings lose their field path. See [architecture.md](architecture.md).
 - Create new BPX files via templates / scaffolds for SPM, SPMe, DFN and Partial
 - Re-validate after edits (continuous).
 - Visualise functions and interpolated tables (e.g. OCP plots) using
@@ -38,9 +49,23 @@ Creation, editing and visualisation are at the heart of the GUI, so creation is 
 - **Simulator hand-off** - export / hand BPX off to simulators, with **PyBOP** and **PyProBE** as the first targets; framed under simulator compatibility and standardisation. 
 
 
+## V-next — PySide6 desktop frontend
+
+A planned direction (not a commitment to drop Streamlit) to make the explorer a
+standalone desktop app.
+
+- Build a **PySide6 frontend as the planned primary GUI**, reusing the existing
+  `core/` and `state/` layers unchanged.
+- Add it as a **new `ui_qt/` package at the same layer as `ui/`** — a sibling
+  frontend, not a rewrite of any lower layer.
+- Extend `tests/test_boundaries.py` to cover `ui_qt/`, keeping the
+  one-directional `ui → state → core → bpx` rule intact.
+- Streamlit stays for now; the final deprecation timeline is undecided. See
+  [architecture.md](architecture.md).
+
 ## Future
 
 - Compare two BPX files (parameter diff and overlaid plots).
 - Multi-file library / data management.
-- Standalone distribution and an alternative frontend (Pyside6 / web) reusing the 'core' and 'state' layers. 
+- Standalone distribution building on the PySide6 desktop frontend above.
 - Further modelling-assistant features building on the simulator hand-off. 

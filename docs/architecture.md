@@ -34,7 +34,8 @@ the rest of this document records the seams that make that true.
 Dependencies flow in one direction only: `ui → state → core → bpx`.
 
 ```
-ui/     Streamlit today (PySide6 / web later). Renders state, collects input.
+ui/     Streamlit today; a sibling ui_qt/ (PySide6) is the planned primary
+        frontend. Renders state, collects input.
 state/  AppState: current document + selected parameter. Plain Python.
 core/   All BPX integration, validation, tree generation and export.
 bpx     The official package (pinned dependency).
@@ -43,6 +44,21 @@ bpx     The official package (pinned dependency).
 `core/` and `state/` must never import a UI framework. A test in
 `tests/test_boundaries.py` enforces this, so the frontend can be replaced
 without rewriting business logic.
+
+### Planned: PySide6 as the primary frontend (V-next)
+
+The replaceable-frontend seam exists precisely so a desktop UI can be added
+without touching business logic. The planned direction is a **PySide6 frontend
+as the primary GUI**, reusing `core/` and `state/` unchanged. This is a
+direction, not a commitment to remove Streamlit: Streamlit stays for now and the
+final deprecation timeline is undecided.
+
+The PySide6 code will live in a **new `ui_qt/` package sitting at the same layer
+as `ui/`** — a sibling frontend over the same state, not a replacement of any
+lower layer. The single guardrail this requires is extending the boundary test:
+`tests/test_boundaries.py` must cover `ui_qt/` the same way it covers `ui/`, so
+the new frontend cannot leak Qt imports into `core/`/`state/` or otherwise
+violate the one-directional dependency rule. See [roadmap.md](roadmap.md).
 
 ### Module responsibilities (`core/`)
 
@@ -100,6 +116,42 @@ navigation uses best-effort **suffix matching** to map an issue to its node.
 Issues appear both inline on the inspected parameter and in a Validation tab that
 links to the parameter.
 
+### Planned: actionable error workflows (V2)
+
+Today a `ValidationIssue` carries only a path, a message and a `Severity`. The
+*source* of an issue is an implementation detail of `bpx_gateway.py`: a Pydantic
+`ValidationError` becomes field-path issues via `issues_from_pydantic`, while a
+non-Pydantic `ValueError`/`BPXSchemaError` (and any captured warning) becomes a
+single `issue_from_message` at an empty path (the document root). UIs should
+**never branch on that exception origin** — it is not stable and says nothing
+about how a user fixes the problem.
+
+The planned design adds an **`IssueKind` enum** that classifies each issue by the
+*remediation it implies*, so any frontend maps `kind → remediation widget`
+rather than re-deriving intent from the underlying exception class. Proposed
+kinds:
+
+| `IssueKind` | When it applies | Remediation it drives |
+|---|---|---|
+| `EDIT_VALUE` | Wrong type/enum, missing field, bad function expression, table length mismatch | Fix the value in place |
+| `MOVE_VALUE` | A field in the wrong section (e.g. thermal conductivity or temperatures placed in `Cell`, initial concentration placed in `Electrolyte`) | Relocate the field to its correct section |
+| `CHOOSE_MODEL` | Model/structure mismatch (SPM vs. SPMe/DFN, single vs. blended electrode, mixed electrode types) | Pick a compatible model |
+| `MAP_MATERIALS` | Blended-electrode `State` keys not matching material keys; scalar-vs-dict shape mismatch | Reconcile material/state keys |
+| `ADD_SECTION` | Missing `State` for non-`Partial` models, or any missing required section | Scaffold the absent section |
+| `REVIEW_WARNING` | Stoichiometry / voltage-tolerance warnings (e.g. from `check_sto_limits`) | Review a plausibility warning |
+
+A new **`core/remediation.py`** is proposed to back these: **pure functions that
+take an issue plus the raw dict and return a proposed fixed dict** (move a field,
+scaffold a section, coerce a type). Because the raw dict is already the source of
+truth (decision 1) and these functions touch no UI, they are fully
+unit-testable in isolation — the same delegate-everything, frontend-agnostic
+discipline as the rest of `core/`.
+
+> **Known gap this must close:** warnings currently lose their field path. A
+> warning is normalised with an empty path, so it lands at the document root with
+> no jump-to-parameter target. `REVIEW_WARNING` is the kind responsible for
+> restoring a usable location for these issues.
+
 ## BPX dependency strategy
 
 The `bpx` package is consumed as a **pinned PyPI release** (`bpx==1.1.0`). All
@@ -122,6 +174,34 @@ Tree (sections) → Parameter list → Inspector
 The structure panel uses expandable sections; selecting a parameter opens it in
 the read-only inspector. The parameter list shows type icons rather than raw
 values, which works for functions and tables as well as scalars.
+
+### Planned: per-kind editing cards (V2)
+
+V1's inspector (`ui/inspector_panel.py`) already dispatches *rendering* off
+`node.kind` rather than parameter name. Editing follows the same principle:
+**one editor widget per `ParameterKind`, not per parameter** — so the editor set
+stays fixed however many parameters or sections BPX adds.
+
+| `ParameterKind` | Editing card |
+|---|---|
+| `SCALAR` | Number input with the parameter's unit |
+| `INTEGER` | Stepper (integer-constrained) |
+| `ENUM` | Dropdown constrained to the schema's `enum_values` |
+| `FUNCTION` | Expression editor with an `ExpressionParser` syntax check; later a preview plot via `Function.to_python_function()` |
+| `TABLE` | Editable x/y grid with a length-match guard |
+| `SECTION` | Add/remove child controls; no value editor |
+| `UNKNOWN` | Raw / JSON fallback |
+
+Each card is tailored by the schema-derived **`FieldMeta`** (unit, description,
+examples, and the integer/enum/function hints already produced by
+`bpx_gateway.py`). Validation issues attached per node become the **in-card error
+state**, so editing and validation share one surface — consistent with the
+`IssueKind` remediation hooks above.
+
+The one justified special case is the **`Model` enum**: its `ENUM` card carries a
+`CHOOSE_MODEL` remediation hook, because changing the model is not a plain value
+edit — it triggers a *structural* switch (e.g. SPM ↔ DFN) that changes which
+sections are required. See [roadmap.md](roadmap.md).
 
 ## Future direction
 
