@@ -22,11 +22,13 @@ V1 is intentionally small but useful at every stage:
 
 - **Open** JSON or YAML BPX files — including invalid ones, so you can see what
   is wrong.
-- **Navigate** the structure: Tree → Section → Parameter → Inspector.
-- **Inspect** every parameter with its value, unit and schema description, typed
-  by kind (scalar, integer, enum, function, table, section).
-- **Validate** continuously: errors and warnings appear inline on parameters and
-  in a Validation tab that links straight to the offending parameter.
+- **Navigate** the structure: Tree → object's parameter list → parameter detail.
+- **Inspect** a parameter in its own detail view with value, unit, schema
+  description and full validation, typed by kind (scalar, integer, enum,
+  function, table, unknown); a clickable breadcrumb navigates back up.
+- **Validate** continuously: a marker flags affected parameters in the list, the
+  full message shows in the parameter detail, and a Validation tab links straight
+  to the offending parameter.
 - **Export** the file as JSON or YAML (a faithful round-trip and format
   converter).
 
@@ -53,7 +55,7 @@ app/
   core/              Frontend-agnostic business logic (never imports Streamlit)
     bpx_gateway.py   The only module that imports `bpx` (anti-corruption layer)
     document.py      BPXDocument — the raw dict is the source of truth
-    tree_model.py    Builds the UI-neutral parameter tree
+    tree_model.py    Builds the UI-neutral BPX object tree and parameter rows
     parameter_types.py  Classifies parameters by kind
     validation.py    Normalises BPX/Pydantic errors into ValidationIssues
     export.py        Serialises back to JSON/YAML
