@@ -37,15 +37,161 @@ Editing, visualisation and file comparison are deliberately deferred — see
 
 ## Quick start
 
+> **Requires Python 3.10 or newer.** The pinned `bpx==1.1.0` dependency does not
+> support Python 3.9 or earlier. If you try to install on an older Python you
+> will see a confusing error like
+> `Could not find a version that satisfies the requirement bpx==1.1.0`.
+
+### 1. Check your Python version first
+
+Run this before anything else and confirm it prints `3.10` or higher:
+
+```text
+python --version
+```
+
+If your default `python` is older than 3.10 (or the command is missing):
+
+- On **Windows**, install Python 3.10+ from [python.org](https://www.python.org/downloads/)
+  (tick "Add python.exe to PATH" in the installer), then open a new terminal.
+- On **macOS**, install a newer Python (e.g. `brew install python@3.12`) and use
+  `python3` / `python3.12` in the commands below. You can check candidates with
+  `python3 --version`.
+
+### 2. Set up and run
+
+The steps are the same on every OS — only the activate command differs. Run them
+**from the repository root**.
+
+**Windows (PowerShell)**
+
 ```powershell
-# from the repository root, with a virtual environment activated
+python -m venv .venv               # create the virtual environment (once)
+.venv\Scripts\Activate.ps1         # activate it
+python -m pip install --upgrade pip
 pip install -r app/requirements.txt
 streamlit run app/main.py
 ```
 
+**macOS / Linux (zsh or bash)**
+
+```bash
+python3 -m venv .venv              # create the virtual environment (once)
+source .venv/bin/activate          # activate it
+python -m pip install --upgrade pip
+pip install -r app/requirements.txt
+streamlit run app/main.py
+```
+
+> Prefer a one-liner? From the repo root run `.\run.ps1` on Windows or
+> `./run.sh` on macOS/Linux. These scripts do all of the above (version check,
+> venv, install, launch) for you.
+
 Then open a file from [examples/](examples/) — `spm_example_valid.json` is a
 valid file; the two A:E example files are older-format and load as *invalid*,
 which is a good demonstration of exploring a broken file.
+
+### 3. Clean up (reclaim disk space)
+
+The `.venv` folder can be large. When you are done, deactivate and delete it —
+you can always recreate it later with the steps above.
+
+**Windows (PowerShell)**
+
+```powershell
+deactivate                         # if the venv is still active
+Remove-Item -Recurse -Force .venv
+```
+
+**macOS / Linux (zsh or bash)**
+
+```bash
+deactivate                         # if the venv is still active
+rm -rf .venv
+```
+
+## Working on this project from any machine (laptop + desktop)
+
+You can work on Explore_BPX from both your macOS laptop and your Windows desktop.
+GitHub holds the single source of truth; each machine keeps its own local copy
+that you sync with `git pull` (download changes) and `git push` (upload changes).
+
+### 1. One-time setup on each machine
+
+Clone the repo once per machine, then move into the project folder. The commands
+are the same on both:
+
+**Windows (PowerShell)**
+
+```powershell
+git clone https://github.com/isabellamwest/Explore_BPX.git
+cd Explore_BPX
+```
+
+**macOS / Linux (zsh or bash)**
+
+```bash
+git clone https://github.com/isabellamwest/Explore_BPX.git
+cd Explore_BPX
+```
+
+### 2. Run it
+
+Use the venv + convenience scripts from [Quick start](#quick-start). From the
+project root:
+
+- **Windows**: `.\run.ps1`
+- **macOS / Linux**: `./run.sh`
+
+(Each script checks Python, sets up `.venv`, installs dependencies, and launches
+the app.)
+
+### 3. Everyday edit-and-commit loop (new to git? start here)
+
+Whenever you sit down to work, follow this loop. The git commands are identical
+on Windows and macOS — only the terminal differs (PowerShell vs zsh/bash).
+
+**Step 1 — Always pull the latest first.** This pulls in anything you (or others)
+pushed from the other machine, so you don't end up with conflicting copies:
+
+```text
+git pull
+```
+
+**Step 2 — Make your edits** in your editor and save.
+
+**Step 3 — Stage and commit your changes.** `git add -A` stages everything you
+changed; the commit records a snapshot with a short message describing it:
+
+```text
+git add -A
+git commit -m "Describe what you changed"
+```
+
+**Step 4 — Push your work back to GitHub.** You have two options:
+
+*Option A — commit straight to `main`* (simplest; fine when you're the only one
+working on it):
+
+```text
+git push origin main
+```
+
+*Option B — put your work on a new branch and open a Pull Request* (safer; lets
+you review changes before they land on `main`):
+
+```text
+git switch -c my-branch-name
+git push -u origin my-branch-name
+```
+
+Then go to the repo on GitHub and click **Compare & pull request** to open a PR.
+
+### 4. Keep both machines in sync
+
+The golden rule: **`git pull` before you start, `git push` when you finish.** If
+you always push from the machine you just worked on and always pull on the
+machine you move to next, both copies stay up to date and you avoid conflicts.
 
 ## Project structure
 
@@ -82,7 +228,10 @@ automatically.
 
 ## Testing
 
-```powershell
+With the virtual environment activated (see Quick start), run the headless suite
+from the repository root. The commands are identical on every OS:
+
+```text
 pip install pytest
 python -m pytest
 ```
