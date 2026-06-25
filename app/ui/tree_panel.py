@@ -1,4 +1,4 @@
-"""Tree navigation panel: drill through sections and select a parameter."""
+"""Tree navigation panel: drill through BPX objects and select one to inspect."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ def render(state: AppState) -> None:
 
 
 def _render_node(node: TreeNode, state: AppState) -> None:
-    if node.is_section:
+    if node.children:
         _render_section(node, state)
     else:
         _render_leaf(node, state)
@@ -27,29 +27,27 @@ def _render_node(node: TreeNode, state: AppState) -> None:
 
 def _render_section(node: TreeNode, state: AppState) -> None:
     label = f"{node.icon} {node.label}"
-    if _descendant_has_error(node):
+    if node.has_errors:
         label += "  ❗"
     with st.expander(label, expanded=False):
-        if not node.children:
-            st.caption("(empty)")
+        _render_leaf(node, state, prefix="Open")
+        if node.parameters:
+            st.caption(f"{len(node.parameters)} parameter(s)")
         for child in node.children:
             _render_node(child, state)
 
 
-def _render_leaf(node: TreeNode, state: AppState) -> None:
+def _render_leaf(node: TreeNode, state: AppState, prefix: str = "") -> None:
     marker = " ❗" if node.has_errors else ""
     key = "nav::" + "/".join(node.path)
     selected = state.selected_path == node.path
+    label = f"{node.icon} {node.label}{marker}"
+    if prefix:
+        label = f"{prefix} {label}"
     if st.button(
-        f"{node.icon} {node.label}{marker}",
+        label,
         key=key,
         use_container_width=True,
         type="primary" if selected else "secondary",
     ):
         state.select(node.path)
-
-
-def _descendant_has_error(node: TreeNode) -> bool:
-    if node.has_errors:
-        return True
-    return any(_descendant_has_error(child) for child in node.children)

@@ -35,6 +35,12 @@ def test_issue_attached_to_node(valid_spm_bytes):
     data = json.dumps(raw).encode("utf-8")
     document = BPXDocument.from_bytes(data, "broken.json")
 
-    node = document.find(("Parameterisation", "Cell", "Upper voltage cut-off [V]"))
+    node = document.find(("Parameterisation", "Cell"))
     assert node is not None
     assert node.has_errors
+
+    parameter = document.find_parameter(
+        ("Parameterisation", "Cell", "Upper voltage cut-off [V]")
+    )
+    assert parameter is not None
+    assert parameter.has_errors

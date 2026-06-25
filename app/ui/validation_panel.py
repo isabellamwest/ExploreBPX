@@ -1,4 +1,4 @@
-"""Validation panel: lists all issues and links each to its parameter."""
+"""Validation panel: lists all issues and links each to its owning object."""
 
 from __future__ import annotations
 
@@ -35,7 +35,13 @@ def _render_issue(index: int, issue: ValidationIssue, state: AppState) -> None:
         st.caption(issue.path_str)
 
         node = state.document.find_best(issue.path) if state.document else None
-        if node is not None and not node.is_section:
-            if st.button("Go to parameter", key=f"goto::{index}"):
+        parameter = (
+            state.document.find_best_parameter(issue.path) if state.document else None
+        )
+        if node is not None:
+            if st.button("Go to location", key=f"goto::{index}"):
                 state.select(node.path)
-                st.toast(f"Selected {node.label} — see the Explorer tab.")
+                if parameter is not None:
+                    state.select_parameter(parameter.path)
+                target = parameter.label if parameter is not None else node.label
+                st.toast(f"Selected {target} — see the Explorer tab.")
