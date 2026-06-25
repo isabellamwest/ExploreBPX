@@ -1,22 +1,38 @@
-"""Builds a frontend-agnostic node tree from a raw BPX dictionary.
+"""Builds a frontend-agnostic object tree from a raw BPX dictionary.
 
 The tree is derived from the raw dict (the document's source of truth), so it
-renders even when the file is invalid. Each node is enriched with schema
-metadata (description, unit) and classified into a :class:`ParameterKind`.
+renders even when the file is invalid. Navigable tree nodes represent BPX
+objects/sections; direct values owned by those objects are stored as
+``ParameterItem`` rows for the inspector/editor surface.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 
 from . import bpx_gateway
-from .parameter_types import ParameterKind, classify, extract_unit, icon_for
+from .parameter_types import (
+    ParameterKind,
+    classify,
+    extract_unit,
+    icon_for,
+    looks_like_table,
+)
 from .validation import Severity, ValidationIssue
 
 
+class NodeType(str, Enum):
+    """How a navigable BPX object node was discovered."""
+
+    STATIC = "static"
+    DYNAMIC = "dynamic"
+    UNKNOWN = "unknown"
+
+
 @dataclass
-class TreeNode:
-    """A single node in the BPX explorer tree (UI-neutral)."""
+class ParameterItem:
+    """A direct parameter owned by a navigable BPX object node."""
 
     label: str
     path: tuple[str, ...]
@@ -25,7 +41,6 @@ class TreeNode:
     unit: str = ""
     description: str = ""
     examples: tuple = ()
-    children: list["TreeNode"] = field(default_factory=list)
     issues: list[ValidationIssue] = field(default_factory=list)
 
     @property
@@ -33,12 +48,62 @@ class TreeNode:
         return icon_for(self.kind)
 
     @property
+    def has_errors(self) -> bool:
+        return any(issue.severity == Severity.ERROR for issue in self.issues)
+
+
+@dataclass
+class TreeNode:
+    """A navigable BPX object node in the explorer tree (UI-neutral)."""
+
+    label: str
+    path: tuple[str, ...]
+    node_type: NodeType = NodeType.UNKNOWN
+    value: object = None
+    description: str = ""
+    children: list["TreeNode"] = field(default_factory=list)
+    parameters: list[ParameterItem] = field(default_factory=list)
+    issues: list[ValidationIssue] = field(default_factory=list)
+
+    @property
+    def icon(self) -> str:
+        return icon_for(ParameterKind.SECTION)
+
+    @property
     def is_section(self) -> bool:
-        return self.kind == ParameterKind.SECTION
+        return True
 
     @property
     def has_errors(self) -> bool:
-        return any(issue.severity == Severity.ERROR for issue in self.issues)
+        return (
+            any(issue.severity == Severity.ERROR for issue in self.issues)
+            or any(parameter.has_errors for parameter in self.parameters)
+            or any(child.has_errors for child in self.children)
+        )
+
+    @property
+    def kind(self) -> ParameterKind:
+        """Compatibility property for frontends expecting section-like nodes."""
+
+        return ParameterKind.SECTION
+
+
+_STATIC_PATHS = {
+    (),
+    ("Header",),
+    ("Parameterisation",),
+    ("Parameterisation", "Cell"),
+    ("Parameterisation", "Electrolyte"),
+    ("Parameterisation", "Negative electrode"),
+    ("Parameterisation", "Negative electrode", "Particle"),
+    ("Parameterisation", "Positive electrode"),
+    ("Parameterisation", "Positive electrode", "Particle"),
+    ("Parameterisation", "Separator"),
+    ("State",),
+    ("State", "Initial conditions"),
+    ("State", "Thermal environment"),
+    ("Validation",),
+}
 
 
 def build_tree(raw: dict, root_label: str = "BPX File") -> TreeNode:
@@ -50,34 +115,83 @@ def build_tree(raw: dict, root_label: str = "BPX File") -> TreeNode:
 def _build_node(
     label: str,
     path: tuple[str, ...],
-    value: object,
+    value: dict,
     index: dict[str, bpx_gateway.FieldMeta],
 ) -> TreeNode:
     meta = index.get(label)
-    kind = classify(value, meta)
     node = TreeNode(
         label=label,
         path=path,
-        kind=kind,
+        node_type=_node_type(path),
+        value=value,
+        description=meta.description if meta else "",
+    )
+
+    for key, child_value in value.items():
+        child_path = path + (key,)
+        if _is_object_node(child_value):
+            node.children.append(
+                _build_node(key, child_path, child_value, index)
+            )
+        else:
+            node.parameters.append(_build_parameter(key, child_path, child_value, index))
+    return node
+
+
+def _is_object_node(value: object) -> bool:
+    return isinstance(value, dict) and not looks_like_table(value)
+
+
+def _build_parameter(
+    label: str,
+    path: tuple[str, ...],
+    value: object,
+    index: dict[str, bpx_gateway.FieldMeta],
+) -> ParameterItem:
+    meta = index.get(label)
+    return ParameterItem(
+        label=label,
+        path=path,
+        kind=classify(value, meta),
         value=value,
         unit=extract_unit(label),
         description=meta.description if meta else "",
         examples=meta.examples if meta else (),
     )
-    if kind == ParameterKind.SECTION and isinstance(value, dict):
-        for key, child_value in value.items():
-            node.children.append(
-                _build_node(key, path + (key,), child_value, index)
-            )
-    return node
+
+
+def _node_type(path: tuple[str, ...]) -> NodeType:
+    if path in _STATIC_PATHS:
+        return NodeType.STATIC
+    if len(path) >= 2 and path[-2] == "Particle":
+        return NodeType.DYNAMIC
+    if len(path) == 2 and path[0] == "Validation":
+        return NodeType.DYNAMIC
+    return NodeType.UNKNOWN
 
 
 def build_path_map(root: TreeNode) -> dict[tuple[str, ...], TreeNode]:
-    """Map every node's full path to the node, for O(1) lookup."""
+    """Map every visible object node's full path to the node, for O(1) lookup."""
+
     out: dict[tuple[str, ...], TreeNode] = {}
 
     def walk(node: TreeNode) -> None:
         out[node.path] = node
+        for child in node.children:
+            walk(child)
+
+    walk(root)
+    return out
+
+
+def build_parameter_path_map(root: TreeNode) -> dict[tuple[str, ...], ParameterItem]:
+    """Map every direct parameter's full path to the parameter item."""
+
+    out: dict[tuple[str, ...], ParameterItem] = {}
+
+    def walk(node: TreeNode) -> None:
+        for parameter in node.parameters:
+            out[parameter.path] = parameter
         for child in node.children:
             walk(child)
 
@@ -99,7 +213,7 @@ def match_path(
     path_map: dict[tuple[str, ...], TreeNode],
     loc: tuple[str, ...],
 ) -> TreeNode | None:
-    """Best-effort match of a (possibly partial) validation ``loc`` to a node.
+    """Best-effort match of a validation ``loc`` to a visible object node.
 
     Validation locations omit the section prefix (e.g. ``Parameterisation``), so
     an exact lookup is tried first, then the node whose path shares the longest
@@ -119,5 +233,29 @@ def match_path(
                 if length > best_len:
                     best_len = length
                     best = node
+                break
+    return best
+
+
+def match_parameter(
+    parameter_map: dict[tuple[str, ...], ParameterItem],
+    loc: tuple[str, ...],
+) -> ParameterItem | None:
+    """Best-effort match of a validation ``loc`` to a direct parameter item."""
+
+    if not loc:
+        return None
+    if loc in parameter_map:
+        return parameter_map[loc]
+
+    best: ParameterItem | None = None
+    best_len = 0
+    for parameter in parameter_map.values():
+        parameter_path = parameter.path
+        for length in range(len(parameter_path), 0, -1):
+            if _contains_slice(loc, parameter_path[-length:]):
+                if length > best_len:
+                    best_len = length
+                    best = parameter
                 break
     return best
