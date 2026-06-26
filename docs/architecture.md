@@ -1,8 +1,7 @@
 # Explore_BPX Architecture
 
 This document records the design of Explore_BPX and the reasoning behind the
-key decisions. It supersedes the earlier `bpx_integration.md` and
-`project_context.md` notes.
+key decisions. 
 
 ## What Explore_BPX is
 

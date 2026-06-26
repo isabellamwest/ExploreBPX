@@ -1,0 +1,75 @@
+{
+  "Header": {
+    "BPX": 0.1,
+    "Title": "WARNING — legacy numeric BPX version triggers a deprecation warning (file is otherwise valid)",
+    "Description": "This file PASSES validation (is_valid = true) but emits a single DeprecationWarning. The 'BPX' header field is given as the JSON number 0.1 instead of a quoted semantic-version string such as '1.0.0'. BPX still accepts a float for backwards compatibility — it converts 0.1 to the string '0.1' — but warns that the numeric form will be removed in a future version. This is exactly the situation in the older About:Energy example files. Fix by quoting the version, e.g. \"BPX\": \"1.0.0\".",
+    "Model": "DFN"
+  },
+  "Parameterisation": {
+    "Cell": {
+      "Electrode area [m2]": 0.016808,
+      "External surface area [m2]": 0.0379,
+      "Volume [m3]": 0.000128,
+      "Number of electrode pairs connected in parallel to make a cell": 34,
+      "Lower voltage cut-off [V]": 2.7,
+      "Upper voltage cut-off [V]": 4.2,
+      "Nominal cell capacity [A.h]": 12.5,
+      "Reference temperature [K]": 298.15,
+      "Density [kg.m-3]": 1847,
+      "Specific heat capacity [J.K-1.kg-1]": 913
+    },
+    "Electrolyte": {
+      "Cation transference number": 0.2594,
+      "Conductivity [S.m-1]": 1.0,
+      "Diffusivity [m2.s-1]": "8.794e-11 * (x / 1000) ** 2 - 3.972e-10 * (x / 1000) + 4.862e-10",
+      "Conductivity activation energy [J.mol-1]": 17100,
+      "Diffusivity activation energy [J.mol-1]": 17100
+    },
+    "Negative electrode": {
+      "Particle radius [m]": 4.12e-06,
+      "Thickness [m]": 5.62e-05,
+      "Diffusivity [m2.s-1]": 2.728e-14,
+      "OCP [V]": {"x": [0, 0.1, 0.5, 0.9, 1], "y": [1.5, 0.2, 0.12, 0.08, 0.05]},
+      "Conductivity [S.m-1]": 0.222,
+      "Surface area per unit volume [m-1]": 499522,
+      "Porosity": 0.253991,
+      "Transport efficiency": 0.128,
+      "Reaction rate constant [mol.m-2.s-1]": 1e-10,
+      "Maximum concentration [mol.m-3]": 29730,
+      "Minimum stoichiometry": 0.005504,
+      "Maximum stoichiometry": 0.75668
+    },
+    "Positive electrode": {
+      "Particle radius [m]": 4.6e-06,
+      "Thickness [m]": 5.23e-05,
+      "Diffusivity [m2.s-1]": 3.2e-14,
+      "OCP [V]": {"x": [0, 0.1, 0.5, 0.9, 1], "y": [4.4, 4.2, 3.9, 3.5, 3.0]},
+      "Conductivity [S.m-1]": 0.789,
+      "Surface area per unit volume [m-1]": 432072,
+      "Porosity": 0.277493,
+      "Transport efficiency": 0.1462,
+      "Reaction rate constant [mol.m-2.s-1]": 1e-10,
+      "Maximum concentration [mol.m-3]": 51765,
+      "Minimum stoichiometry": 0.42424,
+      "Maximum stoichiometry": 0.96210
+    },
+    "Separator": {
+      "Thickness [m]": 2e-05,
+      "Porosity": 0.47,
+      "Transport efficiency": 0.3222
+    }
+  },
+  "State": {
+    "Initial conditions": {
+      "Initial state-of-charge": 0.5,
+      "Initial electrolyte concentration [mol.m-3]": 1000,
+      "Initial temperature [K]": 298.15,
+      "Initial hysteresis state: Positive electrode": 1.0,
+      "Initial hysteresis state: Negative electrode": 1.0
+    },
+    "Thermal environment": {
+      "Ambient temperature [K]": 298.15,
+      "Heat transfer coefficient [W.m-2.K-1]": 10.0
+    }
+  }
+}
