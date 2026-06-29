@@ -10,15 +10,18 @@ The project builds on the official bpx package and provides a graphical interfac
 
 Explore_BPX does not implement the BPX specification itself. Parsing, validation and schema definitions are provided entirely by the official bpx package.
 
-The long-term vision is a **standalone, dashboard-like application at the heart
-of the BPX ecosystem** that simplifies BPX usage and increases adoption.
+The long-term vision is a **standalone, dashboard-like application at the centre
+of the BPX ecosystem**, that simplifies BPX usage and increases adoption.
 
-**Version 1 is a read-only foundation** — a small, well-layered
-explorer that later versions extend without rewriting ([docs/roadmap.md](docs/roadmap.md) and [docs/architecture.md](docs/architecture.md)).
+**Version 1 is the current PySide6 desktop application**: a BPX explorer with
+continuous validation and the first editing foundation in place. Later versions
+build on the same backend layers without restarting the app architecture
+([docs/roadmap.md](docs/roadmap.md) and [docs/architecture.md](docs/architecture.md)).
 
-## Status — Version 1 (read-only explorer)
+## Status — Version 1
 
-V1 is intentionally small but useful at every stage:
+V1 is intentionally small but useful: a desktop app for opening, inspecting,
+validating and beginning to edit BPX files.
 
 - **Open** JSON or YAML BPX files — including invalid ones, so you can see what
   is wrong.
@@ -31,9 +34,11 @@ V1 is intentionally small but useful at every stage:
   to the offending parameter.
 - **Export** the file as JSON or YAML (a faithful round-trip and format
   converter).
+- **Edit** scalar, integer and enum values through the Qt editing cards, backed
+  by command-based state and live validation.
 
-Editing, visualisation and file comparison are deliberately deferred — see
-[docs/roadmap.md](docs/roadmap.md).
+Creation workflows, function/table editors, visualisation and comparison remain
+ahead on the roadmap.
 
 ## Quick start
 
@@ -70,7 +75,7 @@ python -m venv .venv               # create the virtual environment (once)
 .venv\Scripts\Activate.ps1         # activate it
 python -m pip install --upgrade pip
 pip install -r app/requirements.txt
-streamlit run app/main.py
+python app/main_qt.py
 ```
 
 **macOS / Linux (zsh or bash)**
@@ -80,12 +85,11 @@ python3 -m venv .venv              # create the virtual environment (once)
 source .venv/bin/activate          # activate it
 python -m pip install --upgrade pip
 pip install -r app/requirements.txt
-streamlit run app/main.py
+python app/main_qt.py
 ```
 
-> Prefer a one-liner? From the repo root run `.\run.ps1` on Windows or
-> `./run.sh` on macOS/Linux. These scripts do all of the above (version check,
-> venv, install, launch) for you.
+The PySide6 desktop app is the Version 1 frontend. Further editing, creation and
+visualisation workflows will be added here.
 
 Then open a file from [examples/](examples/) — `spm_example_valid.json` is a
 valid file; the two A:E example files are older-format and load as *invalid*,
@@ -137,14 +141,8 @@ cd Explore_BPX
 
 ### 2. Run it
 
-Use the venv + convenience scripts from [Quick start](#quick-start). From the
-project root:
-
-- **Windows**: `.\run.ps1`
-- **macOS / Linux**: `./run.sh`
-
-(Each script checks Python, sets up `.venv`, installs dependencies, and launches
-the app.)
+Use the venv setup from [Quick start](#quick-start), then launch from the
+project root with `python app/main_qt.py`.
 
 ### 3. Everyday edit-and-commit loop (new to git? start here)
 
@@ -197,27 +195,32 @@ machine you move to next, both copies stay up to date and you avoid conflicts.
 
 ```
 app/
-  main.py            Streamlit entry point — wiring only, no logic
-  core/              Frontend-agnostic business logic (never imports Streamlit)
+  main_qt.py         PySide6 entry point (Version 1 desktop app)
+  core/              Frontend-agnostic business logic (never imports UI code)
     bpx_gateway.py   The only module that imports `bpx` (anti-corruption layer)
     document.py      BPXDocument — the raw dict is the source of truth
+    editing.py       Low-level immutable raw-dict mutation primitives
+    commands.py      Operation intents and result contracts
+    command_service.py  Command orchestration (preview/execute)
+    structure.py     Structural capability queries (required/removable sections)
+    document_factory.py  Incomplete document scaffolds (SPM/SPMe/DFN/Partial)
     tree_model.py    Builds the UI-neutral BPX object tree and parameter rows
     parameter_types.py  Classifies parameters by kind
     validation.py    Normalises BPX/Pydantic errors into ValidationIssues
     export.py        Serialises back to JSON/YAML
   state/
-    app_state.py     AppState — current document + selection (no UI code)
-  ui/                Streamlit panels — render and collect input only
+    app_state.py     AppState — document session + selection + command undo
+  ui_qt/             PySide6 desktop frontend
 examples/            Sample BPX files
-tests/               Headless tests (run without Streamlit)
+tests/               Headless tests
 docs/                Architecture and roadmap
 ```
 
 ## Architecture
 
-Strict layering — `ui → state → core → bpx` — so the frontend (Streamlit today,
-potentially PySide6 later) can be replaced without touching business logic. See
-[docs/architecture.md](docs/architecture.md) for the design decisions.
+Strict layering — `frontend → state → core → bpx` — so the frontend can evolve
+without touching business logic. See [docs/architecture.md](docs/architecture.md)
+for the design decisions.
 
 ## BPX dependency
 
@@ -236,5 +239,5 @@ pip install pytest
 python -m pytest
 ```
 
-The suite runs entirely headless (no Streamlit required) and includes a boundary
-test asserting that `core/` and `state/` never import a UI framework.
+The suite runs entirely headless and includes a boundary test asserting that
+`core/` and `state/` never import a UI framework.

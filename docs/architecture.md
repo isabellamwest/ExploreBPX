@@ -23,20 +23,22 @@ as LIIONDB) to simulators (PyBOP, PyProBE), makes BPX easier to create, edit and
 visualise, validates beyond syntax, and advances standardisation — all to reduce
 friction and increase uptake.
 
-This architecture targets that hub, but **V1 deliberately ships only the
-read-only explorer** described above. The value of doing so is that V1 is a
-*small, well-layered framework* the later features bolt onto without a rewrite;
-the rest of this document records the seams that make that true.
+This architecture targets that hub. Version 1 is the current PySide6 desktop
+application: an explorer with continuous validation and the first editing
+foundation in place. The value of V1 is that it establishes a small,
+well-layered framework that later features bolt onto without a rewrite; this
+document records the seams that make that true.
 
 ## Layered architecture
 
-Dependencies flow in one direction only: `ui → state → core → bpx`.
+Dependencies flow in one direction only: `frontend → state → core → bpx`.
 
 ```
-ui/     Streamlit today; a sibling ui_qt/ (PySide6) is the planned primary
-        frontend. Renders state, collects input.
-state/  AppState: current document + selected object path. Plain Python.
-core/   All BPX integration, validation, tree generation and export.
+ui_qt/  The active PySide6 desktop frontend. Renders state and collects input.
+state/  AppState (to be renamed DocumentSession): current document,
+        navigation selection, and command execution/undo coordination.
+core/   BPX integration, validation, tree generation, command orchestration,
+        structural capability queries, and document scaffolding.
 bpx     The official package (pinned dependency).
 ```
 
@@ -44,20 +46,16 @@ bpx     The official package (pinned dependency).
 `tests/test_boundaries.py` enforces this, so the frontend can be replaced
 without rewriting business logic.
 
-### Planned: PySide6 as the primary frontend (V-next)
+### PySide6 as the frontend
 
-The replaceable-frontend seam exists precisely so a desktop UI can be added
-without touching business logic. The planned direction is a **PySide6 frontend
-as the primary GUI**, reusing `core/` and `state/` unchanged. This is a
-direction, not a commitment to remove Streamlit: Streamlit stays for now and the
-final deprecation timeline is undecided.
+The replaceable-frontend seam exists precisely so the desktop UI can evolve
+without touching business logic. The active GUI is the **PySide6 frontend**,
+reusing `core/` and `state/` unchanged.
 
-The PySide6 code will live in a **new `ui_qt/` package sitting at the same layer
-as `ui/`** — a sibling frontend over the same state, not a replacement of any
-lower layer. The single guardrail this requires is extending the boundary test:
-`tests/test_boundaries.py` must cover `ui_qt/` the same way it covers `ui/`, so
-the new frontend cannot leak Qt imports into `core/`/`state/` or otherwise
-violate the one-directional dependency rule. See [roadmap.md](roadmap.md).
+The PySide6 code lives in **`ui_qt/` as the sole frontend package**. The
+guardrail remains boundary enforcement: `tests/test_boundaries.py` ensures Qt
+imports do not leak into `core/`/`state/` and the one-directional dependency
+rule remains intact. See [roadmap.md](roadmap.md).
 
 ### Module responsibilities (`core/`)
 
@@ -65,6 +63,11 @@ violate the one-directional dependency rule. See [roadmap.md](roadmap.md).
 |---|---|
 | `bpx_gateway.py` | The **only** module that imports `bpx`. Loads JSON/YAML, validates, and builds parameter metadata from the public BPX schema. |
 | `document.py` | `BPXDocument`: the raw dict (source of truth) plus the derived tree and validation issues. |
+| `editing.py` | Low-level, pure raw-dict mutation primitives (`set_value`, add/remove section/parameter). |
+| `commands.py` | Intent dataclasses for operations (`SetValue`, `AddSection`, `CreateDocument`, etc.) and operation result types. |
+| `command_service.py` | Request/preview/execute orchestration mapping command intent to `editing.py` primitives, with capability checks. |
+| `structure.py` | Frontend-agnostic structural/capability queries (required sections, removability, model inference). |
+| `document_factory.py` | Creates incomplete structural BPX scaffolds without inventing scientific values. |
 | `tree_model.py` | Builds the UI-neutral BPX object tree, parameter rows for each object, and validation-path matching helpers. |
 | `parameter_types.py` | Classifies a value into a `ParameterKind` and provides icons/units. |
 | `validation.py` | `ValidationIssue` model and normalisers for Pydantic errors and warnings. |
@@ -104,7 +107,7 @@ Schema metadata (description, unit, examples, enum/integer/function hints)
 refines ambiguous cases — e.g. distinguishing a header text string from a
 function expression.
 
-This distinction is the main PySide6-ready backend contract:
+This distinction is the main Qt/backend contract:
 
 ```text
 TreeNode       = navigable BPX object, suitable for QTreeView rows
@@ -135,7 +138,7 @@ visible object node and, where possible, the exact `ParameterItem` on that
 object page. Issues appear inline beside the inspected parameter row and in a
 Validation tab that links to the owning object page.
 
-### Planned: actionable error workflows (V2)
+### Planned: actionable error workflows
 
 Today a `ValidationIssue` carries only a path, a message and a `Severity`. The
 *source* of an issue is an implementation detail of `bpx_gateway.py`: a Pydantic
@@ -170,6 +173,22 @@ discipline as the rest of `core/`.
 > warning is normalised with an empty path, so it lands at the document root with
 > no jump-to-parameter target. `REVIEW_WARNING` is the kind responsible for
 > restoring a usable location for these issues.
+
+### 5. Operations are command-based and document-centric
+
+Editing now follows a command architecture so operation intent, low-level
+mutation, and orchestration stay separated:
+
+- `core/commands.py`: request/intent objects and `CommandResult`.
+- `core/editing.py`: low-level immutable raw-dict edits.
+- `core/command_service.py`: lifecycle orchestration (`preview` and `execute`)
+  with structural guardrails from `core/structure.py`.
+- `core/document_factory.py`: new-document scaffolds that are intentionally
+  incomplete and scientifically non-misleading.
+
+`state/AppState` coordinates these for the UI (`preview_command`,
+`execute_command`, `undo`) while `BPXDocument` remains the primary domain
+object for rebuilt, revalidated state.
 
 ## BPX dependency strategy
 
@@ -226,15 +245,14 @@ Examples:
 | `Parameterisation / Positive electrode / Particle / Primary` | particle radius, diffusivity, OCP, reaction-rate, concentration and stoichiometry |
 | `Validation / C/20 discharge` | time/current/voltage/temperature experiment arrays |
 
-### Planned: per-kind editing cards (V2)
+### Per-kind editing cards
 
-V1's inspector (`ui/inspector_panel.py`) already dispatches *rendering* off
+The Qt inspector (`ui_qt/inspector.py`) dispatches *rendering* off
 `parameter.kind` rather than parameter name. Editing follows the same principle:
 **one editor widget per `ParameterKind`, not per parameter** — so the editor set
-stays fixed however many parameters or sections BPX adds. Both surfaces become
-inputtable: the parameter list gains compact **quick inputs** per row, and the
-parameter detail becomes the **full editor** — both editing the same raw dict
-via `core/` (one source of truth).
+stays fixed however many parameters or sections BPX adds. V1 includes the first
+editing cards for scalar, integer and enum parameters. Later milestones extend
+the same pattern to functions, tables, section operations and raw fallbacks.
 
 | `ParameterKind` | Editing card |
 |---|---|
@@ -259,21 +277,21 @@ sections are required. See [roadmap.md](roadmap.md).
 
 ## Future direction
 
-The V1 foundation is designed so editing, visualisation and comparison bolt on
-without rework: the dict-based document is editing-ready, `AppState` can grow to
-hold multiple documents, and `to_python_function()` on BPX functions enables
-plotting. See [roadmap.md](roadmap.md).
+The Version 1 foundation is designed so deeper editing, visualisation and
+comparison bolt on without rework: the dict-based document is editing-ready,
+`AppState` can grow to hold multiple documents, and `to_python_function()` on
+BPX functions enables plotting. See [roadmap.md](roadmap.md).
 
 ### Extension seams
 
-The schematic's future features each map to a defined plug-in point, so the
-read-only framework stays easy to extend:
+The schematic's future features each map to a defined plug-in point, so the V1
+framework stays easy to extend:
 
 | Future feature (schematic) | Where it plugs in |
 |---|---|
-| Editing & creation (create/edit BPX) | The dict is already the source of truth and is mutation-ready; per-`ParameterKind` renderers gain edit widgets. No new architecture, only `ui`/`state` growth. |
-| Visualisation of functions/tables | `Function.to_python_function()` via `bpx_gateway.py`; a new `ui` plot panel. Already anticipated. |
-| Templates / scaffolds for SPM/SPMe/DFN/Partial | A `core` factory that emits a starting raw dict — sits beside `document.py`, reuses validation. |
+| Editing & creation (create/edit BPX) | Foundation implemented: command intent (`commands.py`), orchestration (`command_service.py`), mutation primitives (`editing.py`) and state-level undo. Ongoing work is wiring more UI actions to commands. |
+| Visualisation of functions/tables | `Function.to_python_function()` via `bpx_gateway.py`; a new `ui_qt` plot panel. Already anticipated. |
+| Templates / scaffolds for SPM/SPMe/DFN/Partial | Implemented in `document_factory.py`: incomplete structural scaffolds with required sections and no invented scientific values. |
 | External database import (LIIONDB, other BPX databases) | A **new anti-corruption adapter mirroring `bpx_gateway.py`** — one module that owns the third-party API and returns a raw BPX dict. |
 | Simulator hand-off (PyBOP, PyProBE) | Generalise `export.py` from "serialise to JSON/YAML" to "emit to a target", adding per-simulator writers behind the same interface. |
 | Compare files / compare against known cell | `AppState` grows from one document to several; `tree_model.py` diffing reuses the existing node tree. |
