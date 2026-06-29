@@ -1,7 +1,7 @@
 """Shared pytest fixtures and import path setup.
 
-Adds the ``app`` directory to ``sys.path`` so the frontend-agnostic packages
-(``core``, ``state``) import the same way they do under ``streamlit run``.
+Adds the ``app`` directory to ``sys.path`` so the project packages import the
+same way they do when the application is launched from the repository root.
 """
 
 from __future__ import annotations

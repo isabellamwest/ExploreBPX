@@ -47,6 +47,16 @@ class BPXDocument:
         decodable JSON/YAML; schema-invalid files still load successfully.
         """
         raw, fmt = bpx_gateway.load_raw(data, filename)
+        return cls.from_raw(raw, filename=filename, fmt=fmt)
+
+    @classmethod
+    def from_raw(cls, raw: dict, filename: str, fmt: str) -> "BPXDocument":
+        """Build a document from an already-decoded raw dict.
+
+        Validation, tree building and issue attachment are identical to
+        :meth:`from_bytes`; this is the rebuild path after an edit, where the
+        raw dict (the source of truth) has already been mutated.
+        """
         result = bpx_gateway.validate(raw)
         tree = build_tree(raw)
         node_path_map = build_path_map(tree)

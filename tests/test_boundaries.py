@@ -1,7 +1,7 @@
 """Architectural boundary tests.
 
-The ``core`` and ``state`` layers must remain frontend-agnostic: no Streamlit
-imports, and ``core`` must not depend on ``ui`` or ``state``.
+The ``core`` and ``state`` layers must remain frontend-agnostic: no UI
+framework imports, and ``core`` must not depend on frontend or state packages.
 """
 
 from __future__ import annotations
@@ -27,12 +27,23 @@ def test_core_and_state_have_no_streamlit():
     assert not offenders, f"Streamlit imported in frontend-agnostic layer: {offenders}"
 
 
-def test_core_does_not_import_ui_or_state():
+def test_core_and_state_have_no_qt():
+    offenders = []
+    for path in _python_files("core", "state"):
+        text = path.read_text("utf-8")
+        if "import PySide6" in text or "from PySide6" in text:
+            offenders.append(path.name)
+    assert not offenders, f"PySide6 imported in frontend-agnostic layer: {offenders}"
+
+
+def test_core_does_not_import_frontend_or_state():
     offenders = []
     for path in _python_files("core"):
         text = path.read_text("utf-8")
         if "import ui" in text or "from ui" in text:
             offenders.append((path.name, "ui"))
+        if "import ui_qt" in text or "from ui_qt" in text:
+            offenders.append((path.name, "ui_qt"))
         if "import state" in text or "from state" in text:
             offenders.append((path.name, "state"))
-    assert not offenders, f"core must not depend on ui/state: {offenders}"
+    assert not offenders, f"core must not depend on ui_qt/ui/state: {offenders}"
