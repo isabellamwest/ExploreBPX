@@ -10,7 +10,6 @@ from core.commands import (
     RemoveSection,
     SetValue,
 )
-from state.app_state import AppState
 
 
 def test_factory_creates_incomplete_scaffold_no_fake_values():
@@ -50,11 +49,12 @@ def test_remove_protected_section_raises():
         pass
 
 
-def test_app_state_create_then_undo():
-    state = AppState()
-    state.execute_command(CreateDocument("SPM", "T"))
-    assert state.document is not None
-    state.execute_command(AddSection(("Parameterisation",), "Extra"))
-    assert "Extra" in state.document.raw["Parameterisation"]
-    state.undo()
-    assert "Extra" not in state.document.raw["Parameterisation"]
+def test_document_session_create_then_undo():
+    from state.document_session import DocumentSession
+    session = DocumentSession()
+    session.execute_command(CreateDocument("SPM", "T"))
+    assert session.document is not None
+    session.execute_command(AddSection(("Parameterisation",), "Extra"))
+    assert "Extra" in session.document.raw["Parameterisation"]
+    session.undo()
+    assert "Extra" not in session.document.raw["Parameterisation"]

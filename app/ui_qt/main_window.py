@@ -81,25 +81,31 @@ class MainWindow(QMainWindow):
 
     # --- navigation -----------------------------------------------------
     def _select_node(self, path: tuple) -> None:
-        self._state.select(path)
-        self._params.show_node(self._state.selected_node())
+        if self._state.active is None:
+            return
+        self._state.active.select(path)
+        self._params.show_node(self._state.active.selected_node())
         self._inspector.show_placeholder()
 
     def _select_parameter(self, path: tuple) -> None:
-        self._state.select_parameter(path)
-        parameter = self._state.selected_parameter()
+        if self._state.active is None:
+            return
+        self._state.active.select_parameter(path)
+        parameter = self._state.active.selected_parameter()
         if parameter is not None:
             self._inspector.show_parameter(parameter)
 
     def _jump_to_path(self, path: tuple) -> None:
-        if not path:
+        if not path or self._state.active is None:
             return
         self._select_node(tuple(path[:-1]))
         self._select_parameter(tuple(path))
 
     def _on_committed(self) -> None:
-        kept_node = self._state.selected_path
-        kept_param = self._state.selected_parameter_path
+        if self._state.active is None:
+            return
+        kept_node = self._state.active.selected_path
+        kept_param = self._state.active.selected_parameter_path
         self._refresh_all()
         if kept_node:
             self._select_node(kept_node)
@@ -112,7 +118,7 @@ class MainWindow(QMainWindow):
         if not name:
             return
         try:
-            self._state.load(Path(name).read_bytes(), Path(name).name)
+            self._state.open(Path(name).read_bytes(), Path(name).name)
         except LoadError as exc:
             QMessageBox.critical(self, "Cannot open file", str(exc))
             return
@@ -121,7 +127,7 @@ class MainWindow(QMainWindow):
     def _save(self) -> None:
         if not self._state.has_document:
             return
-        document = self._state.document
+        document = self._state.active.document
         name, _ = QFileDialog.getSaveFileName(self, "Save BPX", document.filename, "BPX (*.json *.yaml *.yml)")
         if not name:
             return
@@ -129,7 +135,7 @@ class MainWindow(QMainWindow):
         Path(name).write_bytes(export.to_bytes(document.raw, fmt))
 
     def _refresh_all(self) -> None:
-        document = self._state.document
+        document = self._state.active.document if self._state.active else None
         if document is not None:
             self._tree.set_root(document.tree)
         self._params.show_node(None)

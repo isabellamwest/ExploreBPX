@@ -117,9 +117,9 @@ class InspectorPanel(QWidget):
         self._render_issues(parameter.issues, parameter.has_errors)
 
     def _validate_draft(self) -> None:
-        if self._card is None:
+        if self._card is None or self._state.active is None:
             return
-        result = self._state.preview_value(self._card.parameter.path, self._card.value())
+        result = self._state.active.preview_value(self._card.parameter.path, self._card.value())
         errors = [i for i in result.issues if i.severity == Severity.ERROR]
         self._render_issues(result.issues, bool(errors))
 
@@ -129,9 +129,9 @@ class InspectorPanel(QWidget):
             self._validate_draft()
 
     def _on_apply(self) -> None:
-        if self._card is None:
+        if self._card is None or self._state.active is None:
             return
-        self._state.apply_value(self._card.parameter.path, self._card.value())
+        self._state.active.apply_value(self._card.parameter.path, self._card.value())
         self.committed.emit()
 
     def _render_issues(self, issues, has_errors: bool) -> None:

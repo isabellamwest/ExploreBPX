@@ -22,12 +22,12 @@ def _app() -> QApplication:
 def test_window_boots_and_edits(valid_spm_bytes):
     _app()
     window = MainWindow()
-    window._state.load(valid_spm_bytes, "spm_example_valid.json")
+    window._state.open(valid_spm_bytes, "spm_example_valid.json")
     window._refresh_all()
-    assert window._state.document.is_valid
+    assert window._state.active.document.is_valid
 
     path = ("Header", "Model")
     window._jump_to_path(path)
-    window._state.apply_value(path, "DFN")
+    window._state.active.apply_value(path, "DFN")
     window._on_committed()
-    assert window._state.document.raw["Header"]["Model"] == "DFN"
+    assert window._state.active.document.raw["Header"]["Model"] == "DFN"
