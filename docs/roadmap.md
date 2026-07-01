@@ -19,10 +19,10 @@ what is planned for later. Architectural rationale lives in
 | SearchPopup navigation | Current scope |
 | Save vs Export split and dirty tracking | Current scope |
 | DocumentSession / AppState split | Current scope |
+| Authoring lifecycle: skeletons, templates and completion state | Planned |
 | Function/table editing | Planned |
 | Inspector analysis / visualisation section | Planned |
 | Actionable validation and remediation | Planned |
-| Create-from-template workflows | Planned |
 | Raw JSON view | Planned |
 | External database import | Future |
 | Simulator hand-off | Future |
@@ -53,6 +53,7 @@ Out of current scope:
 
 - full function/table editors;
 - in-depth analysis and plotting;
+- authoring completion workflows;
 - raw JSON editing;
 - external database import;
 - simulator hand-off;
@@ -110,6 +111,38 @@ Out of current scope:
 - Compact quick inputs in parameter lists where they genuinely improve repeated
   editing.
 - Model-switch handling for structural model changes.
+
+## Authoring
+
+Authoring covers the lifecycle of creating, completing, validating and
+maintaining BPX documents. It is broader than editing individual values: it owns
+the distinction between Complete BPX, Incomplete BPX, Skeletons and Templates,
+and keeps completion state separate from validation state.
+
+### Current
+
+- Raw-dict document model supports invalid and partially edited BPX files.
+- `document_factory.py` can create incomplete structural scaffolds without
+  inventing scientific values.
+- Continuous validation supports work-in-progress editing without requiring the
+  document to be valid before it can be explored.
+
+### Planned
+
+- New BPX from built-in model skeletons for SPM, SPMe, DFN and Partial.
+- Completion status distinct from validation status.
+- Completion view for unfinished required authoring work.
+- Expected-but-missing parameter rows in the editing workflow.
+- Upload/open skeleton workflows.
+- Save as Template and New from Template workflows.
+
+### Future
+
+- Organisation-, lab-, chemistry- or workflow-specific templates.
+- Parameter authoring states beyond present/missing values.
+- Provenance and confidence tracking.
+- Review/confirmation workflows for template-derived values.
+- Reusable parameter packs.
 
 ## Validation
 
@@ -181,8 +214,6 @@ Out of current scope:
 
 ### Planned
 
-- New BPX files from incomplete templates/scaffolds for SPM, SPMe, DFN and
-  Partial models.
 - Recent documents.
 
 ### Future
@@ -207,18 +238,6 @@ Out of current scope:
 - Simulator hand-off targets such as PyBOP and PyProBE.
 - Target-specific writers behind the export layer.
 - Simulator compatibility checks where appropriate.
-
-## Creation And Templates
-
-### Current
-
-- `document_factory.py` can create incomplete structural scaffolds without
-  inventing scientific values.
-
-### Planned
-
-- UI workflows for creating BPX files from templates.
-- Model-aware scaffolding for required sections.
 
 ## Workspace And Multi-Document Support
 

@@ -446,3 +446,44 @@ the activity bar, SearchPopup, review cursor, Issues drawer and editor cards.
   Inspector; major future workspaces must justify replacing the main content
   area; the former general-purpose auxiliary panel concept should not return.
 - **Status:** Accepted.
+
+### DD-012 — BPX Authoring Lifecycle
+
+- **Decision:** Explore_BPX is a BPX authoring environment, not only a BPX file
+  editor. It distinguishes Complete BPX, Incomplete BPX, Skeletons and
+  Templates, and treats completion state as separate from validation state.
+  Validation answers whether BPX data satisfies BPX/schema rules. Completion
+  answers whether the document is ready to be considered finished within an
+  authoring workflow.
+- **Reasoning:** A work-in-progress BPX document is not the same product state as
+  an incorrect BPX document. Missing, unfinished or unconfirmed authoring work
+  should not be collapsed into generic validation failure, and Explore_BPX
+  should not invent scientific values merely to make a document appear complete.
+- **Concepts:** A Complete BPX is ready for simulation or downstream use. An
+  Incomplete BPX is a genuine work-in-progress. A Skeleton is a model-specific
+  structural starting point with no invented scientific values. A Template is a
+  reusable skeleton or partially completed document containing trusted defaults
+  for a lab, organisation, chemistry or workflow.
+- **Export guarantee:** Exported BPX represents the scientific data the user is
+  prepared to claim. Internal authoring, completion or draft state must not
+  force fake scientific values into simulator-facing BPX output.
+- **UI implications:** Validation remains the surface for schema errors and
+  warnings. Completion becomes a distinct authoring concept for unfinished work.
+  Completion navigation should reuse the same navigation model as search and
+  validation so users can move from authoring tasks into the normal Tree ->
+  Parameter list -> Inspector workflow.
+- **Alternatives considered:** Treat all incomplete documents as invalid files;
+  encode empty values as placeholders in exported BPX; merge completion tasks
+  into validation issues; treat templates as ordinary files with no authoring
+  meaning.
+- **Advantages:** Establishes a clear long-term product philosophy; separates
+  missing work from incorrect data; preserves honest BPX export; creates a
+  foundation for skeletons, templates, guided completion and future authoring
+  metadata.
+- **Disadvantages:** Introduces a second document status concept alongside
+  validation; requires careful UI language so users understand the difference
+  between incomplete and invalid.
+- **Future implications:** Future skeleton, template, provenance, confidence,
+  review and reusable-parameter workflows should build on the authoring model
+  rather than appear as unrelated features.
+- **Status:** Proposed.

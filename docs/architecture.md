@@ -92,6 +92,23 @@ truth. The parsed BPX model and validation issues are derived by calling
 This matters because `parse_bpx_obj` mutates the object it receives. Validation
 must never mutate the raw working document.
 
+### Completion And Authoring Model
+
+Completion is derived separately from BPX validation. Validation remains
+delegated to the official `bpx` package and answers whether the current BPX data
+satisfies BPX/schema rules. Completion answers whether the document is finished
+for an authoring workflow.
+
+The raw BPX dictionary remains the simulator-facing data source. Missing
+scientific values should not be represented by fake BPX values solely to satisfy
+the editor. If Explore_BPX needs richer states such as draft values, template
+inheritance, review status, provenance or confidence, those states belong in an
+authoring/completion layer rather than being conflated with exported BPX data.
+
+Tree generation, completion views and editing surfaces may expose expected or
+unfinished parameters that are not yet present in the raw BPX. Committing a real
+value writes BPX data; tracking authoring intent does not.
+
 ### Document, TreeNode And ParameterItem
 
 `BPXDocument` contains:
@@ -253,7 +270,7 @@ switching, section insertion/removal and remediation actions.
 | Editing and creation | Command intent, `command_service.py`, `editing.py`, `document_factory.py` and per-document undo in `DocumentSession`. |
 | Function/table visualisation | Expandable Inspector analysis section consuming the selected `ParameterItem`; BPX functions exposed through `bpx_gateway.py` / `to_python_function()`. |
 | Issue presentation | Collapsible Qt-owned Issues drawer consuming derived `ValidationIssue` state; no core or state dependency on drawer widgets. |
-| Templates and scaffolds | `document_factory.py` creates incomplete structures without scientific defaults. |
+| Authoring, skeletons and templates | `document_factory.py` creates incomplete structures without scientific defaults; future completion/template state must remain separate from exported BPX data. |
 | External database import | A new anti-corruption adapter, mirroring `bpx_gateway.py`, returns raw BPX dicts from third-party sources. |
 | Simulator hand-off | `export.py` can generalise from serialisation to target-specific writers. |
 | File comparison | Multiple `DocumentSession` objects plus tree-model diffing and shared navigation. |
@@ -264,6 +281,8 @@ switching, section insertion/removal and remediation actions.
 
 - `core/` and `state/` must remain Qt-free.
 - The raw dict remains the editable source of truth.
+- Authoring/completion state must not force placeholders or draft intent into
+  exported BPX data.
 - BPX schema and validation semantics stay delegated to `bpx`.
 - Domain plausibility checks must be separate from schema validation.
 - Future UI features should connect through existing state, command and
