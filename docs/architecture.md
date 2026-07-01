@@ -35,8 +35,9 @@ Dependencies flow in one direction only: `frontend → state → core → bpx`.
 
 ```
 ui_qt/  The active PySide6 desktop frontend. Renders state and collects input.
-state/  AppState (to be renamed DocumentSession): current document,
-        navigation selection, and command execution/undo coordination.
+state/  DocumentSession (per document: raw document, navigation selection, undo
+        history, dirty/backing-file state) and AppState (the active
+        DocumentSession plus app-global view state). Frontend-agnostic.
 core/   BPX integration, validation, tree generation, command orchestration,
         structural capability queries, and document scaffolding.
 bpx     The official package (pinned dependency).
@@ -135,8 +136,10 @@ locations relative to the section being validated (omitting the
 `Parameterisation` prefix and appending union type-tags such as `float`/`int`),
 navigation uses best-effort **suffix matching** to map an issue to the nearest
 visible object node and, where possible, the exact `ParameterItem` on that
-object page. Issues appear inline beside the inspected parameter row and in a
-Validation tab that links to the owning object page.
+object page. Issues surface in the **Utility panel's Issues view** — the single
+home for full issue text, for both parameter- and object-level issues — and in
+the activity-bar **Validation view**, which lists every issue and launches the
+non-modal review cursor.
 
 ### Planned: actionable error workflows
 
@@ -205,40 +208,72 @@ as a fallback if an unreleased fix is ever needed), and vendoring the schema
 
 ## Navigation model
 
+Version 1 uses a **fixed multi-pane desktop shell** modelled on familiar
+IDE/editor conventions. From left to right:
+
+- an **activity bar** that switches the full content area between top-level
+  views (V1: **Editor** and **Validation**); the Validation icon carries a
+  **count badge** reflecting live issue totals;
+- a **top context/mode bar** spanning the content: in normal use it shows the
+  file name and the current location; during validation review it *morphs* into
+  the review cursor (Previous / `n of N` / Finish Review);
+- the **Editor view**: a three-pane **master-detail-detail** layout,
+  `Tree │ Parameter list │ Inspector`;
+- a **Utility panel** (right): docked, toggleable auxiliary panels; V1 hosts the
+  **Issues** panel only;
+- a **bottom status bar** carrying the document source and modified/saved state.
+
 ```
-Tree (BPX objects) → Object page (parameter list) → Parameter detail
+[activity bar] │ Tree │ Parameter list │ Inspector │ [Utility: Issues]
+                                                      status bar
 ```
 
-The structure panel (left) uses expandable BPX object nodes. The right panel has
-a **persistent top section — a clickable BPX-path breadcrumb — and a body that
-swaps in place**:
+The three editor panes form one navigation hierarchy, each level always visible
+so **sibling context is never lost while editing**:
 
-- selecting an object shows its **parameter list**: compact, clickable rows of
-  the object's direct parameters (icon + label, plus a marker only when the
-  parameter has issues);
-- clicking a parameter swaps the body to its **detail view**: value (simple or
-  expandable), type, unit, schema description, examples, the *full* validation
-  message(s), and a disabled **"Advanced display"** placeholder (the future
-  entry point to graphs, V3).
+- **Tree** — navigable BPX *objects* only (never parameters), so the structure
+  mirrors the file;
+- **Parameter list** — the direct parameters of the selected object (icon +
+  label);
+- **Inspector** — the edit surface for the selected parameter. It is designed to
+  host multiple **parameter-centric views of the same `ParameterItem`**; V1 has
+  the **Edit** view only, and a future **Analysis** view (V2) is added here — at
+  full inspector width — rather than in the narrow Utility panel.
 
-Opening a parameter detail does **not** replace the whole panel: the breadcrumb
-stays, simply gaining the parameter segment on the path, and clicking an object
-segment swaps the body back to that object's parameter list. Parameters never
-appear in the tree, keeping navigation aligned with the BPX file structure.
+`AppState.active` (a `DocumentSession`) carries navigation in two tiers:
+`selected_path` (the visible object node) and `selected_parameter_path` (the
+parameter being edited, or `None`). `core/` is untouched — `TreeNode` /
+`ParameterItem` already carry the `path` that lookups, the context bar and
+navigation need.
 
-`AppState` carries this in two tiers: `selected_path` (the visible object node)
-and `selected_parameter_path` (the parameter whose detail is shown, or `None`
-for the list). `core/` is untouched — `TreeNode`/`ParameterItem` already carry
-the `path` the breadcrumb and lookups need.
+### Single navigation owner (`NavigationService`)
 
-**Error display model:** the parameter detail is the single home for the full
-error/warning text; the parameter list shows a marker only; object-level issues
-that map to no parameter surface as a banner in the breadcrumb's persistent top
-section (and in the Validation tab).
+All navigation — from Search, from validation review, and later from comparison,
+documentation links, analysis and database references — flows through **one
+`NavigationService`** (in `ui_qt/`). No other component implements navigation.
+It **coordinates and notifies; it does not drive widgets**:
 
-Examples:
+1. resolve the target `path` (object- and/or parameter-level);
+2. update the selection on `state.active` (the frontend-agnostic step);
+3. emit a single notification carrying the **target identity** (the `path` and
+   whether the target is object- or parameter-level).
 
-| Selected object | Parameter list (click a row → detail) |
+Subscribing views each own their own *reveal* behaviour: the tree expands
+ancestors, sets the current row and scrolls it into view; the parameter list
+selects the row; the inspector loads the parameter and applies a temporary
+highlight; the context bar updates its segments. Because the service only
+touches `state.active` and emits a notification, `core/` and `state/` stay
+Qt-free and `tests/test_boundaries.py` continues to pass.
+
+**Issue display model:** the **Utility panel's Issues view is the single home**
+for full issue text — for both parameter-level and object-level issues (the
+latter no longer need a bespoke banner). Editing cards carry **no** issue text;
+instead the Issues panel **auto-opens and updates live** whenever a draft edit is
+invalid, so live feedback is never lost when the panel is collapsed.
+
+Examples of a selected object and its parameter list:
+
+| Selected object | Parameters (middle pane) |
 |---|---|
 | `Header` | BPX version, title, description, model |
 | `Parameterisation / Cell` | temperature, area, capacity, voltage cut-offs and other cell parameters |
@@ -266,20 +301,222 @@ the same pattern to functions, tables, section operations and raw fallbacks.
 
 Each card is tailored by the schema-derived **`FieldMeta`** (unit, description,
 examples, and the integer/enum/function hints already produced by
-`bpx_gateway.py`). Validation issues attached per node become the **in-card error
-state**, so editing and validation share one surface — consistent with the
-`IssueKind` remediation hooks above.
+`bpx_gateway.py`).
+
+**Commit model.** Editing writes to the **raw editing state** (`BPXDocument.raw`),
+which may legitimately hold invalid values (decision 1). Pressing **Enter**
+commits the card's current input — *valid or invalid* — after which the model is
+re-derived from a copy and any invalidity surfaces as a `ValidationIssue`;
+invalid data is never silently accepted as valid, it is rejected *visibly*. A
+card therefore **emits the user's raw input and never gatekeeps** (e.g. a scalar
+card returns the typed string when it is not a number). A small **inline Reset**
+beside the input restores the last committed value and **Esc** reverts the
+uncommitted draft; there are no detached Apply/Reset buttons, and blur does not
+commit. Full issue text appears in the Utility panel's Issues view, not on the
+card.
 
 The one justified special case is the **`Model` enum**: its `ENUM` card carries a
 `CHOOSE_MODEL` remediation hook, because changing the model is not a plain value
 edit — it triggers a *structural* switch (e.g. SPM ↔ DFN) that changes which
 sections are required. See [roadmap.md](roadmap.md).
 
+## UI design decision log
+
+These entries record the Version 1 **UI redesign** decisions and their reasoning
+(the "Key design decisions" above cover the backend). Status is one of Accepted /
+Deferred / Open.
+
+### Issue 1 — Multi-pane shell layout
+- **Decision:** Fixed three-pane master-detail Editor (`Tree │ Parameter list │
+  Inspector`), a left activity bar, a top context/mode bar, a right Utility
+  panel, and a bottom status bar.
+- **Reasoning:** Keeps object → parameter → editor context visible at once;
+  matches familiar IDE conventions; each band has one clear job.
+- **Alternatives considered:** A two-pane body-swap (tree + swapping
+  list/detail); a dockable inspector; a floating document-info card.
+- **Advantages:** Sibling context preserved while editing; scalable activity-bar
+  seam; no colliding chrome.
+- **Disadvantages:** Three columns pressure horizontal space; the top bar is
+  location-only, not clickable navigation.
+- **Future implications:** Activity bar absorbs future views; the Inspector can
+  host future parameter-centric views; multi-document fits as activity/tab
+  additions.
+- **Status:** Accepted.
+
+### Issue 2 — Non-modal validation issue cursor
+- **Decision:** Validation review is a **non-modal issue cursor** pinned into the
+  top context/mode bar (Previous / `n of N` / Finish Review), not a locked mode;
+  the editor stays fully interactive during review. The Validation list has no
+  Previous/Next.
+- **Reasoning:** The purpose of review is to *fix* issues, which means editing; a
+  modal review would force users to leave it to edit.
+- **Alternatives considered:** A true modal review; jump-only from the list with
+  no cursor.
+- **Advantages:** Fix-in-place; search/tree/edit stay available; matches
+  Find-Next / spellcheck conventions.
+- **Disadvantages:** Less forced focus (mitigated by the visually distinct bar).
+- **Future implications:** Generalises to a remediation walker when `IssueKind`
+  actions arrive.
+- **Status:** Accepted.
+
+### Issue 3 — Activity-bar view switching
+- **Decision:** A left activity bar switches the full content area between
+  top-level views (V1: Editor, Validation), replacing top tabs; the Validation
+  icon shows a **count badge**; no disabled placeholders for unshipped views.
+- **Reasoning:** Most future views are full-area pages; a vertical rail scales
+  better than top tabs and gives the validation state a badge home.
+- **Alternatives considered:** Top `QTabWidget`; VS Code-exact sidebar-only
+  switching; menu-driven switching.
+- **Advantages:** Scales cleanly; honest (only shipped views shown); clear badge.
+- **Disadvantages:** Heavy chrome for two V1 views; needs an icon set.
+- **Future implications:** Compare / database / analysis each become one activity
+  entry with no layout rework.
+- **Status:** Accepted.
+
+### Issue 4 — Search as a navigation component
+- **Decision:** Replace `QCompleter` with a custom **SearchPopup** navigation
+  component (scroll after ~8 results; bold name over full path; ↑↓/Enter/Esc;
+  staged Esc: close → clear → return to editor). It indexes **parameters and
+  navigable objects**, is focused by **both Ctrl+F and Ctrl+P** (focus +
+  select-all), and every selection calls the shared `NavigationService`. First
+  implementation deliberately minimal.
+- **Reasoning:** Search has become navigation, not autocomplete; `QCompleter`'s
+  flat-string model fights the interaction design; owning the component
+  establishes the right seam.
+- **Alternatives considered:** Extend `QCompleter`; defer the popup to V2;
+  parameters-only index; a single shortcut.
+- **Advantages:** One owned navigation surface; objects reachable; no future
+  rip-and-replace.
+- **Disadvantages:** More V1 work; mixed object/parameter results need a type
+  marker (ranking deferred).
+- **Future implications:** Same popup later hosts ranking, icons, recents, and
+  issue/compare/database results.
+- **Status:** Accepted.
+
+### Issue 5 — Toolbar, Import menu, Save vs Export
+- **Decision:** Minimal fixed toolbar — **Import ▼** (V1: "Open File" only),
+  **Save** (write-back to the current file, Ctrl+S, clears Modified), **Export**
+  (copy to a new path/format, leaves Modified), **Search**. Remove the disabled
+  New/Compare buttons. Add dirty/backing-file tracking.
+- **Reasoning:** Save and Export are distinct operations; conflating them makes
+  the Modified/Saved status meaningless; no empty placeholders.
+- **Alternatives considered:** Save = Export (status quo); keep disabled future
+  buttons; Export-only.
+- **Advantages:** Honest controls; meaningful status; Import ▼ is the
+  future-source hub seam.
+- **Disadvantages:** Requires backing-file + dirty state in `DocumentSession`.
+- **Future implications:** Import ▼ absorbs New Template / LIIONDB / database /
+  recent; Export generalises to per-simulator writers.
+- **Status:** Accepted.
+
+### Issue 6 — Utility panel and inspector-hosted analysis
+- **Decision:** A right **Utility panel** of docked, toggleable panels hosts the
+  **Issues** panel only in V1. Editing cards carry no issue text; the Issues
+  panel is the single home for all issue text (parameter- and object-level) and
+  **auto-opens/updates live** when a draft edit is invalid. Analysis is **not** a
+  Utility panel or a parallel registry; it is added in V2 as another **view of
+  the Inspector** over the same selected `ParameterItem`, at full inspector width.
+- **Reasoning:** Editing (stateful draft) and analysis (read-only, derived) are
+  distinct; a thin rail cannot host deep analysis but a full-width inspector view
+  can; defining an analyzer registry before any analyzers exist is premature
+  abstraction.
+- **Alternatives considered:** Floating pop-up windows; analysis inside each
+  editing card; a parallel `analysis/registry.py` in V1; keeping issues inline on
+  the card.
+- **Advantages:** One issue surface (incl. object-level); uncluttered cards; live
+  feedback retained via auto-open; V2 analysis drops in as an inspector view with
+  no rework.
+- **Disadvantages:** Two feedback ideas to keep consistent (auto-open vs card);
+  the Utility panel adds a fourth region (mitigated by toggling).
+- **Future implications:** If inspector width is tight for V2 plots, a "maximize"
+  toggle can collapse Tree+List; the Utility panel can later host
+  outline/doc/compare panels.
+- **Status:** Accepted (revised: no analyzer registry in V1).
+
+### Issue 7 — DocumentSession / AppState split
+- **Decision:** Split state now — `DocumentSession` (document, selection, undo,
+  dirty/backing-file; per document) and `AppState` (a single
+  `active: DocumentSession` plus app-global view state). The UI accesses document
+  state via `state.active.*`. No document collection or switcher UI in V1.
+- **Reasoning:** Undo/selection/dirty are inherently per-document; the
+  rename+split is cheap now and expensive later; one `active` indirection makes
+  future multi-document purely additive.
+- **Alternatives considered:** Keep `AppState` singular; introduce a full session
+  collection now.
+- **Advantages:** Correct ownership; non-breaking multi-document later; no
+  premature collection.
+- **Disadvantages:** A rename + one indirection touches current call sites (small
+  now).
+- **Future implications:** Multi-document = `AppState` gains a sessions list +
+  selector + switcher; `DocumentSession` and `state.active.*` are unchanged;
+  compare reuses two sessions.
+- **Status:** Accepted.
+
+### Issue 8 — Editing / commit model
+- **Decision:** **Enter commits** the card's raw input to the raw editing state —
+  valid or invalid; the derived model re-validates and surfaces any invalidity as
+  issues (invalid data is never silently accepted). Cards always emit raw input
+  and never gatekeep. An **inline Reset** beside the input restores the last
+  committed value; **Esc** reverts the draft; there are no detached Apply/Reset
+  buttons; **blur does not commit**.
+- **Reasoning:** Detached buttons were far from the input, and blocking invalid
+  commits contradicted decision 1 ("open/edit invalid files"); the raw dict, not
+  the card, is the source of truth.
+- **Alternatives considered:** Keep footer Apply/Reset; block invalid commits
+  (status quo); commit live per keystroke; commit on blur.
+- **Advantages:** Co-located controls; invalid edits allowed (core principle);
+  fewer widgets; integrates with Issues auto-open.
+- **Disadvantages:** Enter-to-commit is implicit (mitigated by inline Reset +
+  live Issues).
+- **Future implications:** The same "emit raw, never gatekeep" contract serves
+  function/table cards (V2) and remediation auto-fixes.
+- **Status:** Accepted.
+
+### DD-009 — Navigation ownership
+- **Decision:** One **`NavigationService`** (in `ui_qt/`) owns all navigation; no
+  component duplicates it. It **coordinates and notifies** rather than driving
+  widgets: resolve target `path` → update selection on `state.active` → emit one
+  notification carrying the target identity (path + object-vs-parameter level).
+  Subscribing views own their own reveal (expand/select/scroll/highlight/context
+  bar).
+- **Reasoning:** A single owner prevents duplicated navigation;
+  coordinate-and-notify avoids coupling the service to concrete widgets; the
+  state step keeps `core/`/`state/` Qt-free.
+- **Alternatives considered:** Each consumer implements its own navigation; a
+  service that imperatively drives every widget.
+- **Advantages:** DRY navigation; testable; boundary tests stay green; panels are
+  plug-in subscribers.
+- **Disadvantages:** Requires a small notification/subscription contract.
+- **Future implications:** Consumers extend to compare, documentation links,
+  analysis and database references with no new navigation code.
+- **Status:** Accepted.
+
+### DD-010 — Issue resolution during review
+- **Decision:** When an edit resolves the issue under the review cursor, the
+  cursor **stays put** (no auto-advance), shows a clear **resolved** indicator,
+  and decrements the count; the user advances with Next or leaves with Finish
+  Review. A newly-introduced issue joins the set but never steals the cursor.
+  When all issues are resolved, a clear **Finish Review** action is presented
+  rather than auto-exiting. The resolved indicator and count track the
+  **committed** document (post-Enter revalidation), not the live debounced
+  preview.
+- **Reasoning:** Auto-advance fights the non-modal, user-in-control model and
+  reshuffles indices on every fix; tracking committed state avoids flicker while
+  typing.
+- **Alternatives considered:** Auto-advance to the next issue on resolution.
+- **Advantages:** Predictable; preserves context; confirms changes applied;
+  consistent with the app's philosophy.
+- **Disadvantages:** Slightly slower for bulk triage than auto-advance.
+- **Future implications:** The same cursor becomes the remediation walker; Next
+  can skip auto-fixed issues.
+- **Status:** Accepted.
+
 ## Future direction
 
 The Version 1 foundation is designed so deeper editing, visualisation and
 comparison bolt on without rework: the dict-based document is editing-ready,
-`AppState` can grow to hold multiple documents, and `to_python_function()` on
+`AppState` can grow from a single active `DocumentSession` to a collection
+without changing how the UI reads `state.active`, and `to_python_function()` on
 BPX functions enables plotting. See [roadmap.md](roadmap.md).
 
 ### Extension seams
@@ -290,11 +527,12 @@ framework stays easy to extend:
 | Future feature (schematic) | Where it plugs in |
 |---|---|
 | Editing & creation (create/edit BPX) | Foundation implemented: command intent (`commands.py`), orchestration (`command_service.py`), mutation primitives (`editing.py`) and state-level undo. Ongoing work is wiring more UI actions to commands. |
-| Visualisation of functions/tables | `Function.to_python_function()` via `bpx_gateway.py`; a new `ui_qt` plot panel. Already anticipated. |
+| Visualisation of functions/tables | A new **Analysis view of the Inspector** (V2) rendering the selected `ParameterItem` via `Function.to_python_function()` from `bpx_gateway.py`. |
 | Templates / scaffolds for SPM/SPMe/DFN/Partial | Implemented in `document_factory.py`: incomplete structural scaffolds with required sections and no invented scientific values. |
 | External database import (LIIONDB, other BPX databases) | A **new anti-corruption adapter mirroring `bpx_gateway.py`** — one module that owns the third-party API and returns a raw BPX dict. |
 | Simulator hand-off (PyBOP, PyProBE) | Generalise `export.py` from "serialise to JSON/YAML" to "emit to a target", adding per-simulator writers behind the same interface. |
-| Compare files / compare against known cell | `AppState` grows from one document to several; `tree_model.py` diffing reuses the existing node tree. |
+| Compare files / compare against known cell | `AppState` grows from a single active `DocumentSession` to several; `tree_model.py` diffing and the `NavigationService` reuse the existing node tree and navigation. |
+| In-app navigation (search, validation review, compare, doc-links) | The single **`NavigationService`** (`ui_qt/`): coordinate-and-notify; every consumer subscribes rather than implementing its own navigation. |
 
 ### Design tension: the "sanity check" validator
 
