@@ -182,9 +182,10 @@ For example, the tree expands ancestors, the parameter list selects a row, the
 Inspector loads the parameter and the context bar updates its location display.
 
 This keeps navigation consistent for all consumers — search, validation review,
-future comparison, documentation links, analysis and database references — while
-preserving the frontend boundary. `NavigationService` lives in `ui_qt/` because
-it is part of frontend orchestration; `state/` only stores the selected paths.
+future comparison, Inspector documentation links, Inspector analysis sections and
+database references — while preserving the frontend boundary. `NavigationService`
+lives in `ui_qt/` because it is part of frontend orchestration; `state/` only
+stores the selected paths.
 
 Detailed interaction behaviour for search, highlighting and review is documented
 in [ui-design.md](ui-design.md).
@@ -250,7 +251,8 @@ switching, section insertion/removal and remediation actions.
 | Capability | Architectural seam |
 |---|---|
 | Editing and creation | Command intent, `command_service.py`, `editing.py`, `document_factory.py` and per-document undo in `DocumentSession`. |
-| Function/table visualisation | Inspector analysis view consuming the selected `ParameterItem`; BPX functions exposed through `bpx_gateway.py` / `to_python_function()`. |
+| Function/table visualisation | Expandable Inspector analysis section consuming the selected `ParameterItem`; BPX functions exposed through `bpx_gateway.py` / `to_python_function()`. |
+| Issue presentation | Collapsible Qt-owned Issues drawer consuming derived `ValidationIssue` state; no core or state dependency on drawer widgets. |
 | Templates and scaffolds | `document_factory.py` creates incomplete structures without scientific defaults. |
 | External database import | A new anti-corruption adapter, mirroring `bpx_gateway.py`, returns raw BPX dicts from third-party sources. |
 | Simulator hand-off | `export.py` can generalise from serialisation to target-specific writers. |

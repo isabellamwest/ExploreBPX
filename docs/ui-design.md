@@ -19,6 +19,8 @@ The central interaction principles are:
 - Search and validation navigate to document locations; they do not filter or
   replace the document structure.
 - Validation guides the user without taking control away from them.
+- Secondary information is available on demand without permanently occupying
+  workspace.
 - Editing works against the raw working document, so invalid work-in-progress
   data can be represented and corrected.
 
@@ -27,9 +29,9 @@ The central interaction principles are:
 The workspace uses a fixed multi-pane shell with familiar editor conventions:
 
 ```text
-[activity bar] | Tree | Parameter list | Inspector | [Utility panel]
-                                                    bottom status bar
-        top context / mode bar spans the main content area
+[top context / mode bar spans the main content area]
+[activity bar] | Tree | Parameter list | Inspector | [Issues drawer]
+[bottom status bar]
 ```
 
 The editor uses a three-pane master-detail-detail layout:
@@ -42,7 +44,9 @@ The three panes remain visible while editing so sibling context is preserved. A
 selected object does not replace the tree, and a selected parameter does not
 replace the parameter list.
 
-The **Utility panel** is a docked, toggleable right-side panel for secondary information that supports, but does not interrupt the editing workflow. Initially it contains the Issues view and may later host other contextual tools.
+The **Issues drawer** is a collapsible right-edge drawer for validation issues.
+It remains collapsed most of the time, visible as a thin strip that always shows
+the current issue count, such as `Issues (0)` or `Issues (2)`.
 
 ## Activity Bar
 
@@ -53,8 +57,11 @@ current views are:
 - **Validation**: a full issue list for the active document.
 
 The Validation icon shows a count badge when issues exist. The activity bar
-should show only shipped views; disabled placeholders for future views should be
-avoided.
+is reserved for major workspaces that replace the main content area, such as
+Editor, Validation, future Database and future Compare. It should show only
+shipped views; disabled placeholders for future views should be avoided.
+Parameter analysis, documentation, graphs, statistics and similar secondary
+tools are not activity-bar views.
 
 ## Top Context / Mode Bar
 
@@ -82,9 +89,11 @@ a parameter updates the Inspector.
 ### Inspector
 
 The Inspector is the selected parameter's work surface. In the current scope it
-hosts the **Edit** view. Future parameter-centric workflows, such as Analysis,
-should be added as additional Inspector views over the same selected
-`ParameterItem`, rather than as narrow Utility panel content.
+hosts **Edit** controls. Future parameter-centric workflows, such as Analysis,
+Documentation and References, should be added as expandable/collapsible
+Inspector sections over the same selected `ParameterItem`, rather than as
+separate pages or major workspaces. The intended interaction is click Analysis
+to expand its graph, then click Analysis again to collapse it.
 
 ## Navigation Model
 
@@ -152,12 +161,12 @@ invalid BPX files.
 Validation is continuous. Issues are visible in two places:
 
 - the **Validation view**, which lists all issues for the active document;
-- the **Utility panel's Issues panel**, which is the single home for full issue
-  text for the current context.
+- the **Issues drawer**, which is the single home for full issue text for the
+  current context.
 
 Clicking an issue in the Validation view navigates to the affected object or
 parameter and activates the non-modal review cursor. Object-level issues are also
-shown in the Utility panel rather than requiring a special banner elsewhere.
+shown in the Issues drawer rather than requiring a special banner elsewhere.
 
 ## Review Cursor
 
@@ -182,21 +191,27 @@ automatically.
 Resolved state and counts track the committed document state after Enter, not
 the live preview while typing.
 
-## Utility Panel
+## Issues Drawer
 
-The Utility panel is a docked, toggleable right-side panel for auxiliary context.
-Its current tenant is **Issues**.
+The Issues drawer is a collapsible right-side tool window for validation
+context. It should behave like a collapsible IDE tool window, not a permanently
+visible side panel.
 
-The Issues panel:
+The Issues drawer:
 
 - contains all full issue text;
 - handles both parameter-level and object-level issues;
-- auto-opens when a draft edit produces an error or warning;
+- stays collapsed most of the time;
+- remains visible as a thin strip when collapsed;
+- always displays the current issue count, such as `Issues (0)` or `Issues (2)`;
+- expands when clicked and collapses when clicked again;
+- auto-opens when validation produces a new error or warning unless explicitly
+  dismissed;
 - updates live during preview validation;
 - remains available during normal editing and validation review.
 
-The Utility panel should not become a dumping ground for deep workflows. In-depth
-parameter analysis belongs in the Inspector as a parameter-centric view.
+The Issues drawer should not become a dumping ground for secondary workflows.
+In-depth parameter analysis belongs in the Inspector as an expandable section.
 
 ## Toolbar
 
@@ -221,8 +236,9 @@ bar, whose role is location and mode.
 - Search navigates; it does not filter.
 - Review guides; it does not lock the editor.
 - Invalid edits may be committed to the raw working document.
-- The Utility panel is the single home for full issue text.
-- Future analysis is an Inspector view, not a Utility panel tenant.
+- The Issues drawer is the single home for full issue text.
+- Future analysis is an expandable Inspector section, not an activity-bar view
+  or Issues drawer tenant.
 - Future UI controls should appear when their workflows exist, not as disabled
   placeholders.
 
@@ -237,26 +253,26 @@ Keyboard behaviour should follow common desktop conventions:
 - Escape reverts the uncommitted editor-card draft.
 
 As the UI matures, focus order and screen-reader naming should be checked for
-the activity bar, SearchPopup, review cursor, Utility panel and editor cards.
+the activity bar, SearchPopup, review cursor, Issues drawer and editor cards.
 
 ## Design Decisions
 
 ### DD-001 — Workspace Shell
 
 - **Decision:** Fixed three-pane master-detail Editor (`Tree | Parameter list |
-  Inspector`), a left activity bar, a top context/mode bar, a right Utility
-  panel, and a bottom status bar.
+  Inspector`), a left activity bar, a top context/mode bar, a collapsible right
+  Issues drawer, and a bottom status bar.
 - **Reasoning:** Keeps object -> parameter -> editor context visible at once;
   matches familiar IDE conventions; each band has one clear job.
 - **Alternatives considered:** A two-pane body-swap; a dockable inspector; a
   floating document-info card.
 - **Advantages:** Sibling context preserved while editing; scalable activity-bar
-  seam; no colliding chrome.
+  seam; secondary issue context available on demand.
 - **Disadvantages:** Three columns pressure horizontal space; the top bar is
   location-only, not clickable navigation.
-- **Future implications:** Activity bar absorbs future views; the Inspector can
-  host future parameter-centric views; multi-document fits as activity/tab
-  additions.
+- **Future implications:** Activity bar absorbs future major workspaces; the
+  Inspector can host future parameter-centric sections; multi-document fits as
+  activity/tab additions.
 - **Status:** Accepted.
 
 ### DD-002 — Non-Modal Validation Issue Cursor
@@ -287,8 +303,8 @@ the activity bar, SearchPopup, review cursor, Utility panel and editor cards.
   menu-driven switching.
 - **Advantages:** Scales cleanly; honest; clear badge.
 - **Disadvantages:** Heavy chrome for two current views; needs an icon set.
-- **Future implications:** Compare, database and analysis-related views can be
-  added without layout rework.
+- **Future implications:** Compare and database workspaces can be added without
+  layout rework.
 - **Status:** Accepted.
 
 ### DD-004 — SearchPopup
@@ -325,22 +341,20 @@ the activity bar, SearchPopup, review cursor, Utility panel and editor cards.
   files; Export can generalise to simulator hand-off.
 - **Status:** Accepted.
 
-### DD-006 — Utility Panel And Inspector-Hosted Analysis
+### DD-006 — Issues Drawer And Inspector-Hosted Analysis
 
-- **Decision:** A right Utility panel hosts Issues only in the current scope.
-  Editing cards carry no issue text; Issues is the single full-text issue home.
-  Analysis is not a Utility panel or a pre-built registry; it is added later as
-  another Inspector view over the selected `ParameterItem`.
+- **Decision:** A right Issues drawer hosts full issue text in the current scope.
+  Editing cards carry no issue text. Analysis is not a drawer tenant or a
+  pre-built registry; it is added later as an expandable Inspector section over
+  the selected `ParameterItem`.
 - **Reasoning:** Editing and analysis are distinct; a thin rail cannot host deep
   analysis; defining an analyzer registry before analyzers exist is premature.
 - **Alternatives considered:** Floating pop-ups; analysis inside editing cards;
   a parallel analyzer registry now; full issues inline on cards.
 - **Advantages:** One issue surface; uncluttered cards; live feedback retained
-  through Utility auto-open; future analysis gets full inspector width.
-- **Disadvantages:** Utility panel adds another region; auto-open behaviour must
-  avoid distraction.
-- **Future implications:** A maximize option can later give analysis more width;
-  Utility may later host other lightweight auxiliary panels.
+  through drawer auto-open; future analysis gets full inspector width.
+- **Disadvantages:** Drawer auto-open behaviour must avoid distraction.
+- **Future implications:** A maximize option can later give analysis more width.
 - **Status:** Accepted.
 
 ### DD-007 — DocumentSession / AppState Split
@@ -387,8 +401,9 @@ the activity bar, SearchPopup, review cursor, Utility panel and editor cards.
 - **Advantages:** DRY navigation; testable; boundary tests stay green; panels are
   plug-in subscribers.
 - **Disadvantages:** Requires a small notification contract.
-- **Future implications:** Compare, documentation links, analysis and database
-  references can navigate without new navigation logic.
+- **Future implications:** Compare, Inspector documentation links, Inspector
+  analysis sections and database references can navigate without new navigation
+  logic.
 - **Status:** Accepted.
 
 ### DD-010 — Issue Resolution During Review
@@ -403,4 +418,31 @@ the activity bar, SearchPopup, review cursor, Utility panel and editor cards.
 - **Advantages:** Predictable; preserves context; confirms changes applied.
 - **Disadvantages:** Slightly slower for bulk triage than auto-advance.
 - **Future implications:** Same cursor can become the remediation walker.
+- **Status:** Accepted.
+
+### DD-011 — Secondary Workspace Surfaces
+
+- **Decision:** The Activity Bar is reserved for major application workspaces
+  that replace the main content area, such as Editor, Validation, future
+  Database and future Compare. Parameter analysis, documentation, graphs,
+  statistics and similar tools are secondary surfaces, not Activity Bar views.
+  The Inspector remains the primary parameter work surface: Edit, Analysis,
+  Documentation and References appear as expandable/collapsible sections over
+  the selected `ParameterItem`. Issues use a collapsible right-edge drawer that
+  remains visible as a thin strip with the current count, opens and closes on
+  click, auto-opens for new validation issues unless explicitly dismissed, and
+  remains available during validation review.
+- **Reasoning:** Secondary information should be available on demand without
+  permanently occupying workspace. This keeps editing primary while making rich
+  analysis and validation detail reachable when needed.
+- **Alternatives considered:** Activity Bar entries for every feature; separate
+  Edit and Analysis Inspector pages; a permanently visible auxiliary side panel.
+- **Advantages:** Prevents activity-bar sprawl; preserves horizontal editing
+  space; keeps parameter-centric tools close to the selected parameter; keeps
+  validation issues continuously reachable.
+- **Disadvantages:** Expand/collapse state and auto-open dismissal need clear
+  ownership in the UI shell.
+- **Future implications:** Parameter-centric features compose inside the
+  Inspector; major future workspaces must justify replacing the main content
+  area; the former general-purpose auxiliary panel concept should not return.
 - **Status:** Accepted.

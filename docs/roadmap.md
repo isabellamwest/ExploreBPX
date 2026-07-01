@@ -15,12 +15,12 @@ what is planned for later. Architectural rationale lives in
 | Continuous BPX validation | Current |
 | Export / round-trip JSON or YAML | Current |
 | Scalar, integer and enum editing | Current scope |
-| Activity-bar shell and Utility panel | Current scope |
+| Activity-bar shell and Issues drawer | Current scope |
 | SearchPopup navigation | Current scope |
 | Save vs Export split and dirty tracking | Current scope |
 | DocumentSession / AppState split | Current scope |
 | Function/table editing | Planned |
-| Analysis / visualisation view | Planned |
+| Inspector analysis / visualisation section | Planned |
 | Actionable validation and remediation | Planned |
 | Create-from-template workflows | Planned |
 | Raw JSON view | Planned |
@@ -72,7 +72,7 @@ Out of current scope:
 
 - Activity-bar shell with Editor and Validation views.
 - Top context/mode bar and bottom status bar.
-- Right Utility panel hosting Issues.
+- Collapsible right Issues drawer.
 - SearchPopup for object and parameter navigation.
 - `NavigationService` as the single navigation coordinator.
 
@@ -80,8 +80,8 @@ Out of current scope:
 
 - Multi-document workspace UI over multiple `DocumentSession` objects.
 - Comparison navigation between documents.
-- Documentation, analysis and database references using the same navigation
-  service.
+- Documentation links, Inspector analysis sections and database references using
+  the same navigation service.
 
 ## Editing
 
@@ -121,7 +121,7 @@ Out of current scope:
 
 ### Current Scope
 
-- Utility panel Issues view as the single full-text issue surface.
+- Issues drawer as the single full-text issue surface.
 - Activity-bar Validation view listing document issues.
 - Non-modal review cursor for stepping through issues in context.
 - Resolved issue behaviour: stay in place, show resolved state, explicit Next or
@@ -163,14 +163,14 @@ Out of current scope:
 
 ### Planned
 
-- Analysis as an Inspector view of the selected parameter.
+- Analysis as an expandable Inspector section for the selected parameter.
 - Function and interpolated-table visualisation, such as OCP plots, using BPX
   functions exposed through `bpx_gateway.py`.
 
 ### Future
 
 - Parameter-centric plausibility displays using reference datasets.
-- Optional maximised Inspector/analysis workspace if plots need more space.
+- Optional maximised Inspector section if plots need more space.
 - Comparison overlays for related files or known cells.
 
 ## Data Sources And Import
