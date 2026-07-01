@@ -1,550 +1,280 @@
 # Explore_BPX Architecture
 
-This document records the design of Explore_BPX and the reasoning behind the
-key decisions. 
+This document describes how Explore_BPX is built: its architectural principles,
+module boundaries, domain model, state model and extension seams. User
+interaction decisions live in [ui-design.md](ui-design.md). Capability status and
+planned work live in [roadmap.md](roadmap.md).
 
-## What Explore_BPX is
+## Purpose
 
-Explore_BPX is a **human interface to the BPX format** — an explorer first, an
-editor later, with validation throughout. It is not a BPX implementation and
-does not reimplement schema or validation logic; it delegates all of that to the
-official `bpx` package.
+Explore_BPX is a human interface to the BPX format. It helps users open,
+inspect, edit, validate and eventually visualise BPX documents without
+reimplementing the BPX standard. Schema parsing and validation remain delegated
+to the official `bpx` package.
 
-The product question is *"how do people interact with BPX files?"*, not *"how do
-we validate BPX?"*. Validation is a property surfaced on every parameter, not a
-standalone feature.
+The product question is: **how do people interact with BPX files?** The
+architecture therefore treats validation, navigation and editing as document
+workflows layered around BPX data, not as a replacement implementation of BPX.
 
-## Mission & ecosystem
+## Architectural Principles
 
-The wider project vision (per the BPX Explorer schematic) is a **standalone,
-dashboard-like app at the centre of the BPX ecosystem**: it connects parameter
-sources (experimental/modelling parameterisation and external BPX databases such
-as LIIONDB) to simulators (PyBOP, PyProBE), makes BPX easier to create, edit and
-visualise, validates beyond syntax, and advances standardisation — all to reduce
-friction and increase uptake.
+- **Delegate BPX semantics.** Explore_BPX uses the official `bpx` package for
+  schema parsing and validation.
+- **Keep business logic frontend-agnostic.** `core/` and `state/` must not import
+  Qt or any UI framework.
+- **Use the raw document as editable state.** Invalid and partially edited BPX
+  files must remain representable.
+- **Derive views and validation from state.** Tree nodes, parameter items and
+  validation issues are derived from the raw working document.
+- **Separate intent, mutation and orchestration.** Command intent, raw-dict edits
+  and command execution are distinct layers.
+- **Prefer extension seams over speculative features.** The architecture defines
+  stable places for future capabilities without building unused abstractions.
 
-This architecture targets that hub. Version 1 is the current PySide6 desktop
-application: an explorer with continuous validation and the first editing
-foundation in place. The value of V1 is that it establishes a small,
-well-layered framework that later features bolt onto without a rewrite; this
-document records the seams that make that true.
+## Layered Architecture
 
-## Layered architecture
+Dependencies flow in one direction only:
 
-Dependencies flow in one direction only: `frontend → state → core → bpx`.
-
+```mermaid
+graph TD
+    UI[ui_qt<br/>PySide6 frontend] --> State[state<br/>AppState and DocumentSession]
+    State --> Core[core<br/>Document, validation, commands, tree]
+    Core --> BPX[bpx<br/>official package]
 ```
-ui_qt/  The active PySide6 desktop frontend. Renders state and collects input.
-state/  DocumentSession (per document: raw document, navigation selection, undo
-        history, dirty/backing-file state) and AppState (the active
-        DocumentSession plus app-global view state). Frontend-agnostic.
-core/   BPX integration, validation, tree generation, command orchestration,
-        structural capability queries, and document scaffolding.
-bpx     The official package (pinned dependency).
+
+| Layer | Responsibility |
+|---|---|
+| `ui_qt/` | PySide6 frontend. Renders state, collects input and coordinates UI navigation. |
+| `state/` | Frontend-agnostic application/session state: active document session, selection, undo, dirty/backing-file state and app-level view state. |
+| `core/` | BPX integration, validation, document model, tree generation, editing primitives, commands and structural capability queries. |
+| `bpx` | Official BPX package, pinned as a dependency. |
+
+`tests/test_boundaries.py` enforces the core boundary: `core/` and `state/` stay
+free of UI-framework imports.
+
+## State Model
+
+State is split by ownership:
+
+```mermaid
+graph TD
+    AppState --> Active[active: DocumentSession]
+    AppState --> ViewState[app-global view state]
+    Active --> Document[BPXDocument]
+    Active --> SelectedObject[selected_path]
+    Active --> SelectedParameter[selected_parameter_path]
+    Active --> Undo[undo_stack]
+    Active --> Dirty[dirty / backing_file]
 ```
 
-`core/` and `state/` must never import a UI framework. A test in
-`tests/test_boundaries.py` enforces this, so the frontend can be replaced
-without rewriting business logic.
+`DocumentSession` owns per-document state:
 
-### PySide6 as the frontend
+- the current `BPXDocument`;
+- selected object path;
+- selected parameter path;
+- undo history;
+- dirty state and backing-file path.
 
-The replaceable-frontend seam exists precisely so the desktop UI can evolve
-without touching business logic. The active GUI is the **PySide6 frontend**,
-reusing `core/` and `state/` unchanged.
+`AppState` owns app-global state and exposes a single active `DocumentSession`.
+This keeps the current application simple while making future multi-document
+support additive: a future `AppState` can hold multiple sessions while UI code
+continues to interact with `state.active`.
 
-The PySide6 code lives in **`ui_qt/` as the sole frontend package**. The
-guardrail remains boundary enforcement: `tests/test_boundaries.py` ensures Qt
-imports do not leak into `core/`/`state/` and the one-directional dependency
-rule remains intact. See [roadmap.md](roadmap.md).
+## Domain Model
 
-### Module responsibilities (`core/`)
+### Raw Dict As Source Of Truth
+
+A parsed Pydantic `BPX` object cannot represent invalid or partially edited data.
+Explore_BPX therefore stores the **raw dictionary** as the editable source of
+truth. The parsed BPX model and validation issues are derived by calling
+`bpx.parse_bpx_obj` on a deep copy.
+
+This matters because `parse_bpx_obj` mutates the object it receives. Validation
+must never mutate the raw working document.
+
+### Document, TreeNode And ParameterItem
+
+`BPXDocument` contains:
+
+- the raw working dictionary;
+- derived validation issues;
+- the derived object tree.
+
+The derived tree separates navigable BPX objects from editable values:
+
+```text
+TreeNode       = navigable BPX object
+ParameterItem = direct parameter owned by a TreeNode
+```
+
+Tree nodes are produced by walking the actual raw data rather than only walking
+the schema. This handles BPX polymorphism naturally: SPM/SPMe/DFN/Partial and
+single/blended electrode structures are already expressed in the data shape.
+
+Parameters are classified value-shape-first into `ParameterKind` values such as
+scalar, integer, enum, function, table and unknown. Schema metadata refines the
+classification with units, descriptions, examples and enum/integer/function
+hints.
+
+## Core Module Responsibilities
 
 | Module | Responsibility |
 |---|---|
-| `bpx_gateway.py` | The **only** module that imports `bpx`. Loads JSON/YAML, validates, and builds parameter metadata from the public BPX schema. |
-| `document.py` | `BPXDocument`: the raw dict (source of truth) plus the derived tree and validation issues. |
-| `editing.py` | Low-level, pure raw-dict mutation primitives (`set_value`, add/remove section/parameter). |
-| `commands.py` | Intent dataclasses for operations (`SetValue`, `AddSection`, `CreateDocument`, etc.) and operation result types. |
-| `command_service.py` | Request/preview/execute orchestration mapping command intent to `editing.py` primitives, with capability checks. |
-| `structure.py` | Frontend-agnostic structural/capability queries (required sections, removability, model inference). |
-| `document_factory.py` | Creates incomplete structural BPX scaffolds without inventing scientific values. |
-| `tree_model.py` | Builds the UI-neutral BPX object tree, parameter rows for each object, and validation-path matching helpers. |
-| `parameter_types.py` | Classifies a value into a `ParameterKind` and provides icons/units. |
+| `bpx_gateway.py` | The only module that imports `bpx`. Loads JSON/YAML, validates, and builds parameter metadata from the BPX schema. |
+| `document.py` | `BPXDocument`: raw dict plus derived tree and validation issues. |
+| `editing.py` | Pure raw-dict mutation primitives. |
+| `commands.py` | Intent dataclasses and operation result types. |
+| `command_service.py` | Preview/execute orchestration over command intent, mutation primitives and structural checks. |
+| `structure.py` | Frontend-agnostic structural and capability queries. |
+| `document_factory.py` | Incomplete BPX scaffolds without invented scientific values. |
+| `tree_model.py` | UI-neutral object tree, parameter rows and validation-path matching helpers. |
+| `parameter_types.py` | Value classification and parameter kind metadata. |
 | `validation.py` | `ValidationIssue` model and normalisers for Pydantic errors and warnings. |
-| `export.py` | Serialises the raw dict back to JSON or YAML. |
+| `export.py` | Serialises the raw dict to JSON/YAML and can later generalise to target writers. |
 
-## Key design decisions
+## BPX Integration Strategy
 
-### 1. The raw dict is the source of truth
+Explore_BPX consumes `bpx` as a pinned PyPI dependency (`bpx==1.1.0`). Coupling is
+isolated in `core/bpx_gateway.py`, which uses public APIs only:
 
-A parsed Pydantic `BPX` object cannot represent an invalid or partially-edited
-file. To open invalid files (a core V1 use case) and to support editing later,
-the document stores the **raw dictionary**. The parsed model and validation
-issues are *derived* by attempting `bpx.parse_bpx_obj` on a copy.
+- `parse_bpx_obj`;
+- `BPX`;
+- `model_json_schema()`.
 
-> Note: `parse_bpx_obj` mutates the dict it is given, so validation always runs
-> against a deep copy to keep the source of truth pristine.
+Alternatives rejected for the main dependency path:
 
-### 2. The tree is built from the data, but only BPX objects are navigable
+- local editable BPX checkout: not reproducible and prone to drift;
+- Git/commit dependency: heavier and kept only as a fallback for unreleased
+  fixes;
+- vendored schema: duplicates the logic Explore_BPX intentionally delegates.
 
-Tree nodes are generated by walking the raw dict, so the tree renders even for
-invalid files. BPX is polymorphic (SPM/SPMe/DFN/Partial; single vs. blended
-electrodes), so a pure schema walk would be ambiguous — walking the actual data
-side-steps this because the concrete shape is already chosen.
+## Document Lifecycle
 
-The navigation tree deliberately contains **BPX objects**, not every parameter.
-High-level objects (`Header`, `Parameterisation`, `State`, `Validation`), schema
-child objects (`Cell`, `Electrolyte`, electrodes, `Separator`, initial
-conditions, thermal environment), and dynamic object instances (blended
-electrode particles and validation experiments) become `TreeNode`s. Direct
-values owned by those objects become `ParameterItem`s shown in the selected
-object page.
+The document lifecycle is:
 
-Each parameter item is classified **value-shape first** into one of:
-`scalar`, `integer`, `enum`, `function`, `table`, `unknown`. This means the UI
-needs only one renderer per kind, regardless of how many parameters BPX adds.
-Schema metadata (description, unit, examples, enum/integer/function hints)
-refines ambiguous cases — e.g. distinguishing a header text string from a
-function expression.
-
-This distinction is the main Qt/backend contract:
-
-```text
-TreeNode       = navigable BPX object, suitable for QTreeView rows
-ParameterItem = direct parameter row/card owned by a selected TreeNode
+```mermaid
+flowchart LR
+    Load[Load bytes] --> Raw[Raw dict]
+    Raw --> Validate[Validate copy with bpx]
+    Validate --> Issues[Validation issues]
+    Raw --> Tree[Derived object tree]
+    Raw --> Edit[Raw-dict edit]
+    Edit --> Validate
+    Raw --> Export[Export JSON/YAML]
 ```
 
-A future PySide6 `QAbstractItemModel` should wrap `TreeNode.children` for the
-left-hand tree and render `TreeNode.parameters` in the right-hand editor page,
-without duplicating BPX traversal logic in Qt code.
+Loading produces a `BPXDocument` from bytes. Editing produces a new raw dict,
+then rebuilds and revalidates the document. Export serialises the raw working
+document, which may still contain invalid work-in-progress data.
 
-### 3. Metadata is driven by BPX's own schema
+## Navigation Architecture
 
-Parameter descriptions, units and type hints come from
-`bpx.BPX.model_json_schema()`, built into a flat alias → metadata index. When a
-future BPX version adds a parameter, it appears automatically with no code
-change. The index is flat, so a few aliases that exist in multiple sections with
-different types resolve to their first occurrence; this is harmless because kind
-is classified from the value, not the metadata.
+Navigation has a single owner in the Qt layer: `NavigationService`.
 
-### 4. Validation is continuous and navigable
+The service coordinates navigation without owning concrete widgets:
 
-Validation runs whenever a file is loaded. Issues are normalised into
-`ValidationIssue` objects keyed by an alias path. Because Pydantic reports
-locations relative to the section being validated (omitting the
-`Parameterisation` prefix and appending union type-tags such as `float`/`int`),
-navigation uses best-effort **suffix matching** to map an issue to the nearest
-visible object node and, where possible, the exact `ParameterItem` on that
-object page. Issues surface in the **Utility panel's Issues view** — the single
-home for full issue text, for both parameter- and object-level issues — and in
-the activity-bar **Validation view**, which lists every issue and launches the
-non-modal review cursor.
+1. resolve the target path;
+2. update `state.active.selected_path` and `state.active.selected_parameter_path`;
+3. emit one notification containing the target identity.
 
-### Planned: actionable error workflows
+Views subscribe to that notification and reveal their own part of the target.
+For example, the tree expands ancestors, the parameter list selects a row, the
+Inspector loads the parameter and the context bar updates its location display.
 
-Today a `ValidationIssue` carries only a path, a message and a `Severity`. The
-*source* of an issue is an implementation detail of `bpx_gateway.py`: a Pydantic
-`ValidationError` becomes field-path issues via `issues_from_pydantic`, while a
-non-Pydantic `ValueError`/`BPXSchemaError` (and any captured warning) becomes a
-single `issue_from_message` at an empty path (the document root). UIs should
-**never branch on that exception origin** — it is not stable and says nothing
-about how a user fixes the problem.
+This keeps navigation consistent for all consumers — search, validation review,
+future comparison, documentation links, analysis and database references — while
+preserving the frontend boundary. `NavigationService` lives in `ui_qt/` because
+it is part of frontend orchestration; `state/` only stores the selected paths.
 
-The planned design adds an **`IssueKind` enum** that classifies each issue by the
-*remediation it implies*, so any frontend maps `kind → remediation widget`
-rather than re-deriving intent from the underlying exception class. Proposed
-kinds:
+Detailed interaction behaviour for search, highlighting and review is documented
+in [ui-design.md](ui-design.md).
 
-| `IssueKind` | When it applies | Remediation it drives |
-|---|---|---|
-| `EDIT_VALUE` | Wrong type/enum, missing field, bad function expression, table length mismatch | Fix the value in place |
-| `MOVE_VALUE` | A field in the wrong section (e.g. thermal conductivity or temperatures placed in `Cell`, initial concentration placed in `Electrolyte`) | Relocate the field to its correct section |
-| `CHOOSE_MODEL` | Model/structure mismatch (SPM vs. SPMe/DFN, single vs. blended electrode, mixed electrode types) | Pick a compatible model |
-| `MAP_MATERIALS` | Blended-electrode `State` keys not matching material keys; scalar-vs-dict shape mismatch | Reconcile material/state keys |
-| `ADD_SECTION` | Missing `State` for non-`Partial` models, or any missing required section | Scaffold the absent section |
-| `REVIEW_WARNING` | Stoichiometry / voltage-tolerance warnings (e.g. from `check_sto_limits`) | Review a plausibility warning |
+## Validation Architecture
 
-A new **`core/remediation.py`** is proposed to back these: **pure functions that
-take an issue plus the raw dict and return a proposed fixed dict** (move a field,
-scaffold a section, coerce a type). Because the raw dict is already the source of
-truth (decision 1) and these functions touch no UI, they are fully
-unit-testable in isolation — the same delegate-everything, frontend-agnostic
-discipline as the rest of `core/`.
+Validation runs from the raw working dict via `bpx_gateway.validate`, using a
+copy of the raw dict. Errors and warnings are normalised into `ValidationIssue`
+objects keyed by alias paths.
 
-> **Known gap this must close:** warnings currently lose their field path. A
-> warning is normalised with an empty path, so it lands at the document root with
-> no jump-to-parameter target. `REVIEW_WARNING` is the kind responsible for
-> restoring a usable location for these issues.
+Pydantic locations are not always identical to visible BPX paths: they may be
+relative to a section or include union type tags such as `float` or `int`.
+`tree_model.py` therefore performs best-effort suffix matching to map validation
+issues to the nearest visible `TreeNode` and, where possible, a `ParameterItem`.
 
-### 5. Operations are command-based and document-centric
+Current issue data contains:
 
-Editing now follows a command architecture so operation intent, low-level
-mutation, and orchestration stay separated:
+- path;
+- message;
+- severity.
 
-- `core/commands.py`: request/intent objects and `CommandResult`.
-- `core/editing.py`: low-level immutable raw-dict edits.
-- `core/command_service.py`: lifecycle orchestration (`preview` and `execute`)
-  with structural guardrails from `core/structure.py`.
-- `core/document_factory.py`: new-document scaffolds that are intentionally
-  incomplete and scientifically non-misleading.
+A future `IssueKind` classification can describe the remediation implied by an
+issue, rather than exposing the underlying exception source to the UI. Proposed
+kinds include edit value, move value, choose model, map materials, add section
+and review warning. Remediation logic belongs in pure core functions that take
+an issue and raw dict and return a proposed fixed dict.
 
-`state/AppState` coordinates these for the UI (`preview_command`,
-`execute_command`, `undo`) while `BPXDocument` remains the primary domain
-object for rebuilt, revalidated state.
+Known architectural gap: warnings currently lose their field path in some cases
+and can land at the document root. `IssueKind.REVIEW_WARNING` or equivalent
+warning-location logic should close that gap when actionable validation work is
+implemented.
 
-## BPX dependency strategy
+## Editing Architecture
 
-The `bpx` package is consumed as a **pinned PyPI release** (`bpx==1.1.0`). All
-coupling is isolated in `bpx_gateway.py`, which uses only the public API
-(`parse_bpx_obj`, `BPX`, `model_json_schema`). This minimises the maintenance
-cost of future BPX changes: only one module, and the metadata-driven UI, need to
-react.
+Editing is built around command intent and raw-dict mutation:
 
-Alternatives considered and rejected for V1: a local editable install of the
-BPX repo (not reproducible, high drift), a Git/commit dependency (heavier; kept
-as a fallback if an unreleased fix is ever needed), and vendoring the schema
-(duplicates the very logic this project delegates).
+- `commands.py` describes operation intent;
+- `editing.py` performs pure raw-dict mutations;
+- `command_service.py` previews and executes commands with structural guardrails;
+- `DocumentSession` records undo history and dirty/backing-file state.
 
-## Navigation model
+The raw dict remains the editing state. User input can be committed to the raw
+document even when it is invalid; the derived validated model rejects that state
+visibly by producing validation issues. This preserves the ability to open, edit
+and repair invalid BPX files.
 
-Version 1 uses a **fixed multi-pane desktop shell** modelled on familiar
-IDE/editor conventions. From left to right:
+Per-kind editor widgets are a UI concern, but their architectural contract is
+stable: a card edits one `ParameterItem`, emits raw input, and does not decide
+whether the value is valid. Validation remains a derived concern.
 
-- an **activity bar** that switches the full content area between top-level
-  views (V1: **Editor** and **Validation**); the Validation icon carries a
-  **count badge** reflecting live issue totals;
-- a **top context/mode bar** spanning the content: in normal use it shows the
-  file name and the current location; during validation review it *morphs* into
-  the review cursor (Previous / `n of N` / Finish Review);
-- the **Editor view**: a three-pane **master-detail-detail** layout,
-  `Tree │ Parameter list │ Inspector`;
-- a **Utility panel** (right): docked, toggleable auxiliary panels; V1 hosts the
-  **Issues** panel only;
-- a **bottom status bar** carrying the document source and modified/saved state.
+## Command Architecture
 
-```
-[activity bar] │ Tree │ Parameter list │ Inspector │ [Utility: Issues]
-                                                      status bar
-```
+Command execution is document-centric. Operation intent is represented as a
+command object, previewed or executed by `command_service.py`, and applied via
+pure editing primitives. This separation keeps UI interactions, structural
+rules, mutation and validation independently testable.
 
-The three editor panes form one navigation hierarchy, each level always visible
-so **sibling context is never lost while editing**:
+The command layer is also the natural place for future operations such as model
+switching, section insertion/removal and remediation actions.
 
-- **Tree** — navigable BPX *objects* only (never parameters), so the structure
-  mirrors the file;
-- **Parameter list** — the direct parameters of the selected object (icon +
-  label);
-- **Inspector** — the edit surface for the selected parameter. It is designed to
-  host multiple **parameter-centric views of the same `ParameterItem`**; V1 has
-  the **Edit** view only, and a future **Analysis** view (V2) is added here — at
-  full inspector width — rather than in the narrow Utility panel.
+## Extension Seams
 
-`AppState.active` (a `DocumentSession`) carries navigation in two tiers:
-`selected_path` (the visible object node) and `selected_parameter_path` (the
-parameter being edited, or `None`). `core/` is untouched — `TreeNode` /
-`ParameterItem` already carry the `path` that lookups, the context bar and
-navigation need.
-
-### Single navigation owner (`NavigationService`)
-
-All navigation — from Search, from validation review, and later from comparison,
-documentation links, analysis and database references — flows through **one
-`NavigationService`** (in `ui_qt/`). No other component implements navigation.
-It **coordinates and notifies; it does not drive widgets**:
-
-1. resolve the target `path` (object- and/or parameter-level);
-2. update the selection on `state.active` (the frontend-agnostic step);
-3. emit a single notification carrying the **target identity** (the `path` and
-   whether the target is object- or parameter-level).
-
-Subscribing views each own their own *reveal* behaviour: the tree expands
-ancestors, sets the current row and scrolls it into view; the parameter list
-selects the row; the inspector loads the parameter and applies a temporary
-highlight; the context bar updates its segments. Because the service only
-touches `state.active` and emits a notification, `core/` and `state/` stay
-Qt-free and `tests/test_boundaries.py` continues to pass.
-
-**Issue display model:** the **Utility panel's Issues view is the single home**
-for full issue text — for both parameter-level and object-level issues (the
-latter no longer need a bespoke banner). Editing cards carry **no** issue text;
-instead the Issues panel **auto-opens and updates live** whenever a draft edit is
-invalid, so live feedback is never lost when the panel is collapsed.
-
-Examples of a selected object and its parameter list:
-
-| Selected object | Parameters (middle pane) |
+| Capability | Architectural seam |
 |---|---|
-| `Header` | BPX version, title, description, model |
-| `Parameterisation / Cell` | temperature, area, capacity, voltage cut-offs and other cell parameters |
-| `Parameterisation / Positive electrode / Particle / Primary` | particle radius, diffusivity, OCP, reaction-rate, concentration and stoichiometry |
-| `Validation / C/20 discharge` | time/current/voltage/temperature experiment arrays |
+| Editing and creation | Command intent, `command_service.py`, `editing.py`, `document_factory.py` and per-document undo in `DocumentSession`. |
+| Function/table visualisation | Inspector analysis view consuming the selected `ParameterItem`; BPX functions exposed through `bpx_gateway.py` / `to_python_function()`. |
+| Templates and scaffolds | `document_factory.py` creates incomplete structures without scientific defaults. |
+| External database import | A new anti-corruption adapter, mirroring `bpx_gateway.py`, returns raw BPX dicts from third-party sources. |
+| Simulator hand-off | `export.py` can generalise from serialisation to target-specific writers. |
+| File comparison | Multiple `DocumentSession` objects plus tree-model diffing and shared navigation. |
+| Cross-feature navigation | `NavigationService` is the single frontend navigation coordinator. |
+| Actionable validation | Future `IssueKind` plus pure remediation functions in `core/`. |
 
-### Per-kind editing cards
+## Architectural Constraints
 
-The Qt inspector (`ui_qt/inspector.py`) dispatches *rendering* off
-`parameter.kind` rather than parameter name. Editing follows the same principle:
-**one editor widget per `ParameterKind`, not per parameter** — so the editor set
-stays fixed however many parameters or sections BPX adds. V1 includes the first
-editing cards for scalar, integer and enum parameters. Later milestones extend
-the same pattern to functions, tables, section operations and raw fallbacks.
+- `core/` and `state/` must remain Qt-free.
+- The raw dict remains the editable source of truth.
+- BPX schema and validation semantics stay delegated to `bpx`.
+- Domain plausibility checks must be separate from schema validation.
+- Future UI features should connect through existing state, command and
+  navigation seams rather than duplicating traversal or validation logic.
 
-| `ParameterKind` | Editing card |
-|---|---|
-| `SCALAR` | Number input with the parameter's unit |
-| `INTEGER` | Stepper (integer-constrained) |
-| `ENUM` | Dropdown constrained to the schema's `enum_values` |
-| `FUNCTION` | Expression editor with an `ExpressionParser` syntax check; later a preview plot via `Function.to_python_function()` |
-| `TABLE` | Editable x/y grid with a length-match guard |
-| `SECTION` | Add/remove child controls; no value editor |
-| `UNKNOWN` | Raw / JSON fallback |
+## Future Architectural Considerations
 
-Each card is tailored by the schema-derived **`FieldMeta`** (unit, description,
-examples, and the integer/enum/function hints already produced by
-`bpx_gateway.py`).
+The schematic's BPX Validator includes plausibility validation: comparison of
+values against known or typical cell parameters. That is a distinct concern from
+schema validation and requires a reference dataset of domain knowledge.
 
-**Commit model.** Editing writes to the **raw editing state** (`BPXDocument.raw`),
-which may legitimately hold invalid values (decision 1). Pressing **Enter**
-commits the card's current input — *valid or invalid* — after which the model is
-re-derived from a copy and any invalidity surfaces as a `ValidationIssue`;
-invalid data is never silently accepted as valid, it is rejected *visibly*. A
-card therefore **emits the user's raw input and never gatekeeps** (e.g. a scalar
-card returns the typed string when it is not a number). A small **inline Reset**
-beside the input restores the last committed value and **Esc** reverts the
-uncommitted draft; there are no detached Apply/Reset buttons, and blur does not
-commit. Full issue text appears in the Utility panel's Issues view, not on the
-card.
-
-The one justified special case is the **`Model` enum**: its `ENUM` card carries a
-`CHOOSE_MODEL` remediation hook, because changing the model is not a plain value
-edit — it triggers a *structural* switch (e.g. SPM ↔ DFN) that changes which
-sections are required. See [roadmap.md](roadmap.md).
-
-## UI design decision log
-
-These entries record the Version 1 **UI redesign** decisions and their reasoning
-(the "Key design decisions" above cover the backend). Status is one of Accepted /
-Deferred / Open.
-
-### Issue 1 — Multi-pane shell layout
-- **Decision:** Fixed three-pane master-detail Editor (`Tree │ Parameter list │
-  Inspector`), a left activity bar, a top context/mode bar, a right Utility
-  panel, and a bottom status bar.
-- **Reasoning:** Keeps object → parameter → editor context visible at once;
-  matches familiar IDE conventions; each band has one clear job.
-- **Alternatives considered:** A two-pane body-swap (tree + swapping
-  list/detail); a dockable inspector; a floating document-info card.
-- **Advantages:** Sibling context preserved while editing; scalable activity-bar
-  seam; no colliding chrome.
-- **Disadvantages:** Three columns pressure horizontal space; the top bar is
-  location-only, not clickable navigation.
-- **Future implications:** Activity bar absorbs future views; the Inspector can
-  host future parameter-centric views; multi-document fits as activity/tab
-  additions.
-- **Status:** Accepted.
-
-### Issue 2 — Non-modal validation issue cursor
-- **Decision:** Validation review is a **non-modal issue cursor** pinned into the
-  top context/mode bar (Previous / `n of N` / Finish Review), not a locked mode;
-  the editor stays fully interactive during review. The Validation list has no
-  Previous/Next.
-- **Reasoning:** The purpose of review is to *fix* issues, which means editing; a
-  modal review would force users to leave it to edit.
-- **Alternatives considered:** A true modal review; jump-only from the list with
-  no cursor.
-- **Advantages:** Fix-in-place; search/tree/edit stay available; matches
-  Find-Next / spellcheck conventions.
-- **Disadvantages:** Less forced focus (mitigated by the visually distinct bar).
-- **Future implications:** Generalises to a remediation walker when `IssueKind`
-  actions arrive.
-- **Status:** Accepted.
-
-### Issue 3 — Activity-bar view switching
-- **Decision:** A left activity bar switches the full content area between
-  top-level views (V1: Editor, Validation), replacing top tabs; the Validation
-  icon shows a **count badge**; no disabled placeholders for unshipped views.
-- **Reasoning:** Most future views are full-area pages; a vertical rail scales
-  better than top tabs and gives the validation state a badge home.
-- **Alternatives considered:** Top `QTabWidget`; VS Code-exact sidebar-only
-  switching; menu-driven switching.
-- **Advantages:** Scales cleanly; honest (only shipped views shown); clear badge.
-- **Disadvantages:** Heavy chrome for two V1 views; needs an icon set.
-- **Future implications:** Compare / database / analysis each become one activity
-  entry with no layout rework.
-- **Status:** Accepted.
-
-### Issue 4 — Search as a navigation component
-- **Decision:** Replace `QCompleter` with a custom **SearchPopup** navigation
-  component (scroll after ~8 results; bold name over full path; ↑↓/Enter/Esc;
-  staged Esc: close → clear → return to editor). It indexes **parameters and
-  navigable objects**, is focused by **both Ctrl+F and Ctrl+P** (focus +
-  select-all), and every selection calls the shared `NavigationService`. First
-  implementation deliberately minimal.
-- **Reasoning:** Search has become navigation, not autocomplete; `QCompleter`'s
-  flat-string model fights the interaction design; owning the component
-  establishes the right seam.
-- **Alternatives considered:** Extend `QCompleter`; defer the popup to V2;
-  parameters-only index; a single shortcut.
-- **Advantages:** One owned navigation surface; objects reachable; no future
-  rip-and-replace.
-- **Disadvantages:** More V1 work; mixed object/parameter results need a type
-  marker (ranking deferred).
-- **Future implications:** Same popup later hosts ranking, icons, recents, and
-  issue/compare/database results.
-- **Status:** Accepted.
-
-### Issue 5 — Toolbar, Import menu, Save vs Export
-- **Decision:** Minimal fixed toolbar — **Import ▼** (V1: "Open File" only),
-  **Save** (write-back to the current file, Ctrl+S, clears Modified), **Export**
-  (copy to a new path/format, leaves Modified), **Search**. Remove the disabled
-  New/Compare buttons. Add dirty/backing-file tracking.
-- **Reasoning:** Save and Export are distinct operations; conflating them makes
-  the Modified/Saved status meaningless; no empty placeholders.
-- **Alternatives considered:** Save = Export (status quo); keep disabled future
-  buttons; Export-only.
-- **Advantages:** Honest controls; meaningful status; Import ▼ is the
-  future-source hub seam.
-- **Disadvantages:** Requires backing-file + dirty state in `DocumentSession`.
-- **Future implications:** Import ▼ absorbs New Template / LIIONDB / database /
-  recent; Export generalises to per-simulator writers.
-- **Status:** Accepted.
-
-### Issue 6 — Utility panel and inspector-hosted analysis
-- **Decision:** A right **Utility panel** of docked, toggleable panels hosts the
-  **Issues** panel only in V1. Editing cards carry no issue text; the Issues
-  panel is the single home for all issue text (parameter- and object-level) and
-  **auto-opens/updates live** when a draft edit is invalid. Analysis is **not** a
-  Utility panel or a parallel registry; it is added in V2 as another **view of
-  the Inspector** over the same selected `ParameterItem`, at full inspector width.
-- **Reasoning:** Editing (stateful draft) and analysis (read-only, derived) are
-  distinct; a thin rail cannot host deep analysis but a full-width inspector view
-  can; defining an analyzer registry before any analyzers exist is premature
-  abstraction.
-- **Alternatives considered:** Floating pop-up windows; analysis inside each
-  editing card; a parallel `analysis/registry.py` in V1; keeping issues inline on
-  the card.
-- **Advantages:** One issue surface (incl. object-level); uncluttered cards; live
-  feedback retained via auto-open; V2 analysis drops in as an inspector view with
-  no rework.
-- **Disadvantages:** Two feedback ideas to keep consistent (auto-open vs card);
-  the Utility panel adds a fourth region (mitigated by toggling).
-- **Future implications:** If inspector width is tight for V2 plots, a "maximize"
-  toggle can collapse Tree+List; the Utility panel can later host
-  outline/doc/compare panels.
-- **Status:** Accepted (revised: no analyzer registry in V1).
-
-### Issue 7 — DocumentSession / AppState split
-- **Decision:** Split state now — `DocumentSession` (document, selection, undo,
-  dirty/backing-file; per document) and `AppState` (a single
-  `active: DocumentSession` plus app-global view state). The UI accesses document
-  state via `state.active.*`. No document collection or switcher UI in V1.
-- **Reasoning:** Undo/selection/dirty are inherently per-document; the
-  rename+split is cheap now and expensive later; one `active` indirection makes
-  future multi-document purely additive.
-- **Alternatives considered:** Keep `AppState` singular; introduce a full session
-  collection now.
-- **Advantages:** Correct ownership; non-breaking multi-document later; no
-  premature collection.
-- **Disadvantages:** A rename + one indirection touches current call sites (small
-  now).
-- **Future implications:** Multi-document = `AppState` gains a sessions list +
-  selector + switcher; `DocumentSession` and `state.active.*` are unchanged;
-  compare reuses two sessions.
-- **Status:** Accepted.
-
-### Issue 8 — Editing / commit model
-- **Decision:** **Enter commits** the card's raw input to the raw editing state —
-  valid or invalid; the derived model re-validates and surfaces any invalidity as
-  issues (invalid data is never silently accepted). Cards always emit raw input
-  and never gatekeep. An **inline Reset** beside the input restores the last
-  committed value; **Esc** reverts the draft; there are no detached Apply/Reset
-  buttons; **blur does not commit**.
-- **Reasoning:** Detached buttons were far from the input, and blocking invalid
-  commits contradicted decision 1 ("open/edit invalid files"); the raw dict, not
-  the card, is the source of truth.
-- **Alternatives considered:** Keep footer Apply/Reset; block invalid commits
-  (status quo); commit live per keystroke; commit on blur.
-- **Advantages:** Co-located controls; invalid edits allowed (core principle);
-  fewer widgets; integrates with Issues auto-open.
-- **Disadvantages:** Enter-to-commit is implicit (mitigated by inline Reset +
-  live Issues).
-- **Future implications:** The same "emit raw, never gatekeep" contract serves
-  function/table cards (V2) and remediation auto-fixes.
-- **Status:** Accepted.
-
-### DD-009 — Navigation ownership
-- **Decision:** One **`NavigationService`** (in `ui_qt/`) owns all navigation; no
-  component duplicates it. It **coordinates and notifies** rather than driving
-  widgets: resolve target `path` → update selection on `state.active` → emit one
-  notification carrying the target identity (path + object-vs-parameter level).
-  Subscribing views own their own reveal (expand/select/scroll/highlight/context
-  bar).
-- **Reasoning:** A single owner prevents duplicated navigation;
-  coordinate-and-notify avoids coupling the service to concrete widgets; the
-  state step keeps `core/`/`state/` Qt-free.
-- **Alternatives considered:** Each consumer implements its own navigation; a
-  service that imperatively drives every widget.
-- **Advantages:** DRY navigation; testable; boundary tests stay green; panels are
-  plug-in subscribers.
-- **Disadvantages:** Requires a small notification/subscription contract.
-- **Future implications:** Consumers extend to compare, documentation links,
-  analysis and database references with no new navigation code.
-- **Status:** Accepted.
-
-### DD-010 — Issue resolution during review
-- **Decision:** When an edit resolves the issue under the review cursor, the
-  cursor **stays put** (no auto-advance), shows a clear **resolved** indicator,
-  and decrements the count; the user advances with Next or leaves with Finish
-  Review. A newly-introduced issue joins the set but never steals the cursor.
-  When all issues are resolved, a clear **Finish Review** action is presented
-  rather than auto-exiting. The resolved indicator and count track the
-  **committed** document (post-Enter revalidation), not the live debounced
-  preview.
-- **Reasoning:** Auto-advance fights the non-modal, user-in-control model and
-  reshuffles indices on every fix; tracking committed state avoids flicker while
-  typing.
-- **Alternatives considered:** Auto-advance to the next issue on resolution.
-- **Advantages:** Predictable; preserves context; confirms changes applied;
-  consistent with the app's philosophy.
-- **Disadvantages:** Slightly slower for bulk triage than auto-advance.
-- **Future implications:** The same cursor becomes the remediation walker; Next
-  can skip auto-fixed issues.
-- **Status:** Accepted.
-
-## Future direction
-
-The Version 1 foundation is designed so deeper editing, visualisation and
-comparison bolt on without rework: the dict-based document is editing-ready,
-`AppState` can grow from a single active `DocumentSession` to a collection
-without changing how the UI reads `state.active`, and `to_python_function()` on
-BPX functions enables plotting. See [roadmap.md](roadmap.md).
-
-### Extension seams
-
-The schematic's future features each map to a defined plug-in point, so the V1
-framework stays easy to extend:
-
-| Future feature (schematic) | Where it plugs in |
-|---|---|
-| Editing & creation (create/edit BPX) | Foundation implemented: command intent (`commands.py`), orchestration (`command_service.py`), mutation primitives (`editing.py`) and state-level undo. Ongoing work is wiring more UI actions to commands. |
-| Visualisation of functions/tables | A new **Analysis view of the Inspector** (V2) rendering the selected `ParameterItem` via `Function.to_python_function()` from `bpx_gateway.py`. |
-| Templates / scaffolds for SPM/SPMe/DFN/Partial | Implemented in `document_factory.py`: incomplete structural scaffolds with required sections and no invented scientific values. |
-| External database import (LIIONDB, other BPX databases) | A **new anti-corruption adapter mirroring `bpx_gateway.py`** — one module that owns the third-party API and returns a raw BPX dict. |
-| Simulator hand-off (PyBOP, PyProBE) | Generalise `export.py` from "serialise to JSON/YAML" to "emit to a target", adding per-simulator writers behind the same interface. |
-| Compare files / compare against known cell | `AppState` grows from a single active `DocumentSession` to several; `tree_model.py` diffing and the `NavigationService` reuse the existing node tree and navigation. |
-| In-app navigation (search, validation review, compare, doc-links) | The single **`NavigationService`** (`ui_qt/`): coordinate-and-notify; every consumer subscribes rather than implementing its own navigation. |
-
-### Design tension: the "sanity check" validator
-
-The schematic's *BPX Validator* is more than the schema/syntax validation V1
-delegates to `bpx`. It adds a **sanity check** — a *visual comparison of values
-against known cell parameters* — which requires a **reference dataset of domain
-knowledge** (typical/known parameter ranges).
-
-That conflicts with a core V1 principle: Explore_BPX holds **no domain logic** and
-delegates everything to the `bpx` package. The resolution is deliberate: keep
-sanity-checking **out of V1**, and when it arrives, isolate it as its own
-additive layer — e.g. a dedicated `core/sanity.py` plus a versioned reference
-dataset — so it never contaminates the schema-driven, delegate-everything design
-that the rest of the app relies on. Schema/syntax validation and plausibility
-("sanity") validation stay two distinct, independently-sourced concerns.
+To preserve the current architecture, plausibility validation should be added as
+an independent layer, for example `core/sanity.py` plus a versioned reference
+dataset. It should not contaminate `bpx_gateway.py` or duplicate BPX schema
+logic. Schema/syntax validation and plausibility validation should remain
+independently sourced and independently testable.

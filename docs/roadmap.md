@@ -1,86 +1,243 @@
 # Roadmap
 
-Explore_BPX is built incrementally. Every version is useful on its own; later
-features build on the Version 1 desktop foundation without requiring it to be
-rewritten.
+This roadmap is organised by capability rather than release number. It describes
+what Explore_BPX can do now, what is in the current implementation scope, and
+what is planned for later. Architectural rationale lives in
+[architecture.md](architecture.md); detailed interaction behaviour lives in
+[ui-design.md](ui-design.md).
 
-**Project Schematic (goal)** - a standalone, dashboard-like app at the centre of the BPX ecosystem that makes BPX user-friendly. It connects parameter *sources* (experimental and modelling parameterisation, external BPX databases) to *simulators* (PyBOP, PyProBE), supports easier create/edit/visualise workflows, validates beyond syntax, and advances standardisation.
+## Capability Status Summary
 
-## Version 1 — Qt explorer/editor foundation (current)
+| Capability | Status |
+|---|---|
+| Open JSON/YAML BPX files, including invalid files | Current |
+| Derived BPX object tree and parameter list | Current |
+| Continuous BPX validation | Current |
+| Export / round-trip JSON or YAML | Current |
+| Scalar, integer and enum editing | Current scope |
+| Activity-bar shell and Utility panel | Current scope |
+| SearchPopup navigation | Current scope |
+| Save vs Export split and dirty tracking | Current scope |
+| DocumentSession / AppState split | Current scope |
+| Function/table editing | Planned |
+| Analysis / visualisation view | Planned |
+| Actionable validation and remediation | Planned |
+| Create-from-template workflows | Planned |
+| Raw JSON view | Planned |
+| External database import | Future |
+| Simulator hand-off | Future |
+| File comparison | Future |
+| Multi-document workspace UI | Future |
+| Plausibility / sanity validation | Future |
 
-The smallest genuinely useful desktop app, and the framework every later feature extends from.
+## Current Scope
 
-- Open JSON/YAML BPX files, including invalid ones.
-- A fixed multi-pane shell: a left activity bar (Editor / Validation views), a
-  three-pane Editor (Tree → object parameter list → Inspector), a top
-  context/mode bar, a right Utility panel (Issues), and a bottom status bar.
-- Typed per-kind display and editing of each parameter (scalar, integer, enum;
-  function/table/unknown shown read-only for now) with units and schema
-  descriptions; the Inspector is designed to host future parameter-centric views
-  (Analysis, V2).
-- Continuous validation surfaced in the Utility panel's Issues view (the single
-  home for full issue text, parameter- and object-level) and an activity-bar
-  Validation view; a non-modal review cursor walks issues in place.
-- Global parameter/object navigation via a SearchPopup (Ctrl+F / Ctrl+P), backed
-  by the single NavigationService that all navigation flows through.
-- Edit scalar, integer and enum values through per-kind cards: Enter commits the
-  raw editing state (valid or invalid), with an inline Reset and live validation.
-- Distinct Save (write-back) and Export (copy-out) actions, an Import ▼ menu
-  (Open File), and modified/backing-file tracking.
-- State split into DocumentSession (per document) and AppState (active session +
-  view state), preparing multi-document without exposing it.
-- Export / round-trip as JSON or YAML.
-- Use the command foundation for document operations:
-  `core/commands.py`, `core/command_service.py`, `core/structure.py`,
-  `core/document_factory.py`, and state-level undo support.
+Current scope is the useful desktop foundation: a Qt BPX explorer/editor that can
+open, navigate, validate, edit simple values and export BPX files while keeping
+strict architectural boundaries.
 
-**Excluded from Version 1:** full function/table editors, visualisation, raw JSON
-editing, file comparison, polished create-from-template UI, multi-file handling,
-external database import, simulator hand-off, and any duplication of BPX logic.
+Included in current scope:
 
-## Version 2 — Complete editing, creation and visualisation
+- open JSON/YAML BPX files, including invalid files;
+- show a derived BPX object tree and per-object parameter list;
+- inspect parameters with schema metadata such as units and descriptions;
+- continuously validate the raw working document;
+- edit scalar, integer and enum parameters;
+- commit raw editing input, including invalid work-in-progress values;
+- save back to the current file and export copies;
+- maintain dirty/backing-file state;
+- route navigation through a single NavigationService;
+- keep `core/` and `state/` frontend-agnostic.
 
-Creation, editing and visualisation are at the heart of the GUI, so creation is a first-class goal.
+Out of current scope:
 
-- Extend **per-kind editing cards** beyond Version 1: function expression
-  editor, editable table grid, section add/remove controls, unknown/raw fallback,
-  and compact quick inputs in parameter lists. The `Model` enum is the one
-  special case, carrying a model-switch hook. See [architecture.md](architecture.md).
-- **Actionable error workflows:** classify validation issues by an `IssueKind`
-  enum (edit value, move misplaced field, choose model, map materials, add
-  missing section, review warning) so the UI maps `kind → remediation` instead of
-  branching on the underlying exception. Backed by a pure, unit-testable
-  `core/remediation.py` that proposes fixed dicts. Includes closing the known gap
-  where warnings lose their field path. See [architecture.md](architecture.md).
-- Create new BPX files via UI workflows over the existing incomplete scaffolds
-  for SPM, SPMe, DFN and Partial.
-- Re-validate after edits (continuous).
-- Visualise functions and interpolated tables (e.g. OCP plots) as an **Analysis
-  view of the Inspector** — another view of the selected parameter — using
-  `Function.to_python_function()`.
-- Grow the Import ▼ menu (e.g. New Template) as create-from-template ships.
-- Read-only raw JSON view.
+- full function/table editors;
+- in-depth analysis and plotting;
+- raw JSON editing;
+- external database import;
+- simulator hand-off;
+- comparison;
+- multi-document workspace UI;
+- plausibility validation based on reference datasets.
 
-## Version 3 - Validation beyond syntax and ecosystem connections
+## Workspace And Navigation
 
-- **Sanity Check** - plausibility validation that visually compares parameter values against known / typical cell parameters, distict from the existing schema / syntax check. This will require a reference dataset of cell parameters (design-tension note in [architecture.md](architecture.md))
-- **External database import** - pull parameters from open-source BPX databases such as LIIONDB, and other BPX databases, as additional sources.
-- **Simulator hand-off** - export / hand BPX off to simulators, with **PyBOP** and **PyProBE** as the first targets; framed under simulator compatibility and standardisation. 
+### Current
 
+- Derived object tree built from the raw BPX data.
+- Parameter list for the selected object.
+- Two-tier selection: object path and optional parameter path.
 
-## Near-term organisation
+### Current Scope
 
-- Keep Version 1 focused and shippable: Qt desktop app, open/navigate/validate,
-  scalar/integer/enum editing, export, and a clean command foundation.
-- Move deeper editing workflows into Version 2 rather than expanding Version 1
-  indefinitely.
-- Preserve strict layering so `state/` and `core/` remain reusable.
-- Keep boundary coverage in `tests/test_boundaries.py` so `ui_qt/` stays out of
-  `core/` and `state/`. See [architecture.md](architecture.md).
+- Activity-bar shell with Editor and Validation views.
+- Top context/mode bar and bottom status bar.
+- Right Utility panel hosting Issues.
+- SearchPopup for object and parameter navigation.
+- `NavigationService` as the single navigation coordinator.
 
-## Future
+### Future
 
-- Compare two BPX files (parameter diff and overlaid plots).
-- Multi-file library / data management.
-- Standalone distribution building on the PySide6 desktop frontend above.
-- Further modelling-assistant features building on the simulator hand-off. 
+- Multi-document workspace UI over multiple `DocumentSession` objects.
+- Comparison navigation between documents.
+- Documentation, analysis and database references using the same navigation
+  service.
+
+## Editing
+
+### Current
+
+- Per-kind editing architecture for scalar, integer and enum values.
+- Command foundation for document operations:
+  `core/commands.py`, `core/command_service.py`, `core/structure.py` and
+  `core/document_factory.py`.
+- Raw-dict editing primitives in `core/editing.py`.
+- State-level undo support.
+
+### Current Scope
+
+- Enter-to-commit editing workflow.
+- Inline reset and draft revert behaviour.
+- Dirty/backing-file tracking.
+- Save writes back to the current file; Export writes a copy.
+
+### Planned
+
+- Function expression editor.
+- Editable table grid.
+- Section add/remove controls.
+- Unknown/raw fallback editor.
+- Compact quick inputs in parameter lists where they genuinely improve repeated
+  editing.
+- Model-switch handling for structural model changes.
+
+## Validation
+
+### Current
+
+- BPX schema validation delegated to the official `bpx` package.
+- Normalised `ValidationIssue` records with path, message and severity.
+- Best-effort mapping from validation paths to visible objects/parameters.
+
+### Current Scope
+
+- Utility panel Issues view as the single full-text issue surface.
+- Activity-bar Validation view listing document issues.
+- Non-modal review cursor for stepping through issues in context.
+- Resolved issue behaviour: stay in place, show resolved state, explicit Next or
+  Finish Review.
+
+### Planned
+
+- `IssueKind` classification for actionable remediation.
+- Pure remediation functions for operations such as edit value, move misplaced
+  value, choose model, map materials and add missing section.
+- Restore usable field paths for warnings that currently land at the document
+  root.
+- Optional warning hide/ignore workflow for intentional modelling decisions.
+
+### Future
+
+- Plausibility / sanity validation against known or typical cell parameter
+  ranges, implemented as a separate validation layer with its own reference
+  dataset.
+
+## Search
+
+### Current Scope
+
+- SearchPopup replacing generic autocomplete.
+- Object and parameter results.
+- Keyboard navigation with `Ctrl+F`, `Ctrl+P`, Up/Down, Enter and staged Escape.
+- All result activation flows through `NavigationService`.
+
+### Future
+
+- Ranking.
+- Icons or type markers.
+- Recent searches.
+- Searching validation issues, comparison results or database references through
+  the same navigation surface.
+
+## Analysis And Visualisation
+
+### Planned
+
+- Analysis as an Inspector view of the selected parameter.
+- Function and interpolated-table visualisation, such as OCP plots, using BPX
+  functions exposed through `bpx_gateway.py`.
+
+### Future
+
+- Parameter-centric plausibility displays using reference datasets.
+- Optional maximised Inspector/analysis workspace if plots need more space.
+- Comparison overlays for related files or known cells.
+
+## Data Sources And Import
+
+### Current Scope
+
+- Import menu with Open File.
+
+### Planned
+
+- New BPX files from incomplete templates/scaffolds for SPM, SPMe, DFN and
+  Partial models.
+- Recent documents.
+
+### Future
+
+- LIIONDB import.
+- Other BPX database sources.
+- Additional source adapters implemented as anti-corruption layers that return
+  raw BPX dictionaries.
+
+## Export And Simulator Integration
+
+### Current
+
+- Export / round-trip JSON or YAML from the raw working document.
+
+### Current Scope
+
+- Distinct Save and Export semantics.
+
+### Future
+
+- Simulator hand-off targets such as PyBOP and PyProBE.
+- Target-specific writers behind the export layer.
+- Simulator compatibility checks where appropriate.
+
+## Creation And Templates
+
+### Current
+
+- `document_factory.py` can create incomplete structural scaffolds without
+  inventing scientific values.
+
+### Planned
+
+- UI workflows for creating BPX files from templates.
+- Model-aware scaffolding for required sections.
+
+## Workspace And Multi-Document Support
+
+### Current Scope
+
+- `DocumentSession` separates per-document state from app-global state.
+- `AppState.active` gives the UI a stable active-document access pattern.
+
+### Future
+
+- Multiple open document sessions.
+- Workspace/library management.
+- Comparison between documents.
+- Active-document switcher UI.
+
+## Non-Goals
+
+- Reimplementing BPX schema or validation semantics already owned by `bpx`.
+- Adding plausibility/domain validation to the core BPX gateway.
+- Shipping disabled controls for workflows that do not exist yet.
+- Building speculative analysis registries before concrete analysis widgets are
+  implemented.
