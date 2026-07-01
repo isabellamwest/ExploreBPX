@@ -11,16 +11,25 @@ rewritten.
 The smallest genuinely useful desktop app, and the framework every later feature extends from.
 
 - Open JSON/YAML BPX files, including invalid ones.
-- Navigate: Tree → object's parameter list → parameter detail (with a clickable
-  breadcrumb back up).
-- Read-only display of each parameter in its own detail view, typed by kind
-  (scalar, integer, enum, function, table, unknown) with units and schema
-  descriptions, plus a disabled "Advanced display" placeholder for future graphs.
-- Continuous validation: a marker on the affected parameter in the list, the full
-  message in the parameter detail, plus a Validation tab that links to it.
+- A fixed multi-pane shell: a left activity bar (Editor / Validation views), a
+  three-pane Editor (Tree → object parameter list → Inspector), a top
+  context/mode bar, a right Utility panel (Issues), and a bottom status bar.
+- Typed per-kind display and editing of each parameter (scalar, integer, enum;
+  function/table/unknown shown read-only for now) with units and schema
+  descriptions; the Inspector is designed to host future parameter-centric views
+  (Analysis, V2).
+- Continuous validation surfaced in the Utility panel's Issues view (the single
+  home for full issue text, parameter- and object-level) and an activity-bar
+  Validation view; a non-modal review cursor walks issues in place.
+- Global parameter/object navigation via a SearchPopup (Ctrl+F / Ctrl+P), backed
+  by the single NavigationService that all navigation flows through.
+- Edit scalar, integer and enum values through per-kind cards: Enter commits the
+  raw editing state (valid or invalid), with an inline Reset and live validation.
+- Distinct Save (write-back) and Export (copy-out) actions, an Import ▼ menu
+  (Open File), and modified/backing-file tracking.
+- State split into DocumentSession (per document) and AppState (active session +
+  view state), preparing multi-document without exposing it.
 - Export / round-trip as JSON or YAML.
-- Edit scalar, integer and enum values through per-kind Qt cards using a
-  draft-buffer / live-validate / Apply cycle.
 - Use the command foundation for document operations:
   `core/commands.py`, `core/command_service.py`, `core/structure.py`,
   `core/document_factory.py`, and state-level undo support.
@@ -46,8 +55,10 @@ Creation, editing and visualisation are at the heart of the GUI, so creation is 
 - Create new BPX files via UI workflows over the existing incomplete scaffolds
   for SPM, SPMe, DFN and Partial.
 - Re-validate after edits (continuous).
-- Visualise functions and interpolated tables (e.g. OCP plots) using
+- Visualise functions and interpolated tables (e.g. OCP plots) as an **Analysis
+  view of the Inspector** — another view of the selected parameter — using
   `Function.to_python_function()`.
+- Grow the Import ▼ menu (e.g. New Template) as create-from-template ships.
 - Read-only raw JSON view.
 
 ## Version 3 - Validation beyond syntax and ecosystem connections
