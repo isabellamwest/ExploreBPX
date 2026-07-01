@@ -1,8 +1,8 @@
 """Inspector (right panel): the single editor surface for one parameter.
 
-Layout: title + validity badge, a value editor (per-kind card), description,
-and an Issues pane. Editing uses a draft buffer: typing validates a candidate
-dict live (badge + Issues update). Commit is driven by Enter or the inline
+Layout: title + validity badge, then a value editor (per-kind card) followed by
+an optional description.  Editing uses a draft buffer: typing validates a
+candidate dict live (badge updates).  Commit is driven by Enter or the inline
 Reset interaction within the card; there are no detached Apply/Reset buttons.
 """
 
@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from PySide6.QtCore import QTimer, Signal
 from PySide6.QtWidgets import (
-    QFrame,
     QHBoxLayout,
     QLabel,
     QScrollArea,
@@ -61,23 +60,13 @@ class InspectorPanel(QWidget):
         self._content = QWidget()
         self._content_layout = QVBoxLayout(self._content)
         scroll.setWidget(self._content)
-        body.addWidget(scroll, 2)
-
-        self._issues = QFrame(objectName="IssuesPane")
-        issues_layout = QVBoxLayout(self._issues)
-        issues_layout.addWidget(QLabel("Issues:", objectName="Heading"))
-        self._issues_text = QLabel("None")
-        self._issues_text.setWordWrap(True)
-        issues_layout.addWidget(self._issues_text)
-        issues_layout.addStretch(1)
-        body.addWidget(self._issues, 1)
+        body.addWidget(scroll)
         outer.addLayout(body, 1)
 
     def show_placeholder(self) -> None:
         self._clear_content()
         self._title.setText("")
         self._badge.setText("")
-        self._issues_text.setText("None")
         self._content_layout.addWidget(
             QLabel("Select an object from the structure to inspect + edit it.")
         )
@@ -118,10 +107,8 @@ class InspectorPanel(QWidget):
     def _render_issues(self, issues, has_errors: bool) -> None:
         if not issues:
             self._set_badge("Valid", OK)
-            self._issues_text.setText("None")
             return
         self._set_badge("Invalid" if has_errors else "Warning", ERROR if has_errors else WARNING)
-        self._issues_text.setText("\n\n".join(i.message for i in issues))
 
     def _set_badge(self, text: str, colour: str) -> None:
         self._badge.setText(text)

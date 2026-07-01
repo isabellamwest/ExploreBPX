@@ -24,6 +24,22 @@ QListWidget::item:selected, QTreeView::item:selected { background: #ddeeff; colo
 QLabel#CardTitle { font-size: 15px; font-weight: 600; }
 QLabel#Heading { color: #57606a; font-weight: 600; }
 QFrame#Card { border: 1px solid #d0d7de; }
-QFrame#IssuesPane { border: 1px solid #d0d7de; background: #f6f8fa; }
-QStatusBar { background: #f6f8fa; border-top: 1px solid #d0d7de; }
+QStatusBar { background: #f6f8fa; border-top: 1px solid #d0d7de; font-size: 12px; color: #57606a; }
+QWidget#ActivityBar { background: #f6f8fa; border-right: 1px solid #d0d7de; }
+QToolButton#ActivityButton {
+    background: transparent; border: none; padding: 6px 4px;
+    font-size: 12px; color: #57606a;
+}
+QToolButton#ActivityButton:checked {
+    color: #1f2328; font-weight: 600;
+    border-left: 3px solid #1f6feb; background: #eaf2ff;
+}
+QToolButton#ActivityButton:hover:!checked { background: #e8eaed; }
+QWidget#IssuesDrawer { background: #f6f8fa; border-left: 1px solid #d0d7de; }
+QToolButton#IssuesToggle {
+    background: #f6f8fa; border: none; border-bottom: 1px solid #d0d7de;
+    padding: 5px 8px; font-size: 12px; color: #57606a; text-align: left;
+}
+QToolButton#IssuesToggle:hover { background: #e8eaed; }
+QListWidget#IssuesList { border: none; background: #ffffff; font-size: 12px; }
 """

@@ -15,7 +15,7 @@ what is planned for later. Architectural rationale lives in
 | Continuous BPX validation | Current |
 | Export / round-trip JSON or YAML | Current |
 | Scalar, integer and enum editing | Current |
-| Activity-bar shell and Issues drawer | Current scope |
+| Activity-bar shell and Issues drawer | Current |
 | SearchPopup navigation | Current scope |
 | Save vs Export split and dirty tracking | Current |
 | DocumentSession / AppState split | Current |
@@ -68,12 +68,13 @@ Out of current scope:
 - Derived object tree built from the raw BPX data.
 - Parameter list for the selected object.
 - Two-tier selection: object path and optional parameter path.
+- Activity-bar shell with Editor and Validation workspace views.
+- Collapsible right-edge Issues drawer; auto-opens on first error; thin handle always shows the current issue count.
+- Bottom status bar showing file name and save state.
 
 ### Current Scope
 
-- Activity-bar shell with Editor and Validation views.
-- Top context/mode bar and bottom status bar.
-- Collapsible right Issues drawer.
+- Top context/mode bar showing current location.
 - SearchPopup for object and parameter navigation.
 - `NavigationService` as the single navigation coordinator.
 
@@ -150,11 +151,11 @@ and keeps completion state separate from validation state.
 - BPX schema validation delegated to the official `bpx` package.
 - Normalised `ValidationIssue` records with path, message and severity.
 - Best-effort mapping from validation paths to visible objects/parameters.
+- Validation workspace in the activity bar listing all document issues.
+- Issues drawer surfaces all issues in context; collapses to a thin handle when not needed.
 
 ### Current Scope
 
-- Issues drawer as the single full-text issue surface.
-- Activity-bar Validation view listing document issues.
 - Non-modal review cursor for stepping through issues in context.
 - Resolved issue behaviour: stay in place, show resolved state, explicit Next or
   Finish Review.
