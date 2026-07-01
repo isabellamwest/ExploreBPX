@@ -24,6 +24,8 @@ class IntegerCard(EditorCard):
         layout.addWidget(self._spin, 1)
         if parameter.unit:
             layout.addWidget(QLabel(parameter.unit))
+        layout.addWidget(self._build_reset_button())
+        self._install_keyboard_handler(self._spin)
 
     def value(self) -> object:
         return self._spin.value()

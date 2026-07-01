@@ -1,18 +1,17 @@
 """Per-document session state (frontend-agnostic).
 
 DocumentSession owns all state associated with a single open BPX document:
-the document itself, navigation selection, undo history, and (reserved for the
-forthcoming Save vs Export step) dirty flag and backing-file path.
+the document itself, navigation selection, undo history, dirty flag and
+backing-file path.
 
 DocumentSession has no Qt dependencies and no knowledge of the application
-shell.
-"""
+shell."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from core import bpx_gateway, command_service, editing
+from core import bpx_gateway, command_service, editing, export
 from core.bpx_gateway import ValidationResult
 from core.commands import Command, Preview
 from core.document import BPXDocument
@@ -26,8 +25,9 @@ class DocumentSession:
     document will be produced by an initial command such as ``CreateDocument``.
     In normal use, sessions are created by ``AppState.open``.
 
-    ``dirty`` and ``backing_file`` are reserved for the forthcoming Save vs
-    Export implementation and are not yet wired to any behaviour.
+    ``dirty`` is set by any mutation (``execute_command``, ``apply_value``,
+    ``undo``) and cleared by ``save``. ``backing_file`` is the path from which
+    the document was opened and to which ``save`` writes.
     """
 
     def __init__(self, document: BPXDocument | None = None) -> None:
@@ -35,7 +35,6 @@ class DocumentSession:
         self.selected_path: tuple[str, ...] | None = None
         self.selected_parameter_path: tuple[str, ...] | None = None
         self._undo_stack: list[BPXDocument] = []
-        # Reserved: wired in the Save vs Export implementation step.
         self.dirty: bool = False
         self.backing_file: Path | None = None
 
@@ -63,6 +62,7 @@ class DocumentSession:
         else:
             filename, fmt = "untitled.json", "json"
         self.document = BPXDocument.from_raw(result.raw, filename=filename, fmt=fmt)
+        self.dirty = True
         if result.select_path is not None:
             self.selected_path = result.select_path
         self.selected_parameter_path = result.select_parameter_path
@@ -71,6 +71,7 @@ class DocumentSession:
         """Restore the previous document state, if any."""
         if self._undo_stack:
             self.document = self._undo_stack.pop()
+            self.dirty = True
 
     def select(self, path: tuple[str, ...]) -> None:
         """Select an object node and show its parameter list."""
@@ -121,3 +122,22 @@ class DocumentSession:
         self.document = BPXDocument.from_raw(
             raw, filename=self.document.filename, fmt=self.document.fmt
         )
+        self.dirty = True
+
+    def save(self) -> None:
+        """Write the current document to ``backing_file`` and clear dirty.
+
+        The output format is derived from the backing file's extension so
+        that the written bytes always match the file's declared type.
+
+        Raises ``ValueError`` if no document is loaded or no backing file
+        is set. Raises ``OSError`` if the write fails.
+        """
+        if self.document is None:
+            raise ValueError("No document loaded")
+        if self.backing_file is None:
+            raise ValueError("No backing file set; use export to save to a new location")
+        name = self.backing_file.name.lower()
+        fmt = "yaml" if name.endswith((".yml", ".yaml")) else "json"
+        self.backing_file.write_bytes(export.to_bytes(self.document.raw, fmt))
+        self.dirty = False

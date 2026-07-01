@@ -54,7 +54,7 @@ class MainWindow(QMainWindow):
         new = bar.addAction("New")
         new.setEnabled(False)
         bar.addAction("Save", self._save)
-        bar.addAction("Export", self._save)
+        bar.addAction("Export", self._export)
         compare = bar.addAction("Compare")
         compare.setEnabled(False)
         bar.addSeparator()
@@ -118,21 +118,66 @@ class MainWindow(QMainWindow):
         if not name:
             return
         try:
-            self._state.open(Path(name).read_bytes(), Path(name).name)
-        except LoadError as exc:
+            self._state.open(Path(name))
+        except (LoadError, OSError) as exc:
             QMessageBox.critical(self, "Cannot open file", str(exc))
             return
         self._refresh_all()
 
     def _save(self) -> None:
-        if not self._state.has_document:
+        """Write the document to its backing file.
+
+        If no backing file is set (unsaved new document), a Save As dialog
+        is shown first. Does not affect export copies.
+        """
+        if self._state.active is None:
             return
-        document = self._state.active.document
-        name, _ = QFileDialog.getSaveFileName(self, "Save BPX", document.filename, "BPX (*.json *.yaml *.yml)")
+        session = self._state.active
+        if session.backing_file is None:
+            name, _ = QFileDialog.getSaveFileName(
+                self, "Save BPX",
+                session.document.filename if session.document else "",
+                "BPX (*.json *.yaml *.yml)",
+            )
+            if not name:
+                return
+            session.backing_file = Path(name)
+        try:
+            session.save()
+        except OSError as exc:
+            QMessageBox.critical(self, "Save failed", str(exc))
+            return
+        self._update_title()
+
+    def _export(self) -> None:
+        """Write a copy of the document to a user-chosen location.
+
+        Does not affect the backing file or dirty state.
+        """
+        if self._state.active is None or self._state.active.document is None:
+            return
+        session = self._state.active
+        default = str(session.backing_file) if session.backing_file else session.document.filename
+        name, _ = QFileDialog.getSaveFileName(
+            self, "Export BPX", default, "BPX (*.json *.yaml *.yml)"
+        )
         if not name:
             return
         fmt = "yaml" if name.lower().endswith((".yml", ".yaml")) else "json"
-        Path(name).write_bytes(export.to_bytes(document.raw, fmt))
+        try:
+            Path(name).write_bytes(export.to_bytes(session.document.raw, fmt))
+        except OSError as exc:
+            QMessageBox.critical(self, "Export failed", str(exc))
+
+    def _update_title(self) -> None:
+        """Sync the window title with the active session's name and dirty state."""
+        session = self._state.active
+        if session is None or session.document is None:
+            self.setWindowTitle("ExploreBPX")
+            return
+        name = session.backing_file.name if session.backing_file else session.document.filename
+        prefix = "* " if session.dirty else ""
+        self.setWindowTitle(f"{prefix}{name} \u2014 ExploreBPX")
 
     def _refresh_all(self) -> None:
         document = self._state.active.document if self._state.active else None
@@ -144,3 +189,4 @@ class MainWindow(QMainWindow):
         self._search.index_document(document)
         count = (document.error_count + document.warning_count) if document else 0
         self._tabs.setTabText(1, f"Validation ({count})")
+        self._update_title()

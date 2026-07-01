@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 
 import pytest
 
@@ -19,10 +20,15 @@ def _app() -> QApplication:
     return QApplication.instance() or QApplication([])
 
 
-def test_window_boots_and_edits(valid_spm_bytes):
+def test_window_boots_and_edits(valid_spm_path, tmp_path):
+    # Use a writable copy so the test session's backing_file never points
+    # at the repository example file. Avoids accidental writes on save.
+    work = tmp_path / "spm_test.json"
+    shutil.copy(valid_spm_path, work)
+
     _app()
     window = MainWindow()
-    window._state.open(valid_spm_bytes, "spm_example_valid.json")
+    window._state.open(work)
     window._refresh_all()
     assert window._state.active.document.is_valid
 

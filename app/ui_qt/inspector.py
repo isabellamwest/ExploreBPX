@@ -1,9 +1,9 @@
 """Inspector (right panel): the single editor surface for one parameter.
 
-Layout mirrors the wireframe: title + validity badge, a value editor (per-kind
-card), description, a deferred Display placeholder, an Issues pane, and
-Reset/Apply. Editing uses a draft buffer: typing validates a candidate dict
-live (badge + Issues update), and Apply commits to the document.
+Layout: title + validity badge, a value editor (per-kind card), description,
+and an Issues pane. Editing uses a draft buffer: typing validates a candidate
+dict live (badge + Issues update). Commit is driven by Enter or the inline
+Reset interaction within the card; there are no detached Apply/Reset buttons.
 """
 
 from __future__ import annotations
@@ -13,7 +13,6 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
-    QPushButton,
     QScrollArea,
     QSizePolicy,
     QTextEdit,
@@ -74,23 +73,11 @@ class InspectorPanel(QWidget):
         body.addWidget(self._issues, 1)
         outer.addLayout(body, 1)
 
-        footer = QHBoxLayout()
-        footer.addStretch(1)
-        self._reset_btn = QPushButton("Reset")
-        self._apply_btn = QPushButton("Apply")
-        self._reset_btn.clicked.connect(self._on_reset)
-        self._apply_btn.clicked.connect(self._on_apply)
-        footer.addWidget(self._reset_btn)
-        footer.addWidget(self._apply_btn)
-        outer.addLayout(footer)
-
     def show_placeholder(self) -> None:
         self._clear_content()
         self._title.setText("")
         self._badge.setText("")
         self._issues_text.setText("None")
-        self._reset_btn.setEnabled(False)
-        self._apply_btn.setEnabled(False)
         self._content_layout.addWidget(
             QLabel("Select an object from the structure to inspect + edit it.")
         )
@@ -102,6 +89,7 @@ class InspectorPanel(QWidget):
 
         self._card = create_card(parameter, meta)
         self._card.draft_changed.connect(self._debounce.start)
+        self._card.commit_requested.connect(self._on_commit)
         self._content_layout.addWidget(self._card)
 
         if parameter.description:
@@ -112,8 +100,6 @@ class InspectorPanel(QWidget):
             self._content_layout.addWidget(desc)
 
         self._content_layout.addStretch(1)
-        self._reset_btn.setEnabled(self._card.is_editable)
-        self._apply_btn.setEnabled(self._card.is_editable)
         self._render_issues(parameter.issues, parameter.has_errors)
 
     def _validate_draft(self) -> None:
@@ -123,12 +109,7 @@ class InspectorPanel(QWidget):
         errors = [i for i in result.issues if i.severity == Severity.ERROR]
         self._render_issues(result.issues, bool(errors))
 
-    def _on_reset(self) -> None:
-        if self._card is not None:
-            self._card.reset()
-            self._validate_draft()
-
-    def _on_apply(self) -> None:
+    def _on_commit(self) -> None:
         if self._card is None or self._state.active is None:
             return
         self._state.active.apply_value(self._card.parameter.path, self._card.value())

@@ -25,6 +25,11 @@ def examples_dir() -> Path:
 
 
 @pytest.fixture
+def valid_spm_path() -> Path:
+    return EXAMPLES_DIR / "spm_example_valid.json"
+
+
+@pytest.fixture
 def valid_spm_bytes() -> bytes:
     return (EXAMPLES_DIR / "spm_example_valid.json").read_bytes()
 

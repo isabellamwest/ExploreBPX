@@ -7,6 +7,8 @@ opening and closing documents from the UI layer. All per-document state
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from core.document import BPXDocument
 from state.document_session import DocumentSession
 
@@ -28,10 +30,20 @@ class AppState:
         """True when a document session is open."""
         return self.active is not None
 
-    def open(self, data: bytes | str, filename: str) -> None:
-        """Open a file, creating a fresh DocumentSession."""
-        document = BPXDocument.from_bytes(data, filename)
-        self.active = DocumentSession(document)
+    def open(self, path: Path) -> None:
+        """Open a file, creating a fresh DocumentSession.
+
+        Reads bytes from ``path``, parses the BPX document, and sets
+        ``backing_file`` on the session so that subsequent saves write back
+        to the same location.
+
+        Raises ``core.bpx_gateway.LoadError`` for unparseable files and
+        ``OSError`` if the file cannot be read.
+        """
+        document = BPXDocument.from_bytes(path.read_bytes(), path.name)
+        session = DocumentSession(document)
+        session.backing_file = path
+        self.active = session
 
     def close(self) -> None:
         """Close the active session."""

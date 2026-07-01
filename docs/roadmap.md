@@ -14,11 +14,11 @@ what is planned for later. Architectural rationale lives in
 | Derived BPX object tree and parameter list | Current |
 | Continuous BPX validation | Current |
 | Export / round-trip JSON or YAML | Current |
-| Scalar, integer and enum editing | Current scope |
+| Scalar, integer and enum editing | Current |
 | Activity-bar shell and Issues drawer | Current scope |
 | SearchPopup navigation | Current scope |
-| Save vs Export split and dirty tracking | Current scope |
-| DocumentSession / AppState split | Current scope |
+| Save vs Export split and dirty tracking | Current |
+| DocumentSession / AppState split | Current |
 | Authoring lifecycle: skeletons, templates and completion state | Planned |
 | Function/table editing | Planned |
 | Inspector analysis / visualisation section | Planned |
@@ -94,13 +94,12 @@ Out of current scope:
   `core/document_factory.py`.
 - Raw-dict editing primitives in `core/editing.py`.
 - State-level undo support.
-
-### Current Scope
-
-- Enter-to-commit editing workflow.
-- Inline reset and draft revert behaviour.
 - Dirty/backing-file tracking.
 - Save writes back to the current file; Export writes a copy.
+- Enter-to-commit editing workflow with per-kind cards.
+- Escape reverts the uncommitted draft; inline Reset restores the last committed value.
+
+### Current Scope
 
 ### Planned
 

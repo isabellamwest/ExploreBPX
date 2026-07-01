@@ -19,6 +19,8 @@ class ScalarCard(EditorCard):
         layout.addWidget(self._edit, 1)
         if parameter.unit:
             layout.addWidget(QLabel(parameter.unit))
+        layout.addWidget(self._build_reset_button())
+        self._install_keyboard_handler(self._edit)
 
     @staticmethod
     def _format(value: object) -> str:
