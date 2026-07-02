@@ -78,6 +78,7 @@ class InspectorPanel(QWidget):
 
         self._card = create_card(parameter, meta)
         self._card.draft_changed.connect(self._debounce.start)
+        self._card.draft_reset.connect(self._on_reset)
         self._card.commit_requested.connect(self._on_commit)
         self._content_layout.addWidget(self._card)
 
@@ -97,6 +98,12 @@ class InspectorPanel(QWidget):
         result = self._state.active.preview_value(self._card.parameter.path, self._card.value())
         errors = [i for i in result.issues if i.severity == Severity.ERROR]
         self._render_issues(result.issues, bool(errors))
+
+    def _on_reset(self) -> None:
+        if self._card is None:
+            return
+        self._debounce.stop()
+        self._render_issues(self._card.parameter.issues, self._card.parameter.has_errors)
 
     def _on_commit(self) -> None:
         if self._card is None or self._state.active is None:
