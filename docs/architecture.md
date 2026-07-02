@@ -128,10 +128,26 @@ Tree nodes are produced by walking the actual raw data rather than only walking
 the schema. This handles BPX polymorphism naturally: SPM/SPMe/DFN/Partial and
 single/blended electrode structures are already expressed in the data shape.
 
-Parameters are classified value-shape-first into `ParameterKind` values such as
-scalar, integer, enum, function, table and unknown. Schema metadata refines the
-classification with units, descriptions, examples and enum/integer/function
-hints.
+Parameters are classified into `ParameterKind` values (scalar, integer, enum,
+function, table, unknown). Classification is **declared-type first**: when
+schema metadata is available the declared field type is authoritative, and the
+current stored value's runtime type does not affect which editor opens. This
+ensures that an invalid stored value (e.g. a string committed to a float field)
+never causes the editor to switch kind or become read-only. Value shape is only
+used for structural kinds (dict/list, which define document topology) and for
+`allows_function` fields, where a constant number and a function-expression
+string are both valid stored types. Parameters with no schema metadata fall back
+to value-shape classification.
+
+**Design note for future user-defined parameters.** The declared-type-first
+principle requires that user-defined parameters carry explicit type metadata at
+creation time. The current `metadata_index()` covers BPX schema aliases only;
+parameters authored by Explore_BPX itself (section add/remove, templates) must
+synthesise and supply a `FieldMeta` so that `classify` remains metadata-
+authoritative for them. The no-metadata fallback is reserved for parameters read
+from external files whose aliases do not appear in any known metadata index. The
+mechanism for persisting and looking up user-defined parameter metadata is a
+design decision for the authoring feature.
 
 ## Core Module Responsibilities
 
