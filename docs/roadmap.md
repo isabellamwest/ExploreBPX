@@ -24,6 +24,7 @@ what is planned for later. Architectural rationale lives in
 | Inspector analysis / visualisation section | Planned |
 | Actionable validation and remediation | Planned |
 | Raw JSON view | Planned |
+| Session change awareness and review | Future |
 | External database import | Future |
 | Simulator hand-off | Future |
 | File comparison | Future |
@@ -57,6 +58,7 @@ Out of current scope:
 - raw JSON editing;
 - external database import;
 - simulator hand-off;
+- session change review;
 - comparison;
 - multi-document workspace UI;
 - plausibility validation based on reference datasets.
@@ -139,6 +141,17 @@ and keeps completion state separate from validation state.
 ### Future
 
 - Organisation-, lab-, chemistry- or workflow-specific templates.
+- Session change awareness derived from comparison with the last loaded or saved
+  baseline, answering what is different from the current baseline rather than
+  what actions the user has performed.
+- Subtle modified indicators in the existing editing UI, such as Tree,
+  Parameter List and Inspector markers that do not compete with validation
+  colours.
+- A future Changes workspace as a dedicated review workflow summarising
+  Modified, Added and Deleted items and navigating to affected locations through
+  `NavigationService`.
+- Rich comparison extensions such as old/new value display, filtering, review
+  before save or export, template comparison and last-export comparison.
 - Parameter authoring states beyond present/missing values.
 - Provenance and confidence tracking.
 - Review/confirmation workflows for template-derived values.
