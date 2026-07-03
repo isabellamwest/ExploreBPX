@@ -92,6 +92,8 @@ Out of current scope:
 ### Current
 
 - Per-kind editing architecture for scalar, integer and enum values.
+- Minimal function-expression string editing: any `allows_function` field can
+  hold a numeric constant or a function-expression string; both are now editable.
 - Command foundation for document operations:
   `core/commands.py`, `core/command_service.py`, `core/structure.py` and
   `core/document_factory.py`.
@@ -106,7 +108,7 @@ Out of current scope:
 
 ### Planned
 
-- Function expression editor.
+- Enhanced function expression editor with syntax highlighting and validation.
 - Editable table grid.
 - Section add/remove controls.
 - Unknown/raw fallback editor.

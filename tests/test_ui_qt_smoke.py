@@ -199,3 +199,69 @@ def test_integer_field_with_committed_string_opens_integer_card(valid_spm_path):
     QTest.keyClick(inspector._card._fallback, Qt.Key_Escape)
     assert inspector._card.value() == "not-an-integer"
     assert inspector._badge.text() == "Invalid"
+
+
+def _find_any_function_parameter(document):
+    """Return the first FUNCTION-kind parameter in the tree, or None."""
+    from core.parameter_types import ParameterKind
+
+    def _walk(node):
+        for p in node.parameters:
+            if p.kind == ParameterKind.FUNCTION:
+                return p
+        for child in node.children:
+            result = _walk(child)
+            if result is not None:
+                return result
+        return None
+
+    return _walk(document.tree)
+
+
+def test_function_field_with_string_opens_function_card(valid_spm_path):
+    """An allows_function field holding any string must open as a FunctionCard.
+
+    This covers both valid function expressions and invalid raw strings.  The
+    card must be editable so the user can repair the value without being
+    trapped by a read-only fallback.
+    """
+    from ui_qt.cards.function import FunctionCard
+    from core.parameter_types import ParameterKind
+
+    _app()
+    state = AppState()
+    state.open(valid_spm_path)
+
+    # Commit an invalid string to any allows_function field so its kind is FUNCTION.
+    original_param = _find_any_function_parameter(state.active.document)
+    if original_param is None:
+        # No FUNCTION parameter exists yet; force one by committing a string
+        # to a known allows_function field.
+        path = ("Parameterisation", "Negative electrode", "Diffusivity [m2.s-1]")
+        state.active.apply_value(path, "not-a-function")
+        parameter = state.active.document.find_parameter(path)
+    else:
+        path = original_param.path
+        state.active.apply_value(path, "not-a-function")
+        parameter = state.active.document.find_parameter(path)
+
+    assert parameter is not None
+    assert parameter.kind == ParameterKind.FUNCTION
+
+    inspector = InspectorPanel(state)
+    inspector.show_parameter(parameter)
+    assert isinstance(inspector._card, FunctionCard), (
+        f"Expected FunctionCard for FUNCTION kind, got {type(inspector._card).__name__}"
+    )
+    assert inspector._card.is_editable
+    assert inspector._badge.text() == "Invalid"
+
+    # Typing a valid number must be accepted (live validation clears the badge).
+    inspector._card._edit.setText("1.5e-14")
+    inspector._validate_draft()
+    assert inspector._badge.text() == "Valid"
+
+    # Escape must restore the committed invalid string.
+    QTest.keyClick(inspector._card._edit, Qt.Key_Escape)
+    assert inspector._card.value() == "not-a-function"
+    assert inspector._badge.text() == "Invalid"
