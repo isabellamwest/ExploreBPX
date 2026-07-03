@@ -8,6 +8,8 @@ model is reset.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt
 
 from core.tree_model import TreeNode
@@ -16,9 +18,14 @@ from core.tree_model import TreeNode
 class BpxTreeModel(QAbstractItemModel):
     """Maps a ``TreeNode`` hierarchy onto Qt's item model interface."""
 
-    def __init__(self, root: TreeNode) -> None:
+    def __init__(
+        self,
+        root: TreeNode,
+        is_expanded: Callable[[QModelIndex], bool] | None = None,
+    ) -> None:
         super().__init__()
         self._root = root
+        self._is_expanded = is_expanded or (lambda _index: False)
 
     def node_at(self, index: QModelIndex) -> TreeNode | None:
         if not index.isValid():
@@ -54,10 +61,13 @@ class BpxTreeModel(QAbstractItemModel):
             return None
         node: TreeNode = index.internalPointer()
         if role == Qt.DisplayRole:
-            return f"{node.label} ⚠" if node.has_errors else node.label
+            return f"{node.label} ⚠" if self._shows_error_marker(index, node) else node.label
         if role == Qt.ToolTipRole:
             return node.description or node.label
         return None
+
+    def refresh_warning_markers(self) -> None:
+        self._emit_data_changed(QModelIndex())
 
     def _find_parent(self, current: TreeNode, target: TreeNode) -> TreeNode | None:
         for child in current.children:
@@ -67,3 +77,16 @@ class BpxTreeModel(QAbstractItemModel):
             if found is not None:
                 return found
         return None
+
+    def _shows_error_marker(self, index: QModelIndex, node: TreeNode) -> bool:
+        if node.has_direct_errors or node.has_direct_parameter_errors:
+            return True
+        if not self._is_expanded(index):
+            return any(child.has_errors for child in node.children)
+        return False
+
+    def _emit_data_changed(self, parent: QModelIndex) -> None:
+        for row in range(self.rowCount(parent)):
+            index = self.index(row, 0, parent)
+            self.dataChanged.emit(index, index, [Qt.DisplayRole])
+            self._emit_data_changed(index)

@@ -5,12 +5,15 @@ from __future__ import annotations
 from core.parameter_types import ParameterKind
 from core.tree_model import (
     NodeType,
+    ParameterItem,
+    TreeNode,
     build_parameter_path_map,
     build_path_map,
     build_tree,
     match_parameter,
     match_path,
 )
+from core.validation import ValidationIssue
 
 
 def _find(node, label):
@@ -100,3 +103,24 @@ def test_match_parameter_handles_partial_loc(valid_spm_dict):
     parameter = match_parameter(parameter_map, loc)
     assert parameter is not None
     assert parameter.path == ("Parameterisation", "Cell", "Upper voltage cut-off [V]")
+
+
+def test_tree_node_distinguishes_direct_and_descendant_errors():
+    parameter = ParameterItem(
+        label="Voltage",
+        path=("Cell", "Voltage"),
+        kind=ParameterKind.SCALAR,
+        issues=[ValidationIssue(path=("Cell", "Voltage"), message="Invalid")],
+    )
+    child = TreeNode(label="Cell", path=("Cell",), parameters=[parameter])
+    root = TreeNode(label="BPX File", path=(), children=[child])
+
+    assert child.has_errors
+    assert not child.has_direct_errors
+    assert child.has_direct_parameter_errors
+    assert root.has_errors
+    assert not root.has_direct_errors
+    assert not root.has_direct_parameter_errors
+
+    root.issues.append(ValidationIssue(path=(), message="Invalid root"))
+    assert root.has_direct_errors

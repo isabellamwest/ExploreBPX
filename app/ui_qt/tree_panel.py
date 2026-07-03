@@ -22,14 +22,22 @@ class TreePanel(QWidget):
         self._view = QTreeView()
         self._view.setHeaderHidden(True)
         self._view.clicked.connect(self._on_clicked)
+        self._view.expanded.connect(self._refresh_warning_markers)
+        self._view.collapsed.connect(self._refresh_warning_markers)
         layout.addWidget(self._view)
 
     def set_root(self, root: TreeNode) -> None:
-        model = BpxTreeModel(root)
+        model = BpxTreeModel(root, is_expanded=self._view.isExpanded)
         self._view.setModel(model)
         self._view.expandToDepth(1)
+        model.refresh_warning_markers()
 
     def _on_clicked(self, index: QModelIndex) -> None:
         node = index.internalPointer()
         if node is not None:
             self.node_selected.emit(node.path)
+
+    def _refresh_warning_markers(self, _index: QModelIndex) -> None:
+        model = self._view.model()
+        if isinstance(model, BpxTreeModel):
+            model.refresh_warning_markers()

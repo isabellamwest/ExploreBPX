@@ -81,6 +81,10 @@ always-visible tree and parameter list already provide structural navigation.
 The tree contains BPX objects only, never individual parameters. Selecting an
 object updates the parameter list.
 
+Validation markers in the tree appear on the lowest visible object containing an
+issue. Ancestors do not duplicate the same marker once the relevant branch is
+open.
+
 ### Parameter List
 
 The parameter list shows the direct parameters of the selected object. Selecting

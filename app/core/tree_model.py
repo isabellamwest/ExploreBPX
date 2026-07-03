@@ -82,6 +82,14 @@ class TreeNode:
         )
 
     @property
+    def has_direct_errors(self) -> bool:
+        return any(issue.severity == Severity.ERROR for issue in self.issues)
+
+    @property
+    def has_direct_parameter_errors(self) -> bool:
+        return any(parameter.has_errors for parameter in self.parameters)
+
+    @property
     def kind(self) -> ParameterKind:
         """Compatibility property for frontends expecting section-like nodes."""
 
