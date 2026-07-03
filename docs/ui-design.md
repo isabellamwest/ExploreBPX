@@ -44,9 +44,9 @@ The three panes remain visible while editing so sibling context is preserved. A
 selected object does not replace the tree, and a selected parameter does not
 replace the parameter list.
 
-The **Issues drawer** is a collapsible right-edge drawer for validation issues.
-It remains collapsed most of the time, visible as a thin strip that always shows
-the current issue count, such as `Issues (0)` or `Issues (2)`.
+The **Issues drawer** is a collapsible right-edge panel scoped to the currently
+open parameter card. It is visible only when a parameter card is active in the
+Inspector; it is hidden when the user selects an object or clears the selection.
 
 ## Activity Bar
 
@@ -192,14 +192,13 @@ the live preview while typing.
 
 ## Issues Drawer
 
-The Issues drawer is a collapsible right-side tool window for validation
-context. It should behave like a collapsible IDE tool window, not a permanently
-visible side panel.
+The Issues drawer is a collapsible right-side panel scoped to the currently
+open parameter card. It appears only when a parameter card is active in the
+Inspector and is completely hidden otherwise.
 
 The Issues drawer:
 
-- contains all full issue text;
-- handles both parameter-level and object-level issues;
+- displays all validation issues for the selected parameter;
 - stays collapsed most of the time;
 - remains visible as a thin strip when collapsed;
 - always displays the current issue count, such as `Issues (0)` or `Issues (2)`;
@@ -207,10 +206,10 @@ The Issues drawer:
 - auto-opens when validation produces a new error or warning unless explicitly
   dismissed;
 - updates live during preview validation;
-- remains available during normal editing and validation review.
+- is hidden when no parameter card is open.
 
-The Issues drawer should not become a dumping ground for secondary workflows.
-In-depth parameter analysis belongs in the Inspector as an expandable section.
+Parameter-level issues are the sole focus of the drawer. Object-level and
+document-wide issues are reviewed in the Validation view.
 
 ## Toolbar
 
@@ -235,7 +234,7 @@ bar, whose role is location and mode.
 - Search navigates; it does not filter.
 - Review guides; it does not lock the editor.
 - Invalid edits may be committed to the raw working document.
-- The Issues drawer is the single home for full issue text.
+- The Issues drawer is the single home for full issue text for the selected parameter.
 - Future analysis is an expandable Inspector section, not an activity-bar view
   or Issues drawer tenant.
 - Future UI controls should appear when their workflows exist, not as disabled

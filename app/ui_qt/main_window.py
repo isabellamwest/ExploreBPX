@@ -110,8 +110,10 @@ class MainWindow(QMainWindow):
     def _on_view_changed(self, page_index: int) -> None:
         """Switch the workspace and hide the Issues drawer outside the editor."""
         self._stack.setCurrentIndex(page_index)
-        # The drawer is parameter-specific context; irrelevant in other views.
-        self._issues_drawer.setVisible(page_index == 0)
+        # The drawer is parameter-card context; hide it when leaving the editor.
+        # Visibility within the editor is governed by _select_parameter.
+        if page_index != 0:
+            self._issues_drawer.setVisible(False)
 
     def _select_node(self, path: tuple) -> None:
         if self._state.active is None:
@@ -120,6 +122,7 @@ class MainWindow(QMainWindow):
         self._params.show_node(self._state.active.selected_node())
         self._inspector.show_placeholder()
         self._issues_drawer.show_parameter(None)
+        self._issues_drawer.setVisible(False)
 
     def _select_parameter(self, path: tuple) -> None:
         if self._state.active is None:
@@ -129,6 +132,7 @@ class MainWindow(QMainWindow):
         if parameter is not None:
             self._inspector.show_parameter(parameter)
         self._issues_drawer.show_parameter(parameter)
+        self._issues_drawer.setVisible(parameter is not None)
 
     def _jump_to_path(self, path: tuple) -> None:
         if not path or self._state.active is None:
@@ -226,6 +230,7 @@ class MainWindow(QMainWindow):
         self._inspector.show_placeholder()
         self._validation.refresh(document)
         self._issues_drawer.show_parameter(None)
+        self._issues_drawer.setVisible(False)
         self._search.index_document(document)
         count = (document.error_count + document.warning_count) if document else 0
         self._btn_validation.setText(f"Validation ({count})" if count else "Validation")
