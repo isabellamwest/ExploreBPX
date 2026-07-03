@@ -22,7 +22,6 @@ class EnumCard(EditorCard):
         self._select(self._original)
         self._combo.currentTextChanged.connect(self.draft_changed.emit)
         layout.addWidget(self._combo, 1)
-        layout.addWidget(self._build_reset_button())
         self._install_keyboard_handler(self._combo)
 
     def _select(self, value: object) -> None:

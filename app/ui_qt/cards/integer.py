@@ -46,7 +46,6 @@ class IntegerCard(EditorCard):
 
         if parameter.unit:
             layout.addWidget(QLabel(parameter.unit))
-        layout.addWidget(self._build_reset_button())
         self._install_keyboard_handler(input_widget)
 
     def value(self) -> object:

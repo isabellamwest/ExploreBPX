@@ -11,6 +11,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 pytest.importorskip("PySide6")
 
+from PySide6.QtCore import Qt
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
 from ui_qt.main_window import MainWindow
@@ -41,7 +43,7 @@ def test_window_boots_and_edits(valid_spm_path, tmp_path):
     assert window._state.active.document.raw["Header"]["Model"] == "DFN"
 
 
-def test_inspector_reset_clears_invalid_draft_badge(valid_spm_path):
+def test_inspector_escape_clears_invalid_draft_badge(valid_spm_path):
     _app()
     state = AppState()
     state.open(valid_spm_path)
@@ -60,12 +62,12 @@ def test_inspector_reset_clears_invalid_draft_badge(valid_spm_path):
     inspector._validate_draft()
     assert inspector._badge.text() == "Invalid"
 
-    inspector._card._on_inline_reset()
+    QTest.keyClick(inspector._card._edit, Qt.Key_Escape)
     assert inspector._card.value() == original
     assert inspector._badge.text() == "Valid"
 
 
-def test_inspector_reset_restores_committed_invalid_badge(valid_spm_path):
+def test_inspector_escape_restores_committed_invalid_badge(valid_spm_path):
     _app()
     state = AppState()
     state.open(valid_spm_path)
@@ -86,7 +88,7 @@ def test_inspector_reset_restores_committed_invalid_badge(valid_spm_path):
     inspector._validate_draft()
     assert inspector._badge.text() == "Valid"
 
-    inspector._card._on_inline_reset()
+    QTest.keyClick(inspector._card._combo, Qt.Key_Escape)
     assert inspector._card.value() == "not-a-model"
     assert inspector._badge.text() == "Invalid"
 
@@ -100,7 +102,7 @@ def test_float_field_with_committed_string_opens_scalar_card(valid_spm_path):
 
     Before the fix, classify() would route the string value to FUNCTION, which
     maps to ReadOnlyCard. The user was then trapped: the value was visible but
-    neither editable nor resettable.
+    neither editable nor recoverable via Escape.
     """
     from ui_qt.cards.scalar import ScalarCard
     from core.parameter_types import ParameterKind
@@ -131,8 +133,8 @@ def test_float_field_with_committed_string_opens_scalar_card(valid_spm_path):
     inspector._validate_draft()
     assert inspector._badge.text() == "Valid"
 
-    # Reset must restore the committed (invalid) raw value.
-    inspector._card._on_inline_reset()
+    # Escape must restore the committed (invalid) raw value.
+    QTest.keyClick(inspector._card._edit, Qt.Key_Escape)
     assert inspector._card.value() == "not-a-number"
     assert inspector._badge.text() == "Invalid"
 
@@ -158,7 +160,7 @@ def test_integer_field_with_committed_string_opens_integer_card(valid_spm_path):
     """A string committed to an integer field must reopen as an IntegerCard with fallback.
 
     The IntegerCard should display the raw string, remain editable, and allow
-    Reset to restore the committed value.
+    Escape to restore the committed value.
     """
     from ui_qt.cards.integer import IntegerCard
     from core.parameter_types import ParameterKind
@@ -193,7 +195,7 @@ def test_integer_field_with_committed_string_opens_integer_card(valid_spm_path):
     assert inspector._card._fallback.text() == "not-an-integer"
     assert inspector._badge.text() == "Invalid"
 
-    # Reset must restore the raw committed string.
-    inspector._card._on_inline_reset()
+    # Escape must restore the raw committed string.
+    QTest.keyClick(inspector._card._fallback, Qt.Key_Escape)
     assert inspector._card.value() == "not-an-integer"
     assert inspector._badge.text() == "Invalid"

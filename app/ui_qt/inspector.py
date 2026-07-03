@@ -2,8 +2,9 @@
 
 Layout: title + validity badge, then a value editor (per-kind card) followed by
 an optional description.  Editing uses a draft buffer: typing validates a
-candidate dict live (badge updates).  Commit is driven by Enter or the inline
-Reset interaction within the card; there are no detached Apply/Reset buttons.
+candidate dict live (badge updates).  Commit is driven by Enter; Escape discards
+the draft and restores the committed validation state.  There are no detached
+Apply/Reset buttons.
 """
 
 from __future__ import annotations

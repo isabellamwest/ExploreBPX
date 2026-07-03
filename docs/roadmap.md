@@ -98,7 +98,7 @@ Out of current scope:
 - Dirty/backing-file tracking.
 - Save writes back to the current file; Export writes a copy.
 - Enter-to-commit editing workflow with per-kind cards.
-- Escape reverts the uncommitted draft; inline Reset restores the last committed value.
+- Escape reverts the uncommitted draft.
 
 ### Current Scope
 

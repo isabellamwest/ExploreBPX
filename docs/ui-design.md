@@ -148,7 +148,6 @@ The commit model is:
 - Invalid data is not silently accepted by the validated BPX model; it is
   surfaced as validation issues after revalidation.
 - Cards emit raw user input and do not gatekeep invalid values.
-- A small inline Reset beside the input restores the last committed value.
 - Escape reverts the uncommitted draft.
 - Blur does not commit.
 - Detached footer Apply/Reset buttons are not used.
@@ -376,8 +375,8 @@ the activity bar, SearchPopup, review cursor, Issues drawer and editor cards.
 ### DD-008 — Editing Commit Model
 
 - **Decision:** Enter commits raw input to the raw editing state, valid or
-  invalid. Cards always emit raw input and never gatekeep. Inline Reset restores
-  the last committed value; Escape reverts the draft; blur does not commit.
+  invalid. Cards always emit raw input and never gatekeep. Escape reverts the
+  draft; blur does not commit.
 - **Reasoning:** Detached buttons were far from input, and blocking invalid
   commits contradicted support for invalid BPX files.
 - **Alternatives considered:** Footer Apply/Reset; block invalid commits; commit

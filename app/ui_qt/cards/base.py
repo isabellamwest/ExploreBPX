@@ -3,23 +3,21 @@
 A card edits a *draft* of one parameter value. It never touches the document;
 it emits ``draft_changed`` while the user types (for live validation),
 ``draft_reset`` when the user discards a draft, and ``commit_requested`` when
-the user presses Enter or activates an inline action.
+the user presses Enter.
 
 Keyboard contract (for editable cards):
 - Enter / Return  → emit ``commit_requested`` (Inspector commits to document).
 - Escape          → restore to original value, emit ``draft_reset`` (Inspector
                     restores the committed validation state immediately).
-- Inline Reset    → same as Escape, triggered by the Reset button in the card.
 
 Cards register input widgets with ``_install_keyboard_handler`` in their
-``__init__`` and include the Reset button from ``_build_reset_button`` in their
-layout. ``ReadOnlyCard`` does neither.
+``__init__``. ``ReadOnlyCard`` does neither.
 """
 
 from __future__ import annotations
 
 from PySide6.QtCore import QEvent, QObject, Qt, Signal
-from PySide6.QtWidgets import QPushButton, QWidget
+from PySide6.QtWidgets import QWidget
 
 from core.bpx_gateway import FieldMeta
 from core.tree_model import ParameterItem
@@ -77,17 +75,6 @@ class EditorCard(QWidget):
                 self._reset_draft()
                 return True
         return super().eventFilter(obj, event)
-
-    def _build_reset_button(self) -> QPushButton:
-        """Return a small Reset button that restores the last committed value."""
-        btn = QPushButton("Reset")
-        btn.setObjectName("InlineReset")
-        btn.setFocusPolicy(Qt.NoFocus)
-        btn.clicked.connect(self._on_inline_reset)
-        return btn
-
-    def _on_inline_reset(self) -> None:
-        self._reset_draft()
 
     def _reset_draft(self) -> None:
         self.reset()
