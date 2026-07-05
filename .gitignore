@@ -78,4 +78,5 @@ Thumbs.db
 # Application-specific
 *.log
 
-# JSON examples or generated data can be kept if desired, but logs and temp files should be ignored
+# Scratch files
+scratch/
