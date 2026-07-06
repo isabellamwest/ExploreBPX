@@ -119,6 +119,7 @@ class InspectorPanel(QWidget):
         self._clear_content()
         self._title.setText("")
         self._badge.setText("")
+        self._badge.setStyleSheet("")
         self._content_layout.addWidget(
             QLabel("Select an object from the structure to inspect + edit it.")
         )
