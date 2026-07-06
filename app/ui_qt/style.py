@@ -35,11 +35,15 @@ QToolButton#ActivityButton:checked {
     border-left: 3px solid #1f6feb; background: #eaf2ff;
 }
 QToolButton#ActivityButton:hover:!checked { background: #e8eaed; }
-QWidget#IssuesDrawer { background: #f6f8fa; border-left: 1px solid #d0d7de; }
-QToolButton#IssuesToggle {
-    background: #f6f8fa; border: none; border-bottom: 1px solid #d0d7de;
-    padding: 5px 8px; font-size: 12px; color: #57606a; text-align: left;
+QWidget#SecondaryTabStrip { background: #f6f8fa; }
+QToolButton#SecondaryTab {
+    background: transparent; border: none; border-top: 2px solid transparent;
+    padding: 4px 12px; font-size: 12px; color: #57606a;
 }
-QToolButton#IssuesToggle:hover { background: #e8eaed; }
+QToolButton#SecondaryTab:hover:!checked { background: #e8eaed; }
+QToolButton#SecondaryTab:checked {
+    color: #1f2328; font-weight: 600; border-top: 2px solid #1f6feb;
+}
 QListWidget#IssuesList { border: none; background: #ffffff; font-size: 12px; }
+QLabel#IssuesPlaceholder { color: #57606a; font-size: 12px; padding: 16px; }
 """

@@ -265,3 +265,133 @@ def test_function_field_with_string_opens_function_card(valid_spm_path):
     QTest.keyClick(inspector._card._edit, Qt.Key_Escape)
     assert inspector._card.value() == "not-a-function"
     assert inspector._badge.text() == "Invalid"
+
+
+# ---------------------------------------------------------------------------
+# Inspector secondary workspace: workspace state, not parameter state
+# ---------------------------------------------------------------------------
+
+def test_secondary_workspace_starts_collapsed(valid_spm_path):
+    """The secondary workspace opens collapsed, with the tab strip visible."""
+    _app()
+    state = AppState()
+    state.open(valid_spm_path)
+
+    inspector = InspectorPanel(state)
+    assert inspector._secondary.is_expanded is False
+    assert inspector._secondary.active_id is None
+
+
+def test_secondary_workspace_persists_across_parameter_change(valid_spm_path):
+    """Opening a tab keeps it open while the user navigates parameters."""
+    _app()
+    state = AppState()
+    state.open(valid_spm_path)
+
+    inspector = InspectorPanel(state)
+    inspector._secondary.open("issues")
+    assert inspector._secondary.is_expanded is True
+
+    for path in (("Header", "Model"), ("Header", "BPX")):
+        parameter = state.active.document.find_parameter(path)
+        if parameter is not None:
+            inspector.show_parameter(parameter)
+            # Parameter selection must never collapse the workspace.
+            assert inspector._secondary.is_expanded is True
+            assert inspector._secondary.active_id == "issues"
+
+
+def test_secondary_workspace_toggles_closed_on_active_tab(valid_spm_path):
+    """Clicking the active tab again collapses the workspace."""
+    _app()
+    state = AppState()
+    state.open(valid_spm_path)
+
+    inspector = InspectorPanel(state)
+    inspector._secondary.open("issues")
+    assert inspector._secondary.is_expanded is True
+
+    # Simulate a click on the already-active tab.
+    inspector._secondary._on_tab_clicked("issues")
+    assert inspector._secondary.is_expanded is False
+    # Active tab is remembered so reopening restores it.
+    assert inspector._secondary.active_id == "issues"
+
+
+def test_issues_tab_lists_parameter_issues_and_activates(valid_spm_path):
+    """The Issues tab lists the selected parameter's issues, badges the count,
+    and emits issue_activated with the parameter path on double-click."""
+    _app()
+    state = AppState()
+    state.open(valid_spm_path)
+
+    path = ("Header", "Model")
+    state.active.apply_value(path, "not-a-model")
+    parameter = state.active.document.find_parameter(path)
+    assert parameter is not None and parameter.has_errors
+
+    inspector = InspectorPanel(state)
+    inspector.show_parameter(parameter)
+
+    count = len(parameter.issues)
+    assert count > 0
+    assert inspector._issues_tab._list.count() == count
+    assert inspector._secondary._buttons["issues"].text() == f"Issues ({count})"
+
+    captured = []
+    inspector.issue_activated.connect(lambda p: captured.append(p))
+    inspector._issues_tab._on_activated(inspector._issues_tab._list.item(0))
+    assert captured == [path]
+
+
+def test_reset_collapses_secondary_workspace(valid_spm_path):
+    """Opening a new document returns the workspace to its collapsed default."""
+    _app()
+    state = AppState()
+    state.open(valid_spm_path)
+
+    inspector = InspectorPanel(state)
+    inspector._secondary.open("issues")
+    assert inspector._secondary.is_expanded is True
+
+    inspector.reset()
+    assert inspector._secondary.is_expanded is False
+    assert inspector._secondary.active_id is None
+
+
+def test_issues_tab_placeholder_when_no_issues(valid_spm_path):
+    """Issues tab shows an explanatory placeholder (not an empty area) when the
+    selected parameter has no issues."""
+    _app()
+    state = AppState()
+    state.open(valid_spm_path)
+    assert state.active.document.is_valid
+
+    # Find any parameter that currently has no issues.
+    path = ("Header", "BPX")
+    parameter = state.active.document.find_parameter(path)
+    if parameter is None or parameter.has_errors:
+        pytest.skip("Fixture parameter not available or has errors")
+
+    inspector = InspectorPanel(state)
+    inspector.show_parameter(parameter)
+
+    assert inspector._issues_tab._list.count() == 0
+    # Stacked widget must be on the placeholder page, not the list page.
+    assert inspector._issues_tab._stack.currentIndex() == 1
+    assert "No validation issues" in inspector._issues_tab._placeholder.text()
+
+
+def test_issues_tab_placeholder_when_no_parameter_selected(valid_spm_path):
+    """Issues tab shows a prompt when no parameter is selected (e.g. tree node)."""
+    _app()
+    state = AppState()
+    state.open(valid_spm_path)
+
+    inspector = InspectorPanel(state)
+    # show_placeholder() is called when an object node is selected.
+    inspector.show_placeholder()
+
+    assert inspector._issues_tab._stack.currentIndex() == 1
+    assert "Select a parameter" in inspector._issues_tab._placeholder.text()
+

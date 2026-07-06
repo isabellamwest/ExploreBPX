@@ -1,4 +1,4 @@
-"""Main application window: activity bar, workspace stack, issues drawer.
+"""Main application window: activity bar and workspace stack.
 
 This is wiring only: it owns the single :class:`AppState`, connects panel
 signals to state mutations, and refreshes views. No BPX logic lives here.
@@ -26,7 +26,6 @@ from state.app_state import AppState
 
 from .activity_bar import ActivityBar
 from .inspector import InspectorPanel
-from .issues_drawer import IssuesDrawer
 from .parameter_list import ParameterListPanel
 from .search import SearchBar
 from .style import STYLESHEET
@@ -48,7 +47,6 @@ class MainWindow(QMainWindow):
         self._validation = ValidationPanel()
         self._search = SearchBar()
         self._activity_bar = ActivityBar()
-        self._issues_drawer = IssuesDrawer()
         self._status_label = QLabel()
 
         self._build_toolbar()
@@ -89,7 +87,6 @@ class MainWindow(QMainWindow):
         layout.setSpacing(0)
         layout.addWidget(self._activity_bar)
         layout.addWidget(self._stack, 1)
-        layout.addWidget(self._issues_drawer)
         self.setCentralWidget(central)
 
     def _build_statusbar(self) -> None:
@@ -102,18 +99,15 @@ class MainWindow(QMainWindow):
         self._params.parameter_selected.connect(self._select_parameter)
         self._inspector.committed.connect(self._on_committed)
         self._validation.issue_activated.connect(self._jump_to_path)
-        self._issues_drawer.issue_activated.connect(self._jump_to_path)
+        self._inspector.issue_activated.connect(self._jump_to_path)
         self._search.parameter_chosen.connect(self._jump_to_path)
         self._activity_bar.view_requested.connect(self._on_view_changed)
 
     # --- navigation -----------------------------------------------------
     def _on_view_changed(self, page_index: int) -> None:
-        """Switch the workspace and hide the Issues drawer outside the editor."""
+        """Switch the workspace.  The Inspector (and its secondary workspace)
+        lives on the editor page, so leaving the editor hides it naturally."""
         self._stack.setCurrentIndex(page_index)
-        # The drawer is parameter-card context; hide it when leaving the editor.
-        # Visibility within the editor is governed by _select_parameter.
-        if page_index != 0:
-            self._issues_drawer.setVisible(False)
 
     def _select_node(self, path: tuple) -> None:
         if self._state.active is None:
@@ -121,8 +115,6 @@ class MainWindow(QMainWindow):
         self._state.active.select(path)
         self._params.show_node(self._state.active.selected_node())
         self._inspector.show_placeholder()
-        self._issues_drawer.show_parameter(None)
-        self._issues_drawer.setVisible(False)
 
     def _select_parameter(self, path: tuple) -> None:
         if self._state.active is None:
@@ -131,8 +123,8 @@ class MainWindow(QMainWindow):
         parameter = self._state.active.selected_parameter()
         if parameter is not None:
             self._inspector.show_parameter(parameter)
-        self._issues_drawer.show_parameter(parameter)
-        self._issues_drawer.setVisible(parameter is not None)
+        else:
+            self._inspector.show_placeholder()
 
     def _jump_to_path(self, path: tuple) -> None:
         if not path or self._state.active is None:
@@ -161,7 +153,6 @@ class MainWindow(QMainWindow):
         except (LoadError, OSError) as exc:
             QMessageBox.critical(self, "Cannot open file", str(exc))
             return
-        self._issues_drawer.reset()
         self._refresh_all()
 
     def _save(self) -> None:
@@ -227,10 +218,8 @@ class MainWindow(QMainWindow):
         if document is not None:
             self._tree.set_root(document.tree)
         self._params.show_node(None)
-        self._inspector.show_placeholder()
+        self._inspector.reset()
         self._validation.refresh(document)
-        self._issues_drawer.show_parameter(None)
-        self._issues_drawer.setVisible(False)
         self._search.index_document(document)
         count = (document.error_count + document.warning_count) if document else 0
         self._btn_validation.setText(f"Validation ({count})" if count else "Validation")

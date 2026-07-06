@@ -228,7 +228,7 @@ are plug-in subscribers and the frontend boundary stays intact. The alternatives
 each consumer implementing its own navigation, or one service imperatively driving
 every widget — either duplicate logic or create brittle coupling. The cost is a
 small notification contract. Every current and future consumer (search, validation
-review, comparison, Inspector documentation links, Inspector analysis sections,
+review, comparison, Inspector documentation links, Inspector analysis tabs,
 database references) navigates through this one service.
 
 ## Validation Architecture
@@ -292,8 +292,8 @@ attach, without building the capabilities themselves ahead of need.
 | Capability | Architectural seam |
 |---|---|
 | Editing and creation | Command intent, `command_service.py`, `editing.py`, `document_factory.py` and per-document undo in `DocumentSession`. |
-| Function/table visualisation | Expandable Inspector analysis section consuming the selected `ParameterItem`; BPX functions exposed through `bpx_gateway.py` / `to_python_function()`. |
-| Issue presentation | Qt-owned Issues drawer consuming derived `ValidationIssue` state; no core or state dependency on drawer widgets. |
+| Function/table visualisation | Analysis tab in the Inspector secondary workspace consuming the selected `ParameterItem`; a launcher of `Show` actions that open floating visualisations, with BPX functions exposed through `bpx_gateway.py` / `to_python_function()`. |
+| Issue presentation | Qt-owned Issues tab in the Inspector secondary workspace consuming derived `ValidationIssue` state; no core or state dependency on the tab widgets. |
 | Authoring, skeletons and templates | `document_factory.py` creates incomplete structures without scientific defaults; completion/template state stays separate from exported BPX data. |
 | External database import | A new anti-corruption adapter, mirroring `bpx_gateway.py`, returning raw BPX dicts from third-party sources. |
 | Simulator hand-off | `export.py` generalising from serialisation to target-specific writers. |

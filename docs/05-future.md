@@ -77,8 +77,27 @@ independently sourced and independently testable.
 ## Analysis and visualisation — extensions
 
 - Parameter-centric plausibility displays using reference datasets.
-- An optional maximised Inspector section if plots need more space.
+- Docking or maximising floating visualisations if plots need more space.
 - Comparison overlays for related files or known cells.
+
+## Inspector secondary workspace — ParameterTool protocol
+
+When a second concrete tool is ready (Analysis, Documentation, References, etc.),
+`SecondaryWorkspace` should evolve toward a `ParameterTool` protocol so tools
+register generically without requiring Inspector-specific wiring each time:
+
+```python
+class ParameterTool:
+    id: str
+    title: str
+    def supports(self, parameter) -> bool: ...
+    def update(self, parameter) -> None: ...
+```
+
+`SecondaryWorkspace` would route `show_parameter` calls to all registered tools
+and surface each tab only when `supports()` returns True. Do not build this before
+a second concrete tool is ready — the abstraction should be derived from two
+examples, not invented for one.
 
 ## Reference — superseded design register
 
@@ -89,7 +108,7 @@ that own their subject matter, embedded inline as design rationale:
 - Workspace shell, activity bar, secondary surfaces, toolbar shape → [02-ui.md](02-ui.md).
 - DocumentSession/AppState split, navigation ownership → [01-architecture.md](01-architecture.md).
 - Editing commit model, validation review and cursor behaviour, parameter-scoped
-  Issues drawer, SearchPopup, Save/Export semantics → [03-features.md](03-features.md).
+  Issues tab, SearchPopup, Save/Export semantics → [03-features.md](03-features.md).
 
 The one decision that was still **Proposed** — the BPX authoring lifecycle
 (formerly DD-012) — has since been accepted as a core product commitment and is now

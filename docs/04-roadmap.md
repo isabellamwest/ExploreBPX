@@ -38,7 +38,7 @@ listed here only to establish the baseline that later phases depend on.
 | Enter-to-commit / Escape-to-revert model | [Editing](03-features.md#4-editing) |
 | Command-based mutation with undo | [Editing](03-features.md#4-editing) |
 | Continuous BPX validation and `ValidationIssue` records | [Validation](03-features.md#5-validation) |
-| Validation workspace and parameter-scoped Issues drawer | [Validation](03-features.md#5-validation) |
+| Validation workspace and parameter-scoped Issues tab | [Validation](03-features.md#5-validation) |
 | Export / round-trip JSON or YAML | [Save and Export](03-features.md#7-save-and-export) |
 | Dirty / backing-file state | [Save and Export](03-features.md#7-save-and-export) |
 | `DocumentSession` / `AppState` split | [01-architecture.md](01-architecture.md) |
@@ -182,15 +182,17 @@ authored-parameter metadata.
 
 ## Phase 6 — Analysis and visualisation
 
-### 6.1 Inspector analysis section (design then build)
+### 6.1 Inspector analysis tab (design then build)
 
-- **Depends on:** the Inspector section mechanism (Phase 1).
+- **Depends on:** the Inspector secondary-workspace mechanism (Phase 1).
 - **Note:** this feature is intentionally underspecified and requires a design pass
   before implementation (see [Analysis and Visualisation](03-features.md#9-analysis-and-visualisation)).
 - **Acceptance criteria:**
-  - Analysis is an expandable/collapsible Inspector section over the selected
-    parameter;
-  - function and interpolated-table parameters can be visualised;
+  - Analysis is a tab in the Inspector secondary workspace over the selected
+    parameter, acting as a launcher of per-tool `Show` actions rather than
+    embedding large graphs;
+  - function and interpolated-table parameters can be visualised in a floating
+    view;
   - no analyzer registry is introduced before a concrete analyzer exists.
 
 ## Deferred to future

@@ -187,7 +187,7 @@ where the kind supports it, its editing controls.
 
 The parameter list shows direct parameters of the selected object only. The
 Inspector is the selected parameter's work surface and the home for all
-parameter-centric tools, added as expandable Inspector sections (see
+parameter-centric tools, added as tabs in the Inspector secondary workspace (see
 [02-ui.md](02-ui.md)). All three editor panes stay visible during inspection.
 
 ### Architecture
@@ -333,7 +333,7 @@ checking.
 | Normalised `ValidationIssue` records (path, message, severity) | Implemented |
 | Best-effort mapping from validation paths to visible objects/parameters | Implemented |
 | Validation workspace listing all document issues | Implemented |
-| Parameter-scoped Issues drawer | Implemented |
+| Parameter-scoped Issues tab in the Inspector secondary workspace | Implemented |
 | Non-modal validation review cursor | Planned |
 | Resolved-issue behaviour during review (stay in place, explicit Next/Finish) | Planned |
 | `IssueKind` classification for actionable remediation | Planned |
@@ -354,28 +354,34 @@ Issues are visible in two places, with a strict division of responsibility:
 
 - the **Validation workspace** (activity bar) lists **all** issues for the active
   document, including document-level and object-level issues;
-- the **Issues drawer** shows issues for the **currently selected parameter only**.
+- the **Issues tab** (in the Inspector secondary workspace) shows issues for the
+  **currently selected parameter only**.
 
 Clicking an issue in the Validation workspace navigates to the affected location
 via `NavigationService` and, when review is active, positions the review cursor.
 
-#### Issues drawer (parameter-scoped)
+#### Issues tab (parameter-scoped)
 
-The Issues drawer is strictly parameter-scoped. Its behaviour is a single coherent
-rule:
+The Issues tab is strictly parameter-scoped and lives in the Inspector secondary
+workspace (see [02-ui.md](02-ui.md)). Its behaviour follows the secondary
+workspace's **workspace-state** model rather than being tied to an individual
+parameter:
 
-- **When a parameter is selected**, the drawer exists for that parameter. It may
-  be expanded or collapsed to a thin strip, and always shows that parameter's
-  current issue count (for example `Issues (0)` or `Issues (2)`). It expands and
-  collapses on click, auto-opens when validation produces a new error or warning
-  for that parameter unless explicitly dismissed, and updates live during preview
-  validation.
-- **When no parameter is selected** (an object or the document is selected), the
-  drawer is **not visible at all** — there is no parameter context, so the drawer
-  has no purpose.
+- The secondary workspace starts collapsed; its tab strip — including the Issues
+  tab — is always visible so issues stay discoverable.
+- The Issues tab always shows the selected parameter's current issue count as a
+  badge on the tab label (for example `Issues` or `Issues (2)`), updating live
+  during preview validation, whether or not the panel is open.
+- Opening the tab shows that parameter's issue list. While the tab is open,
+  changing the selected parameter simply refreshes the list for the new
+  parameter; it does not close the workspace.
+- Selecting a parameter never opens or closes the workspace. If the workspace is
+  collapsed, selecting a parameter with issues updates only the Inspector
+  validity badge and the Issues tab count — it does not force the panel open.
+- Only the user collapses the workspace, by clicking the active tab again.
 
-Document-level and object-level issues are never shown in the drawer; they belong
-to the Validation workspace.
+Document-level and object-level issues are never shown in the Issues tab; they
+belong to the Validation workspace.
 
 #### Review cursor (Planned)
 
@@ -405,8 +411,8 @@ warning-path gap in [01-architecture.md](01-architecture.md).
 
 - `core/bpx_gateway.py`, `core/validation.py`, `core/tree_model.py`.
 - `NavigationService` for issue-to-location navigation.
-- The Inspector (for the parameter-scoped drawer) and the activity bar (for the
-  Validation workspace).
+- The Inspector (for the parameter-scoped Issues tab) and the activity bar (for
+  the Validation workspace).
 
 ### Implementation Notes
 
@@ -427,10 +433,14 @@ user-controlled model and can reshuffle issue indices mid-edit. Staying put,
 showing resolved state and letting the user choose Next is more predictable, at the
 cost of being slightly slower for bulk triage.
 
-**Parameter-scoped drawer.** A thin per-parameter drawer keeps full issue text for
-the current parameter continuously reachable without a separate banner, while the
-Validation workspace owns document- and object-wide issues. Scoping the drawer to
-a parameter avoids overloading it with issues that have no parameter context.
+**Parameter-scoped Issues tab.** A per-parameter tab in the Inspector secondary
+workspace keeps full issue text for the current parameter reachable without a
+separate banner, while the Validation workspace owns document- and object-wide
+issues. Scoping the tab to a parameter avoids overloading it with issues that have
+no parameter context. Treating the secondary workspace as workspace state — open
+across parameter changes, closed only by the user — lets the user keep issues in
+view while navigating, matching the persistent problems/terminal panels of
+familiar editors.
 
 ### Future Extensions
 
@@ -685,41 +695,46 @@ plotting a function or an interpolated table. It is a parameter-centric tool hos
 in the Inspector, not a separate workspace.
 
 > **Specification status.** This feature is intentionally underspecified. The
-> accepted design is limited to the placement decision (an expandable Inspector
-> section) and the initial subject (function and table visualisation). Detailed
-> behaviour awaits a dedicated design pass and must not be invented before then.
+> accepted design is limited to the placement decision (an Analysis tab in the
+> Inspector secondary workspace acting as a launcher) and the initial subject
+> (function and table visualisation). Detailed behaviour awaits a dedicated design
+> pass and must not be invented before then.
 
 ### Capabilities
 
 | Capability | Status |
 |---|---|
-| Analysis as an expandable Inspector section for the selected parameter | Planned |
+| Analysis as a tab in the Inspector secondary workspace | Planned |
+| Launcher model: per-tool `Show` actions that open floating visualisations | Planned |
 | Function and interpolated-table visualisation (for example OCP plots) | Planned |
 
 ### User Workflow
 
-With a parameter selected, the user expands the Analysis section in the Inspector
-to see a plot of the parameter (such as a function curve or a table interpolation),
-and collapses it again when finished.
+With a parameter selected, the user opens the Analysis tab in the Inspector
+secondary workspace. Rather than embedding a large graph, the tab lists the
+visualisations available for that parameter — for example `OCP Curve`,
+`Diffusivity`, `Conductivity`, `Statistics` — each with a `Show` action. Selecting
+one opens (or toggles) a floating graph/dialog, keeping the Inspector compact.
 
 ### UI Behaviour
 
-Analysis is an expandable/collapsible Inspector section over the selected
-`ParameterItem`, consistent with the Inspector-section model in
-[02-ui.md](02-ui.md). It is never an activity-bar workspace and never a tenant of
-the Issues drawer. The interaction is click-to-expand, click-to-collapse.
+Analysis is a tab in the Inspector secondary workspace over the selected
+`ParameterItem`, consistent with the secondary-workspace model in
+[02-ui.md](02-ui.md). It is never an activity-bar workspace. The tab itself stays
+compact: it is a **launcher** of per-tool `Show` actions that open or toggle
+floating visualisation dialogs, not a host for large embedded graphs.
 
 ### Architecture
 
 Analysis consumes the selected `ParameterItem` and uses BPX functions exposed
 through `bpx_gateway.py` (`to_python_function()`) to evaluate expressions and
-tables. It attaches at the Inspector analysis-section seam described in
+tables. It attaches at the Inspector secondary-workspace tab seam described in
 [01-architecture.md](01-architecture.md); no analyzer registry is built before
 concrete analyzers exist.
 
 ### Dependencies
 
-- The Inspector section mechanism.
+- The Inspector secondary-workspace tab mechanism.
 - `core/bpx_gateway.py` for evaluating BPX functions and tables.
 - The selected `ParameterItem`.
 
@@ -727,18 +742,21 @@ concrete analyzers exist.
 
 An analyzer registry is deliberately not built ahead of the first concrete
 analyzer. The first analyzers should be implemented directly against the Inspector
-section seam.
+secondary-workspace tab seam, each contributing a `Show` action that opens a
+floating visualisation.
 
 ### Design Rationale
 
 Analysis is a parameter-centric tool, so it belongs in the Inspector next to the
-parameter, not in the activity bar and not inside editing cards. A thin issues rail
-cannot host deep analysis, and defining an analyzer registry before analyzers exist
-is premature. The cost is that a future maximised view may be needed if plots need
-more space.
+parameter, not in the activity bar and not inside editing cards. The launcher model
+keeps the tab compact — the Inspector never has to surrender vertical space to a
+large embedded graph — while still giving access to rich visualisations through
+floating dialogs. Defining an analyzer registry before analyzers exist is
+premature. The cost is that floating dialogs need their own lifecycle and
+positioning conventions, defined when the first analyzer is designed.
 
 ### Future Extensions
 
-Parameter-centric plausibility displays, an optional maximised Inspector section,
-and comparison overlays for related files or known cells remain in
+Parameter-centric plausibility displays, docking or maximising floating
+visualisations, and comparison overlays for related files or known cells remain in
 [05-future.md](05-future.md).
