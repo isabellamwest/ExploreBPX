@@ -19,7 +19,35 @@ from .tree_model import (
     match_parameter,
     match_path,
 )
-from .validation import Severity, ValidationIssue
+from .validation import PydanticErrorDiagnostic, Severity, ValidatorDiagnostic
+
+
+# Navigation constants: Pydantic union-type discriminator suffixes that are
+# artefacts of validation mechanics, not data-path components.  These are
+# stripped only when deriving a navigation path for tree matching.
+_NAV_STRIP_TAGS = frozenset({
+    "float", "int", "str", "bool", "number", "integer", "boolean", "string",
+    "function-after", "function-before", "is-instance",
+})
+
+
+def _derive_nav_path(loc: tuple[str, ...]) -> tuple[str, ...]:
+    """Derive a tree-navigation path from a Pydantic loc tuple.
+
+    Strips trailing union-discriminator tags that are artefacts of Pydantic
+    union validation, leaving only the data-path components.
+    """
+    cleaned = list(loc)
+    while cleaned and cleaned[-1] in _NAV_STRIP_TAGS:
+        cleaned.pop()
+    return tuple(cleaned)
+
+
+def _nav_path_for(issue: ValidatorDiagnostic) -> tuple[str, ...]:
+    """Derive a navigation path from a diagnostic for tree-matching."""
+    if isinstance(issue, PydanticErrorDiagnostic):
+        return _derive_nav_path(issue.loc)
+    return ()
 
 
 @dataclass
@@ -30,7 +58,7 @@ class BPXDocument:
     fmt: str
     raw: dict
     tree: TreeNode
-    issues: list[ValidationIssue] = field(default_factory=list)
+    issues: list[ValidatorDiagnostic] = field(default_factory=list)
     is_valid: bool = False
     _node_path_map: dict[tuple[str, ...], TreeNode] = field(
         default_factory=dict, repr=False
@@ -38,6 +66,7 @@ class BPXDocument:
     _parameter_path_map: dict[tuple[str, ...], ParameterItem] = field(
         default_factory=dict, repr=False
     )
+    _issue_nav_paths: list[tuple[str, ...]] = field(default_factory=list, repr=False)
 
     @classmethod
     def from_bytes(cls, data: bytes | str, filename: str) -> "BPXDocument":
@@ -76,13 +105,20 @@ class BPXDocument:
 
     def _attach_issues(self) -> None:
         for issue in self.issues:
-            parameter = match_parameter(self._parameter_path_map, issue.path)
+            nav_path = _nav_path_for(issue)
+            self._issue_nav_paths.append(nav_path)
+
+            parameter = match_parameter(self._parameter_path_map, nav_path)
             if parameter is not None:
                 parameter.issues.append(issue)
 
-            target = match_path(self._node_path_map, issue.path) or self.tree
+            target = match_path(self._node_path_map, nav_path) or self.tree
             if parameter is None:
                 target.issues.append(issue)
+
+    def iter_issues(self) -> list[tuple[ValidatorDiagnostic, tuple[str, ...]]]:
+        """Return ``(diagnostic, nav_path)`` pairs for all document issues."""
+        return list(zip(self.issues, self._issue_nav_paths))
 
     @property
     def error_count(self) -> int:

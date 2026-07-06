@@ -26,10 +26,11 @@ class ValidationPanel(QWidget):
         self._list.clear()
         if document is None:
             return
-        for issue in document.issues:
+        for issue, nav_path in document.iter_issues():
             prefix = "ERROR" if issue.severity == Severity.ERROR else "WARN"
-            item = QListWidgetItem(f"[{prefix}] {issue.path_str}: {issue.message}")
-            item.setData(256, issue.path)
+            loc_str = " → ".join(nav_path) if nav_path else "(document)"
+            item = QListWidgetItem(f"[{prefix}] {loc_str}: {issue.message}")
+            item.setData(256, nav_path)
             self._list.addItem(item)
 
     def _on_activated(self, item: QListWidgetItem) -> None:

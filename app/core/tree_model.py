@@ -19,7 +19,7 @@ from .parameter_types import (
     icon_for,
     looks_like_table,
 )
-from .validation import Severity, ValidationIssue
+from .validation import Severity, ValidatorDiagnostic
 
 
 class NodeType(str, Enum):
@@ -41,7 +41,7 @@ class ParameterItem:
     unit: str = ""
     description: str = ""
     examples: tuple = ()
-    issues: list[ValidationIssue] = field(default_factory=list)
+    issues: list[ValidatorDiagnostic] = field(default_factory=list)
 
     @property
     def icon(self) -> str:
@@ -63,7 +63,7 @@ class TreeNode:
     description: str = ""
     children: list["TreeNode"] = field(default_factory=list)
     parameters: list[ParameterItem] = field(default_factory=list)
-    issues: list[ValidationIssue] = field(default_factory=list)
+    issues: list[ValidatorDiagnostic] = field(default_factory=list)
 
     @property
     def icon(self) -> str:

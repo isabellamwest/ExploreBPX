@@ -13,7 +13,7 @@ from core.tree_model import (
     match_parameter,
     match_path,
 )
-from core.validation import ValidationIssue
+from core.validation import PydanticErrorDiagnostic
 
 
 def _find(node, label):
@@ -110,7 +110,7 @@ def test_tree_node_distinguishes_direct_and_descendant_errors():
         label="Voltage",
         path=("Cell", "Voltage"),
         kind=ParameterKind.SCALAR,
-        issues=[ValidationIssue(path=("Cell", "Voltage"), message="Invalid")],
+        issues=[PydanticErrorDiagnostic(raw_error={"loc": ("Cell", "Voltage"), "msg": "Invalid"})],
     )
     child = TreeNode(label="Cell", path=("Cell",), parameters=[parameter])
     root = TreeNode(label="BPX File", path=(), children=[child])
@@ -122,5 +122,5 @@ def test_tree_node_distinguishes_direct_and_descendant_errors():
     assert not root.has_direct_errors
     assert not root.has_direct_parameter_errors
 
-    root.issues.append(ValidationIssue(path=(), message="Invalid root"))
+    root.issues.append(PydanticErrorDiagnostic(raw_error={"loc": (), "msg": "Invalid root"}))
     assert root.has_direct_errors

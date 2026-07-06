@@ -83,7 +83,7 @@ class IssuesDrawer(QWidget):
             for issue in parameter.issues:
                 prefix = "ERROR" if issue.severity == Severity.ERROR else "WARN"
                 item = QListWidgetItem(f"[{prefix}] {issue.message}")
-                item.setData(256, issue.path)
+                item.setData(256, parameter.path)
                 self._list.addItem(item)
             count = len(parameter.issues)
 

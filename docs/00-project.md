@@ -81,6 +81,8 @@ architectural, UI and feature decision in the documents that follow.
    dictionary, so invalid and partially edited documents remain fully
    representable. Views and validation are derived from it.
 
+6. **Validation ownership.** Explore_BPX owns presentation only. Validation semantics, messages, and meaning are owned entirely by the official BPX package. Explore_BPX must faithfully surface validator output without modification.
+
 ## Scope
 
 ### In scope

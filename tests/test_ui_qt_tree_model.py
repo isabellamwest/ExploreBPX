@@ -14,12 +14,12 @@ from PySide6.QtCore import Qt
 
 from core.parameter_types import ParameterKind
 from core.tree_model import ParameterItem, TreeNode
-from core.validation import ValidationIssue
+from core.validation import PydanticErrorDiagnostic
 from ui_qt.tree_model import BpxTreeModel
 
 
-def _error(path: tuple[str, ...]) -> ValidationIssue:
-    return ValidationIssue(path=path, message="Invalid")
+def _error(path: tuple[str, ...]) -> PydanticErrorDiagnostic:
+    return PydanticErrorDiagnostic(raw_error={"loc": path, "msg": "Invalid"})
 
 
 def _model(root: TreeNode, expanded_paths: set[tuple[str, ...]] | None = None) -> BpxTreeModel:

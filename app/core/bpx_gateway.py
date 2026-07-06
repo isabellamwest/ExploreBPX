@@ -21,10 +21,10 @@ import yaml
 from pydantic import ValidationError
 
 from .validation import (
-    Severity,
-    ValidationIssue,
-    issue_from_message,
+    BPXExceptionDiagnostic,
+    ValidatorDiagnostic,
     issues_from_pydantic,
+    warnings_as_diagnostics,
 )
 
 #: The exact BPX version this application is built and tested against.
@@ -54,7 +54,7 @@ class ValidationResult:
     """Outcome of validating a raw BPX dictionary."""
 
     is_valid: bool
-    issues: list[ValidationIssue] = field(default_factory=list)
+    issues: list[ValidatorDiagnostic] = field(default_factory=list)
 
 
 def load_raw(data: bytes | str, filename: str = "") -> tuple[dict, str]:
@@ -78,10 +78,10 @@ def validate(raw: dict, v_tol: float = 0.001) -> ValidationResult:
     """Validate a raw BPX dict by attempting to parse it with ``bpx``.
 
     Never raises: parsing errors and deprecation warnings are captured and
-    returned as :class:`ValidationIssue` objects so invalid files can still be
-    explored.
+    returned as :class:`ValidatorDiagnostic` objects so invalid files can
+    still be explored.
     """
-    issues: list[ValidationIssue] = []
+    issues: list[ValidatorDiagnostic] = []
     # ``parse_bpx_obj`` mutates the dict it is given (it replaces sections with
     # parsed models), so validate against a copy to keep ``raw`` pristine.
     candidate = copy.deepcopy(raw)
@@ -94,10 +94,9 @@ def validate(raw: dict, v_tol: float = 0.001) -> ValidationResult:
             issues.extend(issues_from_pydantic(exc.errors()))
             is_valid = False
         except Exception as exc:  # noqa: BLE001 - BPXSchemaError, ValueError, etc.
-            issues.append(issue_from_message(exc))
+            issues.append(BPXExceptionDiagnostic(raw_exception=exc))
             is_valid = False
-    for warning in caught:
-        issues.append(issue_from_message(warning.message, severity=Severity.WARNING))
+    issues.extend(warnings_as_diagnostics(caught))
     return ValidationResult(is_valid=is_valid, issues=issues)
 
 
