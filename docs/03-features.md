@@ -1,0 +1,744 @@
+# Explore_BPX — Features
+
+This document is the authoritative specification for every feature of
+Explore_BPX. It builds on the vision in [00-project.md](00-project.md), the
+architecture in [01-architecture.md](01-architecture.md) and the UI framework in
+[02-ui.md](02-ui.md).
+
+Each feature is specified with one overview, one architecture, one workflow and
+one capability matrix. **Status is tracked per capability**, always as one of two
+values:
+
+- **Implemented** — present in the current codebase.
+- **Planned** — accepted design, to be built. Planned behaviour is the
+  implementation target.
+
+The implementation status of the whole application is derivable from these
+capability matrices without inspecting the codebase. Implementation order and
+acceptance criteria live in [04-roadmap.md](04-roadmap.md); speculative ideas live
+in [05-future.md](05-future.md).
+
+Each feature follows the same template: Overview, Capabilities, User Workflow, UI
+Behaviour, Architecture, Dependencies, Implementation Notes, Design Rationale,
+Future Extensions.
+
+## Contents
+
+1. [Document Loading](#1-document-loading)
+2. [Tree Navigation](#2-tree-navigation)
+3. [Parameter Inspection](#3-parameter-inspection)
+4. [Editing](#4-editing)
+5. [Validation](#5-validation)
+6. [Search](#6-search)
+7. [Save and Export](#7-save-and-export)
+8. [Authoring](#8-authoring)
+9. [Analysis and Visualisation](#9-analysis-and-visualisation)
+
+---
+
+## 1. Document Loading
+
+### Overview
+
+Loading brings a BPX file into the application as an editable document. It must
+accept valid, invalid and incomplete files alike, because inspecting and
+repairing broken files is a core purpose of the tool.
+
+### Capabilities
+
+| Capability | Status |
+|---|---|
+| Open JSON or YAML BPX files | Implemented |
+| Open invalid and incomplete files as editable documents | Implemented |
+| Import menu as the source hub (Open File) | Implemented |
+| Recent documents | Planned |
+
+### User Workflow
+
+The user chooses Import → Open File and selects a `.json` or `.yaml` BPX file. The
+file loads into the Editor workspace with its object tree, parameter list and
+validation state populated. If the file is invalid, it still opens; the problems
+are surfaced through validation rather than blocking the load.
+
+### UI Behaviour
+
+Loading is initiated from the toolbar **Import** menu (see [02-ui.md](02-ui.md)).
+Import is a menu rather than a single button so it can host future sources without
+changing the toolbar shape. On successful load the status bar shows the file name
+and saved state.
+
+### Architecture
+
+Loading produces a `BPXDocument` from bytes via `bpx_gateway.py`, which is the only
+module that imports `bpx`. The raw dictionary becomes the editable source of
+truth; the object tree and validation issues are derived from it (see the Document
+Lifecycle in [01-architecture.md](01-architecture.md)).
+
+### Dependencies
+
+- `core/bpx_gateway.py`, `core/document.py` for loading and derivation.
+- The toolbar Import menu in `ui_qt/`.
+
+### Implementation Notes
+
+Because invalid files must open, loading must not require successful validation.
+Validation runs against a copy of the raw dict and its result is stored as derived
+issues, never as a gate on loading.
+
+### Design Rationale
+
+Import is modelled as a menu, not a single Open button, because it is the seam
+through which future parameter sources (templates, databases, recent files) are
+introduced. Modelling it as a hub now avoids a later toolbar redesign.
+
+### Future Extensions
+
+External database and library sources (for example LIIONDB) are introduced as
+anti-corruption adapters mirroring `bpx_gateway.py` and surfaced under the same
+Import menu. These remain in [05-future.md](05-future.md) until designed.
+
+---
+
+## 2. Tree Navigation
+
+### Overview
+
+The tree presents the document as a navigable hierarchy of BPX objects. It is the
+primary structural navigation surface and remains visible at all times.
+
+### Capabilities
+
+| Capability | Status |
+|---|---|
+| Derived object tree built from the raw BPX data | Implemented |
+| Object selection drives the parameter list | Implemented |
+| Validation markers on the lowest visible affected object | Implemented |
+| Two-tier selection: object path and optional parameter path | Implemented |
+
+### User Workflow
+
+The user browses the tree, expands branches and selects an object. Selecting an
+object populates the parameter list with that object's direct parameters. The tree
+never collapses or filters in response to search or validation; it only reveals.
+
+### UI Behaviour
+
+The tree contains BPX objects only, never individual parameters. Validation
+markers appear on the lowest visible object containing an issue; ancestors do not
+duplicate the same marker once the branch is open. Pane responsibilities are
+defined in [02-ui.md](02-ui.md).
+
+### Architecture
+
+The tree is derived by walking the actual raw data rather than the schema, so BPX
+polymorphism (SPM/SPMe/DFN/Partial, single/blended electrodes) is expressed
+naturally by the data shape. `tree_model.py` produces a UI-neutral tree of
+`TreeNode` objects; `ui_qt/tree_model.py` adapts it to Qt.
+
+### Dependencies
+
+- `core/tree_model.py` for the UI-neutral tree.
+- The two-tier selection state on `DocumentSession`.
+- `NavigationService` for reveal-on-navigate.
+
+### Implementation Notes
+
+Tree selection updates `state.active.selected_path` and clears or updates the
+parameter selection. The tree subscribes to navigation notifications and expands
+ancestors of a navigation target rather than owning navigation logic.
+
+### Design Rationale
+
+Walking the data rather than the schema keeps the tree correct across BPX model
+variants without special-casing each model type, and keeps the tree honest about
+what the document actually contains.
+
+### Future Extensions
+
+Multi-document workspaces and comparison navigation reuse the same tree and the
+same navigation service. These remain in [05-future.md](05-future.md).
+
+---
+
+## 3. Parameter Inspection
+
+### Overview
+
+Parameter inspection presents the direct parameters of the selected object and,
+for a selected parameter, a detailed view including value, unit, schema
+description and validation state.
+
+### Capabilities
+
+| Capability | Status |
+|---|---|
+| Parameter list for the selected object | Implemented |
+| Parameter selection drives the Inspector | Implemented |
+| Inspector shows value, unit and schema metadata | Implemented |
+| Parameters classified by kind (scalar, integer, enum, function, table, unknown) | Implemented |
+
+### User Workflow
+
+The user selects an object in the tree, sees its parameters in the parameter list,
+and selects a parameter. The Inspector then shows that parameter's detail and,
+where the kind supports it, its editing controls.
+
+### UI Behaviour
+
+The parameter list shows direct parameters of the selected object only. The
+Inspector is the selected parameter's work surface and the home for all
+parameter-centric tools, added as expandable Inspector sections (see
+[02-ui.md](02-ui.md)). All three editor panes stay visible during inspection.
+
+### Architecture
+
+Parameters are `ParameterItem` objects owned by a `TreeNode`. Classification into
+`ParameterKind` is declared-type first: schema metadata is authoritative, and a
+value's runtime type does not change which editor opens. The classification rules
+and the open metadata gap for user-defined parameters are defined in
+[01-architecture.md](01-architecture.md).
+
+### Dependencies
+
+- `core/parameter_types.py` for classification and kind metadata.
+- `core/bpx_gateway.py` for schema metadata (units, descriptions).
+- `core/tree_model.py` for parameter rows.
+
+### Implementation Notes
+
+Declared-type-first classification means an invalid stored value (for example a
+string in a float field) is still inspected and edited as its declared kind rather
+than switching to a raw/read-only view.
+
+### Design Rationale
+
+Making the Inspector the single parameter work surface — rather than a separate
+detail page per concern — keeps editing, and later analysis and documentation,
+composed over one selected parameter.
+
+### Future Extensions
+
+Analysis, Documentation and References sections over the selected parameter are
+specified in [Analysis and Visualisation](#9-analysis-and-visualisation) and
+[05-future.md](05-future.md).
+
+---
+
+## 4. Editing
+
+### Overview
+
+Editing changes parameter values in the raw working document. It is the
+foundational capability of the application (see [00-project.md](00-project.md)) and
+is designed to accept invalid work-in-progress input so that broken files can be
+repaired in place.
+
+### Capabilities
+
+| Capability | Status |
+|---|---|
+| Scalar editing | Implemented |
+| Integer editing | Implemented |
+| Enum editing | Implemented |
+| Basic function-expression editing (constant or expression string) | Implemented |
+| Enter-to-commit / Escape-to-revert model | Implemented |
+| Command-based mutation with undo | Implemented |
+| Enhanced function-expression editor (syntax highlighting, validation) | Planned |
+| Editable table grid | Planned |
+| Section add/remove controls | Planned |
+| Unknown/raw fallback editor | Planned |
+| Model-switch handling for structural model changes | Planned |
+| Compact quick inputs in the parameter list | Planned |
+
+### User Workflow
+
+The user selects a parameter, edits its value in the Inspector card for its kind,
+and presses Enter to commit. The value — valid or invalid — is written to the raw
+working document, and validation re-runs and updates issues. Escape reverts an
+uncommitted draft.
+
+### UI Behaviour
+
+Editing is performed in per-kind cards in the Inspector, selected by
+`ParameterKind` rather than by parameter name. The commit model is:
+
+- **Enter commits** the current raw input to the working document, valid or
+  invalid.
+- Invalid data is not silently accepted by the validated BPX model; it is surfaced
+  as validation issues after revalidation.
+- Cards emit raw user input and never gatekeep values.
+- **Escape reverts** the uncommitted draft.
+- Blur does not commit.
+- Detached footer Apply/Reset buttons are not used.
+
+Any `allows_function` field may hold either a numeric constant or a
+function-expression string; both are editable today.
+
+### Architecture
+
+Editing is command-based: `commands.py` describes intent, `editing.py` performs
+pure raw-dict mutation, `command_service.py` previews and executes with structural
+guardrails, and `DocumentSession` records undo and dirty state. A card's
+architectural contract is fixed: it edits one `ParameterItem`, emits raw input, and
+does not decide validity. See the Editing and Command architecture in
+[01-architecture.md](01-architecture.md).
+
+### Dependencies
+
+- `core/commands.py`, `core/command_service.py`, `core/editing.py`,
+  `core/structure.py`.
+- Per-document undo and dirty state on `DocumentSession`.
+- The Inspector cards in `ui_qt/cards/`.
+- The open user-defined parameter metadata gap
+  ([01-architecture.md](01-architecture.md)) blocks reliable classification of
+  authoring-created parameters and therefore constrains section add/remove.
+
+### Implementation Notes
+
+Committing invalid input is intentional: the derived validated model rejects it
+visibly rather than the card refusing it. This keeps the raw dict the source of
+truth and preserves the ability to repair invalid files.
+
+### Design Rationale
+
+Enter-to-commit with co-located cards replaced detached footer buttons, which sat
+far from the input, and replaced blocking invalid commits, which contradicted the
+requirement to support invalid BPX files. Committing per keystroke or on blur were
+rejected as surprising. The single emit-raw contract also serves future
+function/table cards and remediation auto-fixes. The cost is that Enter-to-commit
+is implicit and relies on clear affordances.
+
+### Future Extensions
+
+An enhanced function editor, an editable table grid, section add/remove, an
+unknown/raw fallback and model-switch handling are Planned above. Broader
+authoring-driven editing states are covered in [Authoring](#8-authoring).
+
+---
+
+## 5. Validation
+
+### Overview
+
+Validation continuously reports whether the raw working document satisfies
+BPX/schema rules. It guides the user to problems without locking the editor, and
+it keeps schema validation strictly separate from any future plausibility
+checking.
+
+### Capabilities
+
+| Capability | Status |
+|---|---|
+| Continuous BPX schema validation via the `bpx` package | Implemented |
+| Normalised `ValidationIssue` records (path, message, severity) | Implemented |
+| Best-effort mapping from validation paths to visible objects/parameters | Implemented |
+| Validation workspace listing all document issues | Implemented |
+| Parameter-scoped Issues drawer | Implemented |
+| Non-modal validation review cursor | Planned |
+| Resolved-issue behaviour during review (stay in place, explicit Next/Finish) | Planned |
+| `IssueKind` classification for actionable remediation | Planned |
+| Pure remediation functions (edit, move, choose model, map materials, add section) | Planned |
+| Restored field paths for root-landing warnings | Planned |
+| Optional warning hide/ignore for intentional modelling decisions | Planned |
+
+### User Workflow
+
+Validation runs automatically as the document changes. The user reviews all issues
+in the Validation workspace, clicks an issue to navigate to the affected object or
+parameter, and (when review is implemented) steps through issues with a non-modal
+cursor while continuing to edit.
+
+### UI Behaviour
+
+Issues are visible in two places, with a strict division of responsibility:
+
+- the **Validation workspace** (activity bar) lists **all** issues for the active
+  document, including document-level and object-level issues;
+- the **Issues drawer** shows issues for the **currently selected parameter only**.
+
+Clicking an issue in the Validation workspace navigates to the affected location
+via `NavigationService` and, when review is active, positions the review cursor.
+
+#### Issues drawer (parameter-scoped)
+
+The Issues drawer is strictly parameter-scoped. Its behaviour is a single coherent
+rule:
+
+- **When a parameter is selected**, the drawer exists for that parameter. It may
+  be expanded or collapsed to a thin strip, and always shows that parameter's
+  current issue count (for example `Issues (0)` or `Issues (2)`). It expands and
+  collapses on click, auto-opens when validation produces a new error or warning
+  for that parameter unless explicitly dismissed, and updates live during preview
+  validation.
+- **When no parameter is selected** (an object or the document is selected), the
+  drawer is **not visible at all** — there is no parameter context, so the drawer
+  has no purpose.
+
+Document-level and object-level issues are never shown in the drawer; they belong
+to the Validation workspace.
+
+#### Review cursor (Planned)
+
+Validation review is **non-modal**. The cursor appears in the top context/mode
+bar, but the editor stays fully interactive — the user may edit, search, navigate
+and inspect while review is active. The cursor provides Previous, the current
+issue number and total, the current issue path, Next and Finish Review.
+
+When an edit resolves the issue under the cursor, the cursor **stays on that
+issue** and shows a clear resolved state (such as a tick or "Issue resolved"). It
+does not auto-advance; the user explicitly chooses Next or Finish Review. If all
+issues are resolved, the UI presents a clear Finish Review action rather than
+exiting automatically. Newly introduced issues join the set but do not steal the
+cursor. Resolved state and counts track the committed document state after Enter,
+not the live preview while typing.
+
+### Architecture
+
+Validation runs from the raw dict via `bpx_gateway.validate` on a copy, producing
+normalised `ValidationIssue` records. `tree_model.py` maps issue paths to the
+nearest visible `TreeNode` and, where possible, a `ParameterItem`, using
+best-effort suffix matching. Actionable remediation is a future `IssueKind` plus
+pure remediation functions in `core/`. See the Validation architecture and the
+warning-path gap in [01-architecture.md](01-architecture.md).
+
+### Dependencies
+
+- `core/bpx_gateway.py`, `core/validation.py`, `core/tree_model.py`.
+- `NavigationService` for issue-to-location navigation.
+- The Inspector (for the parameter-scoped drawer) and the activity bar (for the
+  Validation workspace).
+
+### Implementation Notes
+
+Pydantic issue locations do not always match visible BPX paths, so mapping is
+best-effort. Some warnings currently land at the document root; restoring their
+field paths is Planned and tied to the architectural warning-path gap.
+
+### Design Rationale
+
+**Non-modal review.** The purpose of review is to fix issues, which means editing;
+a modal review would force the user to leave it to edit. A non-modal cursor in a
+visually distinct bar matches Find-Next and spellcheck conventions. The cost is
+less forced focus, mitigated by the distinct bar. The same cursor generalises to a
+remediation walker when `IssueKind` actions arrive.
+
+**Stay-in-place on resolution.** Auto-advancing on resolution fights the non-modal,
+user-controlled model and can reshuffle issue indices mid-edit. Staying put,
+showing resolved state and letting the user choose Next is more predictable, at the
+cost of being slightly slower for bulk triage.
+
+**Parameter-scoped drawer.** A thin per-parameter drawer keeps full issue text for
+the current parameter continuously reachable without a separate banner, while the
+Validation workspace owns document- and object-wide issues. Scoping the drawer to
+a parameter avoids overloading it with issues that have no parameter context.
+
+### Future Extensions
+
+Plausibility / sanity validation against known or typical cell parameter ranges is
+a separate validation layer with its own reference dataset, kept independent of
+schema validation. It remains in [05-future.md](05-future.md).
+
+---
+
+## 6. Search
+
+### Overview
+
+Search is navigation, not filtering. It lets the user jump to any object or
+parameter by name or path without altering the document structure.
+
+### Capabilities
+
+| Capability | Status |
+|---|---|
+| SearchPopup navigation over objects and parameters | Planned |
+| Focus by `Ctrl+F` and `Ctrl+P`, selecting existing text | Planned |
+| Keyboard navigation (Up/Down, Enter, staged Escape) | Planned |
+| Result activation through `NavigationService` | Planned |
+
+### User Workflow
+
+The user focuses search (`Ctrl+F` or `Ctrl+P`), types part of an object or
+parameter name, and picks a result. Activation navigates to that location through
+the shared navigation service, revealing it in the tree, parameter list and
+Inspector.
+
+### UI Behaviour
+
+The search box lives in the toolbar and is focused by both `Ctrl+F` and `Ctrl+P`;
+focusing selects existing text so it can be replaced immediately. Results appear in
+a custom **SearchPopup**, not a generic `QCompleter`. The popup:
+
+- indexes both navigable objects and parameters;
+- displays each result as a name over its full path;
+- scrolls after approximately eight visible results;
+- supports Up/Down, Enter and Escape;
+- navigates the highlighted result via `NavigationService` on Enter;
+- stages Escape: close popup, then clear search, then return focus to the editor.
+
+Search never hides tree nodes or parameter rows.
+
+### Architecture
+
+Search consumes the same object/parameter index used for navigation and activates
+results exclusively through `NavigationService` (see
+[01-architecture.md](01-architecture.md) and the navigation model in
+[02-ui.md](02-ui.md)). It owns no navigation logic of its own.
+
+### Dependencies
+
+- `NavigationService` for all result activation.
+- The tree/parameter index for results.
+- The toolbar search box and the SearchPopup widget in `ui_qt/`.
+
+### Implementation Notes
+
+The first implementation is deliberately simple: no ranking, icons, recent
+searches or grouping until there is a concrete need. Mixed object/parameter results
+should carry a clear type marker.
+
+### Design Rationale
+
+Search became navigation rather than autocomplete, so a flat-string `QCompleter`
+fought the interaction design. A custom SearchPopup gives one owned navigation
+surface that reaches objects as well as parameters and avoids a later
+rip-and-replace. The cost is more initial work than reusing a completer.
+
+### Future Extensions
+
+Ranking, icons, recent searches, and searching validation, comparison or database
+results through the same surface remain in [05-future.md](05-future.md).
+
+---
+
+## 7. Save and Export
+
+### Overview
+
+Save and Export are distinct operations over the raw working document. Save
+persists to the current file; Export writes a copy. Keeping them distinct is what
+makes the Modified/Saved state meaningful.
+
+### Capabilities
+
+| Capability | Status |
+|---|---|
+| Export / round-trip to JSON or YAML | Implemented |
+| Dirty / backing-file state on `DocumentSession` | Implemented |
+| Distinct Save (write back, clear Modified) vs Export (write copy, no state change) | Planned |
+
+### User Workflow
+
+The user edits a document, then either **Saves** — writing changes back to the
+current backing file and clearing the Modified indicator — or **Exports** — writing
+a copy to a chosen path and format without changing the Modified state.
+
+### UI Behaviour
+
+Save and Export are separate toolbar actions (see [02-ui.md](02-ui.md)). Save
+writes back to the current backing file and clears Modified; Export writes a copy
+to a chosen path/format and does not change Modified. The status bar reflects the
+resulting saved/modified state.
+
+### Architecture
+
+Both operations serialise the raw working document via `export.py`, which may still
+contain invalid work-in-progress data. `DocumentSession` owns the dirty flag and
+backing-file path that distinguish the two operations.
+
+### Dependencies
+
+- `core/export.py` for serialisation.
+- Dirty and backing-file state on `DocumentSession`.
+- The toolbar Save and Export actions.
+
+### Implementation Notes
+
+Export deliberately serialises whatever is in the raw dict, including invalid
+data, so a broken file can be exported for sharing or later repair.
+
+### Design Rationale
+
+Save and Export are genuinely different operations; conflating them makes the
+Modified/Saved indicator meaningless. Distinguishing them requires backing-file and
+dirty state in `DocumentSession`, which is the accepted cost. Export is also the
+seam that later generalises to simulator hand-off writers.
+
+### Future Extensions
+
+Simulator hand-off targets (for example PyBOP, PyProBE) and target-specific writers
+behind the export layer, plus simulator compatibility checks, remain in
+[05-future.md](05-future.md).
+
+---
+
+## 8. Authoring
+
+### Overview
+
+Authoring covers the lifecycle of creating, completing and maintaining BPX
+documents. It is broader than editing individual values: it owns the distinction
+between Complete BPX, Incomplete BPX, Skeletons and Templates, and it keeps
+completion state separate from validation state.
+
+Authoring is an accepted **core product capability and a major implementation
+priority**, designed alongside editing rather than deferred (see
+[00-project.md](00-project.md)). The whole feature is currently Planned, but it is
+architecturally co-equal with editing.
+
+### Concepts
+
+- **Complete BPX** — ready for simulation or downstream use.
+- **Incomplete BPX** — a genuine work-in-progress.
+- **Skeleton** — a model-specific structural starting point with no invented
+  scientific values.
+- **Template** — a reusable skeleton or partially completed document containing
+  trusted defaults for a lab, organisation, chemistry or workflow.
+
+### Capabilities
+
+| Capability | Status |
+|---|---|
+| Raw-dict model that represents invalid and partially edited documents | Implemented |
+| Incomplete structural scaffolds without invented values (`document_factory.py`) | Implemented |
+| Continuous validation that tolerates work-in-progress editing | Implemented |
+| New BPX from built-in model skeletons (SPM, SPMe, DFN, Partial) | Planned |
+| Completion status distinct from validation status | Planned |
+| Completion view for unfinished required authoring work | Planned |
+| Expected-but-missing parameter rows in the editing workflow | Planned |
+| Upload/open skeleton workflows | Planned |
+| Save as Template and New from Template workflows | Planned |
+
+### User Workflow
+
+The user starts a new document from a model skeleton (or a template), then works
+through the completion view to fill required authoring work. Expected-but-missing
+parameters appear in the editing workflow so the user can supply real values.
+Completion tracks what remains to finish the document, separately from whether the
+current data is valid. The user may save a document as a template for reuse.
+
+### UI Behaviour
+
+Validation remains the surface for schema errors and warnings; completion is a
+distinct authoring concept for unfinished work and must not be shown as validation
+failure. Completion navigation reuses the shared navigation model (see
+[02-ui.md](02-ui.md)) so the user moves from an authoring task into the normal Tree
+→ Parameter list → Inspector workflow. Expected-but-missing parameters are surfaced
+as editable rows that write real BPX values only when committed.
+
+### Architecture
+
+Authoring builds on the completion/authoring model in the domain layer
+([01-architecture.md](01-architecture.md)): the raw dict is the simulator-facing
+data source, and authoring/completion state (draft, template inheritance, review
+status) lives in a separate layer that never forces values into exported BPX.
+`document_factory.py` creates incomplete structures without scientific defaults.
+Authoring-created parameters must synthesise metadata so declared-type-first
+classification still applies — this depends on the **open user-defined parameter
+metadata gap** recorded in [01-architecture.md](01-architecture.md).
+
+### Dependencies
+
+- `core/document_factory.py` for skeletons.
+- The completion/authoring layer (Planned) separate from exported BPX.
+- The unresolved user-defined parameter metadata mechanism
+  ([01-architecture.md](01-architecture.md)), which must be designed before
+  authoring-created parameters can be classified reliably.
+- `NavigationService` for completion-task navigation.
+
+### Implementation Notes
+
+The export guarantee is absolute: internal authoring, completion or draft state
+must never force fake scientific values into simulator-facing BPX output. Skeletons
+provide structure only; committing a real value is what writes BPX data.
+
+### Design Rationale
+
+A work-in-progress BPX document is not the same product state as an incorrect one.
+Collapsing missing or unconfirmed authoring work into generic validation failure
+would mislead the user, and inventing scientific values to make a document look
+complete would corrupt exported data. Treating authoring as a first-class lifecycle
+— Complete / Incomplete / Skeleton / Template, with completion distinct from
+validation — establishes a coherent long-term product model and a foundation for
+guided completion. The cost is a second document-status concept alongside
+validation, which requires careful UI language so users understand the difference
+between incomplete and invalid. The alternatives — treating all incomplete
+documents as invalid, encoding placeholders in exported BPX, or merging completion
+into validation — were rejected as dishonest or confusing.
+
+### Future Extensions
+
+Organisation/lab/chemistry/workflow-specific templates, session change awareness,
+modified indicators, a dedicated Changes review workspace, parameter authoring
+states beyond present/missing, provenance and confidence tracking, review workflows
+for template-derived values, and reusable parameter packs are all more speculative
+and remain in [05-future.md](05-future.md) until designed and accepted.
+
+---
+
+## 9. Analysis and Visualisation
+
+### Overview
+
+Analysis and visualisation present a selected parameter graphically — for example
+plotting a function or an interpolated table. It is a parameter-centric tool hosted
+in the Inspector, not a separate workspace.
+
+> **Specification status.** This feature is intentionally underspecified. The
+> accepted design is limited to the placement decision (an expandable Inspector
+> section) and the initial subject (function and table visualisation). Detailed
+> behaviour awaits a dedicated design pass and must not be invented before then.
+
+### Capabilities
+
+| Capability | Status |
+|---|---|
+| Analysis as an expandable Inspector section for the selected parameter | Planned |
+| Function and interpolated-table visualisation (for example OCP plots) | Planned |
+
+### User Workflow
+
+With a parameter selected, the user expands the Analysis section in the Inspector
+to see a plot of the parameter (such as a function curve or a table interpolation),
+and collapses it again when finished.
+
+### UI Behaviour
+
+Analysis is an expandable/collapsible Inspector section over the selected
+`ParameterItem`, consistent with the Inspector-section model in
+[02-ui.md](02-ui.md). It is never an activity-bar workspace and never a tenant of
+the Issues drawer. The interaction is click-to-expand, click-to-collapse.
+
+### Architecture
+
+Analysis consumes the selected `ParameterItem` and uses BPX functions exposed
+through `bpx_gateway.py` (`to_python_function()`) to evaluate expressions and
+tables. It attaches at the Inspector analysis-section seam described in
+[01-architecture.md](01-architecture.md); no analyzer registry is built before
+concrete analyzers exist.
+
+### Dependencies
+
+- The Inspector section mechanism.
+- `core/bpx_gateway.py` for evaluating BPX functions and tables.
+- The selected `ParameterItem`.
+
+### Implementation Notes
+
+An analyzer registry is deliberately not built ahead of the first concrete
+analyzer. The first analyzers should be implemented directly against the Inspector
+section seam.
+
+### Design Rationale
+
+Analysis is a parameter-centric tool, so it belongs in the Inspector next to the
+parameter, not in the activity bar and not inside editing cards. A thin issues rail
+cannot host deep analysis, and defining an analyzer registry before analyzers exist
+is premature. The cost is that a future maximised view may be needed if plots need
+more space.
+
+### Future Extensions
+
+Parameter-centric plausibility displays, an optional maximised Inspector section,
+and comparison overlays for related files or known cells remain in
+[05-future.md](05-future.md).

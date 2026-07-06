@@ -16,7 +16,8 @@ of the BPX ecosystem**, that simplifies BPX usage and increases adoption.
 **Version 1 is the current PySide6 desktop application**: a BPX explorer with
 continuous validation and the first editing foundation in place. Later versions
 build on the same backend layers without restarting the app architecture
-([docs/roadmap.md](docs/roadmap.md) and [docs/architecture.md](docs/architecture.md)).
+([docs/04-roadmap.md](docs/04-roadmap.md) and
+[docs/01-architecture.md](docs/01-architecture.md)).
 
 ## Status — Version 1
 
@@ -219,8 +220,9 @@ docs/                Architecture and roadmap
 ## Architecture
 
 Strict layering — `frontend → state → core → bpx` — so the frontend can evolve
-without touching business logic. See [docs/architecture.md](docs/architecture.md)
-for the design decisions.
+without touching business logic. See
+[docs/01-architecture.md](docs/01-architecture.md) for the architecture and its
+design rationale.
 
 ## BPX dependency
 
