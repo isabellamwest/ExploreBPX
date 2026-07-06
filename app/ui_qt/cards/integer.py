@@ -33,14 +33,14 @@ class IntegerCard(EditorCard):
             self._spin: QSpinBox | None = QSpinBox()
             self._spin.setRange(-1_000_000, 1_000_000)
             self._spin.setValue(initial)
-            self._spin.valueChanged.connect(self.draft_changed.emit)
+            self._spin.valueChanged.connect(lambda *_: self.draft_changed.emit())
             layout.addWidget(self._spin, 1)
             self._fallback: QLineEdit | None = None
             input_widget = self._spin
         else:
             self._spin = None
             self._fallback = QLineEdit(str(self._original) if self._original is not None else "")
-            self._fallback.textChanged.connect(self.draft_changed.emit)
+            self._fallback.textChanged.connect(lambda *_: self.draft_changed.emit())
             layout.addWidget(self._fallback, 1)
             input_widget = self._fallback
 

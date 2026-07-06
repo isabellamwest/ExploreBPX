@@ -11,6 +11,8 @@ from core.commands import (
     SetValue,
 )
 
+import pytest
+
 
 def test_factory_creates_incomplete_scaffold_no_fake_values():
     raw = document_factory.create("DFN", "Demo")
@@ -42,11 +44,8 @@ def test_set_value_is_non_destructive():
 
 def test_remove_protected_section_raises():
     raw = {"Header": {}, "Parameterisation": {}}
-    try:
+    with pytest.raises(CommandError):
         command_service.execute(raw, RemoveSection(("Header",)))
-        assert False
-    except CommandError:
-        pass
 
 
 def test_document_session_create_then_undo():

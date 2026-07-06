@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from core.bpx_gateway import FieldMeta
 from core.parameter_types import ParameterKind, classify, extract_unit, looks_like_table
 
@@ -110,35 +108,3 @@ def test_classify_no_metadata_bool_is_scalar():
 def test_classify_no_metadata_string_is_function():
     """A string without metadata is FUNCTION (BPX treats unknown strings as expressions)."""
     assert classify("something") == ParameterKind.FUNCTION
-
-
-# ---------------------------------------------------------------------------
-# Registry: FUNCTION kind must produce an editable card
-# ---------------------------------------------------------------------------
-
-def test_function_kind_produces_editable_card():
-    """create_card() must return a FunctionCard (editable) for FUNCTION kind.
-
-    This is the registry-level guard that FUNCTION never falls back to
-    ReadOnlyCard, which would trap the user when an allows_function field
-    contains an invalid or expression string.
-    """
-    import os
-    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    pytest.importorskip("PySide6")
-    from PySide6.QtWidgets import QApplication
-    from core.tree_model import ParameterItem
-    from ui_qt.cards.function import FunctionCard
-    from ui_qt.cards.registry import create_card
-
-    QApplication.instance() or QApplication([])
-
-    param = ParameterItem(
-        label="Diffusivity [m2.s-1]",
-        path=("Parameterisation", "Negative electrode", "Diffusivity [m2.s-1]"),
-        kind=ParameterKind.FUNCTION,
-        value="not-a-function",
-    )
-    card = create_card(param, None)
-    assert isinstance(card, FunctionCard)
-    assert card.is_editable

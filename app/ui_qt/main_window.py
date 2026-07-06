@@ -98,9 +98,9 @@ class MainWindow(QMainWindow):
         self._tree.node_selected.connect(self._select_node)
         self._params.parameter_selected.connect(self._select_parameter)
         self._inspector.committed.connect(self._on_committed)
-        self._validation.issue_activated.connect(self._jump_to_path)
-        self._inspector.issue_activated.connect(self._jump_to_path)
-        self._search.parameter_chosen.connect(self._jump_to_path)
+        self._validation.issue_activated.connect(self.navigate_to)
+        self._inspector.issue_activated.connect(self.navigate_to)
+        self._search.parameter_chosen.connect(self.navigate_to)
         self._activity_bar.view_requested.connect(self._on_view_changed)
 
     # --- navigation -----------------------------------------------------
@@ -126,11 +126,30 @@ class MainWindow(QMainWindow):
         else:
             self._inspector.show_placeholder()
 
-    def _jump_to_path(self, path: tuple) -> None:
+    def navigate_to(self, path: tuple) -> None:
+        """Select the parameter at *path* (and its owning object).
+
+        The shared navigation entry point used by validation issues, the
+        Issues tab and search. Being public, it is equally usable by any
+        future caller such as deep links or automation.
+
+        Navigation paths from validation issues can be partial (a Pydantic
+        ``loc`` may omit a top-level section), so the target is resolved
+        best-effort and navigation then uses the resolved item's full path.
+        """
         if not path or self._state.active is None:
             return
-        self._select_node(tuple(path[:-1]))
-        self._select_parameter(tuple(path))
+        document = self._state.active.document
+        if document is None:
+            return
+        parameter = document.find_best_parameter(tuple(path))
+        if parameter is not None:
+            self._select_node(tuple(parameter.path[:-1]))
+            self._select_parameter(tuple(parameter.path))
+            return
+        node = document.find_best(tuple(path))
+        if node is not None:
+            self._select_node(tuple(node.path))
 
     def _on_committed(self) -> None:
         if self._state.active is None:
@@ -144,16 +163,26 @@ class MainWindow(QMainWindow):
             self._select_parameter(kept_param)
 
     # --- file actions ---------------------------------------------------
+    def open_document(self, path: Path) -> None:
+        """Open a BPX file by path and refresh every view.
+
+        This is the file-open operation independent of any file dialog, so it
+        can be driven by drag-and-drop, a recent-files list, deep links or
+        automation. Raises :class:`core.bpx_gateway.LoadError` for unparseable
+        files and ``OSError`` if the file cannot be read; callers arriving via
+        a dialog surface these as a message box.
+        """
+        self._state.open(Path(path))
+        self._refresh_all()
+
     def _open(self) -> None:
         name, _ = QFileDialog.getOpenFileName(self, "Open BPX", "", "BPX (*.json *.yaml *.yml)")
         if not name:
             return
         try:
-            self._state.open(Path(name))
+            self.open_document(Path(name))
         except (LoadError, OSError) as exc:
             QMessageBox.critical(self, "Cannot open file", str(exc))
-            return
-        self._refresh_all()
 
     def _save(self) -> None:
         """Write the document to its backing file.

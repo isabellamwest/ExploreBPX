@@ -4,3 +4,7 @@
 bpx==1.1.0
 PySide6>=6.6
 PyYAML>=6.0
+
+# Test-only dependencies.
+pytest
+pytest-qt>=4.5

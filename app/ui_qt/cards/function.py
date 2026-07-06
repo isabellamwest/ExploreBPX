@@ -33,7 +33,7 @@ class FunctionCard(EditorCard):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         self._edit = QLineEdit(self._format(self._original))
-        self._edit.textChanged.connect(self.draft_changed.emit)
+        self._edit.textChanged.connect(lambda *_: self.draft_changed.emit())
         layout.addWidget(self._edit, 1)
         self._install_keyboard_handler(self._edit)
 

@@ -20,7 +20,7 @@ class EnumCard(EditorCard):
             values.append(str(self._original))
         self._combo.addItems([str(v) for v in values])
         self._select(self._original)
-        self._combo.currentTextChanged.connect(self.draft_changed.emit)
+        self._combo.currentTextChanged.connect(lambda *_: self.draft_changed.emit())
         layout.addWidget(self._combo, 1)
         self._install_keyboard_handler(self._combo)
 
