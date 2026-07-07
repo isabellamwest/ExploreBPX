@@ -14,8 +14,8 @@ named here is defined, with its Implemented/Planned status, in
 ## How to read this roadmap
 
 - Items are grouped into phases by dependency, not by release number.
-- **Phase 1** is complete. **Phase 2** is the immediate next work. Later phases
-  depend on earlier ones.
+- **Phase 1** is complete, as are items **2.1** and **2.2**. **2.3** is the
+  immediate next work. Later phases depend on earlier ones.
 - Editing and Authoring are the two priority tracks and are sequenced to advance
   together, consistent with the accepted product principles in
   [00-project.md](00-project.md).
@@ -41,6 +41,9 @@ listed here only to establish the baseline that later phases depend on.
 | Validation workspace and parameter-scoped Issues tab | [Validation](03-features.md#5-validation) |
 | Export / round-trip JSON or YAML | [Save and Export](03-features.md#7-save-and-export) |
 | Dirty / backing-file state | [Save and Export](03-features.md#7-save-and-export) |
+| Distinct Save vs Export semantics | [Save and Export](03-features.md#7-save-and-export) |
+| Single `NavigationService` navigation coordinator | [01-architecture.md](01-architecture.md) |
+| SearchPopup navigation over objects and parameters | [Search](03-features.md#6-search) |
 | `DocumentSession` / `AppState` split | [01-architecture.md](01-architecture.md) |
 | Raw-dict model and incomplete scaffolds | [Authoring](03-features.md#8-authoring) |
 
@@ -50,6 +53,7 @@ This phase completes the interaction foundation the later feature work relies on
 
 ### 2.1 SearchPopup navigation
 
+- **Status:** Implemented.
 - **Depends on:** `NavigationService` (Phase 1).
 - **Acceptance criteria:**
   - search is focused by `Ctrl+F` and `Ctrl+P` and selects existing text;
@@ -61,6 +65,7 @@ This phase completes the interaction foundation the later feature work relies on
 
 ### 2.2 Distinct Save vs Export semantics
 
+- **Status:** Implemented.
 - **Depends on:** dirty/backing-file state (Phase 1).
 - **Acceptance criteria:**
   - Save writes back to the current backing file and clears Modified;

@@ -110,10 +110,20 @@ class AppDriver:
         return self
 
     def choose_search_result(self, path: tuple[str, ...]) -> "AppDriver":
-        """Pick *path* from the search completer (as if selecting a suggestion)."""
-        display = " \u2192 ".join(path)
-        self._w._search._completer.activated[str].emit(display)
-        return self
+        """Type a query, then pick the matching result from the SearchPopup."""
+        from PySide6.QtCore import Qt
+
+        search = self._w._search
+        search.setFocus()
+        search.clear()
+        self._qtbot.keyClicks(search, path[-1])
+        popup = search._popup
+        for row in range(popup.count()):
+            if popup.item(row).data(Qt.UserRole) == tuple(path):
+                popup.setCurrentRow(row)
+                popup.itemClicked.emit(popup.item(row))
+                return self
+        raise AssertionError(f"No search result for {path!r}")
 
     def show_view(self, name: str) -> "AppDriver":
         """Switch the workspace via the activity bar ("Editor"/"Validation")."""
@@ -177,6 +187,20 @@ class AppDriver:
 
     def current_view_index(self) -> int:
         return self._w._stack.currentIndex()
+
+    def tree_selection_label(self) -> str | None:
+        """Label of the node currently selected in the structure tree, if any."""
+        index = self._w._tree._view.currentIndex()
+        if not index.isValid():
+            return None
+        return index.internalPointer().label
+
+    def tree_path_is_expanded(self, path: tuple[str, ...]) -> bool:
+        """True when the tree node at *path* is expanded."""
+        view = self._w._tree._view
+        model = view.model()
+        index = model.index_for_path(tuple(path))
+        return index.isValid() and view.isExpanded(index)
 
     # ------------------------------------------------------------------
     # Internals -- the one place that knows card widget structure

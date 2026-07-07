@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
@@ -26,6 +27,7 @@ from state.app_state import AppState
 
 from .activity_bar import ActivityBar
 from .inspector import InspectorPanel
+from .navigation import NavigationService, NavigationTarget
 from .parameter_list import ParameterListPanel
 from .search import SearchBar
 from .style import STYLESHEET
@@ -40,6 +42,7 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(STYLESHEET)
         self.resize(1200, 760)
         self._state = AppState()
+        self._navigation = NavigationService(self._state)
 
         self._tree = TreePanel()
         self._params = ParameterListPanel()
@@ -62,6 +65,13 @@ class MainWindow(QMainWindow):
         bar.addAction("Export", self._export)
         bar.addSeparator()
         bar.addWidget(self._search)
+        for sequence in (QKeySequence.Find, QKeySequence("Ctrl+P")):
+            QShortcut(sequence, self, activated=self._focus_search)
+
+    def _focus_search(self) -> None:
+        """Focus the search box and select its text so it can be replaced."""
+        self._search.setFocus()
+        self._search.selectAll()
 
     def _build_central(self) -> None:
         # Editor view: three-panel splitter.
@@ -95,12 +105,17 @@ class MainWindow(QMainWindow):
         self.setStatusBar(bar)
 
     def _connect(self) -> None:
-        self._tree.node_selected.connect(self._select_node)
-        self._params.parameter_selected.connect(self._select_parameter)
+        # All navigation flows through the single NavigationService: object and
+        # parameter clicks, validation issues, the Issues tab and search all
+        # request navigation, and the views reveal the resolved target.
+        self._navigation.navigated.connect(self._on_navigated)
+        self._tree.node_selected.connect(self._navigation.navigate)
+        self._params.parameter_selected.connect(self._navigation.navigate)
+        self._validation.issue_activated.connect(self._navigation.navigate)
+        self._inspector.issue_activated.connect(self._navigation.navigate)
+        self._search.navigation_requested.connect(self._navigation.navigate)
+        self._search.dismissed.connect(self._tree.focus_tree)
         self._inspector.committed.connect(self._on_committed)
-        self._validation.issue_activated.connect(self.navigate_to)
-        self._inspector.issue_activated.connect(self.navigate_to)
-        self._search.parameter_chosen.connect(self.navigate_to)
         self._activity_bar.view_requested.connect(self._on_view_changed)
 
     # --- navigation -----------------------------------------------------
@@ -109,58 +124,35 @@ class MainWindow(QMainWindow):
         lives on the editor page, so leaving the editor hides it naturally."""
         self._stack.setCurrentIndex(page_index)
 
-    def _select_node(self, path: tuple) -> None:
-        if self._state.active is None:
-            return
-        self._state.active.select(path)
-        self._params.show_node(self._state.active.selected_node())
-        self._inspector.show_placeholder()
-
-    def _select_parameter(self, path: tuple) -> None:
-        if self._state.active is None:
-            return
-        self._state.active.select_parameter(path)
-        parameter = self._state.active.selected_parameter()
-        if parameter is not None:
-            self._inspector.show_parameter(parameter)
-        else:
-            self._inspector.show_placeholder()
-
     def navigate_to(self, path: tuple) -> None:
-        """Select the parameter at *path* (and its owning object).
+        """Request navigation to *path* through the shared NavigationService.
 
-        The shared navigation entry point used by validation issues, the
-        Issues tab and search. Being public, it is equally usable by any
-        future caller such as deep links or automation.
-
-        Navigation paths from validation issues can be partial (a Pydantic
-        ``loc`` may omit a top-level section), so the target is resolved
-        best-effort and navigation then uses the resolved item's full path.
+        A thin public entry point so external callers (deep links, drag-and-
+        drop, automation) can navigate without reaching into the service.
         """
-        if not path or self._state.active is None:
-            return
-        document = self._state.active.document
-        if document is None:
-            return
-        parameter = document.find_best_parameter(tuple(path))
-        if parameter is not None:
-            self._select_node(tuple(parameter.path[:-1]))
-            self._select_parameter(tuple(parameter.path))
-            return
-        node = document.find_best(tuple(path))
-        if node is not None:
-            self._select_node(tuple(node.path))
+        self._navigation.navigate(tuple(path))
+
+    def _on_navigated(self, target: NavigationTarget) -> None:
+        """Dispatch a resolved navigation target to each view's reveal.
+
+        This is wiring only: the views own their reveal behaviour and the
+        service owns resolution and state; MainWindow merely fans the single
+        notification out to the subscribing panels.
+        """
+        self._tree.reveal(target.object_path)
+        self._params.reveal(target.node, target.parameter_path)
+        self._inspector.reveal(target.parameter)
 
     def _on_committed(self) -> None:
         if self._state.active is None:
             return
-        kept_node = self._state.active.selected_path
-        kept_param = self._state.active.selected_parameter_path
+        kept = (
+            self._state.active.selected_parameter_path
+            or self._state.active.selected_path
+        )
         self._refresh_all()
-        if kept_node:
-            self._select_node(kept_node)
-        if kept_param:
-            self._select_parameter(kept_param)
+        if kept:
+            self._navigation.navigate(kept)
 
     # --- file actions ---------------------------------------------------
     def open_document(self, path: Path) -> None:

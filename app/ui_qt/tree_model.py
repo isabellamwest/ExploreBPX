@@ -32,6 +32,27 @@ class BpxTreeModel(QAbstractItemModel):
             return self._root
         return index.internalPointer()
 
+    def index_for_path(self, path: tuple[str, ...]) -> QModelIndex:
+        """Return the model index for the node at *path*, or an invalid index.
+
+        Descends from the root matching each successive path prefix, so callers
+        (such as a view revealing a navigation target) can locate a node
+        without knowing Qt's index construction.
+        """
+        target = tuple(path)
+        parent = QModelIndex()
+        current = self._root
+        for depth in range(1, len(target) + 1):
+            prefix = target[:depth]
+            for row, child in enumerate(current.children):
+                if child.path == prefix:
+                    parent = self.index(row, 0, parent)
+                    current = child
+                    break
+            else:
+                return QModelIndex()
+        return parent
+
     def index(self, row: int, column: int, parent: QModelIndex = QModelIndex()) -> QModelIndex:
         parent_node = self.node_at(parent)
         if parent_node is None or row >= len(parent_node.children):

@@ -32,6 +32,29 @@ class TreePanel(QWidget):
         self._view.expandToDepth(1)
         model.refresh_warning_markers()
 
+    def reveal(self, path: tuple[str, ...]) -> None:
+        """Expand ancestors of, select, and scroll to the node at *path*.
+
+        This is the tree's part of a navigation reveal; it owns no navigation
+        logic and reacts only to a resolved target path.
+        """
+        model = self._view.model()
+        if not isinstance(model, BpxTreeModel):
+            return
+        index = model.index_for_path(tuple(path))
+        if not index.isValid():
+            return
+        parent = index.parent()
+        while parent.isValid():
+            self._view.expand(parent)
+            parent = parent.parent()
+        self._view.setCurrentIndex(index)
+        self._view.scrollTo(index)
+
+    def focus_tree(self) -> None:
+        """Give keyboard focus to the tree view (e.g. when search is dismissed)."""
+        self._view.setFocus()
+
     def _on_clicked(self, index: QModelIndex) -> None:
         node = index.internalPointer()
         if node is not None:

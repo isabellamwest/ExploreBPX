@@ -116,6 +116,36 @@ def test_search_navigates_to_parameter(app_driver, spm_workfile):
     assert d.inspector_title() == "Nominal cell capacity [A.h]"
 
 
+def test_search_navigates_to_object(app_driver, spm_workfile):
+    d = app_driver
+    d.open(spm_workfile)
+    d.choose_search_result(("Parameterisation", "Cell"))
+    assert d.tree_selection_label() == "Cell"
+    # An object-level navigation shows the Inspector placeholder.
+    assert d.showing_placeholder() is True
+
+
+# ---------------------------------------------------------------------------
+# Navigation reveals the target in the structure tree
+# ---------------------------------------------------------------------------
+
+def test_navigation_reveals_owning_object_in_tree(app_driver, spm_workfile):
+    d = app_driver
+    d.open(spm_workfile)
+    d.go_to(_CAPACITY)
+    # The owning object is selected and its ancestor is expanded.
+    assert d.tree_selection_label() == "Cell"
+    assert d.tree_path_is_expanded(("Parameterisation",)) is True
+
+
+def test_focus_search_selects_existing_text(main_window, spm_workfile):
+    main_window.open_document(spm_workfile)
+    main_window._search.setText("abc")
+    main_window._focus_search()
+    # Focusing selects the existing text so it can be replaced immediately.
+    assert main_window._search.selectedText() == "abc"
+
+
 # ---------------------------------------------------------------------------
 # Issues tab: navigation + placeholders
 # ---------------------------------------------------------------------------

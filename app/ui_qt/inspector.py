@@ -132,6 +132,17 @@ class InspectorPanel(QWidget):
         self._secondary.reset()
         self._panel_height = _DEFAULT_PANEL_HEIGHT
 
+    def reveal(self, parameter: ParameterItem | None) -> None:
+        """Show *parameter*'s work surface, or the placeholder for none.
+
+        This is the Inspector's part of a navigation reveal; object-level
+        targets carry no parameter and fall back to the placeholder.
+        """
+        if parameter is not None:
+            self.show_parameter(parameter)
+        else:
+            self.show_placeholder()
+
     def show_parameter(self, parameter: ParameterItem) -> None:
         self._clear_content()
         meta = bpx_gateway.metadata_index().get(parameter.label)

@@ -485,10 +485,10 @@ parameter by name or path without altering the document structure.
 
 | Capability | Status |
 |---|---|
-| SearchPopup navigation over objects and parameters | Planned |
-| Focus by `Ctrl+F` and `Ctrl+P`, selecting existing text | Planned |
-| Keyboard navigation (Up/Down, Enter, staged Escape) | Planned |
-| Result activation through `NavigationService` | Planned |
+| SearchPopup navigation over objects and parameters | Implemented |
+| Focus by `Ctrl+F` and `Ctrl+P`, selecting existing text | Implemented |
+| Keyboard navigation (Up/Down, Enter, staged Escape) | Implemented |
+| Result activation through `NavigationService` | Implemented |
 
 ### User Workflow
 
@@ -559,7 +559,7 @@ makes the Modified/Saved state meaningful.
 |---|---|
 | Export / round-trip to JSON or YAML | Implemented |
 | Dirty / backing-file state on `DocumentSession` | Implemented |
-| Distinct Save (write back, clear Modified) vs Export (write copy, no state change) | Planned |
+| Distinct Save (write back, clear Modified) vs Export (write copy, no state change) | Implemented |
 
 ### User Workflow
 

@@ -31,5 +31,23 @@ class ParameterListPanel(QWidget):
             item.setData(256, parameter.path)
             self._list.addItem(item)
 
+    def reveal(self, node: TreeNode | None, parameter_path: tuple[str, ...] | None) -> None:
+        """Show *node*'s parameters and select/scroll to *parameter_path*.
+
+        This is the parameter list's part of a navigation reveal; it re-lists
+        the target object's parameters and highlights the target row when the
+        navigation is parameter-level.
+        """
+        self.show_node(node)
+        if parameter_path is None:
+            return
+        target = tuple(parameter_path)
+        for row in range(self._list.count()):
+            item = self._list.item(row)
+            if item.data(256) == target:
+                self._list.setCurrentRow(row)
+                self._list.scrollToItem(item)
+                return
+
     def _on_clicked(self, item: QListWidgetItem) -> None:
         self.parameter_selected.emit(item.data(256))
