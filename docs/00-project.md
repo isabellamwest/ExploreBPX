@@ -52,6 +52,12 @@ guiding beliefs are:
   a document look finished or valid.
 - **Delegate what BPX owns.** Schema and validation semantics belong to the
   `bpx` package and are not duplicated.
+- **Open documents, not modes.** The application edits a *Workspace* — one
+  Primary document and optionally one Reference document — rather than an
+  isolated file. Whether one or two documents are present is data, not an
+  application mode, so comparison is a capability of the one editor rather than a
+  separate mode. Today a Workspace holds exactly one document; multi-document
+  support is an additive evolution, not a different application.
 
 ## Accepted Product Principles
 
@@ -82,6 +88,16 @@ architectural, UI and feature decision in the documents that follow.
    representable. Views and validation are derived from it.
 
 6. **Validation ownership.** Explore_BPX owns presentation only. Validation semantics, messages, and meaning are owned entirely by the official BPX package. Explore_BPX must faithfully surface validator output without modification.
+
+7. **The unit of work is a Workspace.** Explore_BPX edits a Workspace — one
+   Primary document and optionally one Reference document — not an isolated file.
+   Components render the Workspace they are given; the number of documents is
+   data, not an application mode, and comparison is therefore a capability of the
+   editor rather than a separate compare mode. The current single-document
+   application is the degenerate one-document Workspace, so multi-document
+   support is additive rather than a new architecture. This is an accepted
+   direction; the current implementation remains single-document (see
+   [01-architecture.md](01-architecture.md)).
 
 ## Scope
 

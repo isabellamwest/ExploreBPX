@@ -97,6 +97,14 @@ External database and library sources (for example LIIONDB) are introduced as
 anti-corruption adapters mirroring `bpx_gateway.py` and surfaced under the same
 Import menu. These remain in [05-future.md](05-future.md) until designed.
 
+Under the Workspace-centred direction ([00-project.md](00-project.md)), opening a
+file becomes a *Workspace* action rather than an Editor action, and a dedicated
+Workspace page hosts document- and workspace-level information (title,
+description, references, BPX version, model, Primary/Reference details) alongside
+Recent documents and new-document actions. The Workspace page, the contextual
+toolbar that hosts these actions, and contextual launch are future design in
+[05-future.md](05-future.md).
+
 ---
 
 ## 2. Tree Navigation
@@ -176,6 +184,8 @@ description and validation state.
 | Parameter selection drives the Inspector | Implemented |
 | Inspector shows value, unit and schema metadata | Implemented |
 | Parameters classified by kind (scalar, integer, enum, function, table, unknown) | Implemented |
+| Parameter information popover ( i ) surfacing rich BPX metadata | Planned |
+| Self-contained ParameterCard (title, validity badge, summary description in the card) | Planned |
 
 ### User Workflow
 
@@ -218,8 +228,22 @@ composed over one selected parameter.
 
 ### Future Extensions
 
-Analysis, Documentation and References sections over the selected parameter are
-specified in [Analysis and Visualisation](#9-analysis-and-visualisation) and
+Analysis and References sections over the selected parameter are specified in
+[Analysis and Visualisation](#9-analysis-and-visualisation) and
+[05-future.md](05-future.md).
+
+Rich parameter *documentation* — a parameter's physical meaning, units, accepted
+types, functional dependence, model availability, measurement methods,
+specification links and symbols — is delivered on demand through an information
+popover anchored to the ParameterCard, triggered by an ( i ) affordance, rather
+than a secondary-workspace tab. Its content is fed by a unified parameter-metadata
+provider combining `FieldMeta` with a separate educational-metadata source (see
+the seam in [01-architecture.md](01-architecture.md)). Delivering the popover
+requires making the ParameterCard self-contained — moving the title, validity
+badge and summary description into the card — while the existing editing/commit
+contract is unchanged. The popover is the feature; the card refactor is the
+supporting work. Both are scheduled in [04-roadmap.md](04-roadmap.md), and the
+richer educational-metadata dataset itself remains future work in
 [05-future.md](05-future.md).
 
 ---

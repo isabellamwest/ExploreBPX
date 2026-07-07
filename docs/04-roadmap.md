@@ -82,6 +82,24 @@ This phase completes the interaction foundation the later feature work relies on
   - clicking a Validation workspace issue navigates and positions the cursor.
   - See [Validation](03-features.md#5-validation).
 
+### 2.4 Parameter information popover and self-contained ParameterCard
+
+- **Depends on:** nothing beyond Phase 1. Independent of Workspace and
+  multi-document support.
+- **Acceptance criteria:**
+  - a contextual BPX parameter information popover ( i ) is available on every
+    ParameterCard, opened from the card and dismissed by a second ( i ) click or
+    Escape;
+  - the popover surfaces rich BPX metadata (physical meaning, units, accepted
+    types, functional dependence, model availability, measurement methods,
+    specification links, symbols) from a unified parameter-metadata provider that
+    combines `FieldMeta` with a separate educational-metadata source;
+  - as supporting work, the ParameterCard becomes self-contained — the parameter
+    title, validity badge and summary description move into the card — while the
+    existing editing/commit contract is unchanged;
+  - parameter documentation is not added as a secondary-workspace tab.
+  - See [Parameter Inspection](03-features.md#3-parameter-inspection).
+
 ## Phase 3 — Authoring foundation
 
 Authoring is a priority track and begins as soon as the interaction foundation is
@@ -197,7 +215,10 @@ authored-parameter metadata.
 
 ## Deferred to future
 
-Recent documents, external database import, simulator hand-off, multi-document
-workspaces, comparison, session change review, plausibility validation and richer
-authoring metadata are not scheduled here. They remain in
-[05-future.md](05-future.md) until promoted into the specification.
+Recent documents, external database import, simulator hand-off, the
+multi-document **Workspace** (Primary plus optional Reference) and comparison as
+an Editor capability, the Workspace page, the contextual toolbar, contextual
+launch, the educational parameter-metadata dataset, session change review,
+plausibility validation and richer authoring metadata are not scheduled here.
+They remain in [05-future.md](05-future.md) until promoted into the
+specification.

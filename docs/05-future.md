@@ -24,17 +24,67 @@ specification document, with any implementation sequencing added to
 
 ## Workspace and multi-document support
 
-- Multiple open document sessions over `DocumentSession`.
-- Workspace/library management.
-- An active-document switcher UI.
-- Comparison navigation between documents.
+The accepted **Workspace** philosophy — the application edits a Workspace of one
+Primary and optionally one Reference document, and comparison is a capability of
+the Editor rather than a separate mode — lives in [00-project.md](00-project.md)
+and [01-architecture.md](01-architecture.md). The items below are the **future
+design work** that follows from it. They are intentionally unresolved and must not
+influence implementation until the multi-document phase becomes an active
+milestone.
+
+- A `Workspace` state object holding the Primary and an optional Reference
+  `DocumentSession`, introduced only when multi-document work begins — never as a
+  speculative container before a consumer exists.
+- The **Workspace page** (activity-bar sibling to Editor and Validation):
+  document- and workspace-level information and management — title, description,
+  references, BPX version, model, Primary/Reference details, recent documents and
+  new-document actions.
+- **Contextual launch:** opening onto the Workspace page on a cold start (no
+  document, recent or file argument) and straight into the Editor when opening or
+  resuming a file.
+- The **contextual toolbar:** exposing the current activity-bar page's actions
+  rather than a fixed global set, with Open becoming a Workspace action. Its
+  design must reconcile its relationship with the top context/mode bar (one
+  surface with two roles, or two rows) and the friction of opening a second file
+  from the Editor.
 
 ## File comparison
 
-- Multiple `DocumentSession` objects plus tree-model diffing and shared
-  navigation.
-- Old/new value display, filtering and review before save or export.
+Comparison is rendered by the Editor when a Reference document is present —
+components render the Workspace (one or two documents) rather than switching into
+a compare mode. The following are future design items, each requiring dedicated
+UX work:
+
+- Shared/merged tree rendering with ownership **indicators** (never ownership
+  filtering of the structure; see the filtering rule in [02-ui.md](02-ui.md)).
+- Dual parameter inspectors showing both documents' cards side by side.
+- Copying values and structures between documents.
+- Grouped issues and grouped or overlaid analysis across both documents.
+- Difference highlighting.
+- Old/new value display and review before save or export.
 - Template comparison and last-export comparison.
+
+### Open design questions (multi-document phase)
+
+These are significant UX problems to be designed in the multi-document phase, not
+solved now:
+
+- Adding parameters during comparison.
+- Deleting parameters during comparison.
+- Copy semantics, including copying incompatible structures.
+- Comparing different BPX model types.
+- Validation behaviour during comparison.
+- Behaviour when one document contains nodes the other does not.
+
+## Parameter documentation — educational metadata source
+
+The scheduled parameter information popover ([04-roadmap.md](04-roadmap.md)) starts
+from `FieldMeta`. Richer educational metadata — physical meaning, measurement
+methods, BPX specification links, symbols and equations — is not exposed by the
+`bpx` package and would come from a separate, versioned reference dataset layered
+over `bpx_gateway.py`, sourced and tested independently and never contaminating
+the BPX gateway (mirroring the plausibility-dataset discipline). The dataset
+itself is future work; the popover ships first against available `FieldMeta`.
 
 ## Authoring — speculative extensions
 
@@ -82,7 +132,7 @@ independently sourced and independently testable.
 
 ## Inspector secondary workspace — ParameterTool protocol
 
-When a second concrete tool is ready (Analysis, Documentation, References, etc.),
+When a second concrete tool is ready (Analysis, References, etc.),
 `SecondaryWorkspace` should evolve toward a `ParameterTool` protocol so tools
 register generically without requiring Inspector-specific wiring each time:
 

@@ -71,13 +71,19 @@ backing-file path.
 via `state.active`.
 
 **Rationale.** Undo, selection and dirty state are inherently per-document, so
-they belong to a session rather than to the application. Exposing exactly one
+they belong to a session rather than to the application. Conceptually the
+application edits a **Workspace** — one Primary document and optionally one
+Reference document (see [00-project.md](00-project.md)); today's single active
+`DocumentSession` is the degenerate one-document Workspace. Exposing exactly one
 `active` session keeps the current single-document application simple while making
-multi-document support purely additive: a future `AppState` can hold many sessions
-while UI code continues to interact with `state.active.*` unchanged. The
-alternatives — keeping a single flat `AppState`, or introducing a full session
-collection immediately — either misplace ownership or add a collection before any
-consumer needs it. The cost is that call sites address state through `active`.
+multi-document support purely additive: a future `Workspace` can hold a Primary
+and an optional Reference session while UI code continues to interact with
+`state.active.*` (the Primary) unchanged. The alternatives — keeping a single flat
+`AppState`, or introducing a `Workspace`/session collection immediately — either
+misplace ownership or add a container before any consumer needs it; introducing
+the `Workspace` object before multi-document work begins would be exactly the
+speculative abstraction this architecture rejects. The cost is that call sites
+address state through `active`.
 
 ## Domain Model
 
@@ -274,6 +280,14 @@ whether the value is valid. Validation remains a derived concern. The
 user-facing commit model and per-kind card behaviour are specified in the Editing
 section of [03-features.md](03-features.md).
 
+The card's editing contract is already independent of document count. A later
+self-contained-card refactor — moving the parameter title, validity badge and
+summary description into the card so it can host a parameter information popover
+(( i )) — changes composition only, not this contract. That refactor is justified
+by the parameter information popover ([03-features.md](03-features.md)); future
+Workspace portability (rendering two cards side by side) emerges naturally from it
+rather than motivating it.
+
 ## Command Architecture
 
 Command execution is document-centric. Operation intent is represented as a
@@ -297,7 +311,8 @@ attach, without building the capabilities themselves ahead of need.
 | Authoring, skeletons and templates | `document_factory.py` creates incomplete structures without scientific defaults; completion/template state stays separate from exported BPX data. |
 | External database import | A new anti-corruption adapter, mirroring `bpx_gateway.py`, returning raw BPX dicts from third-party sources. |
 | Simulator hand-off | `export.py` generalising from serialisation to target-specific writers. |
-| File comparison | Multiple `DocumentSession` objects plus tree-model diffing and shared navigation. |
+| Multi-document Workspace and comparison | A `Workspace` holding the Primary and an optional Reference `DocumentSession`; components render the workspace (one or two documents) rather than switching into a compare mode. Shared-tree rendering, ownership indicators and dual inspectors are future design, not built ahead of need. |
+| Rich parameter documentation | A parameter-metadata provider layered over `bpx_gateway.py`, combining `FieldMeta` with a separate, versioned educational-metadata dataset (physical meaning, measurement methods, specification links, symbols); sourced and tested independently and never contaminating the BPX gateway, mirroring the plausibility-dataset discipline. |
 | Cross-feature navigation | `NavigationService` as the single frontend navigation coordinator. |
 | Actionable validation | Future `IssueKind` plus pure remediation functions in `core/`. |
 | Plausibility validation | An independent layer (for example `core/sanity.py`) plus a versioned reference dataset, sourced and tested separately from schema validation. |
