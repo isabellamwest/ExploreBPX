@@ -44,9 +44,8 @@ milestone.
   resuming a file.
 - The **contextual toolbar:** exposing the current activity-bar page's actions
   rather than a fixed global set, with Open becoming a Workspace action. Its
-  design must reconcile its relationship with the top context/mode bar (one
-  surface with two roles, or two rows) and the friction of opening a second file
-  from the Editor.
+  design must reconcile its relationship with the top context bar and the friction
+  of opening a second file from the Editor.
 
 ## File comparison
 

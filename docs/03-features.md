@@ -358,8 +358,7 @@ checking.
 | Best-effort mapping from validation paths to visible objects/parameters | Implemented |
 | Validation workspace listing all document issues | Implemented |
 | Parameter-scoped Issues tab in the Inspector secondary workspace | Implemented |
-| Non-modal validation review cursor | Planned |
-| Resolved-issue behaviour during review (stay in place, explicit Next/Finish) | Planned |
+| Keyboard navigation of issues (Enter-to-activate) in the Validation workspace and Issues tab | Planned |
 | `IssueKind` classification for actionable remediation | Planned |
 | Pure remediation functions (edit, move, choose model, map materials, add section) | Planned |
 | Restored field paths for root-landing warnings | Planned |
@@ -368,9 +367,10 @@ checking.
 ### User Workflow
 
 Validation runs automatically as the document changes. The user reviews all issues
-in the Validation workspace, clicks an issue to navigate to the affected object or
-parameter, and (when review is implemented) steps through issues with a non-modal
-cursor while continuing to edit.
+in the Validation workspace and navigates to an affected object or parameter by
+selecting an issue (arrow keys) and pressing Enter, or double-clicking it. The
+editor stays spatially stable while the user surveys issues; only Enter (or a
+double-click) commits navigation.
 
 ### UI Behaviour
 
@@ -381,8 +381,9 @@ Issues are visible in two places, with a strict division of responsibility:
 - the **Issues tab** (in the Inspector secondary workspace) shows issues for the
   **currently selected parameter only**.
 
-Clicking an issue in the Validation workspace navigates to the affected location
-via `NavigationService` and, when review is active, positions the review cursor.
+Activating an issue in the Validation workspace — by selecting it and pressing
+Enter, or double-clicking — navigates to the affected location via
+`NavigationService`.
 
 #### Issues tab (parameter-scoped)
 
@@ -407,20 +408,16 @@ parameter:
 Document-level and object-level issues are never shown in the Issues tab; they
 belong to the Validation workspace.
 
-#### Review cursor (Planned)
+#### Keyboard navigation (Planned)
 
-Validation review is **non-modal**. The cursor appears in the top context/mode
-bar, but the editor stays fully interactive — the user may edit, search, navigate
-and inspect while review is active. The cursor provides Previous, the current
-issue number and total, the current issue path, Next and Finish Review.
-
-When an edit resolves the issue under the cursor, the cursor **stays on that
-issue** and shows a clear resolved state (such as a tick or "Issue resolved"). It
-does not auto-advance; the user explicitly chooses Next or Finish Review. If all
-issues are resolved, the UI presents a clear Finish Review action rather than
-exiting automatically. Newly introduced issues join the set but do not steal the
-cursor. Resolved state and counts track the committed document state after Enter,
-not the live preview while typing.
+Both issue lists — the Validation workspace and the parameter-scoped Issues tab —
+are keyboard-drivable. Arrow keys move the selection; Enter/Return activates the
+selected issue through `NavigationService`. Selection change alone does **not**
+navigate, so the user can survey issues without the editor moving; only Enter (or
+a double-click) commits navigation. Focus remains in the list after activation, so
+the user can arrow to the next issue and Enter again. The persistent list
+selection therefore acts as the review position, with no separate review mode or
+workflow state.
 
 ### Architecture
 
@@ -446,16 +443,15 @@ field paths is Planned and tied to the architectural warning-path gap.
 
 ### Design Rationale
 
-**Non-modal review.** The purpose of review is to fix issues, which means editing;
-a modal review would force the user to leave it to edit. A non-modal cursor in a
-visually distinct bar matches Find-Next and spellcheck conventions. The cost is
-less forced focus, mitigated by the distinct bar. The same cursor generalises to a
-remediation walker when `IssueKind` actions arrive.
-
-**Stay-in-place on resolution.** Auto-advancing on resolution fights the non-modal,
-user-controlled model and can reshuffle issue indices mid-edit. Staying put,
-showing resolved state and letting the user choose Next is more predictable, at the
-cost of being slightly slower for bulk triage.
+**Keyboard navigation over a review mode.** Reviewing issues means editing them,
+and the editor must stay spatially stable while the user works. A dedicated review
+mode would add workflow state (a cursor reconciled against committed document
+state) and a new UI surface for marginal gain over what already exists. The
+Validation workspace is already a persistent, stable list that navigates through
+`NavigationService`; making it keyboard-drivable — arrow to survey, Enter to
+navigate — gives step-through review with no new mode and no new state. This keeps
+`NavigationService` the single navigation mechanism and matches the SearchPopup's
+Up/Down/Enter contract.
 
 **Parameter-scoped Issues tab.** A per-parameter tab in the Inspector secondary
 workspace keeps full issue text for the current parameter reachable without a

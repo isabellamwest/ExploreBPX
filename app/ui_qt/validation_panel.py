@@ -1,4 +1,5 @@
-"""Validation tab: all issues, double-click jumps to the owning parameter."""
+"""Validation tab: all issues; double-click or Enter/Return jumps to the owning
+parameter."""
 
 from __future__ import annotations
 
@@ -19,7 +20,10 @@ class ValidationPanel(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         self._list = QListWidget()
-        self._list.itemDoubleClicked.connect(self._on_activated)
+        # itemActivated fires on Enter/Return and double-click, so a single
+        # connection covers keyboard and mouse activation without duplicate
+        # emits. Selection changes alone (arrow keys) do not trigger it.
+        self._list.itemActivated.connect(self._on_activated)
         layout.addWidget(self._list)
 
     def refresh(self, document: BPXDocument | None) -> None:

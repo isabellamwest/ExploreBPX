@@ -73,18 +73,16 @@ This phase completes the interaction foundation the later feature work relies on
   - the status bar reflects the resulting state.
   - See [Save and Export](03-features.md#7-save-and-export).
 
-### 2.3 Non-modal validation review cursor
+### 2.3 Keyboard navigation in the Validation workspace and Issues tab
 
 - **Depends on:** validation issue mapping and `NavigationService` (Phase 1).
 - **Acceptance criteria:**
-  - the review cursor appears in the top context/mode bar and the editor stays
-    interactive;
-  - the cursor provides Previous, current number/total, current path, Next and
-    Finish Review;
-  - resolving the current issue keeps the cursor in place and shows a resolved
-    state; it does not auto-advance;
-  - resolved state and counts track committed document state, not live preview;
-  - clicking a Validation workspace issue navigates and positions the cursor.
+  - arrow keys select rows in the issue list (native list behaviour);
+  - Enter/Return activates the selected issue through `NavigationService`;
+  - selection change alone does not navigate — arrow to survey, Enter to commit;
+  - focus stays in the list after activation, so the user can arrow to the next
+    issue and Enter again;
+  - the parameter-scoped Issues tab gets the same behaviour.
   - See [Validation](03-features.md#5-validation).
 
 ### 2.4 Parameter information popover and self-contained ParameterCard
@@ -195,7 +193,7 @@ authored-parameter metadata.
 
 ### 5.1 `IssueKind` and remediation functions
 
-- **Depends on:** the review cursor (2.3).
+- **Depends on:** the Validation workspace and issue mapping (Phase 1).
 - **Acceptance criteria:**
   - issues carry an `IssueKind` describing implied remediation;
   - pure remediation functions in `core/` take an issue and raw dict and return a

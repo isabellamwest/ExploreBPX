@@ -3,7 +3,8 @@ secondary workspace.
 
 Data contract:
   - show_parameter(parameter) is the sole inbound data path; None clears it.
-  - issue_activated(tuple) is emitted on double-click for navigation.
+  - issue_activated(tuple) is emitted on double-click or Enter/Return
+    activation for navigation.
   - No document-wide or BPX schema logic lives here.
 """
 
@@ -49,7 +50,10 @@ class IssuesTab(QWidget):
 
         self._list = QListWidget()
         self._list.setObjectName("IssuesList")
-        self._list.itemDoubleClicked.connect(self._on_activated)
+        # itemActivated fires on Enter/Return and double-click, so a single
+        # connection covers keyboard and mouse activation without duplicate
+        # emits. Selection changes alone (arrow keys) do not trigger it.
+        self._list.itemActivated.connect(self._on_activated)
         self._stack.addWidget(self._list)  # index 0 — issue list
 
         self._placeholder = QLabel(_MSG_NO_SELECTION)
