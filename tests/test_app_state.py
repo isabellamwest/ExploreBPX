@@ -134,3 +134,73 @@ def test_app_state_open_starts_clean(valid_spm_path):
     state = AppState()
     state.open(valid_spm_path)
     assert not state.active.dirty
+
+
+# ---------------------------------------------------------------------------
+# new_document
+# ---------------------------------------------------------------------------
+
+def test_new_document_creates_incomplete_scaffold():
+    """new_document() builds a document with required fields absent.
+
+    ``Partial`` has no required sections by design (see
+    ``core.structure.required_sections``), so it validates as complete with
+    an empty scaffold; the concrete models (SPM/SPMe/DFN) have required
+    fields and validate as incomplete.
+    """
+    from core import document_factory
+
+    for model in document_factory.SUPPORTED_MODELS:
+        state = AppState()
+        state.new_document(model)
+        assert state.active is not None
+        assert state.active.document.identity.model == model
+        if model != "Partial":
+            assert not state.active.document.is_valid
+            assert state.active.document.issues
+
+
+def test_new_document_has_no_backing_file():
+    """A never-saved scaffold has no backing file."""
+    state = AppState()
+    state.new_document("SPM")
+    assert state.active.backing_file is None
+
+
+def test_new_document_starts_dirty():
+    """A never-saved scaffold is unsaved/modified from the outset."""
+    state = AppState()
+    state.new_document("SPM")
+    assert state.active.dirty
+
+
+def test_new_document_replaces_active_session(valid_spm_path):
+    """new_document() replaces any previously-active session."""
+    state = AppState()
+    state.open(valid_spm_path)
+    first_session = state.active
+    state.new_document("DFN")
+    assert state.active is not first_session
+    assert state.active.document.identity.model == "DFN"
+
+
+def test_new_document_unknown_model_raises():
+    """An unsupported model raises ValueError and leaves no active session."""
+    import pytest
+
+    state = AppState()
+    with pytest.raises(ValueError):
+        state.new_document("NotAModel")
+    assert state.active is None
+
+
+def test_new_document_unknown_model_leaves_previous_session_intact(valid_spm_path):
+    """A failed new_document() call must not disturb the previous session."""
+    import pytest
+
+    state = AppState()
+    state.open(valid_spm_path)
+    first_session = state.active
+    with pytest.raises(ValueError):
+        state.new_document("NotAModel")
+    assert state.active is first_session

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from core import document_factory
 from core.document import BPXDocument
 from state.document_session import DocumentSession
 
@@ -43,6 +44,21 @@ class AppState:
         document = BPXDocument.from_bytes(path.read_bytes(), path.name)
         session = DocumentSession(document)
         session.backing_file = path
+        self.active = session
+
+    def new_document(self, model: str) -> None:
+        """Create a fresh incomplete document scaffold, replacing the active session.
+
+        Builds the scaffold via ``document_factory.create`` (no invented
+        scientific values), wraps it in a new ``DocumentSession`` with no
+        backing file, and marks it dirty since it has never been saved.
+
+        Raises ``ValueError`` for an unsupported ``model``.
+        """
+        raw = document_factory.create(model)
+        document = BPXDocument.from_raw(raw, filename="untitled.json", fmt="json")
+        session = DocumentSession(document)
+        session.dirty = True
         self.active = session
 
     def close(self) -> None:
