@@ -2,9 +2,9 @@
 
 Top to bottom, a ``ParameterCard`` holds:
 
-  1. a header (title label + validity badge; a slot is reserved for a future
-     ( i ) information button - see roadmap 2.4 sub-step 2 - but no button is
-     added yet),
+  1. a header (title label + validity badge + ( i ) information button that
+     toggles a :class:`~ui_qt.parameter_info_popover.ParameterInfoPopover`;
+     roadmap 2.4 sub-step 2),
   2. the per-kind value editor, produced by :func:`create_card`,
   3. the parameter's summary description, when present.
 
@@ -19,11 +19,13 @@ stays in ``InspectorPanel``.
 from __future__ import annotations
 
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QTextEdit, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QTextEdit, QVBoxLayout, QWidget
 
 from core.bpx_gateway import FieldMeta
+from core.parameter_metadata import resolve_parameter_metadata
 from core.tree_model import ParameterItem
 
+from ..parameter_info_popover import ParameterInfoPopover
 from .registry import create_card
 
 
@@ -37,6 +39,8 @@ class ParameterCard(QWidget):
     def __init__(self, parameter: ParameterItem, meta: FieldMeta | None) -> None:
         super().__init__()
         self.parameter = parameter
+        self._meta = meta
+        self._popover: ParameterInfoPopover | None = None
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -47,8 +51,15 @@ class ParameterCard(QWidget):
         header.addWidget(self._title, 1)
         self._badge = QLabel("")
         header.addWidget(self._badge)
-        # Reserved slot: a future ( i ) info button is added after the badge
-        # (roadmap 2.4 sub-step 2).
+        self._info_button = QPushButton("i")
+        self._info_button.setObjectName("InfoButton")
+        self._info_button.setToolTip("Parameter information")
+        self._info_button.setFixedSize(20, 20)
+        self._info_button.setStyleSheet(
+            "border-radius: 10px; font-style: italic; font-weight: 600;"
+        )
+        self._info_button.clicked.connect(self._toggle_info_popover)
+        header.addWidget(self._info_button)
         layout.addLayout(header)
 
         self._editor = create_card(parameter, meta)
@@ -82,3 +93,14 @@ class ParameterCard(QWidget):
         self._badge.setStyleSheet(
             f"color: white; background: {colour}; padding: 2px 8px; border-radius: 3px;"
         )
+
+    def _toggle_info_popover(self) -> None:
+        """Open the info popover on the first click, close it on the second."""
+        if self._popover is not None and self._popover.isVisible():
+            self._popover.hide()
+            return
+        if self._popover is None:
+            self._popover = ParameterInfoPopover(self)
+        metadata = resolve_parameter_metadata(self.parameter.label, self._meta)
+        self._popover.show_metadata(metadata)
+        self._popover.open_below(self._info_button)
