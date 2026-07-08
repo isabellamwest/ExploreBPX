@@ -25,9 +25,11 @@ class EnumCard(EditorCard):
         self._install_keyboard_handler(self._combo)
 
     def _select(self, value: object) -> None:
+        if value is None:
+            self._combo.setCurrentIndex(-1)
+            return
         index = self._combo.findText(str(value))
-        if index >= 0:
-            self._combo.setCurrentIndex(index)
+        self._combo.setCurrentIndex(index)
 
     def value(self) -> object:
         return self._combo.currentText()
