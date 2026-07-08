@@ -193,6 +193,7 @@ class MainWindow(QMainWindow):
         self._inspector.committed.connect(self._on_committed)
         self._activity_bar.view_requested.connect(self._on_view_changed)
         self._workspace.open_requested.connect(self._open)
+        self._workspace.new_requested.connect(self._new)
 
     # --- navigation -----------------------------------------------------
     def _on_view_changed(self, page_index: int) -> None:
@@ -295,6 +296,19 @@ class MainWindow(QMainWindow):
             self.open_document(Path(name))
         except (LoadError, OSError) as exc:
             QMessageBox.critical(self, "Cannot open file", str(exc))
+
+    def _new(self, model: str) -> None:
+        """Create a fresh incomplete document scaffold for *model*.
+
+        Goes through the same discard guard as Open before replacing the
+        active session, then lands on the Editor page so the user can start
+        filling in the new document.
+        """
+        if not self._confirm_discard_if_dirty():
+            return
+        self._state.new_document(model)
+        self._refresh_all()
+        self._show_page(_EDITOR_PAGE_INDEX)
 
     def _save(self) -> bool:
         """Write the document to its backing file.

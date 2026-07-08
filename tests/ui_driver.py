@@ -24,7 +24,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QComboBox, QLineEdit, QSpinBox
+from PySide6.QtWidgets import QComboBox, QLineEdit, QPushButton, QSpinBox
 
 
 class AppDriver:
@@ -147,6 +147,22 @@ class AppDriver:
         """Click the Open File button on the Workspace page."""
         self._qtbot.mouseClick(self._w._workspace._open_button, Qt.LeftButton)
         return self
+
+    def click_workspace_new(self, model: str) -> "AppDriver":
+        """Click the New button for *model* on the Workspace page's inline chooser."""
+        button = self._w._workspace.findChild(QPushButton, f"NewButton_{model}")
+        assert button is not None, f"No New button for model {model!r}"
+        self._qtbot.mouseClick(button, Qt.LeftButton)
+        return self
+
+    def workspace_new_model_options(self) -> list[str]:
+        """The model names currently offered as buttons by the inline New chooser."""
+        prefix = "NewButton_"
+        return [
+            button.objectName()[len(prefix):]
+            for button in self._w._workspace.findChildren(QPushButton)
+            if button.objectName().startswith(prefix)
+        ]
 
     # ------------------------------------------------------------------
     # Readers -- user-visible state only

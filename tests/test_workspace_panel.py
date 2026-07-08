@@ -1,7 +1,8 @@
-"""Workspace page: activity-bar entry, default landing, and info panel.
+"""Workspace page: activity-bar entry, default landing, info panel and New chooser.
 
-Covers Step 7 of the top-bar/workspace redesign: the Workspace page shell.
-The New model-chooser (Step 8) and drag-and-drop (Step 9) are out of scope.
+Covers Step 7 (the Workspace page shell) and Step 8 (the inline New
+model-chooser) of the top-bar/workspace redesign. Drag-and-drop (Step 9) is
+out of scope.
 """
 
 from __future__ import annotations
@@ -10,7 +11,11 @@ import pytest
 
 pytest.importorskip("PySide6")
 
+from PySide6.QtWidgets import QLabel, QPushButton
+
 import ui_qt.main_window as main_window_module
+import ui_qt.workspace_panel as workspace_panel_module
+from core.document_factory import SUPPORTED_MODELS
 
 _CAPACITY = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
 
@@ -125,3 +130,78 @@ def test_opening_from_workspace_page_goes_through_discard_guard(
     d.click_workspace_open()
 
     assert d.status_text() == original_status
+
+
+def test_new_chooser_offers_exactly_the_supported_models(app_driver):
+    assert sorted(app_driver.workspace_new_model_options()) == sorted(SUPPORTED_MODELS)
+
+
+def test_new_chooser_renders_name_only_for_a_model_with_no_descriptor(qtbot, monkeypatch):
+    """A model absent from ``_MODEL_DESCRIPTORS`` must still render (name-only),
+    never crash -- the documented graceful-degradation fallback."""
+    monkeypatch.setattr(workspace_panel_module, "SUPPORTED_MODELS", ("Mystery",))
+
+    panel = workspace_panel_module.WorkspacePanel()
+    qtbot.addWidget(panel)
+
+    button = panel.findChild(QPushButton, "NewButton_Mystery")
+    assert button is not None
+    assert button.text() == "Mystery"
+
+    descriptor = button.parentWidget().findChild(QLabel, "NewChooserDescriptor")
+    assert descriptor is not None
+    assert descriptor.text() == "Mystery"
+
+
+@pytest.mark.parametrize("model", SUPPORTED_MODELS)
+def test_choosing_new_model_creates_document_and_switches_to_editor(app_driver, model):
+    d = app_driver
+    assert d.current_view_index() == 2
+
+    d.click_workspace_new(model)
+
+    assert d.current_view_index() == 0
+    assert d.activity_bar_selected_label() == "Editor"
+    assert f"· {model} ·" in d.identity_text()
+    assert "State: Modified" in d.workspace_info_text()
+    assert "File: untitled.json" in d.workspace_info_text()
+
+
+def test_new_from_workspace_page_goes_through_discard_guard_and_cancel_aborts(
+    app_driver, spm_workfile, monkeypatch
+):
+    d = app_driver
+    d.open(spm_workfile).go_to(_CAPACITY).edit_field(6.0).commit()
+    original_identity = d.identity_text()
+    original_status = d.status_text()
+    assert "Modified" in original_status
+
+    d.show_view("Workspace")  # starting off the Editor page so a wrongful
+    # switch-to-Editor on the abort path would actually move the index
+
+    monkeypatch.setattr(
+        main_window_module.QMessageBox, "question", lambda *a, **k: main_window_module.QMessageBox.Cancel
+    )
+
+    d.click_workspace_new("DFN")
+
+    assert d.current_view_index() == 2
+    assert d.activity_bar_selected_label() == "Workspace"
+    assert d.identity_text() == original_identity
+    assert d.status_text() == original_status  # dirty state retained, nothing created
+
+
+def test_new_from_workspace_page_discard_guard_proceeds_on_discard(
+    app_driver, spm_workfile, monkeypatch
+):
+    d = app_driver
+    d.open(spm_workfile).go_to(_CAPACITY).edit_field(6.0).commit()
+
+    monkeypatch.setattr(
+        main_window_module.QMessageBox, "question", lambda *a, **k: main_window_module.QMessageBox.Discard
+    )
+
+    d.click_workspace_new("DFN")
+
+    assert "· DFN ·" in d.identity_text()
+    assert d.current_view_index() == 0
