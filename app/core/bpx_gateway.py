@@ -49,6 +49,15 @@ class FieldMeta:
     is_text: bool = False
 
 
+@dataclass(frozen=True)
+class ExpectedField:
+    """A parameter alias the schema expects for a given BPX section."""
+
+    alias: str
+    meta: FieldMeta
+    required: bool
+
+
 @dataclass
 class ValidationResult:
     """Outcome of validating a raw BPX dictionary."""
@@ -101,6 +110,12 @@ def validate(raw: dict, v_tol: float = 0.001) -> ValidationResult:
 
 
 @lru_cache(maxsize=1)
+def _schema() -> dict:
+    """The public BPX JSON schema, computed once and cached."""
+    return bpx.BPX.model_json_schema()
+
+
+@lru_cache(maxsize=1)
 def metadata_index() -> dict[str, FieldMeta]:
     """Build an alias -> :class:`FieldMeta` index from the public BPX schema.
 
@@ -109,13 +124,82 @@ def metadata_index() -> dict[str, FieldMeta]:
     types; the first occurrence wins. This is acceptable because node kind is
     classified value-shape first (see :mod:`core.parameter_types`).
     """
-    schema = bpx.BPX.model_json_schema()
     index: dict[str, FieldMeta] = {}
-    for definition in schema.get("$defs", {}).values():
+    for definition in _schema().get("$defs", {}).values():
         for alias, prop in definition.get("properties", {}).items():
             if alias not in index:
                 index[alias] = _field_meta(alias, prop)
     return index
+
+
+#: Section paths that map to a single schema definition regardless of model.
+#: Uses the same path-tuple convention as :mod:`core.tree_model`/
+#: :mod:`core.structure` (e.g. ``("Parameterisation", "Cell")``).
+_SECTION_DEFS: dict[tuple[str, ...], str] = {
+    ("Header",): "Header",
+    ("Parameterisation", "Cell"): "Cell",
+    ("Parameterisation", "Electrolyte"): "Electrolyte",
+    ("Parameterisation", "Separator"): "Contact",
+    ("State",): "State",
+    ("State", "Initial conditions"): "InitialConditions",
+    ("State", "Thermal environment"): "ThermalState",
+}
+
+#: ``Parameterisation`` is the one section whose definition depends on the
+#: declared model, mirroring :func:`core.structure.required_sections`
+#: (``SPM`` omits Electrolyte/Separator; an undeclared or ``Partial`` model has
+#: no fixed shape).
+_PARAMETERISATION_DEFS: dict[str | None, str] = {
+    "SPM": "ParameterisationSPM",
+    "SPMe": "Parameterisation",
+    "DFN": "Parameterisation",
+    "Partial": "ParameterisationPartial",
+    None: "ParameterisationPartial",
+}
+
+
+def expected_fields(path: tuple[str, ...], model: str | None = None) -> tuple[ExpectedField, ...]:
+    """Return the schema-expected parameter fields for a BPX section.
+
+    ``path`` identifies the section using the same tuple convention as
+    :mod:`core.tree_model`/:mod:`core.structure` (e.g.
+    ``("Parameterisation", "Cell")``). ``model`` disambiguates
+    ``("Parameterisation",)`` itself, the one section whose definition
+    depends on the declared BPX model.
+
+    Each returned :class:`ExpectedField` carries the alias, its
+    :class:`FieldMeta` (from the shared :func:`metadata_index`, so metadata
+    never drifts between this query and the rest of the app), and whether the
+    schema's ``required`` list for that definition names it. Order matches
+    the schema definition's declared property order (stable across calls).
+
+    Raises :class:`ValueError` if ``path`` has no single schema definition.
+    Notably, the electrode sections (``"Negative electrode"``/``"Positive
+    electrode"``) are **not** resolved here: the schema represents each as a
+    union of a single-particle and a blended-particle shape (``ElectrodeSingle``
+    vs ``ElectrodeBlended``), and picking between them requires the section's
+    actual content, not just its identifier. Resolving that union is left for
+    the container-aware work :mod:`core.structure` already defers ("lands
+    later when add-parameter is wired").
+    """
+    definition_name = _resolve_definition(path, model)
+    definition = _schema().get("$defs", {}).get(definition_name)
+    if definition is None:
+        raise ValueError(f"No schema definition found for section {path!r}")
+    required = set(definition.get("required") or ())
+    index = metadata_index()
+    return tuple(
+        ExpectedField(alias=alias, meta=index[alias], required=alias in required)
+        for alias in definition.get("properties", {})
+    )
+
+
+def _resolve_definition(path: tuple[str, ...], model: str | None) -> str:
+    if path == ("Parameterisation",):
+        return _PARAMETERISATION_DEFS.get(model, "ParameterisationPartial")
+    if path in _SECTION_DEFS:
+        return _SECTION_DEFS[path]
+    raise ValueError(f"Unsupported or ambiguous section path: {path!r}")
 
 
 def _field_meta(alias: str, prop: dict) -> FieldMeta:
