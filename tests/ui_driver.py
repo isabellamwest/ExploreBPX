@@ -99,9 +99,15 @@ class AppDriver:
         return self
 
     def activate_first_validation_issue(self) -> "AppDriver":
-        """Double-click the first issue in the document-wide Validation view."""
+        """Activate the first issue in the document-wide Validation view.
+
+        Emits ``itemActivated`` -- the signal the panel actually connects
+        (fired by a real double-click or Enter/Return) -- rather than
+        ``itemDoubleClicked``, which is a distinct Qt signal the panel does
+        not listen to.
+        """
         lst = self._w._validation._list
-        lst.itemDoubleClicked.emit(lst.item(0))
+        lst.itemActivated.emit(lst.item(0))
         return self
 
     def activate_validation_issue(self, path: tuple[str, ...]) -> "AppDriver":
@@ -117,9 +123,15 @@ class AppDriver:
         return self
 
     def activate_first_parameter_issue(self) -> "AppDriver":
-        """Double-click the first issue in the Inspector's Issues tab."""
+        """Activate the first issue in the Inspector's Issues tab.
+
+        Emits ``itemActivated`` -- the signal the tab actually connects
+        (fired by a real double-click or Enter/Return) -- rather than
+        ``itemDoubleClicked``, which is a distinct Qt signal the tab does
+        not listen to.
+        """
         lst = self._w._inspector._issues_tab._list
-        lst.itemDoubleClicked.emit(lst.item(0))
+        lst.itemActivated.emit(lst.item(0))
         return self
 
     def choose_search_result(self, path: tuple[str, ...]) -> "AppDriver":

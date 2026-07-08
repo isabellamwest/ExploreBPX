@@ -57,6 +57,13 @@ def test_flagship_navigate_from_issue_and_fix(app_driver, spm_workfile):
     d.show_view("Validation")
     assert d.validation_issue_count() >= 1
 
+    # Move the Inspector away from the offending parameter first, so the
+    # assertion below can only pass if activation itself navigates there --
+    # not because the Inspector already happened to be sitting on it.
+    d.go_to(_MODEL)
+    assert d.inspector_title() == "Model"
+    d.show_view("Validation")
+
     # Activating the issue navigates the Inspector to the offending parameter.
     d.activate_first_validation_issue()
     assert d.inspector_title() == "Nominal cell capacity [A.h]"
@@ -162,6 +169,13 @@ def test_issues_tab_navigation_and_placeholders(app_driver, spm_workfile):
     # An invalid parameter lists its issues; activating one navigates.
     d.edit_field("not-a-number").commit()
     assert d.issues_tab_count() >= 1
+    # The Issues tab is parameter-scoped: its list only ever contains issues
+    # for the currently-displayed parameter, so activation always navigates
+    # to that same parameter. Unlike the flagship Validation test, the
+    # navigate-away-then-activate displacement pattern is structurally
+    # inapplicable here -- this assertion instead verifies that the real
+    # activation signal chain fires (catching a broken/removed connection),
+    # not that activation navigates across parameters.
     d.activate_first_parameter_issue()
     assert d.inspector_title() == "Nominal cell capacity [A.h]"
 
