@@ -235,7 +235,37 @@ class MainWindow(QMainWindow):
         self._state.open(Path(path))
         self._refresh_all()
 
+    def _confirm_discard_if_dirty(self) -> bool:
+        """Guard against silently discarding unsaved changes.
+
+        Reusable by any action that replaces the active document (Open now;
+        New and drag-and-drop later). Returns True when it is safe to
+        proceed with the destructive action: there is no active session, the
+        active session is not dirty, or the user chose "Don't Save". Returns
+        False when the caller must abort: the user chose "Cancel", or chose
+        "Save" but the save did not actually complete (the Save As dialog
+        was cancelled, or the save failed) -- in that case discarding would
+        still lose data, so the guard refuses to proceed.
+        """
+        session = self._state.active
+        if session is None or not session.dirty:
+            return True
+        choice = QMessageBox.question(
+            self,
+            "Unsaved changes",
+            "This document has unsaved changes. Save before continuing?",
+            QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
+            QMessageBox.Save,
+        )
+        if choice == QMessageBox.Discard:
+            return True
+        if choice == QMessageBox.Cancel:
+            return False
+        return self._save()
+
     def _open(self) -> None:
+        if not self._confirm_discard_if_dirty():
+            return
         name, _ = QFileDialog.getOpenFileName(self, "Open BPX", "", "BPX (*.json *.yaml *.yml)")
         if not name:
             return
@@ -244,14 +274,18 @@ class MainWindow(QMainWindow):
         except (LoadError, OSError) as exc:
             QMessageBox.critical(self, "Cannot open file", str(exc))
 
-    def _save(self) -> None:
+    def _save(self) -> bool:
         """Write the document to its backing file.
 
         If no backing file is set (unsaved new document), a Save As dialog
-        is shown first. Does not affect export copies.
+        is shown first. Does not affect export copies. Returns True once the
+        document has actually been written, False if there was nothing to
+        save, the Save As dialog was cancelled, or the write failed -- used
+        by :meth:`_confirm_discard_if_dirty` to decide whether it is safe to
+        proceed with a destructive action.
         """
         if self._state.active is None:
-            return
+            return False
         session = self._state.active
         if session.backing_file is None:
             name, _ = QFileDialog.getSaveFileName(
@@ -260,15 +294,16 @@ class MainWindow(QMainWindow):
                 "BPX (*.json *.yaml *.yml)",
             )
             if not name:
-                return
+                return False
             session.backing_file = Path(name)
         try:
             session.save()
         except OSError as exc:
             QMessageBox.critical(self, "Save failed", str(exc))
-            return
+            return False
         self._update_title()
         self._update_identity_label()
+        return True
 
     def _export(self) -> None:
         """Write a copy of the document to a user-chosen location.
