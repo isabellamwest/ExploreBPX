@@ -63,7 +63,14 @@ class ParameterInfoPopover(QWidget):
         """
         self.adjustSize()
         bottom_right = anchor.mapToGlobal(anchor.rect().bottomRight())
-        self.move(bottom_right.x() - self.width(), bottom_right.y())
+        x = bottom_right.x() - self.width()
+        y = bottom_right.y()
+        screen = anchor.screen()
+        if screen is not None:
+            available = screen.availableGeometry()
+            x = max(available.left(), min(x, available.right() - self.width()))
+            y = max(available.top(), min(y, available.bottom() - self.height()))
+        self.move(x, y)
         self.show()
         self.setFocus(Qt.PopupFocusReason)
 
