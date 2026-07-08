@@ -1,8 +1,8 @@
-"""Read-only fallback card for kinds without an editor yet (function/table/unknown).
+"""Read-only fallback card for kinds without an editor (section/table).
 
-Stage 1 ships scalar/integer/enum editors; other kinds display their value
-read-only so the inspector still works for the whole tree. Editors land in
-later stages without changing the registry contract.
+Structural kinds display their value read-only so the inspector still works
+for the whole tree. ``SECTION`` is a container, not a value to edit here, and
+``TABLE`` editing is separate roadmap work; both fall back to this card.
 """
 
 from __future__ import annotations

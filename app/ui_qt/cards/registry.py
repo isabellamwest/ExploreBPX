@@ -10,6 +10,7 @@ from .base import EditorCard
 from .enum import EnumCard
 from .function import FunctionCard
 from .integer import IntegerCard
+from .raw import RawCard
 from .scalar import ScalarCard
 from .unknown import ReadOnlyCard
 
@@ -18,6 +19,7 @@ _REGISTRY = {
     ParameterKind.INTEGER: IntegerCard,
     ParameterKind.ENUM: EnumCard,
     ParameterKind.FUNCTION: FunctionCard,
+    ParameterKind.UNKNOWN: RawCard,
 }
 
 

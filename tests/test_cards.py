@@ -34,6 +34,7 @@ def _app() -> QApplication:
         (ParameterKind.INTEGER, 3),
         (ParameterKind.ENUM, "SPM"),
         (ParameterKind.FUNCTION, "not-a-function"),
+        (ParameterKind.UNKNOWN, None),
     ],
 )
 def test_editable_kinds_produce_editable_cards(kind, value):
@@ -45,14 +46,46 @@ def test_editable_kinds_produce_editable_cards(kind, value):
     assert card.is_editable
 
 
-def test_unknown_kind_falls_back_to_read_only():
-    """A kind with no editor (tables/unknown) is presented read-only."""
+@pytest.mark.parametrize("kind", [ParameterKind.TABLE, ParameterKind.SECTION])
+def test_structural_kinds_fall_back_to_read_only(kind):
+    """Structural kinds (tables/sections) have no editor and stay read-only.
+
+    ``UNKNOWN`` is deliberately excluded here: B1 gives it a real editable
+    raw fallback card (see ``test_unknown_kind_produces_editable_raw_card``).
+    """
     _app()
-    param = ParameterItem(
-        label="T", path=("Header", "T"), kind=ParameterKind.TABLE, value={}
-    )
+    param = ParameterItem(label="T", path=("Header", "T"), kind=kind, value={})
     card = create_card(param, None)
     assert card.is_editable is False
+
+
+def test_unknown_kind_produces_editable_raw_card():
+    """A no-metadata, value-less custom parameter (``UNKNOWN``) gets the
+    editable raw fallback card rather than the read-only dead end."""
+    _app()
+    param = ParameterItem(
+        label="Custom", path=("Header", "Custom"), kind=ParameterKind.UNKNOWN, value=None
+    )
+    card = create_card(param, None)
+    assert card.is_editable
+    assert type(card).__name__ == "RawCard"
+    assert card._edit.text() == ""
+    assert card.value() == ""
+
+
+def test_unknown_kind_raw_card_commits_and_reverts():
+    """Typing into the raw card commits via the normal ``value()``/``reset()``
+    contract, and Escape-equivalent ``reset()`` restores the original."""
+    _app()
+    param = ParameterItem(
+        label="Custom", path=("Header", "Custom"), kind=ParameterKind.UNKNOWN, value=None
+    )
+    card = create_card(param, None)
+    card._edit.setText("5")
+    assert card.value() == 5
+    card.reset()
+    assert card._edit.text() == ""
+    assert card.value() == ""
 
 
 def _rendered_text(card) -> str:
@@ -79,6 +112,7 @@ def _rendered_text(card) -> str:
         ParameterKind.INTEGER,
         ParameterKind.ENUM,
         ParameterKind.FUNCTION,
+        ParameterKind.UNKNOWN,
     ],
 )
 def test_none_value_renders_empty_without_crashing(kind):
@@ -130,6 +164,7 @@ def test_enum_none_value_can_be_selected_and_reverted():
     [
         (ParameterKind.SCALAR, "3.5", 3.5),
         (ParameterKind.FUNCTION, "x + 1", "x + 1"),
+        (ParameterKind.UNKNOWN, "x + 1", "x + 1"),
     ],
 )
 def test_none_value_can_be_typed_and_reverted(kind, text, expected_value):
