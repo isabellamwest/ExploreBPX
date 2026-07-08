@@ -14,6 +14,58 @@ def test_valid_document(valid_spm_bytes):
     assert document.find(("Parameterisation", "Cell")) is not None
 
 
+def test_identity_reads_header_fields(valid_spm_dict):
+    """A fully-populated Header yields all three identity fields."""
+    import json
+
+    data = json.dumps(valid_spm_dict).encode("utf-8")
+    document = BPXDocument.from_bytes(data, "spm_example_valid.json")
+
+    identity = document.identity
+    assert identity.title == "Minimal valid SPM example"
+    assert identity.model == "SPM"
+    assert identity.bpx_version == "1.0.0"
+
+
+def test_identity_missing_title_is_empty_string(valid_spm_dict):
+    """A missing Title field falls back to an empty string, not a crash."""
+    import json
+
+    del valid_spm_dict["Header"]["Title"]
+    data = json.dumps(valid_spm_dict).encode("utf-8")
+    document = BPXDocument.from_bytes(data, "broken.json")
+
+    identity = document.identity
+    assert identity.title == ""
+    assert identity.model == "SPM"
+    assert identity.bpx_version == "1.0.0"
+
+
+def test_identity_missing_header_is_all_empty_strings(valid_spm_dict):
+    """An entirely missing Header yields empty strings for every field."""
+    import json
+
+    del valid_spm_dict["Header"]
+    data = json.dumps(valid_spm_dict).encode("utf-8")
+    document = BPXDocument.from_bytes(data, "broken.json")
+
+    identity = document.identity
+    assert identity.title == ""
+    assert identity.model == ""
+    assert identity.bpx_version == ""
+
+
+def test_identity_coerces_non_string_bpx_version(valid_spm_dict):
+    """A non-string BPX version value is coerced to str."""
+    import json
+
+    valid_spm_dict["Header"]["BPX"] = 1.0
+    data = json.dumps(valid_spm_dict).encode("utf-8")
+    document = BPXDocument.from_bytes(data, "broken.json")
+
+    assert document.identity.bpx_version == "1.0"
+
+
 @pytest.mark.parametrize(
     "filename",
     ["lfp_18650_cell_BPX.json", "nmc_pouch_cell_BPX.json"],

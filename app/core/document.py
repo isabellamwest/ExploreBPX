@@ -50,6 +50,32 @@ def _nav_path_for(issue: ValidatorDiagnostic) -> tuple[str, ...]:
     return ()
 
 
+@dataclass(frozen=True)
+class DocumentIdentity:
+    """Identity fields read from a BPX document's Header.
+
+    Frontend-agnostic: both the top bar and the Workspace info panel read
+    identity through this value object rather than the raw dict, keeping
+    knowledge of the BPX Header shape inside ``core``.
+    """
+
+    title: str
+    model: str
+    bpx_version: str
+
+
+def _identity_from_raw(raw: dict) -> DocumentIdentity:
+    header = raw.get("Header") or {}
+    title = header.get("Title") or ""
+    model = header.get("Model") or ""
+    bpx_version = header.get("BPX") or ""
+    return DocumentIdentity(
+        title=str(title),
+        model=str(model),
+        bpx_version=str(bpx_version),
+    )
+
+
 @dataclass
 class BPXDocument:
     """A loaded BPX file plus its derived tree and validation state."""
@@ -119,6 +145,11 @@ class BPXDocument:
     def iter_issues(self) -> list[tuple[ValidatorDiagnostic, tuple[str, ...]]]:
         """Return ``(diagnostic, nav_path)`` pairs for all document issues."""
         return list(zip(self.issues, self._issue_nav_paths))
+
+    @property
+    def identity(self) -> DocumentIdentity:
+        """Return the document's identity (Title, Model, BPX version)."""
+        return _identity_from_raw(self.raw)
 
     @property
     def error_count(self) -> int:
