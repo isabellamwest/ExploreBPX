@@ -2,22 +2,46 @@
 
 Peer of ``TreePanel``/``ValidationPanel``: a self-contained widget that owns
 its own layout and rendering. MainWindow only constructs it, wires its
-``open_requested``/``new_requested`` signals to the existing guarded
-open/new flows, and calls ``refresh`` wherever it refreshes the other views.
+``open_requested``/``new_requested``/``file_dropped`` signals to the existing
+guarded open/new flows, and calls ``refresh`` wherever it refreshes the
+other views.
 
-This is the activity-bar page shell (Step 7) plus the inline New
-model-chooser (Step 8). Drag-and-drop lands in a later step.
+This is the activity-bar page shell (Step 7), the inline New model-chooser
+(Step 8) and drag-and-drop file opening (Step 9).
 """
 
 from __future__ import annotations
 
-from PySide6.QtCore import Signal
+from pathlib import Path
+
+from PySide6.QtCore import QMimeData, Signal
+from PySide6.QtGui import QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from core.document import BPXDocument
 from core.document_factory import SUPPORTED_MODELS
 
 _INFO_PANEL_EMPTY_STATE_TEXT = "No document open"
+
+# Kept in sync with the Open/Export dialog filter ("BPX (*.json *.yaml *.yml)")
+# in main_window.py; both describe the same supported set of file extensions.
+SUPPORTED_BPX_EXTENSIONS = (".json", ".yaml", ".yml")
+
+
+def _first_supported_local_file(mime_data: QMimeData) -> Path | None:
+    """The first local file in *mime_data* with a supported BPX extension.
+
+    Returns ``None`` if there is no such file (no URLs, no local files, or
+    none with a supported extension) -- callers treat that as "ignore".
+    """
+    for url in mime_data.urls():
+        if not url.isLocalFile():
+            continue
+        path = Path(url.toLocalFile())
+        if path.suffix.lower() in SUPPORTED_BPX_EXTENSIONS:
+            return path
+    return None
+
 
 # Short, factual one-line descriptors. A model without an entry here still
 # renders correctly (name only) so this mapping can lag SUPPORTED_MODELS
@@ -35,10 +59,12 @@ class WorkspacePanel(QWidget):
 
     open_requested = Signal()
     new_requested = Signal(str)  # model name
+    file_dropped = Signal(str)  # local file path
 
     def __init__(self) -> None:
         super().__init__()
         self.setObjectName("Panel")
+        self.setAcceptDrops(True)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 24, 24, 24)
@@ -117,3 +143,25 @@ class WorkspacePanel(QWidget):
             f"State: {'Modified' if dirty else 'Saved'}",
         ]
         self._info.setText("\n".join(lines))
+
+    # --- drag-and-drop ---------------------------------------------------
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        """Accept the drag only if it carries at least one supported local file."""
+        if _first_supported_local_file(event.mimeData()) is not None:
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event: QDropEvent) -> None:
+        """Emit ``file_dropped`` for the first supported local file, if any.
+
+        Single-document model: any additional dropped files are ignored.
+        MainWindow owns what happens next (discard guard, then open).
+        """
+        path = _first_supported_local_file(event.mimeData())
+        if path is None:
+            event.ignore()
+            return
+        event.acceptProposedAction()
+        self.file_dropped.emit(str(path))

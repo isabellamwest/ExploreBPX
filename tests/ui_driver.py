@@ -23,7 +23,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QMimeData, QPointF, QUrl, Qt
+from PySide6.QtGui import QDropEvent
 from PySide6.QtWidgets import QComboBox, QLineEdit, QPushButton, QSpinBox
 
 
@@ -146,6 +147,22 @@ class AppDriver:
     def click_workspace_open(self) -> "AppDriver":
         """Click the Open File button on the Workspace page."""
         self._qtbot.mouseClick(self._w._workspace._open_button, Qt.LeftButton)
+        return self
+
+    def drop_file_on_workspace(self, path: Path | str) -> "AppDriver":
+        """Simulate the user dropping *path* onto the Workspace page.
+
+        Dispatches a real ``QDropEvent`` straight to the panel, exercising
+        its own extension filtering as well as MainWindow's discard-guard
+        and open/error-handling wiring -- the same as a genuine OS-level
+        drop. If *path* is not a supported BPX file, the panel ignores the
+        event and nothing happens.
+        """
+        panel = self._w._workspace
+        mime = QMimeData()
+        mime.setUrls([QUrl.fromLocalFile(str(path))])
+        event = QDropEvent(QPointF(0, 0), Qt.CopyAction, mime, Qt.LeftButton, Qt.NoModifier)
+        panel.dropEvent(event)
         return self
 
     def click_workspace_new(self, model: str) -> "AppDriver":

@@ -1,8 +1,8 @@
-"""Workspace page: activity-bar entry, default landing, info panel and New chooser.
+"""Workspace page: activity-bar entry, default landing, info panel, New chooser
+and drag-and-drop file opening.
 
-Covers Step 7 (the Workspace page shell) and Step 8 (the inline New
-model-chooser) of the top-bar/workspace redesign. Drag-and-drop (Step 9) is
-out of scope.
+Covers Step 7 (the Workspace page shell), Step 8 (the inline New
+model-chooser) and Step 9 (drag-and-drop) of the top-bar/workspace redesign.
 """
 
 from __future__ import annotations
@@ -11,6 +11,8 @@ import pytest
 
 pytest.importorskip("PySide6")
 
+from PySide6.QtCore import QMimeData, QPointF, QUrl, Qt
+from PySide6.QtGui import QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import QLabel, QPushButton
 
 import ui_qt.main_window as main_window_module
@@ -18,6 +20,26 @@ import ui_qt.workspace_panel as workspace_panel_module
 from core.document_factory import SUPPORTED_MODELS
 
 _CAPACITY = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
+
+
+def _mime_data_for(*paths) -> QMimeData:
+    mime = QMimeData()
+    mime.setUrls([QUrl.fromLocalFile(str(p)) for p in paths])
+    return mime
+
+
+def _drag_enter_event(*paths) -> QDragEnterEvent:
+    mime = _mime_data_for(*paths)
+    event = QDragEnterEvent(QPointF(0, 0).toPoint(), Qt.CopyAction, mime, Qt.LeftButton, Qt.NoModifier)
+    event._mime_keepalive = mime  # PySide6 does not keep the QMimeData arg alive on its own
+    return event
+
+
+def _drop_event(*paths) -> QDropEvent:
+    mime = _mime_data_for(*paths)
+    event = QDropEvent(QPointF(0, 0), Qt.CopyAction, mime, Qt.LeftButton, Qt.NoModifier)
+    event._mime_keepalive = mime  # PySide6 does not keep the QMimeData arg alive on its own
+    return event
 
 
 def _fail_if_called(*args, **kwargs):
@@ -205,3 +227,180 @@ def test_new_from_workspace_page_discard_guard_proceeds_on_discard(
 
     assert "· DFN ·" in d.identity_text()
     assert d.current_view_index() == 0
+
+
+# --- panel-level drag/drop filtering ------------------------------------
+#
+# These construct real QDragEnterEvent/QDropEvent instances and dispatch
+# them straight to a bare WorkspacePanel, exercising the extension filter
+# and single-file behaviour independent of MainWindow.
+
+
+def test_drag_enter_accepts_a_supported_extension(qtbot, valid_spm_path):
+    panel = workspace_panel_module.WorkspacePanel()
+    qtbot.addWidget(panel)
+
+    event = _drag_enter_event(valid_spm_path)
+    panel.dragEnterEvent(event)
+
+    assert event.isAccepted()
+
+
+def test_drag_enter_ignores_an_unsupported_extension(qtbot, tmp_path):
+    panel = workspace_panel_module.WorkspacePanel()
+    qtbot.addWidget(panel)
+
+    unsupported = tmp_path / "notes.txt"
+
+    event = _drag_enter_event(unsupported)
+    panel.dragEnterEvent(event)
+
+    assert not event.isAccepted()
+
+
+def test_drop_emits_file_dropped_for_the_first_supported_file_only(
+    qtbot, valid_spm_path, tmp_path
+):
+    panel = workspace_panel_module.WorkspacePanel()
+    qtbot.addWidget(panel)
+
+    other = tmp_path / "other.json"
+    other.write_text("{}", encoding="utf-8")
+    received: list[str] = []
+    panel.file_dropped.connect(received.append)
+
+    event = _drop_event(valid_spm_path, other)
+    panel.dropEvent(event)
+
+    assert received == [str(valid_spm_path)]
+    assert event.isAccepted()
+
+
+def test_drop_skips_a_leading_unsupported_file_to_reach_a_later_supported_one(
+    qtbot, valid_spm_path, tmp_path
+):
+    panel = workspace_panel_module.WorkspacePanel()
+    qtbot.addWidget(panel)
+
+    unsupported = tmp_path / "notes.txt"
+    received: list[str] = []
+    panel.file_dropped.connect(received.append)
+
+    event = _drop_event(unsupported, valid_spm_path)
+    panel.dropEvent(event)
+
+    assert received == [str(valid_spm_path)]
+    assert event.isAccepted()
+
+
+def test_drag_enter_accepts_an_uppercase_supported_extension(qtbot, tmp_path):
+    panel = workspace_panel_module.WorkspacePanel()
+    qtbot.addWidget(panel)
+
+    uppercase = tmp_path / "SOMETHING.JSON"
+    uppercase.write_text("{}", encoding="utf-8")
+
+    event = _drag_enter_event(uppercase)
+    panel.dragEnterEvent(event)
+
+    assert event.isAccepted()
+
+
+def test_drop_ignores_an_unsupported_extension_without_emitting(qtbot, tmp_path):
+    panel = workspace_panel_module.WorkspacePanel()
+    qtbot.addWidget(panel)
+
+    unsupported = tmp_path / "notes.txt"
+    received: list[str] = []
+    panel.file_dropped.connect(received.append)
+
+    event = _drop_event(unsupported)
+    panel.dropEvent(event)
+
+    assert received == []
+    assert not event.isAccepted()
+
+
+# --- MainWindow wiring: drop goes through the same guard/open/error path
+# as the toolbar/Workspace Open button ------------------------------------
+
+
+def test_dropping_a_valid_file_opens_it_and_switches_to_editor(app_driver, valid_spm_path):
+    d = app_driver
+    assert d.current_view_index() == 2
+
+    d.drop_file_on_workspace(valid_spm_path)
+
+    assert d.current_view_index() == 0
+    assert d.activity_bar_selected_label() == "Editor"
+    assert d.identity_text() == "Minimal valid SPM example · SPM · BPX v1.0.0"
+
+
+def test_dropping_a_file_goes_through_discard_guard_and_cancel_aborts(
+    app_driver, spm_workfile, valid_spm_path, monkeypatch
+):
+    d = app_driver
+    d.open(spm_workfile).go_to(_CAPACITY).edit_field(6.0).commit()
+    original_identity = d.identity_text()
+    original_status = d.status_text()
+    assert "Modified" in original_status
+
+    d.show_view("Workspace")  # starting off the Editor page so a wrongful
+    # switch-to-Editor on the abort path would actually move the index
+
+    monkeypatch.setattr(
+        main_window_module.QMessageBox, "question", lambda *a, **k: main_window_module.QMessageBox.Cancel
+    )
+
+    d.drop_file_on_workspace(valid_spm_path)
+
+    assert d.current_view_index() == 2
+    assert d.activity_bar_selected_label() == "Workspace"
+    assert d.identity_text() == original_identity
+    assert d.status_text() == original_status  # dirty state retained, nothing opened
+
+
+def test_dropping_a_file_discard_guard_proceeds_on_discard(
+    app_driver, spm_workfile, valid_spm_path, monkeypatch
+):
+    d = app_driver
+    d.open(spm_workfile).go_to(_CAPACITY).edit_field(6.0).commit()
+
+    monkeypatch.setattr(
+        main_window_module.QMessageBox, "question", lambda *a, **k: main_window_module.QMessageBox.Discard
+    )
+
+    d.drop_file_on_workspace(valid_spm_path)
+
+    assert d.identity_text() == "Minimal valid SPM example · SPM · BPX v1.0.0"
+    assert d.current_view_index() == 0
+
+
+def test_dropping_an_unsupported_extension_is_a_no_op(app_driver, tmp_path):
+    d = app_driver
+    unsupported = tmp_path / "notes.txt"
+    unsupported.write_text("hello", encoding="utf-8")
+
+    d.drop_file_on_workspace(unsupported)
+
+    assert d.current_view_index() == 2
+    assert d.workspace_info_text() == "No document open"
+
+
+def test_dropping_an_unparseable_file_shows_the_load_error_dialog(
+    app_driver, tmp_path, monkeypatch
+):
+    d = app_driver
+    broken = tmp_path / "broken.json"
+    broken.write_text("{not valid json", encoding="utf-8")
+
+    calls = []
+    monkeypatch.setattr(
+        main_window_module.QMessageBox, "critical", lambda *a, **k: calls.append(a)
+    )
+
+    d.drop_file_on_workspace(broken)
+
+    assert len(calls) == 1
+    assert d.current_view_index() == 2  # stayed on Workspace, nothing opened
+    assert d.workspace_info_text() == "No document open"
