@@ -10,9 +10,10 @@ The Inspector has two responsibilities, split top-to-bottom:
     owns the validation decisions and drives the badge via
     ``ParameterCard.set_validity``.
   - **Secondary workspace** (bottom): a collapsible, tabbed panel for
-    parameter-centric tools (Issues today; Analysis, Documentation, References
-    in future).  A vertical splitter above the tab strip resizes the whole
-    secondary workspace.
+    parameter-centric tools (Issues today; Analysis, References in future).
+    Parameter documentation is delivered as the card's ( i ) popover, not a
+    secondary-workspace tab (roadmap 2.4).  A vertical splitter above the tab
+    strip resizes the whole secondary workspace.
 
 The secondary workspace is workspace state, not parameter state: it starts
 collapsed, stays open across parameter changes, and only the user collapses it.
