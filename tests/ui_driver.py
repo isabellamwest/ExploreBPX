@@ -222,11 +222,11 @@ class AppDriver:
         return self._w._export_action.isEnabled()
 
     def inspector_title(self) -> str:
-        return self._w._inspector._title.text()
+        return self._w._inspector._card._title.text()
 
     def validity(self) -> str:
         """The Inspector validity badge: '', 'Valid', 'Warning' or 'Invalid'."""
-        return self._w._inspector._badge.text()
+        return self._w._inspector._card._badge.text()
 
     def field_value(self):
         return self._w._inspector._card.value()
@@ -324,8 +324,9 @@ class AppDriver:
     def _editor_widget(self):
         card = self._w._inspector._card
         assert card is not None, "No active card; navigate to a parameter first."
+        editor = card._editor
         for attr in ("_edit", "_fallback", "_spin", "_combo"):
-            widget = getattr(card, attr, None)
+            widget = getattr(editor, attr, None)
             if widget is not None:
                 return widget
-        raise AssertionError(f"Card {type(card).__name__} exposes no editor widget.")
+        raise AssertionError(f"Card {type(editor).__name__} exposes no editor widget.")

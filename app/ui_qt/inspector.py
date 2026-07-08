@@ -2,10 +2,13 @@
 
 The Inspector has two responsibilities, split top-to-bottom:
 
-  - **Primary editing area** (top): title + validity badge, a per-kind value
-    editor card, and an optional description.  Editing uses a draft buffer:
-    typing validates a candidate dict live (badge updates); Enter commits;
-    Escape discards the draft and restores the committed validation state.
+  - **Primary editing area** (top): a self-contained ``ParameterCard`` (title,
+    validity badge, per-kind value editor and description) inside a scroll
+    area.  Editing uses a draft buffer: typing validates a candidate dict live
+    (badge updates); Enter commits; Escape discards the draft and restores the
+    committed validation state.  The card owns its own widgets; the Inspector
+    owns the validation decisions and drives the badge via
+    ``ParameterCard.set_validity``.
   - **Secondary workspace** (bottom): a collapsible, tabbed panel for
     parameter-centric tools (Issues today; Analysis, Documentation, References
     in future).  A vertical splitter above the tab strip resizes the whole
@@ -21,12 +24,10 @@ from __future__ import annotations
 
 from PySide6.QtCore import QTimer, Qt, Signal
 from PySide6.QtWidgets import (
-    QHBoxLayout,
     QLabel,
     QScrollArea,
     QSizePolicy,
     QSplitter,
-    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -36,7 +37,7 @@ from core.tree_model import ParameterItem
 from core.validation import Severity
 from state.app_state import AppState
 
-from .cards.registry import create_card
+from .cards.parameter_card import ParameterCard
 from .issues_tab import IssuesTab
 from .secondary_workspace import SecondaryWorkspace
 from .style import ERROR, OK, WARNING
@@ -64,16 +65,8 @@ class InspectorPanel(QWidget):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
 
-        # Header stays above the splitter so it is always visible.
-        header = QHBoxLayout()
-        self._title = QLabel("")
-        self._title.setObjectName("CardTitle")
-        self._badge = QLabel("")
-        header.addWidget(self._title, 1)
-        header.addWidget(self._badge)
-        outer.addLayout(header)
-
-        # Editing area (top splitter pane): the scrollable card + description.
+        # Editing area (top splitter pane): the scrollable ParameterCard, or
+        # the placeholder label when no parameter is selected.
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         self._content = QWidget()
@@ -117,9 +110,6 @@ class InspectorPanel(QWidget):
 
     def show_placeholder(self) -> None:
         self._clear_content()
-        self._title.setText("")
-        self._badge.setText("")
-        self._badge.setStyleSheet("")
         self._content_layout.addWidget(
             QLabel("Select an object from the structure to inspect + edit it.")
         )
@@ -146,20 +136,12 @@ class InspectorPanel(QWidget):
     def show_parameter(self, parameter: ParameterItem) -> None:
         self._clear_content()
         meta = bpx_gateway.metadata_index().get(parameter.label)
-        self._title.setText(parameter.label)
 
-        self._card = create_card(parameter, meta)
+        self._card = ParameterCard(parameter, meta)
         self._card.draft_changed.connect(self._debounce.start)
         self._card.draft_reset.connect(self._on_reset)
         self._card.commit_requested.connect(self._on_commit)
         self._content_layout.addWidget(self._card)
-
-        if parameter.description:
-            self._content_layout.addWidget(QLabel("Description:", objectName="Heading"))
-            desc = QTextEdit(parameter.description)
-            desc.setReadOnly(True)
-            desc.setMaximumHeight(120)
-            self._content_layout.addWidget(desc)
 
         self._content_layout.addStretch(1)
         self._render_issues(parameter.issues, parameter.has_errors)
@@ -168,7 +150,6 @@ class InspectorPanel(QWidget):
         # open/collapsed state (workspace state, not parameter state).
         count = self._issues_tab.show_parameter(parameter)
         self._secondary.set_count("issues", count)
-
 
     def _validate_draft(self) -> None:
         if self._card is None or self._state.active is None:
@@ -191,14 +172,10 @@ class InspectorPanel(QWidget):
 
     def _render_issues(self, issues, has_errors: bool) -> None:
         if not issues:
-            self._set_badge("Valid", OK)
+            self._card.set_validity("Valid", OK)
             return
-        self._set_badge("Invalid" if has_errors else "Warning", ERROR if has_errors else WARNING)
-
-    def _set_badge(self, text: str, colour: str) -> None:
-        self._badge.setText(text)
-        self._badge.setStyleSheet(
-            f"color: white; background: {colour}; padding: 2px 8px; border-radius: 3px;"
+        self._card.set_validity(
+            "Invalid" if has_errors else "Warning", ERROR if has_errors else WARNING
         )
 
     def _clear_content(self) -> None:
