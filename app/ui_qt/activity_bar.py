@@ -31,6 +31,7 @@ class ActivityBar(QWidget):
         self._group = QButtonGroup(self)
         self._group.setExclusive(True)
         self._buttons: list[QToolButton] = []
+        self._buttons_by_page: dict[int, QToolButton] = {}
 
     def add_view(self, label: str, page_index: int, *, checked: bool = False) -> QToolButton:
         """Register a view entry and return its button for later label updates."""
@@ -46,4 +47,17 @@ class ActivityBar(QWidget):
         self._layout.insertWidget(insert_pos, btn)
         self._group.addButton(btn)
         self._buttons.append(btn)
+        self._buttons_by_page[page_index] = btn
         return btn
+
+    def select(self, page_index: int) -> None:
+        """Mark the entry for *page_index* as the checked/active one.
+
+        For programmatic navigation that must make a view current without
+        the user having clicked its button. Does not emit ``view_requested``
+        -- the caller already knows the target page and is only asking the
+        rail's visual state to follow.
+        """
+        btn = self._buttons_by_page.get(page_index)
+        if btn is not None:
+            btn.setChecked(True)

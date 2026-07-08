@@ -38,6 +38,7 @@ from .tree_panel import TreePanel
 from .validation_panel import ValidationPanel
 
 _NO_DOCUMENT_TEXT = "No document"
+_EDITOR_PAGE_INDEX = 0  # QStackedWidget page hosting the tree/params/inspector
 
 
 class _IdentityLabel(QLabel):
@@ -139,7 +140,9 @@ class MainWindow(QMainWindow):
         self._stack.addWidget(self._validation)  # page 1
 
         # Register activity bar entries (order must match stack pages).
-        self._btn_editor = self._activity_bar.add_view("Editor", page_index=0, checked=True)
+        self._btn_editor = self._activity_bar.add_view(
+            "Editor", page_index=_EDITOR_PAGE_INDEX, checked=True
+        )
         self._btn_validation = self._activity_bar.add_view("Validation", page_index=1)
 
         # Assemble the central layout.
@@ -174,7 +177,15 @@ class MainWindow(QMainWindow):
     def _on_view_changed(self, page_index: int) -> None:
         """Switch the workspace.  The Inspector (and its secondary workspace)
         lives on the editor page, so leaving the editor hides it naturally."""
+        self._show_page(page_index)
+
+    def _show_page(self, page_index: int) -> None:
+        """Make *page_index* the current workspace page, keeping the activity
+        bar's selected entry in sync so the left rail never disagrees with
+        the stack. Setting a button's checked state programmatically does
+        not emit ``view_requested``, so this cannot re-trigger navigation."""
         self._stack.setCurrentIndex(page_index)
+        self._activity_bar.select(page_index)
 
     def navigate_to(self, path: tuple) -> None:
         """Request navigation to *path* through the shared NavigationService.
@@ -187,10 +198,15 @@ class MainWindow(QMainWindow):
     def _on_navigated(self, target: NavigationTarget) -> None:
         """Dispatch a resolved navigation target to each view's reveal.
 
-        This is wiring only: the views own their reveal behaviour and the
-        service owns resolution and state; MainWindow merely fans the single
-        notification out to the subscribing panels.
+        The tree, parameter list and Inspector live only on the Editor page,
+        so any navigation -- from Search, a validation issue or the Issues
+        tab -- must first make that page current, however the user reached
+        the app; otherwise a reveal from another page lands on hidden
+        widgets. This is wiring only: the views own their reveal behaviour
+        and the service owns resolution and state; MainWindow merely
+        switches to the page that hosts them and fans the notification out.
         """
+        self._show_page(_EDITOR_PAGE_INDEX)
         self._tree.reveal(target.object_path)
         self._params.reveal(target.node, target.parameter_path)
         self._inspector.reveal(target.parameter)

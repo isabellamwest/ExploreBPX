@@ -103,6 +103,18 @@ class AppDriver:
         lst.itemDoubleClicked.emit(lst.item(0))
         return self
 
+    def activate_validation_issue(self, path: tuple[str, ...]) -> "AppDriver":
+        """Emit the Validation view's own activation signal for *path*.
+
+        Drives through the panel's public ``issue_activated`` signal directly
+        (the same entry point a real double-click or Enter/Return uses
+        internally), bypassing ``QListWidget``'s ``itemDoubleClicked`` --
+        which is a distinct Qt signal from ``itemActivated`` and, unlike a
+        genuine mouse event, does not trigger it when emitted manually.
+        """
+        self._w._validation.issue_activated.emit(tuple(path))
+        return self
+
     def activate_first_parameter_issue(self) -> "AppDriver":
         """Double-click the first issue in the Inspector's Issues tab."""
         lst = self._w._inspector._issues_tab._list
@@ -202,6 +214,13 @@ class AppDriver:
 
     def current_view_index(self) -> int:
         return self._w._stack.currentIndex()
+
+    def activity_bar_selected_label(self) -> str | None:
+        """Text of whichever activity bar button is currently checked."""
+        for label, btn in (("Editor", self._w._btn_editor), ("Validation", self._w._btn_validation)):
+            if btn.isChecked():
+                return label
+        return None
 
     def tree_selection_label(self) -> str | None:
         """Label of the node currently selected in the structure tree, if any."""
