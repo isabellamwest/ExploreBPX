@@ -36,9 +36,12 @@ from .search import SearchBar
 from .style import STYLESHEET
 from .tree_panel import TreePanel
 from .validation_panel import ValidationPanel
+from .workspace_panel import WorkspacePanel
 
 _NO_DOCUMENT_TEXT = "No document"
 _EDITOR_PAGE_INDEX = 0  # QStackedWidget page hosting the tree/params/inspector
+_VALIDATION_PAGE_INDEX = 1
+_WORKSPACE_PAGE_INDEX = 2
 
 
 class _IdentityLabel(QLabel):
@@ -89,6 +92,7 @@ class MainWindow(QMainWindow):
         self._params = ParameterListPanel()
         self._inspector = InspectorPanel(self._state)
         self._validation = ValidationPanel()
+        self._workspace = WorkspacePanel()
         self._search = SearchBar()
         self._activity_bar = ActivityBar()
         self._identity_label = _IdentityLabel()
@@ -134,16 +138,23 @@ class MainWindow(QMainWindow):
             editor_splitter.addWidget(panel)
         editor_splitter.setSizes([240, 280, 680])
 
-        # Workspace stack: page 0 = editor, page 1 = validation.
+        # Workspace stack pages. Page indices are fixed by add order (Editor
+        # then Validation then Workspace) so _EDITOR_PAGE_INDEX stays valid;
+        # the activity bar's add_view order below controls only the VISUAL
+        # order of the left-rail entries, which is Workspace, Editor,
+        # Validation.
         self._stack = QStackedWidget()
-        self._stack.addWidget(editor_splitter)   # page 0
-        self._stack.addWidget(self._validation)  # page 1
+        self._stack.addWidget(editor_splitter)   # _EDITOR_PAGE_INDEX
+        self._stack.addWidget(self._validation)  # _VALIDATION_PAGE_INDEX
+        self._stack.addWidget(self._workspace)   # _WORKSPACE_PAGE_INDEX
 
-        # Register activity bar entries (order must match stack pages).
-        self._btn_editor = self._activity_bar.add_view(
-            "Editor", page_index=_EDITOR_PAGE_INDEX, checked=True
+        self._btn_workspace = self._activity_bar.add_view(
+            "Workspace", page_index=_WORKSPACE_PAGE_INDEX
         )
-        self._btn_validation = self._activity_bar.add_view("Validation", page_index=1)
+        self._btn_editor = self._activity_bar.add_view("Editor", page_index=_EDITOR_PAGE_INDEX)
+        self._btn_validation = self._activity_bar.add_view(
+            "Validation", page_index=_VALIDATION_PAGE_INDEX
+        )
 
         # Assemble the central layout.
         central = QWidget()
@@ -153,6 +164,15 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._activity_bar)
         layout.addWidget(self._stack, 1)
         self.setCentralWidget(central)
+
+        # Default landing: with no document open, start on the Workspace
+        # page rather than the Editor (which has nothing to show yet). Gated
+        # on there being no active session so a future preload (file
+        # argument, recent document) correctly lands on Editor instead.
+        if self._state.active is None:
+            self._show_page(_WORKSPACE_PAGE_INDEX)
+        else:
+            self._show_page(_EDITOR_PAGE_INDEX)
 
     def _build_statusbar(self) -> None:
         bar = QStatusBar()
@@ -172,6 +192,7 @@ class MainWindow(QMainWindow):
         self._search.dismissed.connect(self._tree.focus_tree)
         self._inspector.committed.connect(self._on_committed)
         self._activity_bar.view_requested.connect(self._on_view_changed)
+        self._workspace.open_requested.connect(self._open)
 
     # --- navigation -----------------------------------------------------
     def _on_view_changed(self, page_index: int) -> None:
@@ -234,6 +255,7 @@ class MainWindow(QMainWindow):
         """
         self._state.open(Path(path))
         self._refresh_all()
+        self._show_page(_EDITOR_PAGE_INDEX)
 
     def _confirm_discard_if_dirty(self) -> bool:
         """Guard against silently discarding unsaved changes.
@@ -303,6 +325,7 @@ class MainWindow(QMainWindow):
             return False
         self._update_title()
         self._update_identity_label()
+        self._update_workspace_info()
         return True
 
     def _export(self) -> None:
@@ -365,6 +388,14 @@ class MainWindow(QMainWindow):
         """Sync the top-bar identity label with the active document."""
         self._identity_label.set_full_text(self._compose_identity_text())
 
+    def _update_workspace_info(self) -> None:
+        """Sync the Workspace page's info panel with the active session."""
+        session = self._state.active
+        document = session.document if session else None
+        filename = self._fallback_filename(session) if document is not None else None
+        dirty = session.dirty if session else False
+        self._workspace.refresh(document, filename, dirty)
+
     def _update_actions_enabled(self) -> None:
         """Save/Export are only enabled once a document is loaded (a session
         alone is not enough: a session may exist with no document yet)."""
@@ -385,4 +416,5 @@ class MainWindow(QMainWindow):
         self._btn_validation.setText(f"Validation ({count})" if count else "Validation")
         self._update_title()
         self._update_identity_label()
+        self._update_workspace_info()
         self._update_actions_enabled()

@@ -138,9 +138,14 @@ class AppDriver:
         raise AssertionError(f"No search result for {path!r}")
 
     def show_view(self, name: str) -> "AppDriver":
-        """Switch the workspace via the activity bar ("Editor"/"Validation")."""
-        index = {"Editor": 0, "Validation": 1}[name]
+        """Switch the workspace via the activity bar ("Workspace"/"Editor"/"Validation")."""
+        index = {"Editor": 0, "Validation": 1, "Workspace": 2}[name]
         self._w._activity_bar.view_requested.emit(index)
+        return self
+
+    def click_workspace_open(self) -> "AppDriver":
+        """Click the Open File button on the Workspace page."""
+        self._qtbot.mouseClick(self._w._workspace._open_button, Qt.LeftButton)
         return self
 
     # ------------------------------------------------------------------
@@ -217,10 +222,19 @@ class AppDriver:
 
     def activity_bar_selected_label(self) -> str | None:
         """Text of whichever activity bar button is currently checked."""
-        for label, btn in (("Editor", self._w._btn_editor), ("Validation", self._w._btn_validation)):
+        buttons = (
+            ("Workspace", self._w._btn_workspace),
+            ("Editor", self._w._btn_editor),
+            ("Validation", self._w._btn_validation),
+        )
+        for label, btn in buttons:
             if btn.isChecked():
                 return label
         return None
+
+    def workspace_info_text(self) -> str:
+        """Text shown in the Workspace page's current-document info panel."""
+        return self._w._workspace._info.text()
 
     def tree_selection_label(self) -> str | None:
         """Label of the node currently selected in the structure tree, if any."""
