@@ -249,7 +249,17 @@ def match_parameter(
     parameter_map: dict[tuple[str, ...], ParameterItem],
     loc: tuple[str, ...],
 ) -> ParameterItem | None:
-    """Best-effort match of a validation ``loc`` to a direct parameter item."""
+    """Best-effort match of a validation ``loc`` to a direct parameter item.
+
+    A match on the leaf key alone (length 1) is only trusted when ``loc``
+    itself carries no further context to disambiguate against. When ``loc``
+    names a parent (e.g. an electrode) that the candidate parameter does not
+    share, a leaf-only match is almost always a same-named sibling elsewhere
+    in the tree rather than the diagnostic's real target -- most notably for
+    ``missing`` diagnostics, whose target parameter does not exist at all.
+    Returning ``None`` in that case lets the caller fall back to attaching
+    the diagnostic to the nearest existing ancestor node instead.
+    """
 
     if not loc:
         return None
@@ -266,4 +276,6 @@ def match_parameter(
                     best_len = length
                     best = parameter
                 break
+    if best_len == 1 and len(loc) > 1:
+        return None
     return best

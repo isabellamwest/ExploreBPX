@@ -27,6 +27,46 @@ def test_invalid_files_still_open(examples_dir, filename):
     assert document.tree.children
 
 
+def test_missing_field_attaches_to_owning_section_not_sibling_leaf(examples_dir):
+    """A missing required field must be flagged on the section that lacks it.
+
+    Regression test for a presentation-layer mis-mapping: when a required
+    field is absent, the validator names the section that lacks it. That
+    diagnostic must land on the owning section, and must never be misattached
+    to a same-named sibling field that happens to be present and valid
+    elsewhere in the tree.
+
+    Scenario: remove "Reaction rate constant [mol.m-2.s-1]" from the Negative
+    electrode (making it a missing required field) while the Positive electrode
+    keeps its own present, valid value.
+    """
+    import json
+
+    raw = json.loads((examples_dir / "nmc_pouch_cell_BPX.json").read_text("utf-8"))
+    del raw["Parameterisation"]["Negative electrode"]["Reaction rate constant [mol.m-2.s-1]"]
+    raw["Parameterisation"]["Positive electrode"]["Reaction rate constant [mol.m-2.s-1]"] = 444
+    data = json.dumps(raw).encode("utf-8")
+
+    document = BPXDocument.from_bytes(data, "broken.json")
+
+    # The missing field is reported on the Negative electrode section, as a
+    # single "Field required" error.
+    negative_electrode = document.find(("Parameterisation", "Negative electrode"))
+    assert negative_electrode is not None
+    required_errors = [
+        issue for issue in negative_electrode.issues if issue.message == "Field required"
+    ]
+    assert len(required_errors) == 1
+
+    # The Positive electrode's present, valid parameter is left untouched.
+    positive_parameter = document.find_parameter(
+        ("Parameterisation", "Positive electrode", "Reaction rate constant [mol.m-2.s-1]")
+    )
+    assert positive_parameter is not None
+    assert positive_parameter.value == 444
+    assert not positive_parameter.has_errors
+
+
 def test_issue_attached_to_node(valid_spm_bytes):
     import json
 
