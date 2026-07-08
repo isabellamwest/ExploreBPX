@@ -250,8 +250,30 @@ class AppDriver:
     def validation_issue_count(self) -> int:
         return self._w._validation._list.count()
 
+    def validation_message(self) -> str | None:
+        """Visible placeholder text on the Validation page, else None when
+        the issue list itself is showing."""
+        panel = self._w._validation
+        if panel._stack.currentWidget() is panel._placeholder:
+            return panel._placeholder.text()
+        return None
+
+    def editor_showing_empty_state(self) -> bool:
+        """True when the Editor page shows its no-document hint rather than
+        the tree/params/inspector splitter."""
+        page = self._w._editor_page
+        return page._stack.currentWidget() is page._placeholder
+
+    def editor_empty_state_text(self) -> str:
+        return self._w._editor_page._placeholder.text()
+
     def current_view_index(self) -> int:
         return self._w._stack.currentIndex()
+
+    def validation_badge_text(self) -> str:
+        """Text of the activity bar's Validation entry (e.g. 'Validation' or
+        'Validation (2)')."""
+        return self._w._btn_validation.text()
 
     def activity_bar_selected_label(self) -> str | None:
         """Text of whichever activity bar button is currently checked."""

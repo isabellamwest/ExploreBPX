@@ -17,7 +17,6 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QSizePolicy,
-    QSplitter,
     QStackedWidget,
     QStatusBar,
     QWidget,
@@ -29,6 +28,7 @@ from state.app_state import AppState
 from state.document_session import DocumentSession
 
 from .activity_bar import ActivityBar
+from .editor_page import EditorPage
 from .inspector import InspectorPanel
 from .navigation import NavigationService, NavigationTarget
 from .parameter_list import ParameterListPanel
@@ -131,12 +131,9 @@ class MainWindow(QMainWindow):
         self._search.selectAll()
 
     def _build_central(self) -> None:
-        # Editor view: three-panel splitter.
-        editor_splitter = QSplitter()
-        for panel in (self._tree, self._params, self._inspector):
-            panel.setObjectName("Panel")
-            editor_splitter.addWidget(panel)
-        editor_splitter.setSizes([240, 280, 680])
+        # Editor view: three-panel splitter, plus its own empty-state hint
+        # when no document is open (EditorPage owns that rendering).
+        self._editor_page = EditorPage(self._tree, self._params, self._inspector)
 
         # Workspace stack pages. Page indices are fixed by add order (Editor
         # then Validation then Workspace) so _EDITOR_PAGE_INDEX stays valid;
@@ -144,7 +141,7 @@ class MainWindow(QMainWindow):
         # order of the left-rail entries, which is Workspace, Editor,
         # Validation.
         self._stack = QStackedWidget()
-        self._stack.addWidget(editor_splitter)   # _EDITOR_PAGE_INDEX
+        self._stack.addWidget(self._editor_page)  # _EDITOR_PAGE_INDEX
         self._stack.addWidget(self._validation)  # _VALIDATION_PAGE_INDEX
         self._stack.addWidget(self._workspace)   # _WORKSPACE_PAGE_INDEX
 
@@ -440,6 +437,7 @@ class MainWindow(QMainWindow):
 
     def _refresh_all(self) -> None:
         document = self._state.active.document if self._state.active else None
+        self._editor_page.set_has_document(document is not None)
         if document is not None:
             self._tree.set_root(document.tree)
         self._params.show_node(None)
