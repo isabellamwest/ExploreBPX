@@ -1,27 +1,56 @@
-"""Parameter list (middle panel): direct parameters of the selected object."""
+"""Parameter list (middle panel): direct parameters of the selected object.
+
+The pane also hosts the section-scoped "+ Add parameter" entry point: a
+header button, enabled only when a document is loaded and an object is
+selected, that opens :class:`~.add_parameter_popup.AddParameterPopup`
+anchored underneath it. This is deliberately the only add-parameter surface
+-- the app has no context menus.
+"""
 
 from __future__ import annotations
 
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QListWidget, QListWidgetItem, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QListWidget,
+    QListWidgetItem,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from core.tree_model import TreeNode
+
+from .add_parameter_popup import AddParameterPopup
 
 
 class ParameterListPanel(QWidget):
     """Lists a node's parameters; emits the selected parameter's path."""
 
     parameter_selected = Signal(tuple)
+    add_parameter_requested = Signal(tuple, str)  # (section_path, typed_alias)
 
     def __init__(self) -> None:
         super().__init__()
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+
+        self._node: TreeNode | None = None
+
+        self._add_button = QPushButton("+ Add parameter")
+        self._add_button.setEnabled(False)
+        self._add_button.clicked.connect(self._open_add_popup)
+        layout.addWidget(self._add_button)
+
         self._list = QListWidget()
         self._list.itemClicked.connect(self._on_clicked)
         layout.addWidget(self._list)
 
+        self._popup = AddParameterPopup(self)
+        self._popup.custom_parameter_requested.connect(self._on_custom_parameter_requested)
+
     def show_node(self, node: TreeNode | None) -> None:
+        self._node = node
+        self._add_button.setEnabled(node is not None)
         self._list.clear()
         if node is None:
             return
@@ -51,3 +80,14 @@ class ParameterListPanel(QWidget):
 
     def _on_clicked(self, item: QListWidgetItem) -> None:
         self.parameter_selected.emit(item.data(256))
+
+    def _open_add_popup(self) -> None:
+        if self._node is None:
+            return
+        existing = {parameter.label for parameter in self._node.parameters}
+        self._popup.open_for_section(self._add_button, self._node.label, existing)
+
+    def _on_custom_parameter_requested(self, typed_alias: str) -> None:
+        if self._node is None:
+            return
+        self.add_parameter_requested.emit(self._node.path, typed_alias)

@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 
 from core import export
 from core.bpx_gateway import BPX_VERSION, LoadError
+from core.commands import AddParameter
 from state.app_state import AppState
 from state.document_session import DocumentSession
 
@@ -183,6 +184,7 @@ class MainWindow(QMainWindow):
         self._navigation.navigated.connect(self._on_navigated)
         self._tree.node_selected.connect(self._navigation.navigate)
         self._params.parameter_selected.connect(self._navigation.navigate)
+        self._params.add_parameter_requested.connect(self._on_add_parameter_requested)
         self._validation.issue_activated.connect(self._navigation.navigate)
         self._inspector.issue_activated.connect(self._navigation.navigate)
         self._search.navigation_requested.connect(self._navigation.navigate)
@@ -230,6 +232,24 @@ class MainWindow(QMainWindow):
         self._tree.reveal(target.object_path)
         self._params.reveal(target.node, target.parameter_path)
         self._inspector.reveal(target.parameter)
+
+    def _on_add_parameter_requested(self, section_path: tuple, alias: str) -> None:
+        """Add a custom parameter to *section_path* and reveal it.
+
+        Routes through the existing ``AddParameter`` command with an honest
+        empty value (``None``); the validator, not the UI, judges whether the
+        resulting alias/value is legal. Refresh-then-navigate mirrors
+        ``_on_committed``: the document is rebuilt first, then the new
+        parameter is revealed through the single ``NavigationService``.
+        """
+        session = self._state.active
+        if session is None or session.document is None:
+            return
+        session.execute_command(AddParameter(tuple(section_path), alias, None))
+        target = session.selected_parameter_path
+        self._refresh_all()
+        if target:
+            self._navigation.navigate(target)
 
     def _on_committed(self) -> None:
         if self._state.active is None:

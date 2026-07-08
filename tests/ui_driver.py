@@ -177,6 +177,23 @@ class AppDriver:
         panel.dropEvent(event)
         return self
 
+    def open_add_parameter_popup(self) -> "AppDriver":
+        """Click the Parameter list's "+ Add parameter" header button."""
+        self._qtbot.mouseClick(self._w._params._add_button, Qt.LeftButton)
+        return self
+
+    def type_new_parameter_alias(self, text: str) -> "AppDriver":
+        """Type *text* into the add-parameter popup's input."""
+        popup = self._w._params._popup
+        popup._input.clear()
+        self._qtbot.keyClicks(popup._input, text)
+        return self
+
+    def activate_custom_parameter_row(self) -> "AppDriver":
+        """Activate the add-parameter popup's "Create custom parameter" row."""
+        self._w._params._popup._activate()
+        return self
+
     def click_workspace_new(self, model: str) -> "AppDriver":
         """Click the New button for *model* on the Workspace page's inline chooser."""
         button = self._w._workspace.findChild(QPushButton, f"NewButton_{model}")
@@ -242,6 +259,9 @@ class AppDriver:
     def parameter_labels(self) -> list[str]:
         lst = self._w._params._list
         return [lst.item(i).text() for i in range(lst.count())]
+
+    def add_parameter_button_enabled(self) -> bool:
+        return self._w._params._add_button.isEnabled()
 
     def issues_tab_label(self) -> str:
         return self._w._inspector._secondary._buttons["issues"].text()
