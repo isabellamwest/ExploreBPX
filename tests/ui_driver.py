@@ -189,8 +189,10 @@ class AppDriver:
         self._qtbot.keyClicks(popup._input, text)
         return self
 
-    def activate_custom_parameter_row(self) -> "AppDriver":
-        """Activate the add-parameter popup's "Create custom parameter" row."""
+    def activate_selected_add_parameter_row(self) -> "AppDriver":
+        """Activate whichever row is currently highlighted in the
+        add-parameter popup -- a BPX-alias suggestion or the "Create custom
+        parameter" fallback, whichever the popup currently has selected."""
         self._w._params._popup._activate()
         return self
 
@@ -262,6 +264,26 @@ class AppDriver:
 
     def add_parameter_button_enabled(self) -> bool:
         return self._w._params._add_button.isEnabled()
+
+    def add_parameter_row_count(self) -> int:
+        """Number of rows (suggestions + custom fallback) currently shown in
+        the add-parameter popup."""
+        return self._w._params._popup._list.count()
+
+    def add_parameter_hint_text(self) -> str:
+        """The add-parameter popup's non-actionable hint text (e.g. the
+        'suggestions unavailable' notice for an unresolvable section), or
+        '' when no hint is shown."""
+        hint = self._w._params._popup._hint_label
+        return hint.text() if hint.isVisible() else ""
+
+    def editor_kind(self) -> str:
+        """Class name of the active card's per-kind editor (e.g.
+        'ScalarCard', 'RawCard'), so tests can assert a known BPX alias opens
+        its proper metadata-driven editor rather than the raw fallback."""
+        card = self._w._inspector._card
+        assert card is not None, "No active card; navigate to a parameter first."
+        return type(card._editor).__name__
 
     def issues_tab_label(self) -> str:
         return self._w._inspector._secondary._buttons["issues"].text()

@@ -35,6 +35,7 @@ class ParameterListPanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
 
         self._node: TreeNode | None = None
+        self._model: str | None = None
 
         self._add_button = QPushButton("+ Add parameter")
         self._add_button.setEnabled(False)
@@ -48,8 +49,9 @@ class ParameterListPanel(QWidget):
         self._popup = AddParameterPopup(self)
         self._popup.custom_parameter_requested.connect(self._on_custom_parameter_requested)
 
-    def show_node(self, node: TreeNode | None) -> None:
+    def show_node(self, node: TreeNode | None, model: str | None = None) -> None:
         self._node = node
+        self._model = model
         self._add_button.setEnabled(node is not None)
         self._list.clear()
         if node is None:
@@ -60,14 +62,21 @@ class ParameterListPanel(QWidget):
             item.setData(256, parameter.path)
             self._list.addItem(item)
 
-    def reveal(self, node: TreeNode | None, parameter_path: tuple[str, ...] | None) -> None:
+    def reveal(
+        self,
+        node: TreeNode | None,
+        parameter_path: tuple[str, ...] | None,
+        model: str | None = None,
+    ) -> None:
         """Show *node*'s parameters and select/scroll to *parameter_path*.
 
         This is the parameter list's part of a navigation reveal; it re-lists
         the target object's parameters and highlights the target row when the
-        navigation is parameter-level.
+        navigation is parameter-level. *model* is the document's declared
+        model, needed (alongside the section path) to look up BPX-alias
+        suggestions for the add-parameter popup.
         """
-        self.show_node(node)
+        self.show_node(node, model)
         if parameter_path is None:
             return
         target = tuple(parameter_path)
@@ -85,7 +94,13 @@ class ParameterListPanel(QWidget):
         if self._node is None:
             return
         existing = {parameter.label for parameter in self._node.parameters}
-        self._popup.open_for_section(self._add_button, self._node.label, existing)
+        self._popup.open_for_section(
+            self._add_button,
+            self._node.label,
+            existing,
+            self._node.path,
+            self._model,
+        )
 
     def _on_custom_parameter_requested(self, typed_alias: str) -> None:
         if self._node is None:

@@ -12,6 +12,10 @@ ERROR = "#c62828"
 WARNING = "#ef6c00"
 ACCENT = "#1f6feb"
 BORDER = "#d0d7de"
+#: Muted/de-emphasised text. Used for secondary labels (e.g. QLabel#Heading)
+#: and reused as the foreground for the add-parameter popup's "other BPX
+#: alias" suggestion tier (aliases the section doesn't expect), so grey rows
+#: draw from the same palette rather than a one-off colour.
 MUTED = "#57606a"
 
 STYLESHEET = """

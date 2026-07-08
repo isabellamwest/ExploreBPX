@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from core import export
+from core import export, structure
 from core.bpx_gateway import BPX_VERSION, LoadError
 from core.commands import AddParameter
 from state.app_state import AppState
@@ -230,7 +230,9 @@ class MainWindow(QMainWindow):
         """
         self._show_page(_EDITOR_PAGE_INDEX)
         self._tree.reveal(target.object_path)
-        self._params.reveal(target.node, target.parameter_path)
+        document = self._state.active.document if self._state.active else None
+        model = structure.infer_model(document.raw) if document else None
+        self._params.reveal(target.node, target.parameter_path, model)
         self._inspector.reveal(target.parameter)
 
     def _on_add_parameter_requested(self, section_path: tuple, alias: str) -> None:
