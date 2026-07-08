@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from core import bpx_gateway
 from core.bpx_gateway import FieldMeta
 from core.parameter_types import ParameterKind, classify, extract_unit, looks_like_table
 
@@ -108,3 +109,39 @@ def test_classify_no_metadata_bool_is_scalar():
 def test_classify_no_metadata_string_is_function():
     """A string without metadata is FUNCTION (BPX treats unknown strings as expressions)."""
     assert classify("something") == ParameterKind.FUNCTION
+
+
+# ---------------------------------------------------------------------------
+# F1: the meta=None contract for user-authored custom parameters
+# ---------------------------------------------------------------------------
+# A user-authored custom parameter is an ordinary raw-dict entry whose BPX
+# metadata is genuinely absent (``meta=None``) -- nothing is synthesised or
+# persisted for it. Absence is a valid first-class state, and value shape is
+# the honest classifier when metadata is absent. These tests lock that
+# contract; they assert existing `classify` behaviour and must pass without
+# any change to `classify` itself.
+
+
+def test_classify_custom_parameter_valueless_is_unknown():
+    """A custom parameter with no value yet and no metadata is UNKNOWN."""
+    assert classify(None) == ParameterKind.UNKNOWN
+
+
+def test_classify_custom_parameter_numeric_is_scalar():
+    """A custom parameter with a numeric value and no metadata is SCALAR."""
+    assert classify(5) == ParameterKind.SCALAR
+    assert classify(5.5) == ParameterKind.SCALAR
+
+
+def test_classify_custom_parameter_string_is_function():
+    """A custom parameter with a string value and no metadata is FUNCTION."""
+    assert classify("some expression") == ParameterKind.FUNCTION
+
+
+def test_classify_known_alias_from_metadata_index_stays_authoritative():
+    """A known BPX alias resolves real `FieldMeta` and stays metadata-
+    authoritative -- the meta=None fallback above is reached only when
+    metadata is genuinely absent, not for known schema aliases."""
+    index = bpx_gateway.metadata_index()
+    meta = index["Model"]
+    assert classify("DFN", meta) == ParameterKind.ENUM

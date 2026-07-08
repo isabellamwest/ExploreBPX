@@ -204,9 +204,10 @@ parameter-centric tools, added as tabs in the Inspector secondary workspace (see
 
 Parameters are `ParameterItem` objects owned by a `TreeNode`. Classification into
 `ParameterKind` is declared-type first: schema metadata is authoritative, and a
-value's runtime type does not change which editor opens. The classification rules
-and the open metadata gap for user-defined parameters are defined in
-[01-architecture.md](01-architecture.md).
+value's runtime type does not change which editor opens. The classification
+rules, including the `meta=None` contract for user-defined/custom parameters
+(metadata absence is a valid first-class state; value shape classifies when
+metadata is genuinely absent), are defined in [01-architecture.md](01-architecture.md).
 
 ### Dependencies
 
@@ -313,9 +314,11 @@ does not decide validity. See the Editing and Command architecture in
   `core/structure.py`.
 - Per-document undo and dirty state on `DocumentSession`.
 - The Inspector cards in `ui_qt/cards/`.
-- The open user-defined parameter metadata gap
-  ([01-architecture.md](01-architecture.md)) blocks reliable classification of
-  authoring-created parameters and therefore constrains section add/remove.
+- The `meta=None` contract for user-defined parameter metadata
+  ([01-architecture.md](01-architecture.md)) is resolved: authoring-created
+  parameters do not synthesise or persist metadata, and absence is a valid
+  classification state, so this no longer blocks or constrains section
+  add/remove.
 
 ### Implementation Notes
 
@@ -663,17 +666,21 @@ Authoring builds on the completion/authoring model in the domain layer
 data source, and authoring/completion state (draft, template inheritance, review
 status) lives in a separate layer that never forces values into exported BPX.
 `document_factory.py` creates incomplete structures without scientific defaults.
-Authoring-created parameters must synthesise metadata so declared-type-first
-classification still applies — this depends on the **open user-defined parameter
-metadata gap** recorded in [01-architecture.md](01-architecture.md).
+Authoring-created custom parameters do **not** synthesise or persist a
+`FieldMeta`: absence (`meta=None`) is a valid first-class state under the
+accepted decision in [01-architecture.md](01-architecture.md). `classify`
+stays metadata-authoritative wherever metadata exists and falls back to
+value-shape classification where it is genuinely absent; the BPX validator is
+the source of truth for whether such a parameter is legal.
 
 ### Dependencies
 
 - `core/document_factory.py` for skeletons.
 - The completion/authoring layer (Planned) separate from exported BPX.
-- The unresolved user-defined parameter metadata mechanism
-  ([01-architecture.md](01-architecture.md)), which must be designed before
-  authoring-created parameters can be classified reliably.
+- The `meta=None` contract for user-defined parameter metadata
+  ([01-architecture.md](01-architecture.md)), resolved: no persistence
+  mechanism is needed for authoring-created parameters to be classified
+  reliably.
 - `NavigationService` for completion-task navigation.
 
 ### Implementation Notes

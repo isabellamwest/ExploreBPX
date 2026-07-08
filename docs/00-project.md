@@ -49,7 +49,9 @@ guiding beliefs are:
 - **Guide without taking control.** Validation and, later, completion inform the
   user without locking the editor or forcing a workflow.
 - **Honesty over convenience.** The tool never invents scientific values to make
-  a document look finished or valid.
+  a document look finished or valid. Nothing is fabricated for a user-authored
+  custom parameter either: the key and value are user-supplied, and the BPX
+  validator — not Explore_BPX — is the source of truth for whether it is legal.
 - **Delegate what BPX owns.** Schema and validation semantics belong to the
   `bpx` package and are not duplicated.
 - **Open documents, not modes.** The application edits a *Workspace* — one

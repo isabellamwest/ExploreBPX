@@ -13,8 +13,12 @@ different editor or become read-only.  Value shape is only used for:
 * Structural kinds (``dict``/``list``) whose topology is always shape-driven.
 * ``allows_function`` fields, where a numeric value and a function-expression
   string are both *valid* stored types and value shape selects the editor.
-* Parameters with no schema metadata (genuinely unknown aliases read from
-  external files).
+* Parameters with no schema metadata. This is a valid, first-class state with
+  two legitimate sources: genuinely unknown aliases read from external files,
+  and user-authored custom parameters (an ordinary raw-dict entry whose
+  metadata is absent because nothing is synthesised or persisted for it). The
+  BPX validator remains the source of truth for whether such a parameter is
+  legal.
 """
 
 from __future__ import annotations
@@ -115,8 +119,10 @@ def classify(value: object, meta: "FieldMeta | None" = None) -> ParameterKind:
 
     # --- No-metadata fallback. --------------------------------------------
     # Only reached for parameters whose alias does not appear in the schema
-    # index — i.e. parameters read from external files that Explore_BPX did
-    # not author.  Value shape is the only information available.
+    # index. Two legitimate sources: parameters read from external files that
+    # Explore_BPX did not author, and user-authored custom parameters, whose
+    # metadata is genuinely absent by design (nothing is synthesised or
+    # persisted for them). Value shape is the only information available.
     if isinstance(value, bool):
         return ParameterKind.SCALAR
     if isinstance(value, (int, float)):

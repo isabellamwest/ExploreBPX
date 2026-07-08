@@ -106,19 +106,30 @@ This phase completes the interaction foundation the later feature work relies on
 ## Phase 3 — Authoring foundation
 
 Authoring is a priority track and begins as soon as the interaction foundation is
-in place. This phase depends on resolving one open design question first.
+in place. The one open design question it depended on — user-defined parameter
+metadata — is resolved (3.0, below).
 
-### 3.0 Resolve user-defined parameter metadata gap (design)
+### 3.0 User-defined parameter metadata — resolved (`meta=None` contract)
 
-- **Depends on:** nothing; it is a design decision.
-- **Blocks:** any authoring capability that creates parameters (section
-  add/remove, skeletons, templates).
+- **Status:** Resolved. A user-authored custom parameter is an ordinary
+  raw-dict entry whose `FieldMeta` is genuinely absent (`meta=None`). Nothing
+  is synthesised and nothing is persisted for it. `classify` stays
+  metadata-authoritative wherever metadata exists and falls back to
+  value-shape classification where it is absent; absence is a valid
+  first-class state, and the BPX validator is the source of truth for whether
+  a custom parameter is legal. See [01-architecture.md](01-architecture.md).
+- **Depends on:** nothing; it was a design decision.
 - **Acceptance criteria:**
-  - a mechanism for persisting and looking up metadata for Explore_BPX-authored
-    parameters is designed and accepted;
-  - the mechanism keeps `classify` metadata-authoritative for authored
-    parameters.
-  - See the open gap in [01-architecture.md](01-architecture.md).
+  - the `meta=None` contract is locked by tests (valueless custom parameter →
+    `UNKNOWN`; numeric → `SCALAR`; string → `FUNCTION`; a known alias still
+    resolves its `FieldMeta` and remains metadata-authoritative);
+  - no runtime behaviour change — `classify` already implemented this.
+- **Note:** because no persistence mechanism exists or is needed, the
+  authoring capabilities that create parameters (4.4's raw/unknown fallback
+  editor, and the add-parameter workflows below) are built as general
+  "metadata-absent" capabilities rather than against any specific synthesis
+  mechanism, so broader custom-parameter authoring remains feasible later
+  without rework.
 
 ### 3.1 New BPX from model skeletons
 
@@ -188,6 +199,33 @@ authored-parameter metadata.
 - **Depends on:** nothing beyond Phase 1.
 - **Acceptance criteria:** parameters with no known kind are still editable through
   a raw fallback. See [Editing](03-features.md#4-editing).
+
+### 4.5 Add custom parameter (freeform)
+
+- **Depends on:** 4.4 (raw/unknown fallback editor); 3.0 (`meta=None` contract,
+  resolved).
+- **Acceptance criteria:**
+  - the user can add a freeform custom parameter (key and value) to a section;
+  - the new entry is an ordinary raw-dict entry — no `FieldMeta` is
+    synthesised or persisted for it;
+  - it renders through the 4.4 raw/unknown fallback editor, or a more specific
+    kind if its value shape resolves one, exactly as `classify` already
+    handles `meta=None`;
+  - the BPX validator remains the sole judge of whether the custom parameter
+    is legal BPX content — nothing is fabricated to make it look schema-known.
+  - See [Authoring](03-features.md#8-authoring).
+
+### 4.6 Add BPX parameter (searchable picker)
+
+- **Depends on:** 4.4 (raw/unknown fallback editor); UI design for the picker
+  ([02-ui.md](02-ui.md) — not yet specified, so this item is UI-design-gated).
+- **Acceptance criteria:**
+  - the user can search known BPX schema aliases and add one not yet present
+    in the document;
+  - the added parameter resolves its `FieldMeta` from `metadata_index()`
+    (metadata-authoritative), not from synthesis;
+  - picker UI/UX is designed in [02-ui.md](02-ui.md) before implementation.
+  - See [Authoring](03-features.md#8-authoring).
 
 ## Phase 5 — Actionable validation
 

@@ -147,21 +147,27 @@ for structural kinds (dict/list, which define document topology) and for
 string are both valid stored types. Parameters with no schema metadata fall back
 to value-shape classification.
 
-### Open architectural gap — user-defined parameter metadata
+### User-defined parameter metadata — accepted decision
 
-The declared-type-first principle requires that user-defined parameters carry
-explicit type metadata at creation time. The current `metadata_index()` covers
-BPX schema aliases only; parameters authored by Explore_BPX itself (section
-add/remove, templates) must synthesise and supply a `FieldMeta` so that
-`classify` remains metadata-authoritative for them. The no-metadata fallback is
-reserved for parameters read from external files whose aliases do not appear in
-any known metadata index.
+A user-authored custom parameter is an ordinary raw-dict entry
+(`section[alias] = value`) whose BPX metadata is simply **absent**
+(`FieldMeta` is `None`). Nothing is synthesised and nothing is persisted for
+it. The current `metadata_index()` covers BPX schema aliases only, and that
+remains correct: when metadata exists it dominates classification; when
+metadata is genuinely absent, value shape is the honest classifier, and
+absence is a valid first-class state, not a gap to be closed.
 
-**The mechanism for persisting and looking up user-defined parameter metadata is
-an unresolved design question.** It sits at the intersection of the Editing and
-Authoring features and is recorded here as an explicit gap. It is intentionally
-left unsolved; it must be designed and accepted before authoring-created
-parameters can be classified reliably.
+`classify` already implements this: it is metadata-authoritative when `meta`
+is known, and falls back to value-shape classification (numeric → scalar,
+string → function, dict/list → structural, otherwise unknown) when `meta` is
+`None`. The no-metadata fallback covers two legitimate sources: aliases from
+external files that Explore_BPX did not author, and user-authored custom
+parameters.
+
+The BPX validator is the source of truth for whether a custom parameter is
+legal — the app must not fabricate metadata to make one look schema-known.
+There is no mechanism for persisting or looking up metadata for custom
+parameters, and none is needed under this model.
 
 ## Core Module Responsibilities
 
