@@ -196,12 +196,19 @@ authored-parameter metadata.
 
 ### 4.4 Unknown/raw fallback editor
 
+- **Status:** Implemented (`RawCard`; `UNKNOWN`-kind parameters route to an editable
+  raw card instead of the read-only dead end; a committed value reclassifies to its
+  real kind on rebuild).
 - **Depends on:** nothing beyond Phase 1.
 - **Acceptance criteria:** parameters with no known kind are still editable through
   a raw fallback. See [Editing](03-features.md#4-editing).
 
 ### 4.5 Add custom parameter (freeform)
 
+- **Status:** Implemented (section-scoped "+ Add parameter" header on the
+  parameter-list pane opens a popup with a "Create custom parameter" row; routes
+  through the `AddParameter` command with an empty value and reveals via
+  `NavigationService`).
 - **Depends on:** 4.4 (raw/unknown fallback editor); 3.0 (`meta=None` contract,
   resolved).
 - **Acceptance criteria:**
@@ -217,8 +224,15 @@ authored-parameter metadata.
 
 ### 4.6 Add BPX parameter (searchable picker)
 
+- **Status:** Implemented as one unified surface with 4.5. The same add-parameter
+  popup lists a section's expected aliases (via `expected_fields`) on empty input
+  and, on search, filters those (shown emphasised) while also surfacing other
+  matching BPX aliases from `metadata_index()` (shown greyed). Known limitation:
+  electrode sections cannot enumerate expected fields (the single/blended union
+  needs live content), so they show no expected suggestions — search still surfaces
+  full-schema aliases, and custom-add still works.
 - **Depends on:** 4.4 (raw/unknown fallback editor); UI design for the picker
-  ([02-ui.md](02-ui.md) — not yet specified, so this item is UI-design-gated).
+  ([02-ui.md](02-ui.md), amended to specify the parameter-list add surface).
 - **Acceptance criteria:**
   - the user can search known BPX schema aliases and add one not yet present
     in the document;

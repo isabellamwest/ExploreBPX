@@ -635,6 +635,8 @@ architecturally co-equal with editing.
 | Raw-dict model that represents invalid and partially edited documents | Implemented |
 | Incomplete structural scaffolds without invented values (`document_factory.py`) | Implemented |
 | Continuous validation that tolerates work-in-progress editing | Implemented |
+| Add a freeform custom parameter to a section (no synthesised metadata) | Implemented |
+| Add a known BPX parameter via search (section-expected + full-schema fallback) | Implemented |
 | New BPX from built-in model skeletons (SPM, SPMe, DFN, Partial) | Planned |
 | Completion status distinct from validation status | Planned |
 | Completion view for unfinished required authoring work | Planned |
@@ -658,6 +660,13 @@ failure. Completion navigation reuses the shared navigation model (see
 [02-ui.md](02-ui.md)) so the user moves from an authoring task into the normal Tree
 → Parameter list → Inspector workflow. Expected-but-missing parameters are surfaced
 as editable rows that write real BPX values only when committed.
+
+Parameters are added from a section-scoped "+ Add parameter" header on the
+parameter-list pane (see [02-ui.md](02-ui.md)). The popup lists the section's
+expected BPX aliases and, on search, also surfaces other schema aliases (greyed) and
+a "Create custom parameter" fallback. Every add writes an empty value through the
+`AddParameter` command and reveals the new row via `NavigationService`; the validator
+judges legality and nothing is fabricated.
 
 ### Architecture
 
