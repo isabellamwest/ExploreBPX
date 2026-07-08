@@ -144,6 +144,21 @@ class AppDriver:
     def status_text(self) -> str:
         return self._w._status_label.text()
 
+    def identity_text(self) -> str:
+        """Full (untruncated) top-bar identity string.
+
+        Reads the label's tooltip rather than its rendered ``text()``: the
+        label elides its visible text to the widget's current width, which is
+        unreliable off-screen, but the tooltip always holds the full string.
+        """
+        return self._w._identity_label.toolTip()
+
+    def save_enabled(self) -> bool:
+        return self._w._save_action.isEnabled()
+
+    def export_enabled(self) -> bool:
+        return self._w._export_action.isEnabled()
+
     def inspector_title(self) -> str:
         return self._w._inspector._title.text()
 

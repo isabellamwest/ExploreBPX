@@ -8,13 +8,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QFontMetrics, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
     QLabel,
     QMainWindow,
     QMessageBox,
+    QSizePolicy,
     QSplitter,
     QStackedWidget,
     QStatusBar,
@@ -24,6 +26,7 @@ from PySide6.QtWidgets import (
 from core import export
 from core.bpx_gateway import BPX_VERSION, LoadError
 from state.app_state import AppState
+from state.document_session import DocumentSession
 
 from .activity_bar import ActivityBar
 from .inspector import InspectorPanel
@@ -33,6 +36,43 @@ from .search import SearchBar
 from .style import STYLESHEET
 from .tree_panel import TreePanel
 from .validation_panel import ValidationPanel
+
+_NO_DOCUMENT_TEXT = "No document"
+
+
+class _IdentityLabel(QLabel):
+    """A QLabel that elides its text to whatever width it is given.
+
+    The full, untruncated string is kept as the tooltip so hovering always
+    reveals the complete identity, even when the rendered text is elided.
+    ``sizeHint`` is based on the *full* text rather than the currently
+    displayed (possibly already-elided) text, so the label first asks for
+    its natural width and only shrinks -- via ``resizeEvent`` -- once the
+    toolbar actually has less room to give it.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        self._full_text = ""
+
+    def set_full_text(self, text: str) -> None:
+        self._full_text = text
+        self.setToolTip(text)
+        self.updateGeometry()
+        self._apply_elision()
+
+    def sizeHint(self) -> QSize:
+        width = QFontMetrics(self.font()).horizontalAdvance(self._full_text)
+        return QSize(width, super().sizeHint().height())
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._apply_elision()
+
+    def _apply_elision(self) -> None:
+        metrics = QFontMetrics(self.font())
+        self.setText(metrics.elidedText(self._full_text, Qt.ElideRight, self.width()))
 
 
 class MainWindow(QMainWindow):
@@ -50,6 +90,7 @@ class MainWindow(QMainWindow):
         self._validation = ValidationPanel()
         self._search = SearchBar()
         self._activity_bar = ActivityBar()
+        self._identity_label = _IdentityLabel()
         self._status_label = QLabel()
 
         self._build_toolbar()
@@ -59,10 +100,21 @@ class MainWindow(QMainWindow):
         self._refresh_all()
 
     def _build_toolbar(self) -> None:
+        """Build the fixed top bar: identity on the left, actions on the right.
+
+        Open stays at the far left for now (unchanged position); it moves to
+        the Workspace page in a later step.
+        """
         bar = self.addToolBar("Main")
         bar.addAction("Open", self._open)
-        bar.addAction("Save", self._save)
-        bar.addAction("Export", self._export)
+        bar.addWidget(self._identity_label)
+
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        bar.addWidget(spacer)
+
+        self._save_action = bar.addAction("Save", self._save)
+        self._export_action = bar.addAction("Export", self._export)
         bar.addSeparator()
         bar.addWidget(self._search)
         for sequence in (QKeySequence.Find, QKeySequence("Ctrl+P")):
@@ -200,6 +252,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Save failed", str(exc))
             return
         self._update_title()
+        self._update_identity_label()
 
     def _export(self) -> None:
         """Write a copy of the document to a user-chosen location.
@@ -222,7 +275,12 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Export failed", str(exc))
 
     def _update_title(self) -> None:
-        """Sync the window title and status bar with the active session state."""
+        """Sync the OS window title and bottom status bar with session state.
+
+        Shows only the backing file name and dirty/saved state -- the
+        document's Title/Model/version identity lives in the top bar instead
+        (see :meth:`_update_identity_label`), so no fact is duplicated.
+        """
         session = self._state.active
         if session is None or session.document is None:
             self.setWindowTitle("ExploreBPX")
@@ -233,6 +291,36 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"{prefix}{name} \u2014 ExploreBPX")
         state_text = "Modified" if session.dirty else "Saved"
         self._status_label.setText(f"{name}  |  {state_text}")
+
+    def _fallback_filename(self, session: DocumentSession) -> str:
+        """The file name to show when a document has no Header Title."""
+        if session.backing_file is not None:
+            return session.backing_file.name
+        return session.document.filename if session.document else ""
+
+    def _compose_identity_text(self) -> str:
+        """Compose 'Title \u00b7 Model \u00b7 BPX vX.Y', omitting any empty field."""
+        session = self._state.active
+        if session is None or session.document is None:
+            return _NO_DOCUMENT_TEXT
+        identity = session.document.identity
+        title = identity.title or self._fallback_filename(session)
+        segments = [segment for segment in (title, identity.model) if segment]
+        if identity.bpx_version:
+            segments.append(f"BPX v{identity.bpx_version}")
+        return " \u00b7 ".join(segments) if segments else _NO_DOCUMENT_TEXT
+
+    def _update_identity_label(self) -> None:
+        """Sync the top-bar identity label with the active document."""
+        self._identity_label.set_full_text(self._compose_identity_text())
+
+    def _update_actions_enabled(self) -> None:
+        """Save/Export are only enabled once a document is loaded (a session
+        alone is not enough: a session may exist with no document yet)."""
+        session = self._state.active
+        has_document = session is not None and session.document is not None
+        self._save_action.setEnabled(has_document)
+        self._export_action.setEnabled(has_document)
 
     def _refresh_all(self) -> None:
         document = self._state.active.document if self._state.active else None
@@ -245,3 +333,5 @@ class MainWindow(QMainWindow):
         count = (document.error_count + document.warning_count) if document else 0
         self._btn_validation.setText(f"Validation ({count})" if count else "Validation")
         self._update_title()
+        self._update_identity_label()
+        self._update_actions_enabled()
