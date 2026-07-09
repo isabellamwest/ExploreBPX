@@ -13,6 +13,14 @@ State model.  The workspace is **workspace state, not parameter state**:
   - Expanded/collapsed and active-tab state persist across parameter changes;
     selecting a different parameter never opens or closes the workspace.
   - Only the user collapses it, by clicking the active tab again.
+  - The workspace is parameter-scoped content shown over a document-level
+    surface: when there is no parameter to scope it to (the Inspector's
+    placeholder), it is force-collapsed via :meth:`suspend`, and restored to
+    whatever the user last wanted via :meth:`resume`. Suspension is a
+    visibility override, not a change of the user's intent -- collapsing
+    while suspended, or expanding again on :meth:`resume`, always reflects
+    the *last real user action* (``open``/``collapse``/tab-click), not
+    whatever happened while suspended.
 
 Panel height is owned by the surrounding splitter (see ``InspectorPanel``); this
 widget only reports :meth:`tab_strip_height` and locks its own maximum height
@@ -60,7 +68,14 @@ class SecondaryWorkspace(QWidget):
         super().__init__()
         self.setObjectName("SecondaryWorkspace")
 
-        self._expanded = False
+        # `_intent_expanded` is the user's last real want-open (set only by
+        # `open`/`collapse`/tab-clicks); `_suspended` is a visibility override
+        # applied while there is no parameter to scope the content to.
+        # `is_expanded` (and everything actually rendered) is the derived
+        # combination of the two -- see the class docstring.
+        self._intent_expanded = False
+        self._suspended = False
+        self._rendered_visible = False
         self._active_id: str | None = None
         self._titles: dict[str, str] = {}
         self._buttons: dict[str, QToolButton] = {}
@@ -113,7 +128,7 @@ class SecondaryWorkspace(QWidget):
         self._pages[tab_id] = page_index
 
         self.setMinimumHeight(self.tab_strip_height())
-        if not self._expanded:
+        if not self.is_expanded:
             self.setMaximumHeight(self.tab_strip_height())
 
     def set_count(self, tab_id: str, count: int) -> None:
@@ -124,24 +139,55 @@ class SecondaryWorkspace(QWidget):
         self._buttons[tab_id].setText(f"{title} ({count})" if count else title)
 
     def open(self, tab_id: str) -> None:
-        """Activate *tab_id* and expand the workspace."""
+        """Activate *tab_id* and record the user's intent to be expanded.
+
+        Only visibly expands when not currently suspended; while suspended
+        the intent is still recorded so a later :meth:`resume` restores it.
+        """
         if tab_id not in self._buttons:
             return
-        self._activate(tab_id)
-        self._set_expanded(True)
+        self._active_id = tab_id
+        self._intent_expanded = True
+        self._render()
 
     def collapse(self) -> None:
         """Collapse the workspace, leaving the tab strip visible."""
-        self._set_expanded(False)
+        self._intent_expanded = False
+        self._render()
 
     def reset(self) -> None:
-        """Return to the default state: collapsed, no active tab."""
-        self._activate(None)
-        self._set_expanded(False)
+        """Return to the default state: collapsed, no active tab, not suspended."""
+        self._active_id = None
+        self._intent_expanded = False
+        self._suspended = False
+        self._render()
+
+    def suspend(self) -> None:
+        """Force-collapse because there is no parameter to scope content to.
+
+        Does not touch the user's intent (``open``/``collapse`` state) or the
+        active tab -- only the rendered visibility.
+        """
+        if self._suspended:
+            return
+        self._suspended = True
+        self._render()
+
+    def resume(self) -> None:
+        """Undo :meth:`suspend`, restoring the user's last intent.
+
+        Idempotent when not suspended: a direct parameter-to-parameter
+        reveal (no intervening placeholder) is a no-op and emits nothing.
+        """
+        if not self._suspended:
+            return
+        self._suspended = False
+        self._render()
 
     @property
     def is_expanded(self) -> bool:
-        return self._expanded
+        """The workspace's *visible* expanded state: intent minus suspension."""
+        return self._intent_expanded and not self._suspended
 
     @property
     def active_id(self) -> str | None:
@@ -155,37 +201,30 @@ class SecondaryWorkspace(QWidget):
     # ------------------------------------------------------------------
 
     def _on_tab_clicked(self, tab_id: str) -> None:
-        # Clicking the active tab collapses; otherwise switch/expand.
-        if self._expanded and self._active_id == tab_id:
-            self._set_expanded(False)
+        # Clicking the active tab while visibly expanded collapses; otherwise
+        # switch/expand.
+        if self.is_expanded and self._active_id == tab_id:
+            self.collapse()
         else:
             self.open(tab_id)
 
-    def _activate(self, tab_id: str | None) -> None:
-        self._active_id = tab_id
+    def _render(self) -> None:
+        """Apply the current state to the tab buttons and content stack.
+
+        Emits :attr:`expanded_changed` iff the *rendered* (visible) state
+        actually changes -- suspend/resume calls that don't change visibility
+        (e.g. ``resume()`` while not suspended, or ``suspend()`` while already
+        collapsed) emit nothing.
+        """
+        visible = self.is_expanded
         for tid, button in self._buttons.items():
-            button.setChecked(tid == tab_id)
-        if tab_id is not None:
-            self._content.setCurrentIndex(self._pages[tab_id])
+            button.setChecked(visible and tid == self._active_id)
+        if self._active_id is not None:
+            self._content.setCurrentIndex(self._pages[self._active_id])
 
-    def _set_expanded(self, expanded: bool) -> None:
-        if expanded and self._active_id is None:
+        if visible == self._rendered_visible:
             return
-        if expanded == self._expanded:
-            # Still refresh checked-state so the active tab reads correctly.
-            if not expanded:
-                self._sync_unchecked()
-            return
-
-        self._expanded = expanded
-        self._content.setVisible(expanded)
-        if expanded:
-            self.setMaximumHeight(_MAX_HEIGHT)
-        else:
-            self._sync_unchecked()
-            self.setMaximumHeight(self.tab_strip_height())
-        self.expanded_changed.emit(expanded)
-
-    def _sync_unchecked(self) -> None:
-        for button in self._buttons.values():
-            button.setChecked(False)
+        self._rendered_visible = visible
+        self._content.setVisible(visible)
+        self.setMaximumHeight(_MAX_HEIGHT if visible else self.tab_strip_height())
+        self.expanded_changed.emit(visible)

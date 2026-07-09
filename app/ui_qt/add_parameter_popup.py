@@ -6,7 +6,8 @@ the frameless ``Qt.FramelessWindowHint | Qt.Tool`` pattern established by
 :class:`~ui_qt.parameter_info_popover.ParameterInfoPopover`. This is a new,
 self-contained widget -- it owns both its text input and its actionable rows,
 takes keyboard focus itself (Down/Up to move, Enter to activate, staged Escape
-to close) and dismisses on focus-out. It does not subclass or reuse
+to close) and dismisses on an outside click via the shared
+:class:`~ui_qt.dismissal.OutsideDismissFilter`. It does not subclass or reuse
 :class:`~ui_qt.search.SearchBar`, which owns navigation and must not gain an
 authoring role.
 
@@ -59,6 +60,7 @@ from PySide6.QtWidgets import (
 from core.bpx_gateway import ExpectedField, FieldMeta, expected_fields, searchable_parameters
 from core.parameter_types import extract_unit
 from ui_qt import style
+from ui_qt.dismissal import OutsideDismissFilter
 
 #: Visible-row cap before the list scrolls; keeps the popup within screen
 #: bounds however long the full standard gets. Counts every row (headers
@@ -162,7 +164,6 @@ class _PopupInput(QLineEdit):
     move_requested = Signal(int)
     activate_requested = Signal()
     escape_requested = Signal()
-    focus_lost = Signal()
 
     def keyPressEvent(self, event) -> None:
         key = event.key()
@@ -176,10 +177,6 @@ class _PopupInput(QLineEdit):
             self.escape_requested.emit()
             return
         super().keyPressEvent(event)
-
-    def focusOutEvent(self, event) -> None:
-        self.focus_lost.emit()
-        super().focusOutEvent(event)
 
 
 class _SuggestionDelegate(QStyledItemDelegate):
@@ -237,6 +234,10 @@ class AddParameterPopup(QWidget):
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setFocusPolicy(Qt.StrongFocus)
         self.setFixedWidth(_CARD_WIDTH + 2 * _SHADOW_MARGIN)
+        #: The "+ Add parameter" trigger button is deliberately not registered
+        #: as "inside" -- clicking it while the popup is open must
+        #: close-and-swallow (reading as a toggle) rather than reopen.
+        self._dismiss_filter = OutsideDismissFilter(self)
 
         self._existing_aliases: frozenset[str] = frozenset()
         self._expected_fields: tuple[ExpectedField, ...] = ()
@@ -257,7 +258,6 @@ class AddParameterPopup(QWidget):
         self._input.move_requested.connect(self._move_selection)
         self._input.activate_requested.connect(self._activate)
         self._input.escape_requested.connect(self._on_escape)
-        self._input.focus_lost.connect(self.hide)
 
         self._list = QListWidget()
         self._list.setObjectName("AddParameterList")
@@ -348,6 +348,7 @@ class AddParameterPopup(QWidget):
         # padding -- aligns with the anchor's left edge, leaving a small gap.
         self.move(bottom_left - QPoint(_SHADOW_MARGIN, 0))
         self.show()
+        self._dismiss_filter.install()
         # Row-height metrics are only reliable once shown/polished, so re-fit
         # the list now that the first (empty-input) build is on screen.
         self._resize_list()

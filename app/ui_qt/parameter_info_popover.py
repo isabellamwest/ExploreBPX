@@ -16,6 +16,8 @@ from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
 from core.parameter_metadata import ParameterMetadata
 
+from .dismissal import OutsideDismissFilter
+
 #: (heading, ParameterMetadata field name) for each renderable AC category, in
 #: display order. A field that resolves empty/``None`` is simply omitted.
 _SECTIONS: tuple[tuple[str, str], ...] = (
@@ -40,6 +42,11 @@ class ParameterInfoPopover(QWidget):
         self.setFocusPolicy(Qt.StrongFocus)
         self.setFixedWidth(300)
         self._layout = QVBoxLayout(self)
+        #: The ( i ) anchor button is deliberately not registered as "inside"
+        #: here -- clicking it while the popover is open must close-and-swallow
+        #: (reading as a toggle) rather than reopen; see the card's own
+        #: click-to-toggle handler.
+        self._dismiss_filter = OutsideDismissFilter(self)
 
     def show_metadata(self, metadata: ParameterMetadata) -> None:
         """Rebuild the popover's contents from *metadata*, omitting empty fields."""
@@ -72,6 +79,7 @@ class ParameterInfoPopover(QWidget):
             y = max(available.top(), min(y, available.bottom() - self.height()))
         self.move(x, y)
         self.show()
+        self._dismiss_filter.install()
         self.setFocus(Qt.PopupFocusReason)
 
     def _clear(self) -> None:

@@ -17,6 +17,8 @@ from PySide6.QtWidgets import QLineEdit, QListWidget, QListWidgetItem
 from core.document import BPXDocument
 from core.tree_model import ParameterItem, TreeNode
 
+from .dismissal import OutsideDismissFilter
+
 _PATH_ROLE = Qt.UserRole
 _MAX_RESULTS = 50
 _MAX_VISIBLE_ROWS = 8
@@ -82,6 +84,11 @@ class SearchBar(QLineEdit):
         self._entries: list[_Entry] = []
         self._popup = SearchPopup(self)
         self._popup.itemClicked.connect(self._on_item_clicked)
+        # The search box itself lives outside the popup's geometry (it's in
+        # the top bar, the popup floats below it), so it must be registered
+        # as "inside" -- otherwise clicking into it to place the caret would
+        # be treated as an outside click and dismiss the popup.
+        self._dismiss_filter = OutsideDismissFilter(self._popup, inside=(self,))
         self.textChanged.connect(self._on_text_changed)
 
     # -- indexing --------------------------------------------------------
@@ -127,6 +134,7 @@ class SearchBar(QLineEdit):
         if height:
             self._popup.setFixedHeight(height)
         self._popup.show()
+        self._dismiss_filter.install()
 
     def _on_item_clicked(self, item: QListWidgetItem) -> None:
         self._activate(item)

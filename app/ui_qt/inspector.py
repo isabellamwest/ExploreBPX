@@ -116,6 +116,7 @@ class InspectorPanel(QWidget):
         )
         self._issues_tab.show_parameter(None)
         self._secondary.set_count("issues", 0)
+        self._secondary.suspend()
 
     def reset(self) -> None:
         """Reset to the default state for a newly opened document."""
@@ -135,6 +136,7 @@ class InspectorPanel(QWidget):
             self.show_placeholder()
 
     def show_parameter(self, parameter: ParameterItem) -> None:
+        self._secondary.resume()
         self._clear_content()
         meta = bpx_gateway.field_meta(parameter.path)
 
