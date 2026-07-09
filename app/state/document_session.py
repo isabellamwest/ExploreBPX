@@ -16,6 +16,7 @@ from core.bpx_gateway import ValidationResult
 from core.commands import Command, Preview
 from core.document import BPXDocument
 from core.tree_model import ParameterItem, TreeNode
+from core.validation import ValidatorDiagnostic
 
 
 class DocumentSession:
@@ -109,6 +110,32 @@ class DocumentSession:
             raise ValueError("No document loaded")
         candidate = editing.set_value(self.document.raw, path, value)
         return bpx_gateway.validate(candidate)
+
+    def preview_parameter_issues(
+        self, path: tuple[str, ...], value: object
+    ) -> list[ValidatorDiagnostic]:
+        """Validate a candidate edit and return only *this parameter's* issues.
+
+        The whole document is revalidated (a parameter's legality can depend on
+        its siblings), but the result is scoped to the diagnostics that attach
+        to ``path``. Document- and object-level issues -- a Header deprecation
+        warning, say -- are deliberately excluded: they belong to the Validation
+        workspace, not to a parameter's validity badge or Issues tab (see the
+        Validation section of docs/03-features.md).
+
+        A full candidate :class:`BPXDocument` is derived rather than
+        suffix-matching the raw diagnostics here, so live preview attaches
+        issues through exactly the same path-matching as the committed rebuild
+        and the two can never disagree about what belongs to a parameter.
+        """
+        if self.document is None:
+            raise ValueError("No document loaded")
+        candidate = editing.set_value(self.document.raw, path, value)
+        preview = BPXDocument.from_raw(
+            candidate, filename=self.document.filename, fmt=self.document.fmt
+        )
+        parameter = preview.find_parameter(tuple(path))
+        return list(parameter.issues) if parameter is not None else []
 
     def apply_value(self, path: tuple[str, ...], value: object) -> None:
         """Commit an edit: mutate the raw dict, rebuild tree, revalidate.

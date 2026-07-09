@@ -74,6 +74,32 @@ def test_edit_lifecycle_updates_validation_dirty_and_issues(spm_workfile):
     assert not session.document.find_parameter(_CAPACITY).has_errors
 
 
+def test_preview_parameter_issues_excludes_document_level_diagnostics(tmp_path):
+    """A document-level warning must never colour an unrelated parameter's
+    validity badge while the user types.
+
+    ``warning_legacy_bpx_float.json`` carries a Header/BPX deprecation warning
+    that attaches to no parameter. Previewing a perfectly valid edit to an
+    unrelated parameter must therefore report *no* issues for that parameter,
+    even though the document as a whole still has one.
+    """
+    source = Path(__file__).parent.parent / "examples" / "warning_legacy_bpx_float.json"
+    workfile = tmp_path / "warning.json"
+    workfile.write_bytes(source.read_bytes())
+
+    session = _open(workfile).active
+    assert session.document.warning_count == 1, "fixture must carry a document-level warning"
+    assert not session.document.find_parameter(_CAPACITY).issues
+
+    # The document-wide preview still sees the Header warning ...
+    assert len(session.preview_value(_CAPACITY, 5.0).issues) == 1
+    # ... but the parameter-scoped preview does not: the badge stays Valid.
+    assert session.preview_parameter_issues(_CAPACITY, 5.0) == []
+
+    # A genuinely invalid draft for this parameter is still reported on it.
+    assert session.preview_parameter_issues(_CAPACITY, "not-a-number")
+
+
 def test_committed_invalid_value_resolves_to_a_navigable_parameter(spm_workfile):
     """An issue's navigation path must resolve back to the parameter it came
     from -- the resolution that powers every 'jump to issue' interaction."""

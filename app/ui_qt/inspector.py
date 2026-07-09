@@ -8,7 +8,10 @@ The Inspector has two responsibilities, split top-to-bottom:
     (badge updates); Enter commits; Escape discards the draft and restores the
     committed validation state.  The card owns its own widgets; the Inspector
     owns the validation decisions and drives the badge via
-    ``ParameterCard.set_validity``.
+    ``ParameterCard.set_validity``.  The badge is *parameter-scoped* in both
+    states -- on selection from ``ParameterItem.issues``, while typing from
+    ``DocumentSession.preview_parameter_issues`` -- so a document-level
+    diagnostic elsewhere in the file never colours this parameter's badge.
   - **Secondary workspace** (bottom): a collapsible, tabbed panel for
     parameter-centric tools (Issues today; Analysis, References in future).
     Parameter documentation is delivered as the card's ( i ) popover, not a
@@ -157,9 +160,11 @@ class InspectorPanel(QWidget):
     def _validate_draft(self) -> None:
         if self._card is None or self._state.active is None:
             return
-        result = self._state.active.preview_value(self._card.parameter.path, self._card.value())
-        errors = [i for i in result.issues if i.severity == Severity.ERROR]
-        self._render_issues(result.issues, bool(errors))
+        issues = self._state.active.preview_parameter_issues(
+            self._card.parameter.path, self._card.value()
+        )
+        errors = [i for i in issues if i.severity == Severity.ERROR]
+        self._render_issues(issues, bool(errors))
 
     def _on_reset(self) -> None:
         if self._card is None:
