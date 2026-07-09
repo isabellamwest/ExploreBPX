@@ -334,21 +334,27 @@ class AppDriver:
     def current_view_index(self) -> int:
         return self._w._stack.currentIndex()
 
-    def validation_badge_text(self) -> str:
-        """Text of the activity bar's Validation entry (e.g. 'Validation' or
-        'Validation (2)')."""
-        return self._w._btn_validation.text()
+    def validation_badge_count(self) -> int:
+        """The Validation activity-bar entry's badge count (0 = no badge)."""
+        return self._w._btn_validation.badge_count
+
+    def validation_badge_severity(self) -> str | None:
+        """The Validation entry's badge severity: 'error', 'warning' or None."""
+        return self._w._btn_validation.badge_severity
+
+    def validation_tooltip(self) -> str:
+        """The Validation activity-bar entry's tooltip text."""
+        return self._w._btn_validation.toolTip()
+
+    def page_header_title(self) -> str:
+        """The page header's current (raw, non-upper-cased) title."""
+        return self._w._page_header.title()
 
     def activity_bar_selected_label(self) -> str | None:
-        """Text of whichever activity bar button is currently checked."""
-        buttons = (
-            ("Workspace", self._w._btn_workspace),
-            ("Editor", self._w._btn_editor),
-            ("Validation", self._w._btn_validation),
-        )
-        for label, btn in buttons:
+        """Accessible name of whichever activity bar button is checked."""
+        for btn in self._w._activity_bar._buttons:
             if btn.isChecked():
-                return label
+                return btn.accessibleName()
         return None
 
     def workspace_info_text(self) -> str:

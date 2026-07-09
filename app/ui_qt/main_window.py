@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QStackedWidget,
     QStatusBar,
+    QVBoxLayout,
     QWidget,
 )
 
@@ -28,10 +29,12 @@ from core.commands import AddParameter
 from state.app_state import AppState
 from state.document_session import DocumentSession
 
+from . import icons
 from .activity_bar import ActivityBar
 from .editor_page import EditorPage
 from .inspector import InspectorPanel
 from .navigation import NavigationService, NavigationTarget
+from .page_header import PageHeader
 from .parameter_list import ParameterListPanel
 from .search import SearchBar
 from .style import STYLESHEET
@@ -147,12 +150,24 @@ class MainWindow(QMainWindow):
         self._stack.addWidget(self._workspace)   # _WORKSPACE_PAGE_INDEX
 
         self._btn_workspace = self._activity_bar.add_view(
-            "Workspace", page_index=_WORKSPACE_PAGE_INDEX
+            "Workspace", page_index=_WORKSPACE_PAGE_INDEX, icon=icons.activity_icon(icons.WORKSPACE)
         )
-        self._btn_editor = self._activity_bar.add_view("Editor", page_index=_EDITOR_PAGE_INDEX)
+        self._btn_editor = self._activity_bar.add_view(
+            "Editor", page_index=_EDITOR_PAGE_INDEX, icon=icons.activity_icon(icons.EDITOR)
+        )
         self._btn_validation = self._activity_bar.add_view(
-            "Validation", page_index=_VALIDATION_PAGE_INDEX
+            "Validation", page_index=_VALIDATION_PAGE_INDEX, icon=icons.activity_icon(icons.VALIDATION)
         )
+
+        # Page header + stack form the content column; it sits beside the
+        # activity bar so the header spans the content width only.
+        self._page_header = PageHeader()
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(0)
+        content_layout.addWidget(self._page_header)
+        content_layout.addWidget(self._stack, 1)
 
         # Assemble the central layout.
         central = QWidget()
@@ -160,7 +175,7 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         layout.addWidget(self._activity_bar)
-        layout.addWidget(self._stack, 1)
+        layout.addWidget(content, 1)
         self.setCentralWidget(central)
 
         # Default landing: with no document open, start on the Workspace
@@ -203,11 +218,13 @@ class MainWindow(QMainWindow):
 
     def _show_page(self, page_index: int) -> None:
         """Make *page_index* the current workspace page, keeping the activity
-        bar's selected entry in sync so the left rail never disagrees with
-        the stack. Setting a button's checked state programmatically does
-        not emit ``view_requested``, so this cannot re-trigger navigation."""
+        bar's selected entry -- and the page header's title -- in sync so
+        neither the left rail nor the header ever disagrees with the stack.
+        Setting a button's checked state programmatically does not emit
+        ``view_requested``, so this cannot re-trigger navigation."""
         self._stack.setCurrentIndex(page_index)
         self._activity_bar.select(page_index)
+        self._page_header.set_title(self._activity_bar.label_for(page_index))
 
     def navigate_to(self, path: tuple) -> None:
         """Request navigation to *path* through the shared NavigationService.
@@ -457,6 +474,20 @@ class MainWindow(QMainWindow):
         self._save_action.setEnabled(has_document)
         self._export_action.setEnabled(has_document)
 
+    @staticmethod
+    def _validation_tooltip(errors: int, warnings: int) -> str:
+        """Compose the Validation button's tooltip from honest error/warning
+        counts, e.g. 'Validation — 2 errors, 1 warning'. A zero side is
+        omitted; singular/plural is handled per side."""
+        if not errors and not warnings:
+            return "Validation"
+        parts = []
+        if errors:
+            parts.append(f"{errors} error" + ("" if errors == 1 else "s"))
+        if warnings:
+            parts.append(f"{warnings} warning" + ("" if warnings == 1 else "s"))
+        return "Validation — " + ", ".join(parts)
+
     def _refresh_all(self) -> None:
         document = self._state.active.document if self._state.active else None
         self._editor_page.set_has_document(document is not None)
@@ -466,8 +497,11 @@ class MainWindow(QMainWindow):
         self._inspector.reset()
         self._validation.refresh(document)
         self._search.index_document(document)
-        count = (document.error_count + document.warning_count) if document else 0
-        self._btn_validation.setText(f"Validation ({count})" if count else "Validation")
+        errors = document.error_count if document else 0
+        warnings = document.warning_count if document else 0
+        severity = "error" if errors else ("warning" if warnings else None)
+        self._btn_validation.set_badge(errors + warnings, severity)
+        self._btn_validation.setToolTip(self._validation_tooltip(errors, warnings))
         self._update_title()
         self._update_identity_label()
         self._update_workspace_info()

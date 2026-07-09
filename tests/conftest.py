@@ -52,6 +52,12 @@ def invalid_bpx_path() -> Path:
 
 
 @pytest.fixture
+def warning_only_bpx_path() -> Path:
+    """An example file that is valid but emits a warning-severity issue."""
+    return EXAMPLES_DIR / "warning_legacy_bpx_float.json"
+
+
+@pytest.fixture
 def spm_workfile(valid_spm_path, tmp_path) -> Path:
     """A writable copy of the valid SPM example.
 

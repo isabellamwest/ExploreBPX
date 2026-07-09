@@ -34,6 +34,21 @@ def test_navigate_to_switches_from_validation_to_editor_page(app_driver, valid_s
     assert d.editor_showing_empty_state() is False
 
 
+def test_navigate_to_from_workspace_updates_header_and_rail_together(app_driver, valid_spm_path):
+    d = app_driver
+    d.open(valid_spm_path)
+    d.show_view("Workspace")
+    assert d.current_view_index() == 2
+    assert d.page_header_title() == "Workspace"
+    assert d.activity_bar_selected_label() == "Workspace"
+
+    d.go_to(_CAPACITY)
+
+    assert d.current_view_index() == 0
+    assert d.page_header_title() == "Editor"
+    assert d.activity_bar_selected_label() == "Editor"
+
+
 def test_navigate_while_already_on_editor_stays_on_editor(app_driver, valid_spm_path):
     d = app_driver
     d.open(valid_spm_path)
