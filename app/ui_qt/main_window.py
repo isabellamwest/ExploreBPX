@@ -108,11 +108,11 @@ class MainWindow(QMainWindow):
     def _build_toolbar(self) -> None:
         """Build the fixed top bar: identity on the left, actions on the right.
 
-        Open stays at the far left for now (unchanged position); it moves to
-        the Workspace page in a later step.
+        Opening a file lives on the Workspace page's "Open File" button now, so
+        the top bar carries no Open action -- only document identity, Save,
+        Export and search.
         """
         bar = self.addToolBar("Main")
-        bar.addAction("Open", self._open)
         bar.addWidget(self._identity_label)
 
         spacer = QWidget()
