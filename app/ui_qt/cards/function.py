@@ -47,6 +47,8 @@ class FunctionCard(EditorCard):
 
     def value(self) -> object:
         text = self._edit.text().strip()
+        if not text:
+            return None  # honest "no value", matching what AddParameter writes
         try:
             number = float(text)
         except ValueError:

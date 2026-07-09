@@ -20,6 +20,7 @@ from PySide6.QtWidgets import QApplication
 from core.bpx_gateway import FieldMeta
 from core.parameter_types import ParameterKind, classify
 from core.tree_model import ParameterItem
+from ui_qt.cards.base import _values_equal
 from ui_qt.cards.registry import create_card
 
 
@@ -70,7 +71,7 @@ def test_unknown_kind_produces_editable_raw_card():
     assert card.is_editable
     assert type(card).__name__ == "RawCard"
     assert card._edit.text() == ""
-    assert card.value() == ""
+    assert card.value() is None  # empty free text is honest "no value", not ""
 
 
 def test_unknown_kind_raw_card_commits_and_reverts():
@@ -85,7 +86,7 @@ def test_unknown_kind_raw_card_commits_and_reverts():
     assert card.value() == 5
     card.reset()
     assert card._edit.text() == ""
-    assert card.value() == ""
+    assert card.value() is None
 
 
 def _rendered_text(card) -> str:
@@ -119,7 +120,8 @@ def test_none_value_renders_empty_without_crashing(kind):
     """A known-alias parameter added with an honest empty value (``None``)
     still opens its proper per-kind editor (metadata is authoritative), and
     that editor must render a blank field -- never the literal string "None"
-    and never a fabricated default."""
+    and never a fabricated default. The empty draft round-trips back to
+    ``None`` -- honest "no value" -- rather than the empty string."""
     _app()
     meta = (
         FieldMeta(alias="P", is_enum=True, enum_values=("SPM", "SPMe"))
@@ -130,7 +132,7 @@ def test_none_value_renders_empty_without_crashing(kind):
     card = create_card(param, meta)
     assert card.is_editable
     assert _rendered_text(card) == ""
-    assert card.value() == ""
+    assert card.value() is None
 
 
 def test_enum_none_value_has_no_selection():
@@ -156,7 +158,7 @@ def test_enum_none_value_can_be_selected_and_reverted():
     assert card.value() == "SPMe"
     card.reset()
     assert card._combo.currentIndex() == -1
-    assert card.value() == ""
+    assert card.value() is None
 
 
 @pytest.mark.parametrize(
@@ -177,6 +179,7 @@ def test_none_value_can_be_typed_and_reverted(kind, text, expected_value):
     assert card.value() == expected_value
     card.reset()
     assert card._edit.text() == ""
+    assert card.value() is None
 
 
 def test_known_alias_with_none_value_opens_proper_editor_end_to_end():
@@ -197,21 +200,29 @@ def test_known_alias_with_none_value_opens_proper_editor_end_to_end():
 
 
 # ---------------------------------------------------------------------------
-# Interim card shims for the new declared kinds (TEXT, BOOLEAN, SERIES, MAP)
-# and the FUNCTION/MAP value-dependent dispatch -- see docs/03-features.md §4
-# "Input system". These lock today's stand-in behaviour so a later real card
-# (Phase 3/4) is a deliberate, visible change rather than a silent one.
+# Registry routing for the declared TEXT/BOOLEAN kinds, and interim card
+# shims for the still-unbuilt kinds (SERIES, MAP) and the FUNCTION/MAP
+# value-dependent dispatch -- see docs/03-features.md §4 "Input system".
+# These lock today's stand-in behaviour so a later real card (Phase 4/5) is
+# a deliberate, visible change rather than a silent one.
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("kind", [ParameterKind.TEXT, ParameterKind.BOOLEAN])
-def test_text_and_boolean_kinds_use_editable_raw_card(kind):
-    """TEXT and BOOLEAN reuse RawCard's lenient free-text behaviour until the
-    real TextCard/BooleanCard (Phase 3) land."""
+def test_text_kind_uses_text_card():
     _app()
-    param = ParameterItem(label="P", path=("Header", "P"), kind=kind, value="hello")
+    param = ParameterItem(label="P", path=("Header", "P"), kind=ParameterKind.TEXT, value="hello")
     card = create_card(param, None)
-    assert type(card).__name__ == "RawCard"
+    assert type(card).__name__ == "TextCard"
+    assert card.is_editable
+
+
+def test_boolean_kind_uses_boolean_card():
+    _app()
+    param = ParameterItem(
+        label="P", path=("Header", "P"), kind=ParameterKind.BOOLEAN, value=True
+    )
+    card = create_card(param, None)
+    assert type(card).__name__ == "BooleanCard"
     assert card.is_editable
 
 
@@ -293,7 +304,94 @@ def test_integer_none_value_uses_fallback_and_can_be_typed():
     card = create_card(param, None)
     assert card._spin is None
     assert card._fallback.text() == ""
+    assert card.value() is None
     card._fallback.setText("5")
     assert card.value() == 5
     card.reset()
     assert card._fallback.text() == ""
+    assert card.value() is None
+
+
+# ---------------------------------------------------------------------------
+# is_dirty: type-aware dirty-checking (docs/03-features.md §4 "commit only
+# when the draft differs").
+# ---------------------------------------------------------------------------
+
+
+def test_is_dirty_false_for_an_unchanged_scalar_draft():
+    _app()
+    param = ParameterItem(label="P", path=("Header", "P"), kind=ParameterKind.SCALAR, value=5.0)
+    card = create_card(param, None)
+    assert card.is_dirty is False
+
+
+def test_is_dirty_true_for_float_typed_over_an_int_original():
+    """``5 == 5.0`` in Python, but they are different JSON values -- typing
+    "5.0" over a stored ``5`` must count as a real edit."""
+    _app()
+    param = ParameterItem(label="P", path=("Header", "P"), kind=ParameterKind.SCALAR, value=5)
+    card = create_card(param, None)
+    card._edit.setText("5.0")
+    assert card.value() == 5.0
+    assert card.is_dirty is True
+
+
+def test_values_equal_distinguishes_json_types():
+    """``5 == 5.0`` and ``True == 1`` in Python, but each pair has a different
+    JSON representation, so the dirty-check's equality must separate them."""
+    assert _values_equal(5.0, 5.0) is True
+    assert _values_equal(5, 5.0) is False
+    assert _values_equal(True, 1) is False
+    assert _values_equal(None, "") is False
+
+
+def test_untouched_card_is_never_dirty_even_when_it_cannot_render_the_original():
+    """A card whose widget cannot faithfully hold the stored value still must
+    not report an edit the user never made.
+
+    Here a BooleanCard is handed the int ``1`` (unreachable via ``classify``,
+    which tests ``bool`` before ``int``, but the invariant must hold anyway):
+    the checkbox can only read back a real ``bool``, so a pure value
+    comparison would call it dirty and a bare Enter would rewrite ``1`` to
+    ``true``. This is the same failure mode as a stored ``null`` in a
+    TextCard.
+    """
+    _app()
+    param = ParameterItem(label="P", path=("Header", "P"), kind=ParameterKind.BOOLEAN, value=1)
+    card = create_card(param, None)
+    assert card.value() is True  # BooleanCard always yields a real bool
+    assert card.is_dirty is False  # ... but nothing was touched, so nothing commits
+
+
+def test_toggling_a_boolean_over_an_equal_int_original_is_dirty():
+    """Once the user *does* interact, ``True`` over a stored ``1`` is a real
+    kind-changing edit, even though ``True == 1``."""
+    _app()
+    param = ParameterItem(label="P", path=("Header", "P"), kind=ParameterKind.BOOLEAN, value=1)
+    card = create_card(param, None)
+    card._check.toggle()  # -> False
+    card._check.toggle()  # -> back to True, but now touched
+    assert card.value() is True
+    assert card.is_dirty is True
+
+
+def test_is_dirty_false_for_an_unchanged_boolean_draft():
+    _app()
+    param = ParameterItem(label="P", path=("Header", "P"), kind=ParameterKind.BOOLEAN, value=True)
+    card = create_card(param, None)
+    assert card.is_dirty is False
+
+
+def test_is_dirty_false_for_an_unchanged_text_draft():
+    _app()
+    param = ParameterItem(label="P", path=("Header", "P"), kind=ParameterKind.TEXT, value="hello")
+    card = create_card(param, None)
+    assert card.is_dirty is False
+
+
+def test_is_dirty_true_for_edited_text_draft():
+    _app()
+    param = ParameterItem(label="P", path=("Header", "P"), kind=ParameterKind.TEXT, value="hello")
+    card = create_card(param, None)
+    card._edit.setPlainText("hello world")
+    assert card.is_dirty is True

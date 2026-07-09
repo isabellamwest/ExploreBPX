@@ -10,10 +10,10 @@ Top to bottom, a ``ParameterCard`` holds:
 
 ``ParameterCard`` is a pure composition container. It forwards the inner
 editor's ``draft_changed`` / ``draft_reset`` / ``commit_requested`` signals
-unchanged and re-exposes ``parameter``, ``value()`` and ``reset()`` so callers
-can treat it like the editor it wraps. It does not decide validity: the badge
-is driven externally via :meth:`set_validity`, and all validation orchestration
-stays in ``InspectorPanel``.
+unchanged and re-exposes ``parameter``, ``value()``, ``reset()`` and
+``is_dirty`` so callers can treat it like the editor it wraps. It does not
+decide validity: the badge is driven externally via :meth:`set_validity`, and
+all validation orchestration stays in ``InspectorPanel``.
 """
 
 from __future__ import annotations
@@ -66,7 +66,14 @@ class ParameterCard(QWidget):
         self._editor.draft_changed.connect(self.draft_changed)
         self._editor.draft_reset.connect(self.draft_reset)
         self._editor.commit_requested.connect(self.commit_requested)
-        layout.addWidget(self._editor)
+        # Value row: the editor plus a trailing slot. The trailing slot is
+        # reserved -- not built -- for a future Reference document's value
+        # and delta once multi-document lands (docs/03-features.md §4); no
+        # widget or API for it exists yet, so today's layout is visually
+        # identical to the editor sitting alone.
+        value_row = QHBoxLayout()
+        value_row.addWidget(self._editor, 1)
+        layout.addLayout(value_row)
 
         if parameter.description:
             layout.addWidget(QLabel("Description:", objectName="Heading"))
@@ -86,6 +93,11 @@ class ParameterCard(QWidget):
     @property
     def is_editable(self) -> bool:
         return self._editor.is_editable
+
+    @property
+    def is_dirty(self) -> bool:
+        """Whether the inner editor's draft differs from its original value."""
+        return self._editor.is_dirty
 
     def set_validity(self, text: str, colour: str) -> None:
         """Drive the header badge; validity decisions stay in the Inspector."""

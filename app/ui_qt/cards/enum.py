@@ -32,6 +32,11 @@ class EnumCard(EditorCard):
         self._combo.setCurrentIndex(index)
 
     def value(self) -> object:
+        # currentIndex() < 0 is a genuine no-selection state, not "the empty
+        # string"; currentText() returns "" there regardless, so it must be
+        # checked explicitly rather than trusted.
+        if self._combo.currentIndex() < 0:
+            return None
         return self._combo.currentText()
 
     def reset(self) -> None:

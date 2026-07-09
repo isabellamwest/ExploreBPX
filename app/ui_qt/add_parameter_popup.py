@@ -81,26 +81,35 @@ def _kind_label(meta) -> str | None:
     """A short, honest kind indication drawn from :class:`FieldMeta` flags, or
     ``None`` when nothing about the field's shape is actually known.
 
+    Every label is verbatim BPX/JSON-schema vocabulary (``FloatFunctionTable``,
+    ``dict[str, FloatInt]``, ...) rather than an invented paraphrase -- a
+    standing project rule, since modellers read this against the schema they
+    already know.
+
     An alias whose meaning differs across BPX sections (e.g.
     ``"Conductivity [S.m-1]"``, a plain scalar for an electrode but a
     function-capable field for the electrolyte) collapses in
     :func:`core.bpx_gateway.searchable_parameters` to an alias-only
     :class:`FieldMeta` with no description, no examples, and every type flag
     ``False`` -- the same shape a field with no meaningful flags would carry.
-    Defaulting to "Number" there would assert a kind that may well be wrong,
-    so that shape omits the hint rather than guessing.
+    Defaulting to "FloatInt" there would assert a kind that may well be
+    wrong, so that shape omits the hint rather than guessing.
     """
     if meta.is_enum:
-        return "Enum"
+        return "enum"
     if meta.is_integer:
-        return "Integer"
+        return "int"
     if meta.is_text:
-        return "Text"
+        return "str"
+    if meta.is_series:
+        return "list[FloatInt]"
+    if meta.allows_map:
+        return "FloatInt | dict[str, FloatInt]"
     if meta.allows_function:
-        return "Number or Function"
+        return "FloatFunctionTable"
     if not meta.description and not meta.examples:
         return None
-    return "Number"
+    return "FloatInt"
 
 
 def _suggestion_text(alias: str, meta, required: bool = False) -> str:

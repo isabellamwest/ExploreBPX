@@ -1,0 +1,20 @@
+{
+  "Header": {
+    "BPX": "1.1.0",
+    "Title": "New SPM (incomplete)",
+    "Model": "SPM"
+  },
+  "Parameterisation": {
+    "Cell": {
+      "External surface area [m2]": 3434343,
+      "Volume [m3]": 6756,
+      "Upper voltage cut-off [V]": 6767676,
+      "fyyuieeyguhjiuyuujj ugu iu67687": 7767676
+    },
+    "Negative electrode": {
+      "Diffusivity [m2.s-1]": null
+    },
+    "Positive electrode": {}
+  },
+  "State": {}
+}

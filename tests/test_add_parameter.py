@@ -205,7 +205,7 @@ def test_suggestion_row_carries_honest_kind_and_unit_hints(popup, anchor):
     popup._input.setText("Density [kg.m-3]")
     text = _row_item(popup, "Density [kg.m-3]").text()
     assert "kg.m-3" in text  # honest unit hint from the alias itself
-    assert "Number" in text  # honest kind hint from FieldMeta flags
+    assert "FloatInt" in text  # honest kind hint from FieldMeta flags, verbatim BPX vocabulary
 
 
 def test_suggestion_row_shows_required_marker(popup, anchor):
@@ -227,6 +227,50 @@ def test_selecting_a_suggestion_emits_its_known_alias(popup, anchor, qtbot):
     with qtbot.waitSignal(popup.custom_parameter_requested) as blocker:
         popup._list.itemClicked.emit(item)
     assert blocker.args[0] == "Density [kg.m-3]"
+
+
+# ---------------------------------------------------------------------------
+# _kind_label: verbatim BPX vocabulary, driven by the live schema.
+#
+# Each path below is chosen to isolate one FieldMeta flag combination:
+#   - LAM: Negative electrode -> allows_map
+#   - Validation run's Time [s] -> is_series
+#   - Header.Model -> is_enum
+#   - Header.Title -> is_text
+#   - Cell's nominal capacity -> no flags set (the plain-FloatInt default)
+#   - Negative electrode OCP -> allows_function
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "path, expected_label",
+    [
+        (("State", "Degradation", "LAM: Negative electrode"), "FloatInt | dict[str, FloatInt]"),
+        (("Validation", "some_run", "Time [s]"), "list[FloatInt]"),
+        (("Header", "Model"), "enum"),
+        (("Header", "Title"), "str"),
+        (("Parameterisation", "Cell", "Nominal cell capacity [A.h]"), "FloatInt"),
+        (("Parameterisation", "Negative electrode", "OCP [V]"), "FloatFunctionTable"),
+    ],
+)
+def test_kind_label_uses_verbatim_bpx_vocabulary(path, expected_label):
+    from core.bpx_gateway import field_meta
+    from ui_qt.add_parameter_popup import _kind_label
+
+    meta = field_meta(path)
+    assert meta is not None, f"no live FieldMeta resolved for {path!r}"
+    assert _kind_label(meta) == expected_label
+
+
+def test_kind_label_omits_hint_when_nothing_is_known():
+    """An alias whose FieldMeta collapses to every flag False, no description
+    and no examples (the cross-section-ambiguous case) omits the hint rather
+    than guessing "FloatInt"."""
+    from core.bpx_gateway import FieldMeta
+    from ui_qt.add_parameter_popup import _kind_label
+
+    meta = FieldMeta(alias="Conductivity [S.m-1]")
+    assert _kind_label(meta) is None
 
 
 def test_clicking_a_group_header_does_nothing(popup, anchor, qtbot):
@@ -515,10 +559,11 @@ def test_add_custom_parameter_end_to_end(app_driver, spm_workfile):
     d.activate_selected_add_parameter_row()
 
     # The command wrote an honest empty value (None -> classifies UNKNOWN),
-    # so the new row opens in the editable RawCard fallback.
+    # so the new row opens in the editable RawCard fallback, still rendering
+    # empty text but round-tripping to None -- not "" -- as its draft value.
     assert d.inspector_title() == "My custom parameter"
     assert d.card_is_editable() is True
-    assert d.field_value() == ""
+    assert d.field_value() is None
     assert any("My custom parameter" in label for label in d.parameter_labels())
 
 

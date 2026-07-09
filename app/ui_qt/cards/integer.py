@@ -52,6 +52,8 @@ class IntegerCard(EditorCard):
         if self._spin is not None:
             return self._spin.value()
         text = self._fallback.text().strip()
+        if not text:
+            return None  # honest "no value", matching what AddParameter writes
         try:
             return int(text)
         except ValueError:

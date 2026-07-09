@@ -7,26 +7,26 @@ from core.parameter_types import ParameterKind
 from core.tree_model import ParameterItem
 
 from .base import EditorCard
+from .boolean import BooleanCard
 from .enum import EnumCard
 from .function import FunctionCard
 from .integer import IntegerCard
 from .raw import RawCard
 from .scalar import ScalarCard
+from .text import TextCard
 from .unknown import ReadOnlyCard
 
-# Interim until the per-kind cards land; see docs/03-features.md §4 "Input
-# system". TEXT and BOOLEAN reuse RawCard's lenient free-text behaviour --
-# the same UX these fields effectively had before this kind existed -- until
-# the real TextCard/BooleanCard (Phase 3) land. SERIES is spelled out
-# explicitly (rather than relying on the ReadOnlyCard default below) so the
-# mapping stays honest about what today's fallback actually covers.
+# Interim until the remaining per-kind cards land; see docs/03-features.md §4
+# "Input system". SERIES is spelled out explicitly (rather than relying on
+# the ReadOnlyCard default below) so the mapping stays honest about what
+# today's fallback actually covers.
 _REGISTRY = {
     ParameterKind.SCALAR: ScalarCard,
     ParameterKind.INTEGER: IntegerCard,
     ParameterKind.ENUM: EnumCard,
     ParameterKind.UNKNOWN: RawCard,
-    ParameterKind.TEXT: RawCard,
-    ParameterKind.BOOLEAN: RawCard,
+    ParameterKind.TEXT: TextCard,
+    ParameterKind.BOOLEAN: BooleanCard,
     ParameterKind.SERIES: ReadOnlyCard,
 }
 

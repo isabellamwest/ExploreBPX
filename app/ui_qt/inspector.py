@@ -165,15 +165,23 @@ class InspectorPanel(QWidget):
         )
         errors = [i for i in issues if i.severity == Severity.ERROR]
         self._render_issues(issues, bool(errors))
+        self._secondary.set_count("issues", len(issues))
 
     def _on_reset(self) -> None:
         if self._card is None:
             return
         self._debounce.stop()
         self._render_issues(self._card.parameter.issues, self._card.parameter.has_errors)
+        self._secondary.set_count("issues", len(self._card.parameter.issues))
 
     def _on_commit(self) -> None:
         if self._card is None or self._state.active is None:
+            return
+        if not self._card.is_dirty:
+            # No-op Enter: the draft equals the committed value (type-aware),
+            # so committing would just rewrite it -- most importantly, it
+            # would turn a stored null into whatever the card's own idea of
+            # "empty" is (e.g. "").
             return
         self._state.active.apply_value(self._card.parameter.path, self._card.value())
         self.committed.emit()
