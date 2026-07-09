@@ -21,6 +21,7 @@ import pytest
 
 pytest.importorskip("PySide6")
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QWidget
 
 from core.parameter_types import ParameterKind
@@ -333,11 +334,68 @@ def test_staged_escape_clears_text_then_closes(popup, anchor):
     assert popup.isVisible() is False
 
 
-def test_focus_out_dismisses_popup(popup, anchor):
+def test_focus_lost_signal_removed():
+    """The click-away dismissal now goes through the shared
+    ``OutsideDismissFilter`` (see test_outside_click_closes_popup below);
+    the old focus-out path is dead code and must not linger."""
+    from ui_qt.add_parameter_popup import _PopupInput
+
+    assert not hasattr(_PopupInput, "focus_lost")
+
+
+def test_outside_click_closes_popup_and_is_swallowed(popup, anchor, qtbot):
+    from PySide6.QtCore import QEvent, QPointF
+    from PySide6.QtGui import QMouseEvent
+    from PySide6.QtWidgets import QApplication, QPushButton
+
     popup.open_for_section(anchor, "Cell", existing_aliases=set())
     assert popup.isVisible() is True
-    popup._input.focus_lost.emit()
+
+    decoy = QPushButton()
+    decoy.setGeometry(2000, 2000, 50, 20)
+    qtbot.addWidget(decoy)
+    decoy.show()
+    clicks = []
+    decoy.clicked.connect(lambda: clicks.append(1))
+
+    global_pos = decoy.mapToGlobal(decoy.rect().center())
+    press = QMouseEvent(
+        QEvent.MouseButtonPress, QPointF(decoy.rect().center()), QPointF(global_pos),
+        Qt.LeftButton, Qt.LeftButton, Qt.NoModifier,
+    )
+    QApplication.instance().sendEvent(decoy, press)
     assert popup.isVisible() is False
+
+    release = QMouseEvent(
+        QEvent.MouseButtonRelease, QPointF(decoy.rect().center()), QPointF(global_pos),
+        Qt.LeftButton, Qt.NoButton, Qt.NoModifier,
+    )
+    QApplication.instance().sendEvent(decoy, release)
+    assert clicks == []  # the dismissing press never reached the button beneath
+
+
+def test_outside_click_on_trigger_button_closes_without_reopening(panel, qtbot):
+    """The "+ Add parameter" trigger button is deliberately not registered as
+    an "inside" widget, so clicking it while the popup is open reads as an
+    outside press: it closes (and swallows the click) rather than toggling
+    straight back open."""
+    panel.show_node(_section_node())
+    panel._open_add_popup()
+    assert panel._popup.isVisible() is True
+
+    from PySide6.QtCore import QEvent, QPointF
+    from PySide6.QtGui import QMouseEvent
+    from PySide6.QtWidgets import QApplication
+
+    button = panel._add_button
+    local_pos = button.rect().center()
+    global_pos = button.mapToGlobal(local_pos)
+    press = QMouseEvent(
+        QEvent.MouseButtonPress, QPointF(local_pos), QPointF(global_pos),
+        Qt.LeftButton, Qt.LeftButton, Qt.NoModifier,
+    )
+    QApplication.instance().sendEvent(button, press)
+    assert panel._popup.isVisible() is False
 
 
 def test_reopening_for_a_new_section_clears_stale_state(popup, anchor):
@@ -374,6 +432,11 @@ def test_list_scrolls_when_content_exceeds_the_visible_row_cap(popup, anchor):
 def panel(qtbot) -> ParameterListPanel:
     p = ParameterListPanel()
     qtbot.addWidget(p)
+    # The add-parameter popup is a floating Qt.Tool window parented (for
+    # lifetime, not stacking) to the panel, so closing the panel alone would
+    # not close it; register it too so a test that leaves it open doesn't
+    # leak its OutsideDismissFilter registration into later tests.
+    qtbot.addWidget(p._popup)
     return p
 
 

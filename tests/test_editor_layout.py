@@ -119,7 +119,8 @@ def test_add_parameter_popup_card_border_is_unaffected_by_the_new_view_rule(
     d.select_object(_CELL)
     d.open_add_parameter_popup()
 
-    card = d._w._params._popup.findChild(QFrame, "AddParameterCard")
+    popup = d._w._params._popup
+    card = popup.findChild(QFrame, "AddParameterCard")
     assert card is not None
     image = card.grab().toImage()
     pixel = image.pixelColor(0, image.height() // 2).name()
@@ -130,3 +131,9 @@ def test_add_parameter_popup_card_border_is_unaffected_by_the_new_view_rule(
         "objectName selectors only, not a descendant selector that could "
         "out-specify it."
     )
+
+    # This popup is a floating top-level window merely parented to the
+    # panel; it does not close with the main window at teardown. Close it
+    # here so this test is self-contained (see conftest.main_window for the
+    # fixture-level guard against the general case).
+    popup.close()

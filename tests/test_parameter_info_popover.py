@@ -87,7 +87,13 @@ def card(qtbot):
     meta = FieldMeta(alias="Ambient temperature [K]", description="The ambient temperature.")
     c = ParameterCard(parameter, meta)
     qtbot.addWidget(c)
-    return c
+    yield c
+    # The popover is a floating Qt.Tool window parented (for lifetime, not
+    # stacking) to the card, so closing the card alone would not close it and
+    # a test that leaves it open would otherwise leak its application-level
+    # OutsideDismissFilter registration into later tests in the same session.
+    if c._popover is not None:
+        c._popover.close()
 
 
 def test_info_button_present_on_every_card(card):
@@ -118,3 +124,35 @@ def test_escape_closes_popover_opened_from_card(card, qtbot):
     assert card._popover.isVisible()
     qtbot.keyClick(card._popover, Qt.Key_Escape)
     assert card._popover.isVisible() is False
+
+
+def test_outside_click_closes_popover_and_is_swallowed(card, qtbot):
+    from PySide6.QtGui import QMouseEvent
+    from PySide6.QtCore import QEvent, QPointF
+    from PySide6.QtWidgets import QApplication, QPushButton
+
+    qtbot.mouseClick(card._info_button, Qt.LeftButton)
+    assert card._popover.isVisible()
+
+    decoy = QPushButton()
+    decoy.setGeometry(2000, 2000, 50, 20)
+    qtbot.addWidget(decoy)
+    decoy.show()
+    clicks = []
+    decoy.clicked.connect(lambda: clicks.append(1))
+
+    global_pos = decoy.mapToGlobal(decoy.rect().center())
+    press = QMouseEvent(
+        QEvent.MouseButtonPress, QPointF(decoy.rect().center()), QPointF(global_pos),
+        Qt.LeftButton, Qt.LeftButton, Qt.NoModifier,
+    )
+    QApplication.instance().sendEvent(decoy, press)
+
+    assert card._popover.isVisible() is False
+    # The dismissing press was swallowed: the button beneath never saw it.
+    release = QMouseEvent(
+        QEvent.MouseButtonRelease, QPointF(decoy.rect().center()), QPointF(global_pos),
+        Qt.LeftButton, Qt.NoButton, Qt.NoModifier,
+    )
+    QApplication.instance().sendEvent(decoy, release)
+    assert clicks == []

@@ -208,6 +208,46 @@ def test_secondary_workspace_persists_and_resets(app_driver, spm_workfile):
     assert d.secondary_expanded() is False
 
 
+_VOLTAGE_LIMIT = ("Parameterisation", "Cell", "Upper voltage cut-off [V]")
+_CELL_OBJECT = ("Parameterisation", "Cell")
+
+
+def test_secondary_workspace_suspends_without_a_parameter(app_driver, spm_workfile):
+    """The drawer is parameter-scoped, so it must not stay expanded showing
+    stale/empty content when the Inspector falls back to its placeholder --
+    but the user's last expanded/collapsed intent must survive the trip."""
+    d = app_driver
+    d.open(spm_workfile)
+    d.go_to(_CAPACITY)
+
+    # Opening Issues expands the drawer...
+    d.click_issues_tab()
+    assert d.secondary_expanded() is True
+
+    # ...selecting an object (no parameter) force-collapses it...
+    d.select_object(_CELL_OBJECT)
+    assert d.showing_placeholder() is True
+    assert d.secondary_expanded() is False
+
+    # ...and selecting a parameter again restores it, Issues still active.
+    d.go_to(_CAPACITY)
+    assert d.secondary_expanded() is True
+    assert "Issues" in d.issues_tab_label()
+
+    # Collapsing while a parameter is shown, then switching parameters,
+    # must not re-expand it.
+    d.click_issues_tab()
+    assert d.secondary_expanded() is False
+    d.go_to(_VOLTAGE_LIMIT)
+    assert d.secondary_expanded() is False
+
+    # Opening a new document resets to the collapsed default.
+    d.click_issues_tab()
+    assert d.secondary_expanded() is True
+    d.open(spm_workfile)
+    assert d.secondary_expanded() is False
+
+
 # ---------------------------------------------------------------------------
 # Placeholder / no-document states
 # ---------------------------------------------------------------------------

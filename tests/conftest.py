@@ -79,11 +79,33 @@ def main_window(qtbot):
     runs in headless-only environments.
     """
     pytest.importorskip("PySide6")
+    from PySide6.QtCore import QEvent
+    from PySide6.QtWidgets import QApplication
     from ui_qt.main_window import MainWindow
 
     window = MainWindow()
     qtbot.addWidget(window)
-    return window
+
+    yield window
+
+    # The app's transient popups (search results, add-parameter, parameter
+    # info) are floating `Qt.FramelessWindowHint | Qt.Tool` top-level
+    # windows merely *parented* to a panel for lifetime -- they do not
+    # cascade-hide/close with their parent. A test that opens one and
+    # forgets to close it leaves it visible after `qtbot.addWidget` teardown
+    # closes `window`, because `.close()` + `.deleteLater()` +
+    # `processEvents()` never delivers `QEvent.DeferredDelete`, so the
+    # popup's `OutsideDismissFilter` -- installed on the shared
+    # `QApplication` -- stays registered and swallows the *next* test's
+    # first outside click. Explicitly hide every other top-level widget so
+    # each test starts with a clean `qApp`: hiding is what the filter
+    # actually watches for (`QEvent.Hide`) to deregister itself.
+    app = QApplication.instance()
+    if app is not None:
+        for widget in app.topLevelWidgets():
+            if widget is not window and widget.isVisible():
+                widget.hide()
+        app.sendPostedEvents(None, QEvent.DeferredDelete)
 
 
 @pytest.fixture

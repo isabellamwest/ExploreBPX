@@ -12,6 +12,8 @@ import pytest
 
 pytest.importorskip("PySide6")
 
+from PySide6.QtCore import Qt
+
 from core.document import BPXDocument
 from ui_qt.search import SearchBar
 
@@ -23,6 +25,11 @@ _CELL = ("Parameterisation", "Cell")
 def search(qtbot, valid_spm_bytes):
     bar = SearchBar()
     qtbot.addWidget(bar)
+    # The results popup is a floating Qt.Tool window parented (for lifetime,
+    # not stacking) to the search box, so closing the box alone would not
+    # close it; register it too so a test that leaves it open doesn't leak
+    # its OutsideDismissFilter registration into later tests in the session.
+    qtbot.addWidget(bar._popup)
     bar.index_document(BPXDocument.from_bytes(valid_spm_bytes, "spm.json"))
     return bar
 
@@ -94,3 +101,46 @@ def test_empty_query_hides_popup(search):
     assert search._popup.count() >= 1
     search.setText("")
     assert search._popup.isVisible() is False
+
+
+def test_outside_click_closes_popup(search, qtbot):
+    from PySide6.QtCore import QEvent, QPointF
+    from PySide6.QtGui import QMouseEvent
+    from PySide6.QtWidgets import QApplication, QWidget
+
+    search.show()
+    search.setText("Cell")
+    assert search._popup.isVisible()
+
+    decoy = QWidget()
+    decoy.setGeometry(2000, 2000, 50, 20)
+    qtbot.addWidget(decoy)
+    decoy.show()
+    global_pos = decoy.mapToGlobal(decoy.rect().center())
+    press = QMouseEvent(
+        QEvent.MouseButtonPress, QPointF(decoy.rect().center()), QPointF(global_pos),
+        Qt.LeftButton, Qt.LeftButton, Qt.NoModifier,
+    )
+    QApplication.instance().sendEvent(decoy, press)
+
+    assert search._popup.isVisible() is False
+
+
+def test_click_into_search_box_does_not_dismiss_popup(search, qtbot):
+    from PySide6.QtCore import QEvent, QPointF
+    from PySide6.QtGui import QMouseEvent
+    from PySide6.QtWidgets import QApplication
+
+    search.show()
+    search.setText("Cell")
+    assert search._popup.isVisible()
+
+    local_pos = search.rect().center()
+    global_pos = search.mapToGlobal(local_pos)
+    press = QMouseEvent(
+        QEvent.MouseButtonPress, QPointF(local_pos), QPointF(global_pos),
+        Qt.LeftButton, Qt.LeftButton, Qt.NoModifier,
+    )
+    QApplication.instance().sendEvent(search, press)
+
+    assert search._popup.isVisible() is True
