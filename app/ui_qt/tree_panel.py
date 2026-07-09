@@ -20,6 +20,7 @@ class TreePanel(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         self._view = QTreeView()
+        self._view.setObjectName("StructureTree")
         self._view.setHeaderHidden(True)
         self._view.clicked.connect(self._on_clicked)
         self._view.expanded.connect(self._refresh_warning_markers)

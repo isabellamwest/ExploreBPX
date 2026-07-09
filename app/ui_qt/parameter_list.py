@@ -33,16 +33,25 @@ class ParameterListPanel(QWidget):
         super().__init__()
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
         self._node: TreeNode | None = None
         self._model: str | None = None
 
         self._add_button = QPushButton("+ Add parameter")
+        self._add_button.setObjectName("AddParameterButton")
         self._add_button.setEnabled(False)
+        self._add_button.setMinimumHeight(28)
         self._add_button.clicked.connect(self._open_add_popup)
-        layout.addWidget(self._add_button)
+
+        button_container = QWidget()
+        button_layout = QVBoxLayout(button_container)
+        button_layout.setContentsMargins(8, 8, 8, 8)
+        button_layout.addWidget(self._add_button)
+        layout.addWidget(button_container)
 
         self._list = QListWidget()
+        self._list.setObjectName("ParameterListView")
         self._list.itemClicked.connect(self._on_clicked)
         layout.addWidget(self._list)
 

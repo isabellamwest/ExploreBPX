@@ -32,6 +32,8 @@ class EditorPage(QWidget):
         self._stack = QStackedWidget()
 
         splitter = QSplitter()
+        splitter.setObjectName("EditorSplitter")
+        splitter.setHandleWidth(1)
         for panel in (tree, params, inspector):
             panel.setObjectName("Panel")
             splitter.addWidget(panel)

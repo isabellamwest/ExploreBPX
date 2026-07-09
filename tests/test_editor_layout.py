@@ -1,0 +1,132 @@
+"""Editor page flush-pane layout: single-hairline seams and the shaded inset
+"+ Add parameter" button.
+
+Covers the editor splitter's 1px handle width and ``#EditorSplitter``
+objectName (the QSS scoping hook), the tree/parameter-list child views'
+stripped borders, the add-button container's even inset padding, and two
+guards against the specificity traps called out in the design: the
+Inspector's own internal splitter must stay unaffected by the editor-only
+handle rule, and the add-parameter popup's card border must survive the new
+``QTreeView#StructureTree, QListWidget#ParameterListView`` rule.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+pytest.importorskip("PySide6")
+
+from PySide6.QtWidgets import QFrame
+
+_CELL = ("Parameterisation", "Cell")
+
+
+def _editor_splitter(app_driver):
+    """The editor page's tree/params/inspector splitter (stack index 0)."""
+    return app_driver._w._editor_page._stack.widget(0)
+
+
+# --- structure ---------------------------------------------------------
+
+
+def test_editor_splitter_handle_width_and_object_name(app_driver):
+    splitter = _editor_splitter(app_driver)
+    assert splitter.objectName() == "EditorSplitter"
+    assert splitter.handleWidth() == 1
+
+
+def test_tree_and_parameter_list_views_are_named_for_qss_binding(app_driver):
+    d = app_driver
+    assert d._w._tree._view.objectName() == "StructureTree"
+    assert d._w._params._list.objectName() == "ParameterListView"
+
+
+def test_add_parameter_button_container_has_even_inset_and_zero_pane_spacing(app_driver):
+    params = app_driver._w._params
+    assert params.layout().spacing() == 0
+
+    button = params._add_button
+    container_layout = button.parentWidget().layout()
+    margins = container_layout.contentsMargins()
+    assert (margins.left(), margins.top(), margins.right(), margins.bottom()) == (
+        8,
+        8,
+        8,
+        8,
+    )
+
+
+def test_add_parameter_button_object_name_and_min_height(app_driver):
+    button = app_driver._w._params._add_button
+    assert button.objectName() == "AddParameterButton"
+    assert button.minimumHeight() == 28
+
+
+# --- painted chrome ------------------------------------------------------
+
+
+def test_editor_splitter_handle_paints_the_hairline_colour(app_driver, valid_spm_path):
+    d = app_driver
+    d.open(valid_spm_path)
+
+    splitter = _editor_splitter(app_driver)
+    handle = splitter.handle(1)
+    image = handle.grab().toImage()
+    pixel = image.pixelColor(image.width() // 2, image.height() // 2).name()
+    assert pixel == "#d0d7de", (
+        f"Editor splitter handle pixel was {pixel}, not #d0d7de -- check the "
+        "QSplitter#EditorSplitter::handle rule in style.py."
+    )
+
+
+def test_inspector_internal_splitter_is_unaffected_by_the_editor_rule(
+    app_driver, valid_spm_path
+):
+    """Guards the objectName scoping. A bare ``QSplitter::handle`` rule would
+    also repaint the Inspector's own top/bottom splitter (above its secondary
+    workspace); it must keep its own default handle width and colour."""
+    d = app_driver
+    d.open(valid_spm_path)
+
+    inspector_splitter = d._w._inspector._splitter
+    assert inspector_splitter.objectName() != "EditorSplitter"
+    assert inspector_splitter.handleWidth() != 1, (
+        "Inspector splitter handleWidth() is 1 -- the EditorSplitter's "
+        "setHandleWidth(1) call leaked onto the Inspector's own splitter."
+    )
+
+    handle = inspector_splitter.handle(1)
+    image = handle.grab().toImage()
+    pixel = image.pixelColor(image.width() // 2, image.height() // 2).name()
+    assert pixel != "#d0d7de", (
+        f"Inspector splitter handle pixel was {pixel} -- the "
+        "QSplitter#EditorSplitter::handle rule leaked onto the Inspector's "
+        "own internal splitter. It must be scoped by objectName, not a bare "
+        "QSplitter::handle selector."
+    )
+
+
+def test_add_parameter_popup_card_border_is_unaffected_by_the_new_view_rule(
+    app_driver, valid_spm_path
+):
+    """Guards the specificity trap: the new
+    ``QTreeView#StructureTree, QListWidget#ParameterListView { border: none; }``
+    rule must be scoped by explicit objectName only, and must not strip the
+    add-parameter popup card's own border via a broader (accidentally more
+    specific) descendant selector."""
+    d = app_driver
+    d.open(valid_spm_path)
+    d.select_object(_CELL)
+    d.open_add_parameter_popup()
+
+    card = d._w._params._popup.findChild(QFrame, "AddParameterCard")
+    assert card is not None
+    image = card.grab().toImage()
+    pixel = image.pixelColor(0, image.height() // 2).name()
+    assert pixel == "#d0d7de", (
+        f"AddParameterCard border pixel was {pixel}, not #d0d7de -- the "
+        "QFrame#AddParameterCard border rule was overridden. Check that the "
+        "new StructureTree/ParameterListView border rule uses explicit "
+        "objectName selectors only, not a descendant selector that could "
+        "out-specify it."
+    )

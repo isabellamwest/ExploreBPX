@@ -25,6 +25,16 @@ QToolBar { background: #f6f8fa; border-bottom: 1px solid #d0d7de; padding: 4px; 
 QTreeView, QListWidget { border: 1px solid #d0d7de; background: #ffffff; }
 QTreeView::item, QListWidget::item { padding: 3px 4px; }
 QListWidget::item:selected, QTreeView::item:selected { background: #ddeeff; color: #1f2328; }
+/* Editor page: the tree and parameter-list panes sit flush against the
+   splitter's own 1px hairline (see QSplitter#EditorSplitter::handle below),
+   so their own borders are stripped to avoid a doubled seam. Explicit ids
+   only -- a descendant selector here would out-specify (and silently strip
+   the border from) QListWidget#AddParameterList below. */
+QTreeView#StructureTree, QListWidget#ParameterListView { border: none; }
+/* The editor page's tree/params/inspector splitter: a single 1px hairline
+   per seam. Scoped by objectName so it does not affect the Inspector's own
+   internal (top/bottom) splitter, whose handle stays at its default width. */
+QSplitter#EditorSplitter::handle { background: #d0d7de; }
 QLabel#CardTitle { font-size: 15px; font-weight: 600; }
 QLabel#Heading { color: #57606a; font-weight: 600; }
 QFrame#Card { border: 1px solid #d0d7de; }
@@ -46,6 +56,18 @@ QToolButton#SecondaryTab:checked {
 }
 QListWidget#IssuesList { border: none; background: #ffffff; font-size: 12px; }
 QLabel#IssuesPlaceholder { color: #57606a; font-size: 12px; padding: 16px; }
+
+/* Parameter-list pane's "+ Add parameter" header: a shaded, inset button
+   rather than a native full-bleed one, and honestly greyed (not error-red)
+   while disabled (no section selected). */
+QPushButton#AddParameterButton {
+    background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px;
+    color: #1f2328; font-size: 12px; padding: 4px 8px;
+}
+QPushButton#AddParameterButton:hover:!disabled { background: #e8eaed; }
+QPushButton#AddParameterButton:disabled {
+    color: #8c959f; background: #f6f8fa; border: 1px solid #e1e4e8;
+}
 
 /* Add-parameter popup: a floating "command palette" surface. The frameless
    top-level is translucent; this rounded card carries the visible chrome so
