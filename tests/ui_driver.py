@@ -196,6 +196,64 @@ class AppDriver:
         self._w._params._popup._activate()
         return self
 
+    def right_click_parameter_row(self, index: int) -> "AppDriver":
+        """Right-click the parameter row at *index*: select it and open its
+        context menu.
+
+        Emits the list's own ``customContextMenuRequested`` at the row's
+        on-screen position -- the same entry point a real right-click
+        delivers. ``QMenu.exec()`` is a genuinely blocking native call (a
+        Python-level monkeypatch of it does not intercept the underlying
+        C++ modal loop), so a zero-delay timer closes the menu the instant
+        its event loop starts, letting ``exec()`` return immediately -- the
+        standard Qt-test idiom for driving a blocking popup without a real
+        user dismissing it.
+        """
+        from PySide6.QtCore import QTimer
+        from PySide6.QtWidgets import QApplication
+
+        def _close_open_popup() -> None:
+            popup = QApplication.instance().activePopupWidget()
+            if popup is not None:
+                popup.close()
+
+        panel = self._w._params
+        item = panel._list.item(index)
+        assert item is not None, f"No parameter row at index {index}"
+        pos = panel._list.visualItemRect(item).center()
+        QTimer.singleShot(0, _close_open_popup)
+        panel._list.customContextMenuRequested.emit(pos)
+        return self
+
+    def activate_remove_parameter_action(self) -> "AppDriver":
+        """Activate the parameter list's "Remove parameter" context-menu
+        action -- the equivalent of clicking it while the menu is showing."""
+        self._w._params._remove_action.trigger()
+        return self
+
+    def press_delete_in_parameter_list(self) -> "AppDriver":
+        """Press the Delete key with the parameter list focused -- the
+        row-removal accelerator."""
+        self._qtbot.keyClick(self._w._params._list, Qt.Key_Delete)
+        return self
+
+    def undo(self) -> "AppDriver":
+        """Undo the most recent command and refresh every view.
+
+        The app has no dedicated Undo affordance yet (no redo either -- see
+        PROJECT_STATUS's deferred-debt note); this drives the same
+        ``DocumentSession.undo`` + refresh-and-reveal sequence a future Undo
+        action would, so tests can verify a command is undo-able without
+        inventing UI that does not exist.
+        """
+        session = self._w._state.active
+        session.undo()
+        target = session.selected_path
+        self._w._refresh_all()
+        if target:
+            self._w._navigation.navigate(target)
+        return self
+
     def click_workspace_new(self, model: str) -> "AppDriver":
         """Click the New button for *model* on the Workspace page's inline chooser."""
         button = self._w._workspace.findChild(QPushButton, f"NewButton_{model}")

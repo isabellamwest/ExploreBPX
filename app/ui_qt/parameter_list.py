@@ -3,16 +3,24 @@
 The pane also hosts the section-scoped "+ Add parameter" entry point: a
 header button, enabled only when a document is loaded and an object is
 selected, that opens :class:`~.add_parameter_popup.AddParameterPopup`
-anchored underneath it. This is deliberately the only add-parameter surface
--- the app has no context menus.
+anchored underneath it. This is deliberately the only add-parameter surface;
+creation is never offered by a row's right-click.
+
+A row's right-click context menu instead offers actions on that *existing*
+row -- currently just "Remove parameter", also reachable via the Delete key
+once a row is current. Context menus never create; creation controls are
+never hidden behind a right-click (see the parameter-list pane section of
+docs/02-ui.md).
 """
 
 from __future__ import annotations
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QPoint, Qt, Signal
+from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
+    QMenu,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -23,11 +31,34 @@ from core.tree_model import TreeNode
 from .add_parameter_popup import AddParameterPopup
 
 
+class _ParameterListView(QListWidget):
+    """A ``QListWidget`` whose Delete key removes the current row.
+
+    A small subclass -- matching the local key-handling convention already
+    used by :class:`~.add_parameter_popup._PopupInput` -- rather than a
+    ``QAction`` shortcut. A ``QAction``'s live keyboard binding only fires
+    while the widget genuinely holds Qt's application focus, which makes it
+    unreliable to drive deterministically; overriding the key event handles
+    Delete directly and always acts on whichever row is current, exactly
+    like Enter/Escape on the editor cards. This is therefore the *only*
+    Delete binding -- the context-menu action deliberately declares none.
+    """
+
+    delete_requested = Signal()
+
+    def keyPressEvent(self, event) -> None:
+        if event.key() == Qt.Key_Delete:
+            self.delete_requested.emit()
+            return
+        super().keyPressEvent(event)
+
+
 class ParameterListPanel(QWidget):
     """Lists a node's parameters; emits the selected parameter's path."""
 
     parameter_selected = Signal(tuple)
     add_parameter_requested = Signal(tuple, str)  # (section_path, typed_alias)
+    remove_parameter_requested = Signal(tuple)  # parameter_path
 
     def __init__(self) -> None:
         super().__init__()
@@ -50,10 +81,22 @@ class ParameterListPanel(QWidget):
         button_layout.addWidget(self._add_button)
         layout.addWidget(button_container)
 
-        self._list = QListWidget()
+        self._list = _ParameterListView()
         self._list.setObjectName("ParameterListView")
         self._list.itemClicked.connect(self._on_clicked)
+        self._list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self._list.customContextMenuRequested.connect(self._on_context_menu_requested)
+        self._list.delete_requested.connect(self._remove_current_parameter)
         layout.addWidget(self._list)
+
+        # The single action behind the context menu's "Remove parameter"
+        # entry. It carries no ``QKeySequence``: the live Delete accelerator
+        # is ``_ParameterListView.keyPressEvent`` above, so a shortcut here
+        # would be a second, redundant binding whose only effect is to print
+        # a hint beside the label. Both paths land on the same
+        # ``_remove_current_parameter`` handler.
+        self._remove_action = QAction("Remove parameter", self)
+        self._remove_action.triggered.connect(self._remove_current_parameter)
 
         self._popup = AddParameterPopup(self)
         self._popup.custom_parameter_requested.connect(self._on_custom_parameter_requested)
@@ -98,6 +141,37 @@ class ParameterListPanel(QWidget):
 
     def _on_clicked(self, item: QListWidgetItem) -> None:
         self.parameter_selected.emit(item.data(256))
+
+    def _on_context_menu_requested(self, pos: QPoint) -> None:
+        """Show "Remove parameter" for the row under *pos*, or nothing.
+
+        A right-click always acts on whatever row it lands on -- never a
+        stale prior selection -- so the target row is made current first,
+        which is also what visibly shows it as the menu's target. Empty
+        space -- including an empty list, or no object/document loaded at
+        all -- has no row under the cursor, so this opens no menu; a
+        disabled menu is not shown either, matching the app's "no disabled
+        placeholders" convention.
+        """
+        item = self._list.itemAt(pos)
+        if item is None:
+            return
+        self._list.setCurrentItem(item)
+        menu = QMenu(self)
+        menu.addAction(self._remove_action)
+        menu.exec(self._list.mapToGlobal(pos))
+
+    def _remove_current_parameter(self) -> None:
+        """Request removal of whichever row is current.
+
+        The context menu action and the Delete-key accelerator both land
+        here; a no-op when nothing is current (e.g. Delete pressed with an
+        empty list).
+        """
+        item = self._list.currentItem()
+        if item is None:
+            return
+        self.remove_parameter_requested.emit(item.data(256))
 
     def _open_add_popup(self) -> None:
         if self._node is None:

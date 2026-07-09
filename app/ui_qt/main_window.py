@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
 
 from core import export, structure
 from core.bpx_gateway import BPX_VERSION, LoadError
-from core.commands import AddParameter
+from core.commands import AddParameter, RemoveParameter
 from state.app_state import AppState
 from state.document_session import DocumentSession
 
@@ -200,6 +200,7 @@ class MainWindow(QMainWindow):
         self._tree.node_selected.connect(self._navigation.navigate)
         self._params.parameter_selected.connect(self._navigation.navigate)
         self._params.add_parameter_requested.connect(self._on_add_parameter_requested)
+        self._params.remove_parameter_requested.connect(self._on_remove_parameter_requested)
         self._validation.issue_activated.connect(self._navigation.navigate)
         self._inspector.issue_activated.connect(self._navigation.navigate)
         self._search.navigation_requested.connect(self._navigation.navigate)
@@ -266,6 +267,25 @@ class MainWindow(QMainWindow):
             return
         session.execute_command(AddParameter(tuple(section_path), alias, None))
         target = session.selected_parameter_path
+        self._refresh_all()
+        if target:
+            self._navigation.navigate(target)
+
+    def _on_remove_parameter_requested(self, parameter_path: tuple) -> None:
+        """Remove a parameter via its row's context menu (or Delete key).
+
+        Routes through the existing ``RemoveParameter`` command -- the same
+        execute/undo seam ``_on_add_parameter_requested`` uses. The command's
+        result carries no parameter selection, so navigating to the owning
+        object afterwards naturally clears the removed parameter's selection
+        (the Inspector falls back to its placeholder) rather than leaving it
+        dangling on a row that no longer exists.
+        """
+        session = self._state.active
+        if session is None or session.document is None:
+            return
+        session.execute_command(RemoveParameter(tuple(parameter_path)))
+        target = session.selected_path
         self._refresh_all()
         if target:
             self._navigation.navigate(target)
