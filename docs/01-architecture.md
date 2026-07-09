@@ -136,16 +136,29 @@ Tree nodes are produced by walking the actual raw data rather than only the
 schema. This handles BPX polymorphism naturally: SPM/SPMe/DFN/Partial and
 single/blended electrode structures are already expressed in the data shape.
 
-Parameters are classified into `ParameterKind` values (scalar, integer, enum,
-function, table, unknown). Classification is **declared-type first**: when schema
-metadata is available the declared field type is authoritative, and the current
-stored value's runtime type does not affect which editor opens. This ensures an
-invalid stored value — for example a string committed to a float field — never
-causes the editor to switch kind or become read-only. Value shape is used only
-for structural kinds (dict/list, which define document topology) and for
-`allows_function` fields, where a constant number and a function-expression
-string are both valid stored types. Parameters with no schema metadata fall back
-to value-shape classification.
+Parameters are classified into `ParameterKind` values (scalar, integer, text,
+boolean, enum, function, map, series, table, section, unknown). Classification is
+**declared-type first, universally**: when schema metadata is available the
+declared field type alone fixes the kind, and the stored value's runtime type
+never changes which editor opens. This ensures an invalid stored value — for
+example a string committed to a float field — never causes the editor to switch
+kind or become read-only.
+
+Union-typed fields (`FloatFunctionTable`, `FloatInt | dict[str, FloatInt]`) are
+one kind, not several: the kind identifies the declared union, and the card for
+that kind carries a **mode strip** naming each legal representation in verbatim
+`bpx` schema vocabulary. The stored value's shape selects the *initial mode*
+only; the user may switch mode freely. (This replaces an earlier rule where
+value shape selected among scalar/function/table kinds for `allows_function`
+fields — that exception made a field's other legal representations unreachable
+from the UI and is removed.)
+
+Value shape still classifies in exactly two places: metadata-absent parameters
+(the honest fallback below), and undeclared dicts/lists, whose topology no
+schema field describes. A field the schema declares as a value is always a
+`ParameterItem`, never a `TreeNode`, whatever it currently holds — so a
+per-material map (for example a dict-valued `LAM: Positive electrode`) stays an
+editable parameter instead of turning into a tree section.
 
 ### User-defined parameter metadata — accepted decision
 
@@ -157,12 +170,12 @@ remains correct: when metadata exists it dominates classification; when
 metadata is genuinely absent, value shape is the honest classifier, and
 absence is a valid first-class state, not a gap to be closed.
 
-`classify` already implements this: it is metadata-authoritative when `meta`
-is known, and falls back to value-shape classification (numeric → scalar,
-string → function, dict/list → structural, otherwise unknown) when `meta` is
-`None`. The no-metadata fallback covers two legitimate sources: aliases from
-external files that Explore_BPX did not author, and user-authored custom
-parameters.
+`classify` implements this: it is metadata-authoritative when `meta` is known,
+and falls back to value-shape classification (bool → boolean, numeric → scalar,
+string → text, list → series, table-shaped dict → table, other dict →
+structural, otherwise unknown) when `meta` is `None`. The no-metadata fallback
+covers two legitimate sources: aliases from external files that Explore_BPX did
+not author, and user-authored custom parameters.
 
 The BPX validator is the source of truth for whether a custom parameter is
 legal — the app must not fabricate metadata to make one look schema-known.

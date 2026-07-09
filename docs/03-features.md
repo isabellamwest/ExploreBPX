@@ -268,10 +268,17 @@ repaired in place.
 | Basic function-expression editing (constant or expression string) | Implemented |
 | Enter-to-commit / Escape-to-revert model | Implemented |
 | Command-based mutation with undo | Implemented |
-| Enhanced function-expression editor (syntax highlighting, validation) | Planned |
-| Editable table grid | Planned |
+| Unknown/raw fallback editor | Implemented |
+| Declared-kind taxonomy (text, boolean, map, series; table narrowed to `InterpolatedTable`) | Planned |
+| Mode strip on union-typed fields (verbatim BPX vocabulary, per-mode drafts, conditional Raw) | Planned |
+| Text editing (auto-growing, Shift+Enter newline, pattern hint) | Planned |
+| Boolean editing (toggle) | Planned |
+| Per-material map editing (keys seeded from sibling Particle names) | Planned |
+| Series/table inline grids with expanded in-place editor, paste and CSV import | Planned |
+| Remove parameter (row context menu) | Planned |
 | Section add/remove controls | Planned |
-| Unknown/raw fallback editor | Planned |
+| Tree editing (add/remove sections; add/rename/remove materials and experiments) | Planned |
+| Enhanced function-expression editor (syntax highlighting, validation) | Planned |
 | Model-switch handling for structural model changes | Planned |
 | Compact quick inputs in the parameter list | Planned |
 
@@ -298,6 +305,43 @@ Editing is performed in per-kind cards in the Inspector, selected by
 
 Any `allows_function` field may hold either a numeric constant or a
 function-expression string; both are editable today.
+
+#### Input system (Planned)
+
+The input system is designed by declared kind — one card per kind, one
+skeleton for every card (title, authoring flag, validity badge, ( i ) info
+affordance; mode strip when the declared type is a union; value area; hint
+line fed by `FieldMeta.examples`; description):
+
+- **Kind is declared; mode is chosen.** The schema's declared type fixes one
+  `ParameterKind`. Union-typed fields carry a **mode strip** naming each legal
+  representation in verbatim `bpx` schema vocabulary — `Float` · `Function` ·
+  `InterpolatedTable` for `FloatFunctionTable` fields; `FloatInt` ·
+  `dict[str, FloatInt]` for per-material fields. Labels, hints and messages are
+  taken from the BPX schema unchanged, never translated. The stored value's
+  shape picks the initial mode; switching modes changes the representation.
+  Each mode keeps its own draft until commit or Escape; commit writes only the
+  active mode's value.
+- **Raw mode is conditional.** When a stored value cannot be represented
+  structurally (a ragged table, a non-numeric series entry), the card opens in
+  a Raw mode with a notice, and the structured modes become available once the
+  value parses. Values are never silently coerced or discarded.
+- **Empty and null.** An empty text input commits `""`; an empty numeric input
+  commits `null`. A card commits only when its draft differs from the committed
+  value, so a no-op Enter never rewrites a stored `null`. Nullable fields carry
+  an explicit *Set to null* action. Removing the key itself is the separate
+  Remove-parameter action, keeping presence and emptiness independent.
+- **Multi-line text.** Enter commits everywhere; Shift+Enter inserts a newline
+  in multi-line text fields, so the app-wide commit contract is unchanged.
+- **Large values.** Series and table cards show a compact inline grid plus an
+  expanded editor that temporarily replaces the card within the Inspector pane
+  (✕ returns; see [02-ui.md](02-ui.md)). Paste (with a preview reporting
+  rejected cells) and CSV import (with column mapping for experiment data) are
+  first-class. A series card in a Validation run shows its sibling columns
+  read-only, so length mismatches are visible while editing; a CSV import
+  there offers to fill all sibling columns from the same file.
+- **Reference slot.** Every card's value row reserves a trailing slot for a
+  future Reference document's value and delta; nothing renders there today.
 
 ### Architecture
 
