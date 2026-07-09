@@ -116,20 +116,26 @@ def _schema() -> dict:
 
 
 @lru_cache(maxsize=1)
-def metadata_index() -> dict[str, FieldMeta]:
-    """Build an alias -> :class:`FieldMeta` index from the public BPX schema.
+def _definition_index() -> dict[str, dict[str, FieldMeta]]:
+    """Build a definition name -> alias -> :class:`FieldMeta` index from the
+    public BPX schema.
 
-    The index is flat across all schema definitions. A handful of aliases (e.g.
-    ``"Conductivity [S.m-1]"``) appear in more than one section with differing
-    types; the first occurrence wins. This is acceptable because node kind is
-    classified value-shape first (see :mod:`core.parameter_types`).
+    BPX keys parameter metadata by *(definition, alias)*, not by alias alone:
+    the same alias (e.g. ``"Conductivity [S.m-1]"``) means different things in
+    different sections. This index preserves that scoping instead of
+    flattening it. Every property of every ``$defs`` definition is included
+    verbatim, including properties that merely link to another definition
+    (e.g. ``Parameterisation``'s ``"Cell"``) -- callers that want only real,
+    addable parameters filter those separately (see
+    :func:`searchable_parameters`).
     """
-    index: dict[str, FieldMeta] = {}
-    for definition in _schema().get("$defs", {}).values():
-        for alias, prop in definition.get("properties", {}).items():
-            if alias not in index:
-                index[alias] = _field_meta(alias, prop)
-    return index
+    return {
+        name: {
+            alias: _field_meta(alias, prop)
+            for alias, prop in definition.get("properties", {}).items()
+        }
+        for name, definition in _schema().get("$defs", {}).items()
+    }
 
 
 #: Section paths that map to a single schema definition regardless of model.
@@ -143,6 +149,7 @@ _SECTION_DEFS: dict[tuple[str, ...], str] = {
     ("State",): "State",
     ("State", "Initial conditions"): "InitialConditions",
     ("State", "Thermal environment"): "ThermalState",
+    ("State", "Degradation"): "Degradation",
 }
 
 #: ``Parameterisation`` is the one section whose definition depends on the
@@ -157,6 +164,32 @@ _PARAMETERISATION_DEFS: dict[str | None, str] = {
     None: "ParameterisationPartial",
 }
 
+#: The three ``Parameterisation`` shapes (SPM/DFN-SPMe/Partial) agree on every
+#: alias they share (each is a pure section link, identical regardless of
+#: model) -- so :func:`field_meta` can resolve ``("Parameterisation", <section>)``
+#: without knowing the declared model, unlike :func:`expected_fields`.
+_PARAMETERISATION_FAMILY: tuple[str, ...] = (
+    "Parameterisation",
+    "ParameterisationSPM",
+    "ParameterisationPartial",
+)
+
+#: The electrode/particle family: for every alias two or more of these share,
+#: the schema metadata is identical (verified against the live BPX schema --
+#: see the ``principal-engineer`` implementation notes for this change).
+#: Electrolyte is the one section that diverges and is deliberately excluded.
+#: Including ``Particle`` lets this same family resolve both single-particle
+#: electrodes (whose particle fields live directly on the electrode) and
+#: blended electrodes (whose particle fields live under a nested
+#: ``Particle/<name>`` instance).
+_ELECTRODE_FAMILY: tuple[str, ...] = (
+    "ElectrodeSingle",
+    "ElectrodeBlended",
+    "ElectrodeSingleSPM",
+    "ElectrodeBlendedSPM",
+    "Particle",
+)
+
 
 def expected_fields(path: tuple[str, ...], model: str | None = None) -> tuple[ExpectedField, ...]:
     """Return the schema-expected parameter fields for a BPX section.
@@ -168,10 +201,11 @@ def expected_fields(path: tuple[str, ...], model: str | None = None) -> tuple[Ex
     depends on the declared BPX model.
 
     Each returned :class:`ExpectedField` carries the alias, its
-    :class:`FieldMeta` (from the shared :func:`metadata_index`, so metadata
-    never drifts between this query and the rest of the app), and whether the
-    schema's ``required`` list for that definition names it. Order matches
-    the schema definition's declared property order (stable across calls).
+    :class:`FieldMeta` (from :func:`_definition_index`, scoped to this
+    section's own schema definition, so metadata never drifts between this
+    query and the rest of the app), and whether the schema's ``required``
+    list for that definition names it. Order matches the schema definition's
+    declared property order (stable across calls).
 
     Raises :class:`ValueError` if ``path`` has no single schema definition.
     Notably, the electrode sections (``"Negative electrode"``/``"Positive
@@ -187,7 +221,7 @@ def expected_fields(path: tuple[str, ...], model: str | None = None) -> tuple[Ex
     if definition is None:
         raise ValueError(f"No schema definition found for section {path!r}")
     required = set(definition.get("required") or ())
-    index = metadata_index()
+    index = _definition_index()[definition_name]
     return tuple(
         ExpectedField(alias=alias, meta=index[alias], required=alias in required)
         for alias in definition.get("properties", {})
@@ -202,6 +236,145 @@ def _resolve_definition(path: tuple[str, ...], model: str | None) -> str:
     raise ValueError(f"Unsupported or ambiguous section path: {path!r}")
 
 
+def _definitions_for(path: tuple[str, ...]) -> tuple[str, ...]:
+    """Return the schema definition(s) whose properties back *path*'s
+    children, or ``()`` if the path isn't a recognised section.
+
+    Unlike :func:`_resolve_definition` (one definition, raises on
+    ambiguity), this returns every definition that plausibly describes
+    *path* -- including the electrode/particle subtree, at any depth beneath
+    ``"Negative electrode"``/``"Positive electrode"`` -- so
+    :func:`field_meta` can merge them and check they agree instead of
+    guessing one.
+
+    ``("Validation", <run name>)`` also resolves here, to ``Experiment``:
+    the schema types ``Validation`` as ``Dict[str, Experiment]`` (an
+    arbitrary, user-chosen run name keying a fixed ``Experiment`` shape), so
+    the match is on position/length, never on the run name's literal value
+    (which may itself contain a ``/``).
+    """
+    if not path:
+        return ()
+    if path == ("Parameterisation",):
+        return _PARAMETERISATION_FAMILY
+    if len(path) >= 2 and path[0] == "Parameterisation" and path[1] in (
+        "Negative electrode",
+        "Positive electrode",
+    ):
+        return _ELECTRODE_FAMILY
+    if len(path) == 2 and path[0] == "Validation":
+        return ("Experiment",)
+    if path in _SECTION_DEFS:
+        return (_SECTION_DEFS[path],)
+    return ()
+
+
+def field_meta(path: tuple[str, ...]) -> FieldMeta | None:
+    """Return the schema :class:`FieldMeta` for the parameter or section at
+    *path*, or ``None`` if *path* has no known schema meaning.
+
+    ``path`` uses the same tuple convention as :mod:`core.tree_model`/
+    :mod:`core.structure` and identifies the field itself (its last element
+    is the alias; the rest identifies the owning section). Metadata is
+    model-independent for every real BPX parameter, so no ``model`` argument
+    is needed. When *path*'s section resolves to more than one schema
+    definition (the electrode/particle family), the alias must carry
+    identical metadata in every definition that defines it; a disagreement
+    (which does not occur for any current BPX alias) resolves to ``None``
+    rather than guessing.
+    """
+    if not path:
+        return None
+    section_path, alias = path[:-1], path[-1]
+    definitions = _definitions_for(section_path)
+    if not definitions:
+        return None
+    index = _definition_index()
+    candidates = [
+        index[definition][alias] for definition in definitions if alias in index.get(definition, {})
+    ]
+    if not candidates:
+        return None
+    first = candidates[0]
+    return first if all(candidate == first for candidate in candidates[1:]) else None
+
+
+def _is_container_link(prop: dict) -> bool:
+    """True if schema property *prop* merely names another section (a plain
+    ``$ref``, a union of only ``$ref``s, or a dict keyed by another
+    definition) rather than describing a leaf parameter value.
+
+    Examples: ``Parameterisation``'s ``"Cell"`` (``$ref`` to ``Cell``),
+    ``"Negative electrode"`` (union of ``ElectrodeSingle``/``ElectrodeBlended``
+    refs), ``ElectrodeBlended``'s ``"Particle"`` (dict of ``Particle`` refs).
+    A field whose value may be a plain number *or* a ``$ref`` to
+    ``InterpolatedTable`` (the function/table fields) is not a container
+    link: its ``anyOf`` mixes the ref with primitive types.
+    """
+    if "$ref" in prop:
+        return True
+    any_of = prop.get("anyOf")
+    if any_of and all("$ref" in member for member in any_of):
+        return True
+    additional = prop.get("additionalProperties")
+    if isinstance(additional, dict) and "$ref" in additional:
+        return True
+    return False
+
+
+def _is_parameter_bearing_definition(definition: dict) -> bool:
+    """True for schema definitions describing a closed set of real BPX
+    parameters (``Cell``, ``Electrolyte``, ``Particle``, ...).
+
+    False for: open/free-form value shapes, identified structurally by
+    ``additionalProperties`` not being exactly ``False`` (``InterpolatedTable``
+    leaves it unset; ``UserDefined`` sets it ``True`` for its arbitrary
+    user content); and pure section containers whose every property is a
+    container link to another definition rather than a parameter
+    (``Parameterisation``/``State`` and their variants) -- these contribute
+    no entries to :func:`searchable_parameters` because they own no
+    parameters of their own, only named sub-sections.
+    """
+    if definition.get("additionalProperties") is not False:
+        return False
+    properties = definition.get("properties", {})
+    return any(not _is_container_link(prop) for prop in properties.values())
+
+
+@lru_cache(maxsize=1)
+def searchable_parameters() -> dict[str, FieldMeta]:
+    """The full BPX standard's addable parameter aliases, flattened across
+    every parameter-bearing schema definition (see
+    :func:`_is_parameter_bearing_definition`), for the add-parameter popup's
+    "other parameters" list.
+
+    Container-link properties (schema property names that merely name
+    another section, e.g. ``"Cell"``, ``"Particle"`` -- see
+    :func:`_is_container_link`) are excluded: they identify a section, not an
+    addable parameter. An alias whose :class:`FieldMeta` differs across the
+    definitions it appears in (e.g. ``"Conductivity [S.m-1]"``, which means
+    something different for an electrode than for the electrolyte) collapses
+    to an alias-only placeholder (no description, no type flags) rather than
+    arbitrarily picking one definition's meaning -- the authoritative
+    per-section meta is resolved separately, once the parameter's actual
+    section is known, via :func:`field_meta`.
+    """
+    candidates: dict[str, list[FieldMeta]] = {}
+    for definition in _schema().get("$defs", {}).values():
+        if not _is_parameter_bearing_definition(definition):
+            continue
+        for alias, prop in definition.get("properties", {}).items():
+            if _is_container_link(prop):
+                continue
+            candidates.setdefault(alias, []).append(_field_meta(alias, prop))
+
+    result: dict[str, FieldMeta] = {}
+    for alias, metas in candidates.items():
+        first = metas[0]
+        result[alias] = first if all(meta == first for meta in metas[1:]) else FieldMeta(alias=alias)
+    return result
+
+
 def _field_meta(alias: str, prop: dict) -> FieldMeta:
     any_of = prop.get("anyOf", [])
     allows_function = _allows_function(prop, any_of)
@@ -209,7 +382,7 @@ def _field_meta(alias: str, prop: dict) -> FieldMeta:
     prop_type = prop.get("type")
     return FieldMeta(
         alias=alias,
-        description=prop.get("description") or prop.get("title") or "",
+        description=prop.get("description") or "",
         examples=tuple(prop.get("examples", ()) or ()),
         allows_function=allows_function,
         is_enum=is_enum,

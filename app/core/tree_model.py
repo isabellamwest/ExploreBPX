@@ -116,17 +116,15 @@ _STATIC_PATHS = {
 
 def build_tree(raw: dict, root_label: str = "BPX File") -> TreeNode:
     """Build the node tree for a raw BPX dictionary."""
-    index = bpx_gateway.metadata_index()
-    return _build_node(root_label, (), raw, index)
+    return _build_node(root_label, (), raw)
 
 
 def _build_node(
     label: str,
     path: tuple[str, ...],
     value: dict,
-    index: dict[str, bpx_gateway.FieldMeta],
 ) -> TreeNode:
-    meta = index.get(label)
+    meta = bpx_gateway.field_meta(path)
     node = TreeNode(
         label=label,
         path=path,
@@ -138,11 +136,9 @@ def _build_node(
     for key, child_value in value.items():
         child_path = path + (key,)
         if _is_object_node(child_value):
-            node.children.append(
-                _build_node(key, child_path, child_value, index)
-            )
+            node.children.append(_build_node(key, child_path, child_value))
         else:
-            node.parameters.append(_build_parameter(key, child_path, child_value, index))
+            node.parameters.append(_build_parameter(key, child_path, child_value))
     return node
 
 
@@ -154,9 +150,8 @@ def _build_parameter(
     label: str,
     path: tuple[str, ...],
     value: object,
-    index: dict[str, bpx_gateway.FieldMeta],
 ) -> ParameterItem:
-    meta = index.get(label)
+    meta = bpx_gateway.field_meta(path)
     return ParameterItem(
         label=label,
         path=path,

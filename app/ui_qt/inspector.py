@@ -136,7 +136,7 @@ class InspectorPanel(QWidget):
 
     def show_parameter(self, parameter: ParameterItem) -> None:
         self._clear_content()
-        meta = bpx_gateway.metadata_index().get(parameter.label)
+        meta = bpx_gateway.field_meta(parameter.path)
 
         self._card = ParameterCard(parameter, meta)
         self._card.draft_changed.connect(self._debounce.start)

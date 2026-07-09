@@ -152,7 +152,7 @@ to value-shape classification.
 A user-authored custom parameter is an ordinary raw-dict entry
 (`section[alias] = value`) whose BPX metadata is simply **absent**
 (`FieldMeta` is `None`). Nothing is synthesised and nothing is persisted for
-it. The current `metadata_index()` covers BPX schema aliases only, and that
+it. The current `field_meta()` covers BPX schema aliases only, and that
 remains correct: when metadata exists it dominates classification; when
 metadata is genuinely absent, value shape is the honest classifier, and
 absence is a valid first-class state, not a gap to be closed.

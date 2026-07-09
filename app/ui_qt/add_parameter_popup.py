@@ -21,17 +21,22 @@ the *whole* BPX standard for the target section up front -- no typing required
   out. Sections whose schema is an unresolvable union (the electrode
   single/blended case) simply have no suggested group -- not a dead end.
 * **Other parameters** -- every remaining alias in the full BPX standard
-  (:func:`core.bpx_gateway.metadata_index`) that this section doesn't expect
-  and doesn't already have, in plain text.
+  (:func:`core.bpx_gateway.searchable_parameters`) that this section doesn't
+  expect and doesn't already have, in plain text.
 
 Typing filters both groups by substring. The "Create custom parameter"
 fallback is a **pinned footer action**, not a scrolling row: it stays put
 beneath the list (separated by a divider), reachable by keyboard as the last
 navigable entry. All routes end the same way -- creating a parameter with an
 honest empty value (``None``) and letting ``core.commands.AddParameter``/the
-validator judge legality, not this widget; a known alias (suggested or not)
-still resolves its proper :class:`~core.bpx_gateway.FieldMeta` on rebuild
-because metadata resolves by leaf alias regardless of section.
+validator judge legality, not this widget; a suggested alias always resolves
+its proper :class:`~core.bpx_gateway.FieldMeta` on rebuild (it is, by
+definition, expected by the target section's own schema). An "other" alias
+resolves its meaning the same schema-honest way BPX itself does -- keyed by
+*(section, alias)*, not alias alone -- so it opens its proper editor only if
+the target section's schema actually defines that alias; otherwise it falls
+back to the metadata-less raw editor rather than borrowing an unrelated
+section's meaning for the same alias.
 """
 
 from __future__ import annotations
@@ -51,7 +56,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from core.bpx_gateway import ExpectedField, FieldMeta, expected_fields, metadata_index
+from core.bpx_gateway import ExpectedField, FieldMeta, expected_fields, searchable_parameters
 from core.parameter_types import extract_unit
 from ui_qt import style
 
@@ -70,8 +75,19 @@ _SUGGESTED_HEADER = "Suggested for this section"
 _OTHER_HEADER = "Other parameters"
 
 
-def _kind_label(meta) -> str:
-    """A short, honest kind indication drawn from :class:`FieldMeta` flags."""
+def _kind_label(meta) -> str | None:
+    """A short, honest kind indication drawn from :class:`FieldMeta` flags, or
+    ``None`` when nothing about the field's shape is actually known.
+
+    An alias whose meaning differs across BPX sections (e.g.
+    ``"Conductivity [S.m-1]"``, a plain scalar for an electrode but a
+    function-capable field for the electrolyte) collapses in
+    :func:`core.bpx_gateway.searchable_parameters` to an alias-only
+    :class:`FieldMeta` with no description, no examples, and every type flag
+    ``False`` -- the same shape a field with no meaningful flags would carry.
+    Defaulting to "Number" there would assert a kind that may well be wrong,
+    so that shape omits the hint rather than guessing.
+    """
     if meta.is_enum:
         return "Enum"
     if meta.is_integer:
@@ -80,16 +96,23 @@ def _kind_label(meta) -> str:
         return "Text"
     if meta.allows_function:
         return "Number or Function"
+    if not meta.description and not meta.examples:
+        return None
     return "Number"
 
 
 def _suggestion_text(alias: str, meta, required: bool = False) -> str:
-    hints = [_kind_label(meta)]
+    hints = []
+    kind = _kind_label(meta)
+    if kind:
+        hints.append(kind)
     unit = extract_unit(alias)
     if unit:
         hints.append(unit)
     if required:
         hints.append("Required")
+    if not hints:
+        return alias
     return f"{alias}  ({' · '.join(hints)})"
 
 
@@ -378,7 +401,7 @@ class AddParameterPopup(QWidget):
         exclude = self._expected_aliases | self._existing_aliases
         matches = [
             (alias, meta)
-            for alias, meta in metadata_index().items()
+            for alias, meta in searchable_parameters().items()
             if alias not in exclude and needle in alias.lower()
         ]
         matches.sort(key=lambda pair: pair[0].lower())
