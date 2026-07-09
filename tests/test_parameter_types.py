@@ -138,10 +138,9 @@ def test_classify_custom_parameter_string_is_function():
     assert classify("some expression") == ParameterKind.FUNCTION
 
 
-def test_classify_known_alias_from_metadata_index_stays_authoritative():
+def test_classify_known_alias_from_field_meta_stays_authoritative():
     """A known BPX alias resolves real `FieldMeta` and stays metadata-
     authoritative -- the meta=None fallback above is reached only when
     metadata is genuinely absent, not for known schema aliases."""
-    index = bpx_gateway.metadata_index()
-    meta = index["Model"]
+    meta = bpx_gateway.field_meta(("Header", "Model"))
     assert classify("DFN", meta) == ParameterKind.ENUM

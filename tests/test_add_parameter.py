@@ -479,10 +479,13 @@ def test_add_known_alias_suggestion_end_to_end(app_driver, spm_workfile):
 
 
 def test_add_other_bpx_alias_end_to_end(app_driver, spm_workfile):
-    """Selecting an "other" row -- a known alias the Cell section doesn't itself
-    expect -- routes through the same AddParameter path and still resolves its
-    proper metadata-driven editor on rebuild, since metadata resolves by leaf
-    alias regardless of section."""
+    """Selecting an "other" row -- a known alias the Cell section doesn't
+    itself expect -- routes through the same AddParameter path. BPX keys
+    metadata by (section, alias), not alias alone, and Cell's own schema does
+    not define "Porosity" (it belongs to Contact/electrode sections instead),
+    so this correctly falls back to the honest, metadata-less RawCard editor
+    rather than fabricating a Contact/electrode-flavoured ScalarCard for a
+    field Cell's schema doesn't recognise."""
     d = app_driver
     d.open(spm_workfile)
     d.select_object(_CELL)
@@ -493,7 +496,7 @@ def test_add_other_bpx_alias_end_to_end(app_driver, spm_workfile):
     d.activate_selected_add_parameter_row()
 
     assert d.inspector_title() == "Porosity"
-    assert d.editor_kind() == "ScalarCard"
+    assert d.editor_kind() == "RawCard"
     assert d.card_is_editable() is True
     assert any("Porosity" in label for label in d.parameter_labels())
 

@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import copy
 
+import bpx
 import pytest
 
 from core import bpx_gateway
 from core.bpx_gateway import LoadError
+from core.parameter_types import ParameterKind, classify
+from core.tree_model import build_tree, build_parameter_path_map
 
 
 def test_load_raw_json(valid_spm_bytes):
@@ -46,15 +49,263 @@ def test_validate_invalid_file_reports_issues(valid_spm_dict):
     assert result.issues
 
 
-def test_metadata_index_known_fields():
-    index = bpx_gateway.metadata_index()
-    assert index["OCP [V]"].allows_function is True
-    assert index["Model"].is_enum is True
-    assert "SPM" in index["Model"].enum_values
-    assert index[
-        "Number of electrode pairs connected in parallel to make a cell"
-    ].is_integer is True
-    assert index["Title"].is_text is True
+def test_field_meta_known_fields():
+    ocp = bpx_gateway.field_meta(("Parameterisation", "Negative electrode", "OCP [V]"))
+    assert ocp.allows_function is True
+
+    model = bpx_gateway.field_meta(("Header", "Model"))
+    assert model.is_enum is True
+    assert "SPM" in model.enum_values
+
+    pairs = bpx_gateway.field_meta(
+        (
+            "Parameterisation",
+            "Cell",
+            "Number of electrode pairs connected in parallel to make a cell",
+        )
+    )
+    assert pairs.is_integer is True
+
+    title = bpx_gateway.field_meta(("Header", "Title"))
+    assert title.is_text is True
+
+
+def test_field_meta_unknown_alias_is_none():
+    """A genuinely unknown/custom alias resolves to no metadata -- the
+    `meta=None` contract `classify` relies on for value-shape fallback."""
+    assert bpx_gateway.field_meta(("Parameterisation", "Cell", "Not a real alias")) is None
+    assert classify(5, bpx_gateway.field_meta(("Parameterisation", "Cell", "Not a real alias"))) == (
+        ParameterKind.SCALAR
+    )
+
+
+# ---------------------------------------------------------------------------
+# Regression coverage for the metadata_index() -> _definition_index()/
+# field_meta() split (path-scoped metadata instead of a flat, first-occurrence
+# -wins alias map).
+# ---------------------------------------------------------------------------
+
+
+def test_field_meta_electrolyte_conductivity_is_its_own_field():
+    """Finding 1/2: Electrolyte's "Conductivity [S.m-1]" must not pick up the
+    electrode's description or lose its function-capable type -- the two
+    definitions share an alias but not a meaning."""
+    meta = bpx_gateway.field_meta(("Parameterisation", "Electrolyte", "Conductivity [S.m-1]"))
+    assert meta.description.startswith("Electrolyte conductivity")
+    assert meta.allows_function is True
+
+
+def test_field_meta_electrode_conductivity_is_scalar_only():
+    meta = bpx_gateway.field_meta(("Parameterisation", "Negative electrode", "Conductivity [S.m-1]"))
+    assert meta.description.startswith("Effective electronic conductivity")
+    assert meta.allows_function is False
+
+
+def test_field_meta_diffusivity_activation_energy_differs_by_section():
+    """Finding 3: the same alias describes electrolyte diffusion in one
+    section and particle diffusion in another."""
+    electrolyte = bpx_gateway.field_meta(
+        ("Parameterisation", "Electrolyte", "Diffusivity activation energy [J.mol-1]")
+    )
+    electrode = bpx_gateway.field_meta(
+        ("Parameterisation", "Negative electrode", "Diffusivity activation energy [J.mol-1]")
+    )
+    assert "electrolyte" in electrolyte.description
+    assert "particles" in electrode.description
+
+
+def test_field_meta_blended_particle_instance_resolves_particle_schema():
+    """The electrode/particle family resolves at any depth under an
+    electrode, including a named blended-particle instance."""
+    meta = bpx_gateway.field_meta(
+        (
+            "Parameterisation",
+            "Positive electrode",
+            "Particle",
+            "Primary",
+            "Minimum stoichiometry",
+        )
+    )
+    assert meta is not None
+    assert meta.alias == "Minimum stoichiometry"
+
+
+def test_field_meta_validation_run_resolves_experiment_schema():
+    """``Validation`` is ``Dict[str, Experiment]``: the run name is an
+    arbitrary, user-chosen key, not a schema identifier, so `field_meta`
+    must resolve any run name to `Experiment`'s metadata -- not just a
+    specific literal one."""
+    meta = bpx_gateway.field_meta(("Validation", "1C discharge", "Time [s]"))
+    assert meta is not None
+    assert meta.description == "Time in seconds (list of FloatInts)"
+
+    # The run name may itself contain a "/" (see the shipped example file's
+    # "C/20 discharge" run) -- resolution must treat it as one opaque path
+    # element, never split on "/".
+    slashy = bpx_gateway.field_meta(("Validation", "C/20 discharge", "Voltage [V]"))
+    assert slashy is not None
+    assert slashy.description == "Voltage vs time"
+
+
+def test_build_tree_electrolyte_conductivity_is_a_function_end_to_end(examples_dir):
+    """Finding 2, end-to-end: with correct per-section metadata, the
+    Electrolyte's function-valued "Conductivity [S.m-1]" in this example file
+    renders as a FUNCTION parameter, not a SCALAR one. This example file does
+    not fully validate against bpx 1.1.0 (a renamed alias elsewhere) -- build_tree
+    does not require validity."""
+    import json
+
+    raw = json.loads((examples_dir / "nmc_pouch_cell_BPX.json").read_text("utf-8"))
+    tree = build_tree(raw)
+    parameters = build_parameter_path_map(tree)
+    conductivity = parameters[("Parameterisation", "Electrolyte", "Conductivity [S.m-1]")]
+    assert conductivity.kind is ParameterKind.FUNCTION
+    assert isinstance(conductivity.value, str)
+
+
+def test_build_tree_validation_parameters_have_descriptions_end_to_end(examples_dir):
+    """Regression: every `Validation/<run>/<alias>` parameter must resolve
+    real `Experiment` schema metadata, not `None` -- this example file has
+    two runs (one, "C/20 discharge", with a "/" in its name), each with all
+    four `Experiment` aliases."""
+    import json
+
+    raw = json.loads((examples_dir / "nmc_pouch_cell_BPX.json").read_text("utf-8"))
+    tree = build_tree(raw)
+    parameters = build_parameter_path_map(tree)
+    validation_parameters = [
+        parameter for path, parameter in parameters.items() if path[0] == "Validation"
+    ]
+    assert validation_parameters
+    for parameter in validation_parameters:
+        assert parameter.description, f"{parameter.path!r} has no description"
+
+
+def test_field_meta_degradation_and_thermal_fields_have_no_fabricated_description():
+    """Finding 5: fields with no schema description must not fabricate one
+    from the pydantic auto-title (e.g. "LLI" -> "Lli")."""
+    lli = bpx_gateway.field_meta(("State", "Degradation", "LLI"))
+    assert lli.description == ""
+
+    heat_transfer = bpx_gateway.field_meta(
+        ("State", "Thermal environment", "Heat transfer coefficient [W.m-2.K-1]")
+    )
+    assert heat_transfer.description == ""
+
+
+def test_searchable_parameters_excludes_section_container_aliases():
+    """Finding 4: section/container names swept up by the old flat index must
+    not appear as addable "parameters"."""
+    pool = bpx_gateway.searchable_parameters()
+    junk = {
+        "x",
+        "y",
+        "Cell",
+        "Particle",
+        "Separator",
+        "Electrolyte",
+        "Negative electrode",
+        "Positive electrode",
+        "User-defined",
+        "Initial conditions",
+        "Thermal environment",
+        "Degradation",
+        "description",
+    }
+    assert junk.isdisjoint(pool)
+    assert "Thickness [m]" in pool
+
+
+def test_searchable_parameters_includes_experiment_aliases():
+    """Decision: `Experiment`'s four aliases (`Time [s]`, `Current [A]`,
+    `Voltage [V]`, `Temperature [K]`) belong in the searchable pool. The pool
+    backs the add-parameter popup's "other parameters" tier -- every real,
+    addable BPX parameter from every parameter-bearing definition, with no
+    special-casing per section. `Experiment` is exactly that: a closed set of
+    real leaf parameters (none of its properties are container links), so it
+    is included on the same structural basis as `Cell`, `Electrolyte`, etc.
+    -- there is no principled reason to carve `Validation`'s parameters out
+    of a pool meant to cover the whole standard."""
+    pool = bpx_gateway.searchable_parameters()
+    for alias in ("Time [s]", "Current [A]", "Voltage [V]", "Temperature [K]"):
+        assert alias in pool
+    assert pool["Time [s]"].description == "Time in seconds (list of FloatInts)"
+
+
+def test_searchable_parameters_collapses_ambiguous_alias():
+    """Decision 2: an alias whose meaning differs across the definitions it
+    appears in collapses to an alias-only placeholder, not one definition's
+    (arbitrary) meaning."""
+    conductivity = bpx_gateway.searchable_parameters()["Conductivity [S.m-1]"]
+    assert conductivity.description == ""
+    assert conductivity.allows_function is False
+    assert conductivity.is_enum is False
+    assert conductivity.is_integer is False
+    assert conductivity.is_text is False
+    assert conductivity.examples == ()
+
+
+#: Every ``bpx`` schema definition, classified by hand against the live
+#: schema at the time of writing. If ``bpx`` adds, removes or renames a
+#: definition, this test fails: review the new/changed definition and, if
+#: it's a genuine parameter container, confirm its properties are leaf-shaped
+#: (see `_is_container_link`/`_is_parameter_bearing_definition` in
+#: bpx_gateway.py) before adding it here with the correct classification.
+_KNOWN_DEFINITION_CLASSIFICATION = {
+    "Cell": "parameter-bearing",
+    "Contact": "parameter-bearing",
+    "Degradation": "parameter-bearing",
+    "ElectrodeBlended": "parameter-bearing",
+    "ElectrodeBlendedSPM": "parameter-bearing",
+    "ElectrodeSingle": "parameter-bearing",
+    "ElectrodeSingleSPM": "parameter-bearing",
+    "Electrolyte": "parameter-bearing",
+    "Experiment": "parameter-bearing",
+    "Header": "parameter-bearing",
+    "InitialConditions": "parameter-bearing",
+    "Particle": "parameter-bearing",
+    "ThermalState": "parameter-bearing",
+    "InterpolatedTable": "value-type",
+    "UserDefined": "value-type",
+    "Parameterisation": "container",
+    "ParameterisationPartial": "container",
+    "ParameterisationSPM": "container",
+    "State": "container",
+}
+
+
+def test_schema_definition_classification_covers_every_definition():
+    """Schema-coverage guard for decision 3: `searchable_parameters()` derives
+    its parameter-bearing definition set structurally (no hardcoded name
+    list), but this test pins that derivation's *result* against a reviewed,
+    literal expectation so an upstream `bpx` schema change fails loudly here
+    instead of silently mis-classifying a new definition."""
+    defs = bpx.BPX.model_json_schema()["$defs"]
+
+    missing = set(defs) - set(_KNOWN_DEFINITION_CLASSIFICATION)
+    assert not missing, (
+        f"bpx added new schema definition(s) {missing!r} that this guard test "
+        "doesn't know about yet. Review each one: is it a genuine parameter "
+        "container (add as 'parameter-bearing'), a pure section link whose "
+        "properties are all $ref (add as 'container'), or an open/free-form "
+        "value shape (add as 'value-type')? Then add it to "
+        "_KNOWN_DEFINITION_CLASSIFICATION above with that classification."
+    )
+    stale = set(_KNOWN_DEFINITION_CLASSIFICATION) - set(defs)
+    assert not stale, f"bpx removed schema definition(s) {stale!r}; remove from the table above."
+
+    for name, expected in _KNOWN_DEFINITION_CLASSIFICATION.items():
+        definition = defs[name]
+        if definition.get("additionalProperties") is not False:
+            actual = "value-type"
+        elif bpx_gateway._is_parameter_bearing_definition(definition):
+            actual = "parameter-bearing"
+        else:
+            actual = "container"
+        assert actual == expected, (
+            f"{name} classified as {actual!r}, expected {expected!r} -- bpx's "
+            f"schema shape for {name} changed; re-derive its classification."
+        )
 
 
 def test_expected_fields_cell_matches_schema_aliases():
@@ -82,9 +333,9 @@ def test_expected_fields_cell_required_flag():
     assert fields["External surface area [m2]"].required is False
 
 
-def test_expected_fields_carries_metadata_index_meta():
+def test_expected_fields_carries_the_same_meta_as_field_meta():
     fields = {field.alias: field for field in bpx_gateway.expected_fields(("Header",))}
-    assert fields["Model"].meta is bpx_gateway.metadata_index()["Model"]
+    assert fields["Model"].meta == bpx_gateway.field_meta(("Header", "Model"))
     assert fields["Model"].meta.is_enum is True
 
 
