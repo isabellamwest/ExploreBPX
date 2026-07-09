@@ -42,6 +42,12 @@ class ParameterItem:
     description: str = ""
     examples: tuple = ()
     issues: list[ValidatorDiagnostic] = field(default_factory=list)
+    #: For a ``MAP``-kind parameter, the sibling Particle names of the
+    #: electrode named by ``FieldMeta.material_check`` (e.g. "Primary",
+    #: "Secondary" for a blended electrode) -- a hint for per-material key
+    #: entry, not a schema constraint. Empty for every other kind and for a
+    #: single-particle (unblended) electrode.
+    key_suggestions: tuple[str, ...] = ()
 
     @property
     def icon(self) -> str:
@@ -116,7 +122,9 @@ _STATIC_PATHS = {
 
 def build_tree(raw: dict, root_label: str = "BPX File") -> TreeNode:
     """Build the node tree for a raw BPX dictionary."""
-    return _build_node(root_label, (), raw)
+    root = _build_node(root_label, (), raw)
+    _seed_key_suggestions(root, raw)
+    return root
 
 
 def _build_node(
@@ -135,14 +143,32 @@ def _build_node(
 
     for key, child_value in value.items():
         child_path = path + (key,)
-        if _is_object_node(child_value):
+        child_meta = bpx_gateway.field_meta(child_path)
+        if _is_object_node(child_value, child_meta):
             node.children.append(_build_node(key, child_path, child_value))
         else:
-            node.parameters.append(_build_parameter(key, child_path, child_value))
+            node.parameters.append(_build_parameter(key, child_path, child_value, child_meta))
     return node
 
 
-def _is_object_node(value: object) -> bool:
+def _is_object_node(value: object, meta: bpx_gateway.FieldMeta | None) -> bool:
+    """True if *value* should render as a navigable tree section rather than
+    a leaf parameter.
+
+    When metadata is known, the schema's declaration is authoritative: a
+    field is an object node only if the schema declares it a container link
+    (``meta.is_container``) *and* the value is actually a dict -- a declared
+    container holding a non-dict invalid value degrades to a parameter row
+    (the validator reports it) rather than misclassifying it as a section.
+    This keeps a per-material map field (e.g. a dict-valued "LAM: Positive
+    electrode") a ``ParameterItem`` instead of turning it into a tree
+    section, whatever it currently holds.
+
+    When metadata is genuinely absent, value shape is the only information
+    available (unchanged from before).
+    """
+    if meta is not None:
+        return meta.is_container and isinstance(value, dict)
     return isinstance(value, dict) and not looks_like_table(value)
 
 
@@ -150,8 +176,8 @@ def _build_parameter(
     label: str,
     path: tuple[str, ...],
     value: object,
+    meta: bpx_gateway.FieldMeta | None,
 ) -> ParameterItem:
-    meta = bpx_gateway.field_meta(path)
     return ParameterItem(
         label=label,
         path=path,
@@ -161,6 +187,48 @@ def _build_parameter(
         description=meta.description if meta else "",
         examples=meta.examples if meta else (),
     )
+
+
+def _seed_key_suggestions(root: TreeNode, raw: dict) -> None:
+    """Populate ``key_suggestions`` on every ``MAP``-kind parameter from the
+    raw dict's Particle names, read once. A post-pass over the finished tree
+    rather than threaded through ``_build_node``/``_build_parameter`` because
+    it is a display hint over the result, not a classification input.
+    """
+    suggestions_by_material_check = {
+        "positive_electrode": _particle_names(raw, "Positive electrode"),
+        "negative_electrode": _particle_names(raw, "Negative electrode"),
+    }
+
+    def walk(node: TreeNode) -> None:
+        for parameter in node.parameters:
+            if parameter.kind is not ParameterKind.MAP:
+                continue
+            meta = bpx_gateway.field_meta(parameter.path)
+            if meta is None:
+                continue
+            parameter.key_suggestions = suggestions_by_material_check.get(meta.material_check, ())
+        for child in node.children:
+            walk(child)
+
+    walk(root)
+
+
+def _particle_names(raw: dict, electrode_label: str) -> tuple[str, ...]:
+    """The blended-electrode Particle instance names for *electrode_label*
+    (e.g. "Primary", "Secondary"), or ``()`` for a missing/single-particle/
+    malformed shape. Defensive by design: this seeds a suggestion, not a
+    schema requirement."""
+    parameterisation = raw.get("Parameterisation")
+    if not isinstance(parameterisation, dict):
+        return ()
+    electrode = parameterisation.get(electrode_label)
+    if not isinstance(electrode, dict):
+        return ()
+    particle = electrode.get("Particle")
+    if not isinstance(particle, dict):
+        return ()
+    return tuple(particle.keys())
 
 
 def _node_type(path: tuple[str, ...]) -> NodeType:

@@ -360,3 +360,112 @@ def test_expected_fields_unsupported_electrode_path_raises():
 def test_expected_fields_unknown_path_raises():
     with pytest.raises(ValueError):
         bpx_gateway.expected_fields(("Nonexistent",))
+
+
+# ---------------------------------------------------------------------------
+# FieldMeta flag detection against the live BPX schema (Phase 1 input-system
+# extensions: allows_map, is_series, pattern, nullable, material_check,
+# is_container).
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "path, material_check",
+    [
+        (("State", "Degradation", "LAM: Positive electrode"), "positive_electrode"),
+        (("State", "Degradation", "LAM: Negative electrode"), "negative_electrode"),
+        (
+            ("State", "Initial conditions", "Initial hysteresis state: Positive electrode"),
+            "positive_electrode",
+        ),
+        (
+            ("State", "Initial conditions", "Initial hysteresis state: Negative electrode"),
+            "negative_electrode",
+        ),
+    ],
+)
+def test_field_meta_allows_map_and_material_check(path, material_check):
+    """The four ``FloatInt | dict[str, FloatInt]`` fields: allows_map is set,
+    the schema's own material_check value is carried verbatim, and they are
+    not misclassified as text/integer/container."""
+    meta = bpx_gateway.field_meta(path)
+    assert meta is not None
+    assert meta.allows_map is True
+    assert meta.material_check == material_check
+    assert meta.is_text is False
+    assert meta.is_integer is False
+    assert meta.is_container is False
+    assert meta.allows_function is False
+
+
+def test_field_meta_experiment_arrays_are_series():
+    for alias in ("Time [s]", "Current [A]", "Voltage [V]", "Temperature [K]"):
+        meta = bpx_gateway.field_meta(("Validation", "1C discharge", alias))
+        assert meta is not None, alias
+        assert meta.is_series is True, alias
+
+
+def test_field_meta_interpolated_table_x_y_are_series():
+    """InterpolatedTable's x/y are declared arrays too, even though they are
+    never surfaced as their own ParameterItem (see tree_model)."""
+    definition_index = bpx_gateway._definition_index()
+    table = definition_index["InterpolatedTable"]
+    assert table["x"].is_series is True
+    assert table["y"].is_series is True
+
+
+def test_field_meta_user_defined_description_is_text_and_nullable():
+    """UserDefined.description (anyOf string|null) is TEXT-flagged and
+    genuinely nullable -- the one real ``nullable`` case in the schema."""
+    definition_index = bpx_gateway._definition_index()
+    meta = definition_index["UserDefined"]["description"]
+    assert meta.is_text is True
+    assert meta.nullable is True
+
+
+def test_field_meta_header_bpx_has_pattern():
+    meta = bpx_gateway.field_meta(("Header", "BPX"))
+    assert meta is not None
+    assert meta.pattern == r"^\d+\.\d+(?:\.\d+)?$"
+
+
+def test_field_meta_header_title_is_not_nullable():
+    """A ``default: null`` on a non-null-typed field (no ``anyOf`` member of
+    type null) does not make it nullable -- pydantic still rejects an
+    explicit ``None`` there."""
+    meta = bpx_gateway.field_meta(("Header", "Title"))
+    assert meta is not None
+    assert meta.nullable is False
+    assert meta.is_text is True
+
+
+def test_field_meta_ocp_allows_function_stays_not_text():
+    """OCP's anyOf includes a string member (for function expressions), but
+    allows_function must win: is_text stays False so the FUNCTION kind is not
+    shadowed by TEXT."""
+    meta = bpx_gateway.field_meta(("Parameterisation", "Negative electrode", "OCP [V]"))
+    assert meta is not None
+    assert meta.allows_function is True
+    assert meta.is_text is False
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        ("Parameterisation", "Cell"),
+        ("Parameterisation", "Positive electrode", "Particle"),
+        ("Parameterisation", "User-defined"),
+    ],
+)
+def test_field_meta_container_links_are_flagged(path):
+    """Cell/Particle/User-defined are pure section links (schema properties
+    that merely name another definition), so is_container is True."""
+    meta = bpx_gateway.field_meta(path)
+    assert meta is not None
+    assert meta.is_container is True
+
+
+def test_field_meta_leaf_parameter_is_not_container():
+    meta = bpx_gateway.field_meta(("Parameterisation", "Cell", "Nominal cell capacity [A.h]"))
+    assert meta is not None
+    assert meta.is_container is False

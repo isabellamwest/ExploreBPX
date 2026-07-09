@@ -1,10 +1,12 @@
 """Function-expression editing card.
 
 BPX parameters declared with ``allows_function`` can hold either a constant
-numeric value or a function-expression string.  When the stored value is a
-string (valid expression or invalid raw text) this card is used so the value
-remains visible and editable regardless of whether the expression is currently
-valid.
+numeric value or a function-expression string.  Classification no longer
+switches editor by stored-value shape (see ``core.parameter_types``), so this
+card is now the FUNCTION kind's card for every legal representation except a
+table-valued (dict) one -- see the interim dispatch in ``cards/registry.py``
+-- including a plain numeric constant, which previously routed to
+``ScalarCard``.
 
 Keyboard contract (inherited from :class:`~.base.EditorCard`):
 - Enter / Return  → emit ``commit_requested``.
@@ -13,7 +15,7 @@ Keyboard contract (inherited from :class:`~.base.EditorCard`):
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QHBoxLayout, QLineEdit
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit
 
 from .base import EditorCard
 
@@ -35,6 +37,8 @@ class FunctionCard(EditorCard):
         self._edit = QLineEdit(self._format(self._original))
         self._edit.textChanged.connect(lambda *_: self.draft_changed.emit())
         layout.addWidget(self._edit, 1)
+        if parameter.unit:
+            layout.addWidget(QLabel(parameter.unit))
         self._install_keyboard_handler(self._edit)
 
     @staticmethod

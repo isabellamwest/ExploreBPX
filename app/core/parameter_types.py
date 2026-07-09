@@ -4,21 +4,30 @@ BPX parameters fall into a small set of *kinds* regardless of which battery
 section they appear in. Classifying by kind (rather than by section) lets the
 UI reuse one renderer per kind.
 
-Classification is **declared-type first**: when schema metadata is available
-the declared field type is authoritative and the current stored value's runtime
-type is irrelevant.  This ensures that an invalid stored value (e.g. a string
-committed to a float field) never causes the application to switch to a
-different editor or become read-only.  Value shape is only used for:
+Classification is **declared-type first, universally**: when schema metadata
+is available the declared field type alone fixes the kind, and the stored
+value's runtime type never changes the result. This ensures that an invalid
+stored value (e.g. a string committed to a float field) never causes the
+application to switch to a different editor or become read-only.
 
-* Structural kinds (``dict``/``list``) whose topology is always shape-driven.
-* ``allows_function`` fields, where a numeric value and a function-expression
-  string are both *valid* stored types and value shape selects the editor.
-* Parameters with no schema metadata. This is a valid, first-class state with
-  two legitimate sources: genuinely unknown aliases read from external files,
-  and user-authored custom parameters (an ordinary raw-dict entry whose
-  metadata is absent because nothing is synthesised or persisted for it). The
-  BPX validator remains the source of truth for whether such a parameter is
-  legal.
+A field the schema declares as a *union* of representations
+(``FloatFunctionTable``, ``FloatInt | dict[str, FloatInt]``) is one kind, not
+several: the kind identifies the declared union (``FUNCTION``, ``MAP``), and
+the stored value's shape is a card-level concern (which mode/representation
+to render), never a classification concern. The earlier exception -- where a
+numeric value in an ``allows_function`` field classified as ``SCALAR`` -- is
+removed: it made the field's other legal representations unreachable from the
+UI.
+
+Kind is declared; mode is chosen. Value shape classifies in exactly one place:
+when ``meta`` is ``None``, i.e. metadata is genuinely absent. This is a valid,
+first-class state with two legitimate sources: genuinely unknown aliases read
+from external files, and user-authored custom parameters (an ordinary
+raw-dict entry whose metadata is absent because nothing is synthesised or
+persisted for it). The BPX validator remains the source of truth for whether
+such a parameter is legal. Only in this fallback does an undeclared dict/list's
+topology classify it (``TABLE``/``SECTION``/``SERIES``), because no schema
+field describes it.
 """
 
 from __future__ import annotations
@@ -39,8 +48,12 @@ class ParameterKind(str, Enum):
     SECTION = "section"
     SCALAR = "scalar"
     INTEGER = "integer"
+    TEXT = "text"
+    BOOLEAN = "boolean"
     ENUM = "enum"
     FUNCTION = "function"
+    MAP = "map"
+    SERIES = "series"
     TABLE = "table"
     UNKNOWN = "unknown"
 
@@ -49,8 +62,12 @@ _ICONS = {
     ParameterKind.SECTION: "📁",
     ParameterKind.SCALAR: "🔢",
     ParameterKind.INTEGER: "#️⃣",
+    ParameterKind.TEXT: "📝",
+    ParameterKind.BOOLEAN: "☑️",
     ParameterKind.ENUM: "🔽",
     ParameterKind.FUNCTION: "📈",
+    ParameterKind.MAP: "🗂️",
+    ParameterKind.SERIES: "📶",
     ParameterKind.TABLE: "📊",
     ParameterKind.UNKNOWN: "❔",
 }
@@ -80,21 +97,14 @@ def looks_like_table(value: object) -> bool:
 def classify(value: object, meta: "FieldMeta | None" = None) -> ParameterKind:
     """Classify a BPX value into a :class:`ParameterKind`.
 
-    ``meta`` is the schema metadata for the value's alias, if known.  When
-    metadata is available the *declared* field type is authoritative; the
-    current stored value's runtime type does not affect the result (except for
-    ``allows_function`` fields, where both a number and a function-expression
-    string are valid and the stored value type selects the editor).
+    ``meta`` is the schema metadata for the value's alias, if known. When
+    metadata is available the *declared* field type alone fixes the kind; the
+    stored value's runtime type never changes the result -- not even for
+    union-typed fields (``allows_function``/``allows_map``), whose stored
+    value's shape only picks a card-level *mode*, not the kind. Value shape
+    classifies only when ``meta`` is genuinely absent (see the module
+    docstring).
     """
-    # --- Structural kinds are always shape-driven. -------------------------
-    # Dicts and lists define document topology, not parameter values, so they
-    # are classified by shape regardless of any schema declaration.
-    if isinstance(value, dict):
-        return ParameterKind.TABLE if looks_like_table(value) else ParameterKind.SECTION
-    if isinstance(value, list):
-        # Experiment arrays (Validation section) are tabular data.
-        return ParameterKind.TABLE
-
     # --- Metadata-authoritative path. -------------------------------------
     # When the schema declares a field type, that declaration is the source of
     # truth for editor selection.  An invalid stored value (e.g. a string in a
@@ -105,16 +115,18 @@ def classify(value: object, meta: "FieldMeta | None" = None) -> ParameterKind:
         if meta.is_integer:
             return ParameterKind.INTEGER
         if meta.is_text:
-            return ParameterKind.SCALAR
+            return ParameterKind.TEXT
+        if meta.is_series:
+            return ParameterKind.SERIES
+        if meta.allows_map:
+            return ParameterKind.MAP
         if meta.allows_function:
-            # This field legitimately stores EITHER a constant numeric value OR
-            # a function/table expression string.  Both are valid, so we use
-            # the stored value's shape to pick the editor.
-            if isinstance(value, (int, float)) and not isinstance(value, bool):
-                return ParameterKind.SCALAR
+            # The declared union (number | function-expression | table) is one
+            # kind; the stored value's shape only selects the card's initial
+            # mode, never the kind itself.
             return ParameterKind.FUNCTION
         # Remaining known fields are plain numerics (float): no enum, no
-        # integer flag, no text flag, no function alternative.  Always scalar.
+        # integer/text/series/map/function flag.  Always scalar.
         return ParameterKind.SCALAR
 
     # --- No-metadata fallback. --------------------------------------------
@@ -122,12 +134,17 @@ def classify(value: object, meta: "FieldMeta | None" = None) -> ParameterKind:
     # index. Two legitimate sources: parameters read from external files that
     # Explore_BPX did not author, and user-authored custom parameters, whose
     # metadata is genuinely absent by design (nothing is synthesised or
-    # persisted for them). Value shape is the only information available.
+    # persisted for them). Value shape is the only information available, and
+    # this is the one place an undeclared dict/list's topology classifies it.
     if isinstance(value, bool):
-        return ParameterKind.SCALAR
+        # Checked before int/float: bool is a subclass of int in Python.
+        return ParameterKind.BOOLEAN
     if isinstance(value, (int, float)):
         return ParameterKind.SCALAR
     if isinstance(value, str):
-        # BPX treats unknown string values as function expressions.
-        return ParameterKind.FUNCTION
+        return ParameterKind.TEXT
+    if isinstance(value, dict):
+        return ParameterKind.TABLE if looks_like_table(value) else ParameterKind.SECTION
+    if isinstance(value, list):
+        return ParameterKind.SERIES
     return ParameterKind.UNKNOWN

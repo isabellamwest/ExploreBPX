@@ -47,6 +47,27 @@ class FieldMeta:
     enum_values: tuple = ()
     is_integer: bool = False
     is_text: bool = False
+    #: True for a per-material field declared ``FloatInt | dict[str, FloatInt]``
+    #: (e.g. Degradation's LAM fields, InitialConditions' hysteresis-state
+    #: fields): a single value applies to every material, or a dict keyed by
+    #: particle name overrides it per material.
+    allows_map: bool = False
+    #: True for a field declared ``type: "array"`` (e.g. Experiment's Time/
+    #: Current/Voltage/Temperature, InterpolatedTable's x/y).
+    is_series: bool = False
+    #: The schema's ``pattern`` (checked on the property itself and any
+    #: ``anyOf`` member), or ``""`` if the field declares none.
+    pattern: str = ""
+    #: True only when an ``anyOf`` member is exactly ``{"type": "null"}`` --
+    #: a ``default: null`` on a non-null-typed field does not make it
+    #: nullable (pydantic still rejects an explicit ``None`` there).
+    nullable: bool = False
+    #: Verbatim value of the schema's custom ``material_check`` key
+    #: (``"positive_electrode"`` / ``"negative_electrode"``), or ``""``.
+    material_check: str = ""
+    #: True if the property merely names another schema section (see
+    #: :func:`_is_container_link`) rather than describing a leaf value.
+    is_container: bool = False
 
 
 @dataclass(frozen=True)
@@ -378,8 +399,10 @@ def searchable_parameters() -> dict[str, FieldMeta]:
 def _field_meta(alias: str, prop: dict) -> FieldMeta:
     any_of = prop.get("anyOf", [])
     allows_function = _allows_function(prop, any_of)
+    allows_map = _allows_map(any_of)
     is_enum = "enum" in prop
     prop_type = prop.get("type")
+    member_types = _member_types(prop, any_of)
     return FieldMeta(
         alias=alias,
         description=prop.get("description") or "",
@@ -388,8 +411,39 @@ def _field_meta(alias: str, prop: dict) -> FieldMeta:
         is_enum=is_enum,
         enum_values=tuple(prop.get("enum", ())) if is_enum else (),
         is_integer=prop_type == "integer",
-        is_text=prop_type == "string" and not is_enum and not allows_function,
+        is_text="string" in member_types and not is_enum and not allows_function and not allows_map,
+        allows_map=allows_map,
+        is_series=prop_type == "array",
+        pattern=_pattern(prop, any_of),
+        nullable=any(member.get("type") == "null" for member in any_of),
+        material_check=prop.get("material_check") or "",
+        is_container=_is_container_link(prop),
     )
+
+
+def _member_types(prop: dict, any_of: list) -> set[str]:
+    """Every ``type`` the property declares, checking both the property
+    itself and its ``anyOf`` members."""
+    types = set()
+    prop_type = prop.get("type")
+    if prop_type:
+        types.add(prop_type)
+    for member in any_of:
+        member_type = member.get("type")
+        if member_type:
+            types.add(member_type)
+    return types
+
+
+def _pattern(prop: dict, any_of: list) -> str:
+    """The schema ``pattern``, checked on the property itself first, then any
+    ``anyOf`` member (e.g. Header's ``BPX`` version string)."""
+    if "pattern" in prop:
+        return prop["pattern"]
+    for member in any_of:
+        if "pattern" in member:
+            return member["pattern"]
+    return ""
 
 
 def _allows_function(prop: dict, any_of: list) -> bool:
@@ -402,3 +456,25 @@ def _allows_function(prop: dict, any_of: list) -> bool:
     has_string = any(member.get("type") == "string" for member in members)
     has_number = any(member.get("type") in ("number", "integer") for member in members)
     return has_string and has_number
+
+
+def _allows_map(any_of: list) -> bool:
+    """Detect a per-material field declared ``FloatInt | dict[str, FloatInt]``:
+    an ``anyOf`` with a number member, an integer member, and an object member
+    whose ``additionalProperties`` is itself an ``anyOf`` of number/integer
+    (e.g. Degradation's LAM fields, InitialConditions' hysteresis-state
+    fields)."""
+    if not any_of:
+        return False
+    has_number = any(member.get("type") == "number" for member in any_of)
+    has_integer = any(member.get("type") == "integer" for member in any_of)
+    object_member = next((member for member in any_of if member.get("type") == "object"), None)
+    if object_member is None:
+        return False
+    additional = object_member.get("additionalProperties")
+    if not isinstance(additional, dict):
+        return False
+    additional_any_of = additional.get("anyOf", [])
+    additional_has_number = any(member.get("type") == "number" for member in additional_any_of)
+    additional_has_integer = any(member.get("type") == "integer" for member in additional_any_of)
+    return has_number and has_integer and additional_has_number and additional_has_integer

@@ -196,6 +196,92 @@ def test_known_alias_with_none_value_opens_proper_editor_end_to_end():
     assert card._combo.currentIndex() == -1
 
 
+# ---------------------------------------------------------------------------
+# Interim card shims for the new declared kinds (TEXT, BOOLEAN, SERIES, MAP)
+# and the FUNCTION/MAP value-dependent dispatch -- see docs/03-features.md §4
+# "Input system". These lock today's stand-in behaviour so a later real card
+# (Phase 3/4) is a deliberate, visible change rather than a silent one.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("kind", [ParameterKind.TEXT, ParameterKind.BOOLEAN])
+def test_text_and_boolean_kinds_use_editable_raw_card(kind):
+    """TEXT and BOOLEAN reuse RawCard's lenient free-text behaviour until the
+    real TextCard/BooleanCard (Phase 3) land."""
+    _app()
+    param = ParameterItem(label="P", path=("Header", "P"), kind=kind, value="hello")
+    card = create_card(param, None)
+    assert type(card).__name__ == "RawCard"
+    assert card.is_editable
+
+
+def test_series_kind_falls_back_to_read_only():
+    """SERIES has no editor yet; it stays read-only (Phase 4 covers series
+    grids)."""
+    _app()
+    param = ParameterItem(
+        label="P", path=("Validation", "run", "Time [s]"), kind=ParameterKind.SERIES, value=[0, 1]
+    )
+    card = create_card(param, None)
+    assert type(card).__name__ == "ReadOnlyCard"
+    assert card.is_editable is False
+
+
+def test_function_kind_with_dict_value_falls_back_to_read_only():
+    """A table-valued FUNCTION field must not reach the free-text
+    FunctionCard: str(dict) is Python repr and committing it would corrupt
+    the value."""
+    _app()
+    param = ParameterItem(
+        label="OCP [V]",
+        path=("Parameterisation", "Negative electrode", "OCP [V]"),
+        kind=ParameterKind.FUNCTION,
+        value={"x": [0, 1], "y": [2, 3]},
+    )
+    card = create_card(param, None)
+    assert type(card).__name__ == "ReadOnlyCard"
+
+
+def test_function_kind_with_numeric_value_uses_function_card_with_unit():
+    """A numeric constant in a FUNCTION field now opens FunctionCard (not
+    ScalarCard, per the removed value-shape exception), and FunctionCard
+    shows the unit label exactly as ScalarCard does."""
+    _app()
+    param = ParameterItem(
+        label="Diffusivity [m2.s-1]",
+        path=("Parameterisation", "Negative electrode", "Diffusivity [m2.s-1]"),
+        kind=ParameterKind.FUNCTION,
+        value=3.3e-14,
+        unit="m2.s-1",
+    )
+    card = create_card(param, None)
+    assert type(card).__name__ == "FunctionCard"
+    assert card._edit.text() == str(3.3e-14)
+
+
+@pytest.mark.parametrize(
+    "value, expected_card",
+    [
+        (1.0, "ScalarCard"),
+        (5, "ScalarCard"),
+        (None, "RawCard"),
+        ({"Primary": 1.0, "Secondary": 5.0}, "ReadOnlyCard"),
+    ],
+)
+def test_map_kind_dispatches_by_stored_value_shape(value, expected_card):
+    """MAP's interim dispatch: numeric (non-bool) -> ScalarCard, None ->
+    RawCard, dict -> ReadOnlyCard (real MapCard is Phase 4)."""
+    _app()
+    param = ParameterItem(
+        label="LAM: Positive electrode",
+        path=("State", "Degradation", "LAM: Positive electrode"),
+        kind=ParameterKind.MAP,
+        value=value,
+    )
+    card = create_card(param, None)
+    assert type(card).__name__ == expected_card
+
+
 def test_integer_none_value_uses_fallback_and_can_be_typed():
     """A ``None`` original is not a valid int, so the integer card falls back
     to its free-text widget (the existing invalid-original path) rather than

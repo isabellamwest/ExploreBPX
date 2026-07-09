@@ -31,9 +31,9 @@ def test_classify_function_string():
     assert classify("1 + x", meta) == ParameterKind.FUNCTION
 
 
-def test_classify_text_string_is_scalar():
+def test_classify_text_string_is_text():
     meta = FieldMeta(alias="Title", is_text=True)
-    assert classify("My cell", meta) == ParameterKind.SCALAR
+    assert classify("My cell", meta) == ParameterKind.TEXT
 
 
 def test_classify_enum():
@@ -71,11 +71,18 @@ def test_classify_invalid_string_in_integer_field_stays_integer():
     assert classify("bad-value", meta) == ParameterKind.INTEGER
 
 
-def test_classify_function_field_number_stays_scalar():
-    """A numeric constant in an allows_function field must open in the scalar editor."""
+def test_classify_function_field_number_stays_function():
+    """A numeric constant in an allows_function field is still FUNCTION.
+
+    The declared union is one kind; the stored value's shape only picks the
+    card's initial mode (a card-level concern), never the classified kind.
+    This replaces the removed exception where a numeric value classified as
+    SCALAR, which made the field's Function/InterpolatedTable modes
+    unreachable from the UI.
+    """
     meta = FieldMeta(alias="Diffusivity [m2.s-1]", allows_function=True)
-    assert classify(1.5e-14, meta) == ParameterKind.SCALAR
-    assert classify(2, meta) == ParameterKind.SCALAR
+    assert classify(1.5e-14, meta) == ParameterKind.FUNCTION
+    assert classify(2, meta) == ParameterKind.FUNCTION
 
 
 def test_classify_function_field_string_stays_function():
@@ -101,14 +108,17 @@ def test_classify_bool_in_float_field_stays_scalar():
     assert classify(True, meta) == ParameterKind.SCALAR
 
 
-def test_classify_no_metadata_bool_is_scalar():
-    """Bool without metadata is SCALAR (no-meta fallback)."""
-    assert classify(True) == ParameterKind.SCALAR
+def test_classify_no_metadata_bool_is_boolean():
+    """Bool without metadata is BOOLEAN (no-meta fallback), checked before the
+    int/float branch since ``bool`` is a subclass of ``int`` in Python."""
+    assert classify(True) == ParameterKind.BOOLEAN
+    assert classify(False) == ParameterKind.BOOLEAN
 
 
-def test_classify_no_metadata_string_is_function():
-    """A string without metadata is FUNCTION (BPX treats unknown strings as expressions)."""
-    assert classify("something") == ParameterKind.FUNCTION
+def test_classify_no_metadata_string_is_text():
+    """A string without metadata is TEXT: prose under User-defined (or any
+    other metadata-less string) must not get an expression editor."""
+    assert classify("something") == ParameterKind.TEXT
 
 
 # ---------------------------------------------------------------------------
@@ -118,8 +128,7 @@ def test_classify_no_metadata_string_is_function():
 # metadata is genuinely absent (``meta=None``) -- nothing is synthesised or
 # persisted for it. Absence is a valid first-class state, and value shape is
 # the honest classifier when metadata is absent. These tests lock that
-# contract; they assert existing `classify` behaviour and must pass without
-# any change to `classify` itself.
+# contract.
 
 
 def test_classify_custom_parameter_valueless_is_unknown():
@@ -133,9 +142,9 @@ def test_classify_custom_parameter_numeric_is_scalar():
     assert classify(5.5) == ParameterKind.SCALAR
 
 
-def test_classify_custom_parameter_string_is_function():
-    """A custom parameter with a string value and no metadata is FUNCTION."""
-    assert classify("some expression") == ParameterKind.FUNCTION
+def test_classify_custom_parameter_string_is_text():
+    """A custom parameter with a string value and no metadata is TEXT."""
+    assert classify("some expression") == ParameterKind.TEXT
 
 
 def test_classify_known_alias_from_field_meta_stays_authoritative():
@@ -144,3 +153,54 @@ def test_classify_known_alias_from_field_meta_stays_authoritative():
     metadata is genuinely absent, not for known schema aliases."""
     meta = bpx_gateway.field_meta(("Header", "Model"))
     assert classify("DFN", meta) == ParameterKind.ENUM
+
+
+# ---------------------------------------------------------------------------
+# Declared MAP and SERIES kinds, and the meta=None fallback's list -> SERIES
+# / dict -> TABLE/SECTION shape rule (the one place value shape still
+# classifies).
+# ---------------------------------------------------------------------------
+
+
+def test_classify_series_uses_metadata():
+    """A declared array field (Experiment's Time/Current/Voltage/Temperature,
+    InterpolatedTable's x/y) classifies SERIES regardless of the stored
+    value's own shape."""
+    meta = FieldMeta(alias="Time [s]", is_series=True)
+    assert classify([0, 0.1, 0.2], meta) == ParameterKind.SERIES
+    # Declared-type-first: an invalid non-list stored value stays SERIES too.
+    assert classify("not-a-list", meta) == ParameterKind.SERIES
+
+
+def test_classify_map_uses_metadata_unconditionally():
+    """A declared per-material field (allows_map) classifies MAP whatever
+    shape the stored value currently has -- a single FloatInt, a per-material
+    dict, or an invalid value. Kind is declared; representation is a
+    card-level concern."""
+    meta = FieldMeta(alias="LAM: Positive electrode", allows_map=True)
+    assert classify(1.0, meta) == ParameterKind.MAP
+    assert classify({"Primary": 1.0, "Secondary": 5.0}, meta) == ParameterKind.MAP
+    assert classify(None, meta) == ParameterKind.MAP
+
+
+def test_classify_function_field_dict_value_stays_function():
+    """A declared allows_function field holding an InterpolatedTable dict
+    classifies FUNCTION, not TABLE -- the union is one kind; a table-shaped
+    value only selects the InterpolatedTable mode."""
+    meta = FieldMeta(alias="OCP [V]", allows_function=True)
+    assert classify({"x": [0, 1], "y": [2, 3]}, meta) == ParameterKind.FUNCTION
+
+
+def test_classify_no_metadata_list_is_series():
+    """A list without metadata is SERIES (changed from TABLE): the
+    structural dict/list shape check only classifies in the meta=None
+    fallback, and an undeclared list's topology is a series, not a table."""
+    assert classify([1, 2, 3]) == ParameterKind.SERIES
+
+
+def test_classify_no_metadata_dict_shape_rule_unchanged():
+    """The meta=None dict rule (table-shaped -> TABLE, else -> SECTION) is
+    unchanged; only its position in `classify` moved (from unconditional to
+    the meta=None branch only)."""
+    assert classify({"x": [0, 1], "y": [2, 3]}) == ParameterKind.TABLE
+    assert classify({"Cell": {}}) == ParameterKind.SECTION
