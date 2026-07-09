@@ -266,16 +266,26 @@ class AppDriver:
         return self._w._params._add_button.isEnabled()
 
     def add_parameter_row_count(self) -> int:
-        """Number of rows (suggestions + custom fallback) currently shown in
-        the add-parameter popup."""
+        """Number of rows currently shown in the add-parameter popup's list,
+        including group headers. The custom-add fallback is a pinned footer,
+        not a list row -- see :meth:`add_parameter_can_create_custom`."""
         return self._w._params._popup._list.count()
 
-    def add_parameter_hint_text(self) -> str:
-        """The add-parameter popup's non-actionable hint text (e.g. the
-        'suggestions unavailable' notice for an unresolvable section), or
-        '' when no hint is shown."""
-        hint = self._w._params._popup._hint_label
-        return hint.text() if hint.isVisible() else ""
+    def add_parameter_can_create_custom(self) -> bool:
+        """True when the popup's pinned "Create custom parameter" footer is
+        offered for the currently typed text."""
+        return self._w._params._popup._footer_shown
+
+    def add_parameter_alias_texts(self) -> list[str]:
+        """The visible text of every real (non-header) parameter row currently
+        listed in the add-parameter popup."""
+        popup = self._w._params._popup
+        lst = popup._list
+        return [
+            lst.item(i).text()
+            for i in range(lst.count())
+            if lst.item(i).data(popup._TIER_ROLE) != "header"
+        ]
 
     def editor_kind(self) -> str:
         """Class name of the active card's per-kind editor (e.g.

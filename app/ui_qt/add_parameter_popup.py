@@ -4,37 +4,49 @@ Anchored under the Parameter-list pane's "+ Add parameter" button, following
 the frameless ``Qt.FramelessWindowHint | Qt.Tool`` pattern established by
 :class:`~ui_qt.search.SearchPopup` and
 :class:`~ui_qt.parameter_info_popover.ParameterInfoPopover`. This is a new,
-self-contained widget -- it owns both its text input and its single
-actionable row, takes keyboard focus itself (Down/Up to move, Enter to
-activate, staged Escape to close) and dismisses on focus-out. It does not
-subclass or reuse :class:`~ui_qt.search.SearchBar`, which owns navigation and
-must not gain an authoring role.
+self-contained widget -- it owns both its text input and its actionable rows,
+takes keyboard focus itself (Down/Up to move, Enter to activate, staged Escape
+to close) and dismisses on focus-out. It does not subclass or reuse
+:class:`~ui_qt.search.SearchBar`, which owns navigation and must not gain an
+authoring role.
 
-The popup is a unified surface. With empty input it lists every BPX alias the
-schema expects for the target section that isn't already present. As the user
-types, that list narrows and is joined by a second, visually de-emphasised
-tier of every *other* BPX alias (from the full schema index) matching the
-typed text -- surfacing the whole standard, not just what this section
-expects -- alongside an always-available "Create custom parameter" fallback
-row. All routes end the same way -- creating a parameter with an honest empty
-value (``None``) and letting ``core.commands.AddParameter``/the validator
-judge legality, not this widget; a known alias (expected or not) still
-resolves its proper :class:`~core.bpx_gateway.FieldMeta` on rebuild because
-metadata resolves by leaf alias regardless of section. For sections the
-schema cannot resolve without content (the electrode union), the *expected*
-tier degrades gracefully to none while the "other BPX alias" tier and the
-custom row stay fully functional.
+The popup is a floating command palette (a rounded, shadowed card over a
+translucent top-level, à la Raycast / Linear / VS Code Quick Open). It lists
+the *whole* BPX standard for the target section up front -- no typing required
+-- under at most two headed groups:
+
+* **Suggested** -- the aliases the BPX schema expects for *this* section
+  (:func:`core.bpx_gateway.expected_fields`) that aren't already present. These
+  are highlighted in accent blue so the section's own standard fields stand
+  out. Sections whose schema is an unresolvable union (the electrode
+  single/blended case) simply have no suggested group -- not a dead end.
+* **Other parameters** -- every remaining alias in the full BPX standard
+  (:func:`core.bpx_gateway.metadata_index`) that this section doesn't expect
+  and doesn't already have, in plain text.
+
+Typing filters both groups by substring. The "Create custom parameter"
+fallback is a **pinned footer action**, not a scrolling row: it stays put
+beneath the list (separated by a divider), reachable by keyboard as the last
+navigable entry. All routes end the same way -- creating a parameter with an
+honest empty value (``None``) and letting ``core.commands.AddParameter``/the
+validator judge legality, not this widget; a known alias (suggested or not)
+still resolves its proper :class:`~core.bpx_gateway.FieldMeta` on rebuild
+because metadata resolves by leaf alias regardless of section.
 """
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor
+from PySide6.QtCore import QPoint, QPointF, QRect, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
-    QLabel,
+    QFrame,
+    QGraphicsDropShadowEffect,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QPushButton,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
     QVBoxLayout,
     QWidget,
 )
@@ -43,12 +55,19 @@ from core.bpx_gateway import ExpectedField, FieldMeta, expected_fields, metadata
 from core.parameter_types import extract_unit
 from ui_qt import style
 
-_NO_SUGGESTIONS_TEXT = "Suggestions aren't available for this section yet."
-
-#: Visible-row cap before the suggestion list scrolls; keeps the popup well
-#: within screen bounds regardless of how long the expected/other-alias
-#: tiers get.
+#: Visible-row cap before the list scrolls; keeps the popup within screen
+#: bounds however long the full standard gets. Counts every row (headers
+#: included); the pinned "create" footer sits outside this budget.
 _MAX_VISIBLE_ROWS = 10
+
+#: Fixed width of the card's visible content.
+_CARD_WIDTH = 380
+#: Transparent margin around the card, giving the drop shadow room to render
+#: without being clipped by the top-level's bounds.
+_SHADOW_MARGIN = 16
+
+_SUGGESTED_HEADER = "Suggested for this section"
+_OTHER_HEADER = "Other parameters"
 
 
 def _kind_label(meta) -> str:
@@ -72,6 +91,45 @@ def _suggestion_text(alias: str, meta, required: bool = False) -> str:
     if required:
         hints.append("Required")
     return f"{alias}  ({' · '.join(hints)})"
+
+
+def _render_icon(size: int, paint) -> QIcon:
+    """Draw a crisp (2x-supersampled) monochrome glyph via *paint(painter, px)*."""
+    scale = 2
+    pixmap = QPixmap(size * scale, size * scale)
+    pixmap.fill(Qt.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.Antialiasing, True)
+    paint(painter, size * scale)
+    painter.end()
+    pixmap.setDevicePixelRatio(scale)
+    return QIcon(pixmap)
+
+
+def _search_icon() -> QIcon:
+    def paint(p: QPainter, px: float) -> None:
+        pen = QPen(QColor(style.MUTED))
+        pen.setWidthF(px * 0.09)
+        p.setPen(pen)
+        radius = px * 0.26
+        cx, cy = px * 0.40, px * 0.40
+        p.drawEllipse(QPointF(cx, cy), radius, radius)
+        p.drawLine(QPointF(cx + radius * 0.72, cy + radius * 0.72), QPointF(px * 0.86, px * 0.86))
+
+    return _render_icon(14, paint)
+
+
+def _plus_icon() -> QIcon:
+    def paint(p: QPainter, px: float) -> None:
+        pen = QPen(QColor(style.ACCENT))
+        pen.setWidthF(px * 0.11)
+        pen.setCapStyle(Qt.RoundCap)
+        p.setPen(pen)
+        mid, arm = px * 0.5, px * 0.28
+        p.drawLine(QPointF(mid, mid - arm), QPointF(mid, mid + arm))
+        p.drawLine(QPointF(mid - arm, mid), QPointF(mid + arm, mid))
+
+    return _render_icon(14, paint)
 
 
 class _PopupInput(QLineEdit):
@@ -101,52 +159,131 @@ class _PopupInput(QLineEdit):
         super().focusOutEvent(event)
 
 
+class _SuggestionDelegate(QStyledItemDelegate):
+    """Paints a faint divider above group headers that follow another group,
+    so the "Other parameters" section reads as its own block."""
+
+    _GAP = 9  # extra top space carrying the divider, above a following header
+
+    @staticmethod
+    def _has_divider(index) -> bool:
+        return bool(index.data(AddParameterPopup._TIER_TOP_ROLE))
+
+    def sizeHint(self, option, index):
+        size = super().sizeHint(option, index)
+        if self._has_divider(index):
+            size.setHeight(size.height() + self._GAP)
+        return size
+
+    def paint(self, painter, option, index) -> None:
+        if not self._has_divider(index):
+            super().paint(painter, option, index)
+            return
+        rect = option.rect
+        painter.save()
+        painter.setPen(QPen(QColor("#eaecef")))
+        line_y = rect.top() + self._GAP // 2
+        painter.drawLine(rect.left() + 6, line_y, rect.right() - 6, line_y)
+        painter.restore()
+        shifted = QStyleOptionViewItem(option)
+        shifted.rect = QRect(
+            rect.left(), rect.top() + self._GAP, rect.width(), rect.height() - self._GAP
+        )
+        super().paint(painter, shifted, index)
+
+
 class AddParameterPopup(QWidget):
-    """Frameless popup offering BPX-alias suggestions plus a custom-add
-    fallback for a section."""
+    """Frameless popup listing the whole BPX standard for a section (suggested
+    fields highlighted) plus a pinned custom-add footer."""
 
     custom_parameter_requested = Signal(str)  # the chosen alias (suggested or typed)
 
     _ALIAS_ROLE = Qt.UserRole
-    #: Which tier a row belongs to -- "expected", "other" or "custom". Drives
-    #: the grey/highlighted visual distinction and lets tests assert tier
-    #: membership without depending on rendered colour.
+    #: Which tier a row belongs to -- "suggested", "other" or "header". Drives
+    #: the highlight/plain distinction and lets tests assert tier membership
+    #: without depending on rendered colour.
     _TIER_ROLE = Qt.UserRole + 1
+    #: Marks a header that should carry a divider line above it (i.e. a group
+    #: that follows another group).
+    _TIER_TOP_ROLE = Qt.UserRole + 2
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("AddParameterPopup")
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Tool)
+        self.setAttribute(Qt.WA_TranslucentBackground)
         self.setFocusPolicy(Qt.StrongFocus)
-        self.setFixedWidth(320)
+        self.setFixedWidth(_CARD_WIDTH + 2 * _SHADOW_MARGIN)
 
         self._existing_aliases: frozenset[str] = frozenset()
         self._expected_fields: tuple[ExpectedField, ...] = ()
-        #: The section's full expected-alias set (schema order, *not*
-        #: filtered for presence) -- excluded from the "other BPX alias" tier
-        #: so an expected field never appears twice under a different tier.
+        #: The section's full expected-alias set (schema order, *not* filtered
+        #: for presence) -- excluded from the "other" tier so a suggested field
+        #: never appears twice under a different group.
         self._expected_aliases: frozenset[str] = frozenset()
+        #: The currently typed text the footer would create, and whether that
+        #: footer is shown / keyboard-selected.
+        self._typed: str = ""
+        self._footer_shown: bool = False
+        self._footer_selected: bool = False
 
         self._input = _PopupInput()
+        self._input.setObjectName("AddParameterInput")
+        self._input.addAction(_search_icon(), QLineEdit.LeadingPosition)
         self._input.textChanged.connect(self._refresh_rows)
         self._input.move_requested.connect(self._move_selection)
         self._input.activate_requested.connect(self._activate)
         self._input.escape_requested.connect(self._on_escape)
         self._input.focus_lost.connect(self.hide)
 
-        self._hint_label = QLabel()
-        self._hint_label.setObjectName("AddParameterPopupHint")
-        self._hint_label.setWordWrap(True)
-        self._hint_label.hide()
-
         self._list = QListWidget()
+        self._list.setObjectName("AddParameterList")
         self._list.setFocusPolicy(Qt.NoFocus)
-        self._list.itemClicked.connect(self._activate)
+        # Long aliases elide with "…" rather than scrolling sideways -- a stray
+        # horizontal scrollbar would otherwise steal height and trigger a
+        # spurious vertical one under the content-hugging height.
+        self._list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._list.setTextElideMode(Qt.ElideRight)
+        self._list.setItemDelegate(_SuggestionDelegate(self._list))
+        self._list.itemClicked.connect(self._on_row_clicked)
 
-        layout = QVBoxLayout(self)
-        layout.addWidget(self._input)
-        layout.addWidget(self._hint_label)
-        layout.addWidget(self._list)
+        #: Thin rule separating the scrolling list from the pinned footer;
+        #: shown only alongside the footer.
+        self._divider = QFrame()
+        self._divider.setObjectName("AddParameterDivider")
+        self._divider.setFixedHeight(1)
+        self._divider.hide()
+
+        self._create_button = QPushButton()
+        self._create_button.setObjectName("AddParameterCreate")
+        self._create_button.setIcon(_plus_icon())
+        self._create_button.setFocusPolicy(Qt.NoFocus)
+        self._create_button.setCursor(Qt.PointingHandCursor)
+        self._create_button.clicked.connect(self._emit_custom)
+        self._create_button.hide()
+
+        card = QFrame()
+        card.setObjectName("AddParameterCard")
+        card.setFixedWidth(_CARD_WIDTH)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(8, 8, 8, 8)
+        card_layout.setSpacing(6)
+        card_layout.addWidget(self._input)
+        card_layout.addWidget(self._list)
+        card_layout.addWidget(self._divider)
+        card_layout.addWidget(self._create_button)
+
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(24)
+        shadow.setColor(QColor(15, 23, 42, 60))
+        shadow.setOffset(0, 5)
+        card.setGraphicsEffect(shadow)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(
+            _SHADOW_MARGIN, _SHADOW_MARGIN, _SHADOW_MARGIN, _SHADOW_MARGIN
+        )
+        outer.addWidget(card)
 
     # -- opening -----------------------------------------------------
     def open_for_section(
@@ -160,16 +297,14 @@ class AddParameterPopup(QWidget):
         """Show the popup under *anchor*, scoped to *section_label*.
 
         *existing_aliases* is the set of parameter labels already present in
-        the target section, so neither a suggestion nor the custom-add row
-        ever offers to silently overwrite one. *section_path*/*model* are
-        used to look up the section's schema-expected aliases via
-        :func:`core.bpx_gateway.expected_fields`; sections the schema cannot
-        resolve without content (e.g. the electrode single/blended union)
-        raise :class:`ValueError`, which degrades the *expected* tier to none.
-        That's caught tightly around the expected-set lookup only: the
-        "other BPX alias" tier is sourced from the full schema index
-        independently of section resolution, so it (and the custom-add row)
-        stay fully functional even for an unresolvable section.
+        the target section, so nothing ever offers to silently overwrite one.
+        *section_path*/*model* are used to look up the section's schema-expected
+        aliases via :func:`core.bpx_gateway.expected_fields`; sections the
+        schema cannot resolve without content (e.g. the electrode
+        single/blended union) raise :class:`ValueError`, which simply leaves
+        the *suggested* group empty. The full BPX standard (the "other" group)
+        is sourced from the schema index independently, so every section --
+        resolvable or not -- still lists all its addable parameters.
         """
         self._existing_aliases = frozenset(existing_aliases)
         try:
@@ -177,65 +312,69 @@ class AddParameterPopup(QWidget):
         except ValueError:
             self._expected_fields = ()
             self._expected_aliases = frozenset()
-            self._hint_label.setText(_NO_SUGGESTIONS_TEXT)
-            self._hint_label.show()
         else:
             self._expected_aliases = frozenset(field.alias for field in fields)
             self._expected_fields = tuple(
                 field for field in fields if field.alias not in self._existing_aliases
             )
-            self._hint_label.hide()
         self._input.setPlaceholderText(f"Add parameter to {section_label}…")
         self._input.clear()
         self._refresh_rows("")
         bottom_left = anchor.mapToGlobal(anchor.rect().bottomLeft())
-        self.move(bottom_left)
+        # Offset by the shadow margin so the visible card -- not the transparent
+        # padding -- aligns with the anchor's left edge, leaving a small gap.
+        self.move(bottom_left - QPoint(_SHADOW_MARGIN, 0))
         self.show()
+        # Row-height metrics are only reliable once shown/polished, so re-fit
+        # the list now that the first (empty-input) build is on screen.
+        self._resize_list()
         self._input.setFocus(Qt.PopupFocusReason)
 
     # -- rows --------------------------------------------------------
     def _refresh_rows(self, text: str) -> None:
-        """Rebuild the suggestion list for *text*.
+        """Rebuild the grouped list (and the footer) for *text*.
 
-        Empty input lists every expected-but-absent alias (the substring
-        needle is empty, so it matches everything). Non-empty input narrows
-        that expected tier and adds a second, de-emphasised tier of matching
-        BPX aliases the section doesn't expect, before the custom-add
-        fallback row (typed text only, per the existing coexistence rule).
+        Empty input lists the whole standard (the needle matches everything);
+        typing filters both groups by substring. The "Suggested" group is
+        omitted entirely when the section has no resolvable expected fields, so
+        such sections just show the full "other" list with no header.
         """
         self._list.clear()
         typed = text.strip()
         needle = typed.lower()
         shown_aliases: set[str] = set()
 
-        for candidate in self._expected_fields:
-            if needle in candidate.alias.lower():
-                self._list.addItem(
-                    self._make_row(
-                        candidate.alias, candidate.meta, "expected", required=candidate.required
-                    )
-                )
-                shown_aliases.add(candidate.alias)
+        suggested = [f for f in self._expected_fields if needle in f.alias.lower()]
+        others = self._other_matches(needle)
 
-        if typed:
-            for alias, meta in self._other_matches(needle):
+        if suggested:
+            self._list.addItem(self._make_header(_SUGGESTED_HEADER, divider=False))
+            for field in suggested:
+                self._list.addItem(
+                    self._make_row(field.alias, field.meta, "suggested", required=field.required)
+                )
+                shown_aliases.add(field.alias)
+
+        if others:
+            # Only head (and divide) the "other" group when a suggested group
+            # precedes it; on its own it needs no label.
+            if suggested:
+                self._list.addItem(self._make_header(_OTHER_HEADER, divider=True))
+            for alias, meta in others:
                 self._list.addItem(self._make_row(alias, meta, "other"))
                 shown_aliases.add(alias)
 
-        if typed and typed not in self._existing_aliases and typed not in shown_aliases:
-            item = QListWidgetItem(f"Create custom parameter: '{typed}'")
-            item.setData(self._ALIAS_ROLE, typed)
-            item.setData(self._TIER_ROLE, "custom")
-            self._list.addItem(item)
+        self._typed = typed
+        show_footer = bool(typed) and typed not in self._existing_aliases and typed not in shown_aliases
+        self._set_footer(show_footer)
 
-        if self._list.count():
-            self._list.setCurrentRow(0)
+        self._reset_selection()
         self._resize_list()
 
     def _other_matches(self, needle: str) -> list[tuple[str, FieldMeta]]:
-        """BPX aliases from the full schema index that match *needle* but
-        aren't expected for this section and aren't already present, in a
-        stable alphabetical order."""
+        """Every BPX alias from the full schema index that matches *needle* but
+        isn't expected for this section and isn't already present, in a stable
+        alphabetical order. With an empty needle this is the whole standard."""
         exclude = self._expected_aliases | self._existing_aliases
         matches = [
             (alias, meta)
@@ -249,22 +388,99 @@ class AddParameterPopup(QWidget):
         item = QListWidgetItem(_suggestion_text(alias, meta, required))
         item.setData(self._ALIAS_ROLE, alias)
         item.setData(self._TIER_ROLE, tier)
-        if tier == "other":
-            item.setForeground(QColor(style.MUTED))
+        if tier == "suggested":
+            item.setForeground(QColor(style.ACCENT))
+            font = QFont(self._list.font())
+            font.setBold(True)
+            item.setFont(font)
         return item
 
+    def _make_header(self, text: str, divider: bool) -> QListWidgetItem:
+        """A small, uppercase, non-selectable group label."""
+        item = QListWidgetItem(text)
+        item.setFlags(Qt.ItemIsEnabled)  # visible, but never selected/activated
+        item.setData(self._TIER_ROLE, "header")
+        item.setForeground(QColor(style.MUTED))
+        font = QFont(self._list.font())
+        size = font.pointSizeF()
+        if size > 0:
+            font.setPointSizeF(size * 0.82)
+        font.setBold(True)
+        font.setCapitalization(QFont.AllUppercase)
+        font.setLetterSpacing(QFont.PercentageSpacing, 106)
+        item.setFont(font)
+        if divider:
+            item.setData(self._TIER_TOP_ROLE, True)
+        return item
+
+    def _set_footer(self, show: bool) -> None:
+        """Show/hide the pinned custom-add footer (and its divider) and keep
+        its label in step with the typed text."""
+        self._footer_shown = show
+        self._divider.setVisible(show)
+        self._create_button.setVisible(show)
+        if show:
+            self._create_button.setText(f"  Create custom parameter “{self._typed}”")
+
     def _resize_list(self) -> None:
-        """Cap the list's visible height so it scrolls natively instead of
-        growing the popup past a sensible size (or off-screen)."""
+        """Size the list to hug its content -- no dead space, no premature
+        scrollbar -- but cap it at ``_MAX_VISIBLE_ROWS`` so it scrolls natively
+        instead of growing the popup off-screen."""
         count = self._list.count()
         if count == 0:
-            self._list.setMaximumHeight(0)
+            self._list.setFixedHeight(0)
             return
-        row_height = self._list.sizeHintForRow(0)
-        rows = min(count, _MAX_VISIBLE_ROWS)
-        self._list.setMaximumHeight(row_height * rows + 2 * self._list.frameWidth())
+        frame = 2 * self._list.frameWidth()
+        heights = [self._list.sizeHintForRow(i) for i in range(count)]
+        if count > _MAX_VISIBLE_ROWS:
+            self._list.setFixedHeight(sum(heights[:_MAX_VISIBLE_ROWS]) + frame)
+        else:
+            self._list.setFixedHeight(sum(heights) + frame)
+
+    # -- selection / activation --------------------------------------
+    def _selectable_rows(self) -> list[int]:
+        """Row indices the keyboard/mouse may land on -- i.e. real parameter
+        rows, skipping the non-selectable group headers."""
+        return [
+            i
+            for i in range(self._list.count())
+            if self._list.item(i).flags() & Qt.ItemIsSelectable
+        ]
+
+    def _reset_selection(self) -> None:
+        """Pick the default highlight after a rebuild: the first real row if
+        any, else the footer, so Enter always has an obvious target."""
+        rows = self._selectable_rows()
+        if rows:
+            self._select_footer(False)
+            self._list.setCurrentRow(rows[0])
+        elif self._footer_shown:
+            self._select_footer(True)
+        else:
+            self._select_footer(False)
+            self._list.setCurrentRow(-1)
+
+    def _select_footer(self, on: bool) -> None:
+        """Move the keyboard highlight onto (or off) the pinned footer,
+        restyling it and clearing the list's own selection so only one row
+        ever looks active."""
+        self._footer_selected = on and self._footer_shown
+        self._create_button.setProperty("selected", self._footer_selected)
+        self._create_button.style().unpolish(self._create_button)
+        self._create_button.style().polish(self._create_button)
+        if self._footer_selected:
+            self._list.setCurrentRow(-1)
+
+    def _on_row_clicked(self, item: QListWidgetItem) -> None:
+        if not (item.flags() & Qt.ItemIsSelectable):
+            return  # a group header -- not actionable
+        self._list.setCurrentItem(item)
+        self._activate()
 
     def _activate(self, *_args) -> None:
+        if self._footer_selected and self._footer_shown:
+            self._emit_custom()
+            return
         item = self._list.currentItem()
         if item is None:
             return
@@ -274,13 +490,32 @@ class AddParameterPopup(QWidget):
         self.hide()
         self.custom_parameter_requested.emit(alias)
 
+    def _emit_custom(self, *_args) -> None:
+        if not self._typed:
+            return
+        self.hide()
+        self.custom_parameter_requested.emit(self._typed)
+
     # -- keyboard ------------------------------------------------------
     def _move_selection(self, delta: int) -> None:
-        count = self._list.count()
-        if not count:
+        """Cycle the highlight through the real rows (skipping headers) and, as
+        the final entry, the pinned footer -- so the whole surface is
+        keyboard-reachable even though headers and the footer aren't rows."""
+        rows = self._selectable_rows()
+        total = len(rows) + (1 if self._footer_shown else 0)
+        if not total:
             return
-        row = (self._list.currentRow() + delta) % count
-        self._list.setCurrentRow(row)
+        if self._footer_selected:
+            current = len(rows)
+        else:
+            cur_row = self._list.currentRow()
+            current = rows.index(cur_row) if cur_row in rows else 0
+        new = (current + delta) % total
+        if self._footer_shown and new == len(rows):
+            self._select_footer(True)
+        else:
+            self._select_footer(False)
+            self._list.setCurrentRow(rows[new])
 
     def _on_escape(self) -> None:
         """Staged Escape: clear typed text first, then close the popup."""

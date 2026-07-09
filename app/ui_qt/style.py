@@ -50,4 +50,43 @@ QToolButton#SecondaryTab:checked {
 }
 QListWidget#IssuesList { border: none; background: #ffffff; font-size: 12px; }
 QLabel#IssuesPlaceholder { color: #57606a; font-size: 12px; padding: 16px; }
+
+/* Add-parameter popup: a floating "command palette" surface. The frameless
+   top-level is translucent; this rounded card carries the visible chrome so
+   it reads like Raycast/Linear/VS Code Quick Open rather than a raw widget. */
+QFrame#AddParameterCard {
+    background: #ffffff;
+    border: 1px solid #d0d7de;
+    border-radius: 10px;
+}
+QLineEdit#AddParameterInput {
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+    padding: 6px 8px;
+    background: #ffffff;
+    selection-background-color: #ddeeff;
+}
+QLineEdit#AddParameterInput:focus { border: 1px solid #1f6feb; }
+QLabel#AddParameterPopupHint { color: #57606a; padding: 2px 4px 4px 4px; }
+QListWidget#AddParameterList {
+    border: none;
+    background: transparent;
+    outline: none;
+}
+QListWidget#AddParameterList::item { padding: 6px 8px; border-radius: 6px; }
+QListWidget#AddParameterList::item:selected { background: #ddeeff; color: #1f2328; }
+QFrame#AddParameterDivider { background: #eaecef; border: none; }
+/* The pinned "Create custom parameter" action -- accent-tinted escape hatch,
+   highlighted the same way as a selected row when keyboard focus reaches it. */
+QPushButton#AddParameterCreate {
+    text-align: left;
+    padding: 8px 10px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: #1f6feb;
+    font-weight: 500;
+}
+QPushButton#AddParameterCreate:hover { background: #eaf2ff; }
+QPushButton#AddParameterCreate[selected="true"] { background: #ddeeff; }
 """
