@@ -18,6 +18,110 @@ pytest.importorskip("PySide6")
 
 _MODEL = ("Header", "Model")
 _CAPACITY = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
+_TIME_SERIES = ("Validation", "C/20 discharge", "Time [s]")
+
+
+# ---------------------------------------------------------------------------
+# Series grid: edit a cell -> validation reacts -> undo restores, end to end
+# ---------------------------------------------------------------------------
+
+def test_series_grid_edit_validation_and_undo(app_driver, spm_with_validation_path):
+    d = app_driver
+    d.open(spm_with_validation_path)
+    assert d.validation_issue_count() == 0
+
+    d.go_to(_TIME_SERIES)
+    assert d.editor_kind() == "SeriesCard"
+    assert d.grid_values() == [[0], [100], [200]]
+    assert d.validity() == "Valid"
+
+    # A non-numeric cell is committed verbatim and the validator rejects it.
+    d.set_grid_cell(1, 0, "oops").commit_grid()
+    assert d.grid_values() == [[0], ["oops"], [200]]
+    assert d.validity() == "Invalid"
+
+    # Undo restores the array and returns to it.
+    d.undo()
+    assert d.grid_values() == [[0], [100], [200]]
+    assert d.validity() == "Valid"
+
+
+def test_series_grid_add_row_commits_a_null_cell(app_driver, spm_with_validation_path):
+    """Adding a row must commit an honest null, never a fabricated 0."""
+    d = app_driver
+    d.open(spm_with_validation_path).go_to(_TIME_SERIES)
+
+    d.add_grid_row().commit_grid()
+
+    assert d.grid_values() == [[0], [100], [200], [None]]
+    assert d.validity() == "Invalid"  # a null is not a valid number
+
+
+def test_series_grid_escape_reverts_the_draft(app_driver, spm_with_validation_path):
+    """Escape on the grid restores the committed rows and commits nothing."""
+    d = app_driver
+    d.open(spm_with_validation_path).go_to(_TIME_SERIES)
+
+    d.set_grid_cell(0, 0, "999")
+    assert d.grid_values() == [[999], [100], [200]]
+
+    d.revert_grid()
+
+    assert d.grid_values() == [[0], [100], [200]]
+    assert d.validity() == "Valid"
+    assert d.undo_enabled() is False  # nothing was committed
+
+
+def test_series_grid_remove_row_commits(app_driver, spm_with_validation_path):
+    d = app_driver
+    d.open(spm_with_validation_path).go_to(_TIME_SERIES)
+
+    d.remove_grid_row(1).commit_grid()
+
+    assert d.grid_values() == [[0], [200]]
+    assert d.undo_enabled() is True
+
+
+def test_enter_inside_a_cell_editor_confirms_the_cell_not_the_document(
+    app_driver, spm_with_validation_path
+):
+    """The two keyboard layers must not collide: Enter in an open cell editor
+    confirms that cell (Qt's delegate) and must NOT commit the document."""
+    d = app_driver
+    d.open(spm_with_validation_path).go_to(_TIME_SERIES)
+
+    d.open_grid_cell_editor(0, 0)
+    assert d.grid_cell_editor_open() is True
+
+    from PySide6.QtCore import Qt
+
+    d.press_in_cell_editor(Qt.Key_Return)
+
+    # The cell editor closed and confirmed its draft into the grid ...
+    assert d.grid_cell_editor_open() is False
+    assert d.grid_values()[0] == [1]  # the digit typed to open the editor
+    # ... but nothing was committed to the document.
+    assert d.undo_enabled() is False
+
+
+def test_escape_inside_a_cell_editor_cancels_the_cell_not_the_card(
+    app_driver, spm_with_validation_path
+):
+    """Escape in an open cell editor cancels that cell only; a separate draft in
+    another cell survives (it does not reach the card's grid-level revert)."""
+    d = app_driver
+    d.open(spm_with_validation_path).go_to(_TIME_SERIES)
+
+    d.set_grid_cell(1, 0, "555")  # a standing draft in another cell
+    d.open_grid_cell_editor(0, 0)
+    assert d.grid_cell_editor_open() is True
+
+    from PySide6.QtCore import Qt
+
+    d.press_in_cell_editor(Qt.Key_Escape)
+
+    assert d.grid_cell_editor_open() is False
+    assert d.grid_values() == [[0], [555], [200]]  # cell 0 unchanged, 1 kept
 
 
 # ---------------------------------------------------------------------------

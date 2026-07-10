@@ -1,0 +1,216 @@
+"""``NumericGrid``: the tabular editor shared by series and interpolated tables.
+
+A ``QTableView`` over a small ``QAbstractTableModel`` rather than a
+``QTableWidget``: a validation experiment's arrays run to thousands of rows, and
+a per-cell widget tree would be paid for on every one of them.
+
+**Cells hold objects, not floats.** A cell the user types ``oops`` into keeps
+the string ``"oops"``; an empty cell is ``None``. ``values()`` returns those
+objects verbatim. This is the same contract every other card honours: the card
+emits raw input and never judges validity, and the BPX validator reports the
+type error. A bad cell is *never* coerced to ``0``, and a blank one is never
+coerced to ``""`` -- either would silently invent data.
+
+**Keyboard.** Enter and Escape mean different things depending on where they
+land, and the two layers do not collide:
+
+- inside an open cell editor, Qt's delegate consumes them: Enter confirms the
+  cell, Escape cancels it. Neither reaches the card;
+- on the grid itself, they are the app-wide contract from
+  :class:`~.base.EditorCard`: Enter commits the draft to the document, Escape
+  reverts it.
+
+The load-bearing mechanism for the grid-level case is the card's event filter
+on the view (installed by ``SeriesCard`` via ``_install_keyboard_handler``): it
+consumes Return and Escape before the view acts on them. ``EditKeyPressed`` is
+additionally left out of the view's edit triggers, so even without that filter
+Enter would not open a cell editor -- belt and suspenders, not the guard itself.
+Typing a character still opens an editor (``AnyKeyPressed``), as does a
+double-click, which is how a cell is edited.
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, Signal
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QHBoxLayout,
+    QHeaderView,
+    QTableView,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
+)
+
+from .values import format_value, parse_value, values_equal
+
+#: Rows shown before the grid scrolls. The grid keeps this height whatever it
+#: holds, so adding a row never reflows the Inspector around it.
+VISIBLE_ROWS = 8
+
+
+class _GridModel(QAbstractTableModel):
+    """Rows of raw cell objects behind a fixed set of columns."""
+
+    def __init__(self, headers: tuple[str, ...], parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._headers = tuple(headers)
+        self._rows: list[list[object]] = []
+
+    # --- Qt model interface -------------------------------------------
+    def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:  # noqa: N802
+        return 0 if parent.isValid() else len(self._rows)
+
+    def columnCount(self, parent: QModelIndex = QModelIndex()) -> int:  # noqa: N802
+        return 0 if parent.isValid() else len(self._headers)
+
+    def data(self, index: QModelIndex, role: int = Qt.DisplayRole):
+        if not index.isValid():
+            return None
+        if role in (Qt.DisplayRole, Qt.EditRole):
+            return format_value(self._rows[index.row()][index.column()])
+        if role == Qt.TextAlignmentRole:
+            return int(Qt.AlignRight | Qt.AlignVCenter)
+        return None
+
+    def setData(self, index: QModelIndex, value, role: int = Qt.EditRole) -> bool:  # noqa: N802
+        """Store the typed text as a raw object, never as a coerced number."""
+        if not index.isValid() or role != Qt.EditRole:
+            return False
+        parsed = parse_value(str(value))
+        current = self._rows[index.row()][index.column()]
+        if values_equal(parsed, current):
+            return False  # a no-op re-type is not a change
+        self._rows[index.row()][index.column()] = parsed
+        self.dataChanged.emit(index, index, [Qt.DisplayRole, Qt.EditRole])
+        return True
+
+    def flags(self, index: QModelIndex) -> Qt.ItemFlags:
+        if not index.isValid():
+            return Qt.NoItemFlags
+        return Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable
+
+    def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.DisplayRole):  # noqa: N802
+        if role != Qt.DisplayRole:
+            return None
+        if orientation == Qt.Horizontal:
+            return self._headers[section]
+        return str(section + 1)  # 1-based row-number gutter
+
+    # --- content ------------------------------------------------------
+    def rows(self) -> list[list[object]]:
+        return [list(row) for row in self._rows]
+
+    def set_rows(self, rows) -> None:
+        self.beginResetModel()
+        self._rows = [list(row) for row in rows]
+        self.endResetModel()
+
+    def insert_row(self, at: int) -> None:
+        self.beginInsertRows(QModelIndex(), at, at)
+        self._rows.insert(at, [None] * len(self._headers))
+        self.endInsertRows()
+
+    def remove_row(self, at: int) -> None:
+        self.beginRemoveRows(QModelIndex(), at, at)
+        del self._rows[at]
+        self.endRemoveRows()
+
+
+class NumericGrid(QWidget):
+    """A compact, scrolling table of raw cell values with add/remove row."""
+
+    #: Emitted on a user edit: a cell changed, or a row was added or removed.
+    #: Deliberately *not* emitted by :meth:`set_values`, which seeds or restores
+    #: the grid -- a card populates its editor before wiring the change signal,
+    #: so seeding must never mark the card touched (see ``EditorCard``).
+    changed = Signal()
+
+    def __init__(self, headers: tuple[str, ...], parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._model = _GridModel(headers, self)
+
+        self._view = QTableView()
+        self._view.setModel(self._model)
+        self._view.setSelectionMode(QAbstractItemView.SingleSelection)
+        self._view.setSelectionBehavior(QAbstractItemView.SelectItems)
+        self._view.setEditTriggers(
+            QAbstractItemView.DoubleClicked
+            | QAbstractItemView.SelectedClicked
+            | QAbstractItemView.AnyKeyPressed
+        )
+        self._view.setCornerButtonEnabled(False)
+        self._view.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self._view.setFixedHeight(self._compact_height())
+
+        self._add_button = self._row_button("+", "Add row", self.insert_row)
+        self._remove_button = self._row_button("−", "Remove row", self.remove_row)
+
+        buttons = QHBoxLayout()
+        buttons.setContentsMargins(0, 0, 0, 0)
+        buttons.addWidget(self._add_button)
+        buttons.addWidget(self._remove_button)
+        buttons.addStretch(1)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._view)
+        layout.addLayout(buttons)
+
+        self._model.dataChanged.connect(lambda *_: self.changed.emit())
+        self._model.rowsInserted.connect(lambda *_: self.changed.emit())
+        self._model.rowsRemoved.connect(lambda *_: self.changed.emit())
+        self._model.modelReset.connect(self._refresh_buttons)
+        self.changed.connect(self._refresh_buttons)
+        self._refresh_buttons()
+
+    def _row_button(self, text: str, tooltip: str, slot) -> QToolButton:
+        button = QToolButton()
+        button.setText(text)
+        button.setToolTip(tooltip)
+        button.setAccessibleName(tooltip)
+        button.setAutoRaise(True)
+        button.clicked.connect(slot)
+        return button
+
+    def _compact_height(self) -> int:
+        header = self._view.horizontalHeader().sizeHint().height()
+        row = self._view.verticalHeader().defaultSectionSize()
+        return header + row * VISIBLE_ROWS + 2 * self._view.frameWidth()
+
+    def _refresh_buttons(self) -> None:
+        """Greying an inapplicable action is the app's convention; hiding is for
+        unbuilt ones. With no rows there is nothing to remove."""
+        self._remove_button.setEnabled(self.row_count > 0)
+
+    # --- API ----------------------------------------------------------
+    @property
+    def row_count(self) -> int:
+        return self._model.rowCount()
+
+    def focus_widget(self) -> QWidget:
+        """The widget that takes keyboard focus, for the card's key handler."""
+        return self._view
+
+    def values(self) -> list[list[object]]:
+        """Every row's cells, verbatim: ``int``, ``float``, ``str`` or ``None``."""
+        return self._model.rows()
+
+    def set_values(self, rows) -> None:
+        """Replace the contents. Does not emit ``changed`` (see the signal)."""
+        self._model.set_rows(rows)
+
+    def insert_row(self) -> None:
+        """Add an empty row below the current one, or at the end."""
+        index = self._view.currentIndex()
+        at = index.row() + 1 if index.isValid() else self.row_count
+        self._model.insert_row(at)
+        self._view.setCurrentIndex(self._model.index(at, 0))
+
+    def remove_row(self) -> None:
+        """Remove the current row, or the last one when nothing is selected."""
+        if not self.row_count:
+            return
+        index = self._view.currentIndex()
+        at = index.row() if index.isValid() else self.row_count - 1
+        self._model.remove_row(at)

@@ -18,42 +18,32 @@ from __future__ import annotations
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit
 
 from .base import EditorCard
+from .values import format_value, parse_value
 
 
 class FunctionCard(EditorCard):
     """Edits a function-expression value via a free-text field.
 
-    ``value()`` mirrors :class:`~.scalar.ScalarCard`: if the committed text
-    parses as a plain number the result is a ``float`` (or ``int``), allowing
-    a seamless transition back to the scalar editor on the next document
-    rebuild.  Otherwise the raw string is returned and validation reports any
-    type error.
+    ``value()`` uses the shared lenient convention (``cards.values``): if the
+    committed text parses as a plain number the result is a ``float`` (or
+    ``int``), allowing a seamless transition back to the scalar editor on the
+    next document rebuild.  Otherwise the raw string is returned -- an
+    expression, or simply wrong text -- and validation reports any type error.
     """
 
     def __init__(self, parameter, meta) -> None:
         super().__init__(parameter, meta)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        self._edit = QLineEdit(self._format(self._original))
+        self._edit = QLineEdit(format_value(self._original))
         self._edit.textChanged.connect(lambda *_: self.draft_changed.emit())
         layout.addWidget(self._edit, 1)
         if parameter.unit:
             layout.addWidget(QLabel(parameter.unit))
         self._install_keyboard_handler(self._edit)
 
-    @staticmethod
-    def _format(value: object) -> str:
-        return "" if value is None else str(value)
-
     def value(self) -> object:
-        text = self._edit.text().strip()
-        if not text:
-            return None  # honest "no value", matching what AddParameter writes
-        try:
-            number = float(text)
-        except ValueError:
-            return text  # expression string or invalid text — let validation decide
-        return int(number) if number.is_integer() and "." not in text else number
+        return parse_value(self._edit.text())
 
     def reset(self) -> None:
-        self._edit.setText(self._format(self._original))
+        self._edit.setText(format_value(self._original))

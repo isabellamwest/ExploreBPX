@@ -20,7 +20,7 @@ from PySide6.QtWidgets import QApplication
 from core.bpx_gateway import FieldMeta
 from core.parameter_types import ParameterKind, classify
 from core.tree_model import ParameterItem
-from ui_qt.cards.base import _values_equal
+from ui_qt.cards.values import values_equal
 from ui_qt.cards.registry import create_card
 
 
@@ -200,11 +200,11 @@ def test_known_alias_with_none_value_opens_proper_editor_end_to_end():
 
 
 # ---------------------------------------------------------------------------
-# Registry routing for the declared TEXT/BOOLEAN kinds, and interim card
-# shims for the still-unbuilt kinds (SERIES, MAP) and the FUNCTION/MAP
-# value-dependent dispatch -- see docs/03-features.md §4 "Input system".
-# These lock today's stand-in behaviour so a later real card (Phase 4/5) is
-# a deliberate, visible change rather than a silent one.
+# Registry routing for the declared TEXT/BOOLEAN/SERIES kinds, the interim card
+# shim for the still-unbuilt MAP kind, and the FUNCTION/MAP value-dependent
+# dispatch -- see docs/03-features.md §4 "Input system". These lock today's
+# behaviour so a later real card (Phase 4c/5) is a deliberate, visible change
+# rather than a silent one.
 # ---------------------------------------------------------------------------
 
 
@@ -226,16 +226,16 @@ def test_boolean_kind_uses_boolean_card():
     assert card.is_editable
 
 
-def test_series_kind_falls_back_to_read_only():
-    """SERIES has no editor yet; it stays read-only (Phase 4 covers series
-    grids)."""
+def test_series_kind_uses_series_card():
+    """SERIES now has a real grid editor (Phase 4b); see test_series_card.py
+    for its behaviour and for the unrepresentable-value fallback."""
     _app()
     param = ParameterItem(
         label="P", path=("Validation", "run", "Time [s]"), kind=ParameterKind.SERIES, value=[0, 1]
     )
     card = create_card(param, None)
-    assert type(card).__name__ == "ReadOnlyCard"
-    assert card.is_editable is False
+    assert type(card).__name__ == "SeriesCard"
+    assert card.is_editable
 
 
 def test_function_kind_with_dict_value_falls_back_to_read_only():
@@ -339,10 +339,10 @@ def test_is_dirty_true_for_float_typed_over_an_int_original():
 def test_values_equal_distinguishes_json_types():
     """``5 == 5.0`` and ``True == 1`` in Python, but each pair has a different
     JSON representation, so the dirty-check's equality must separate them."""
-    assert _values_equal(5.0, 5.0) is True
-    assert _values_equal(5, 5.0) is False
-    assert _values_equal(True, 1) is False
-    assert _values_equal(None, "") is False
+    assert values_equal(5.0, 5.0) is True
+    assert values_equal(5, 5.0) is False
+    assert values_equal(True, 1) is False
+    assert values_equal(None, "") is False
 
 
 def test_untouched_card_is_never_dirty_even_when_it_cannot_render_the_original():

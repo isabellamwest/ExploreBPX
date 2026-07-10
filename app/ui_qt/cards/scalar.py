@@ -5,6 +5,7 @@ from __future__ import annotations
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit
 
 from .base import EditorCard
+from .values import format_value, parse_value
 
 
 class ScalarCard(EditorCard):
@@ -14,26 +15,15 @@ class ScalarCard(EditorCard):
         super().__init__(parameter, meta)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        self._edit = QLineEdit(self._format(self._original))
+        self._edit = QLineEdit(format_value(self._original))
         self._edit.textChanged.connect(lambda *_: self.draft_changed.emit())
         layout.addWidget(self._edit, 1)
         if parameter.unit:
             layout.addWidget(QLabel(parameter.unit))
         self._install_keyboard_handler(self._edit)
 
-    @staticmethod
-    def _format(value: object) -> str:
-        return "" if value is None else str(value)
-
     def value(self) -> object:
-        text = self._edit.text().strip()
-        if not text:
-            return None  # honest "no value", matching what AddParameter writes
-        try:
-            number = float(text)
-        except ValueError:
-            return text  # let the backend report a type error
-        return int(number) if number.is_integer() and "." not in text else number
+        return parse_value(self._edit.text())
 
     def reset(self) -> None:
-        self._edit.setText(self._format(self._original))
+        self._edit.setText(format_value(self._original))

@@ -254,6 +254,13 @@ undoes the document; selection survives an undo.
 **Goal.** Experiment arrays (`Time [s]`, `Current [A]`, `Voltage [V]`,
 `Temperature [K]`) become editable. Build the grid the mode strip will reuse.
 
+**Invariant (4b + 4c).** Grid and mode-body editors stay **detached** from
+`document.raw`: copy values in via `set_values()`/`set_value()`, emit out via
+`values()`/`value()`, commit only through `apply_value`. Never hold or mutate a live
+list/dict from the document — undo correctness already requires this, and it keeps
+every mutation attachable at the single choke point (future per-value provenance /
+staged-proposal apply depend on that).
+
 **New: `app/ui_qt/cards/grid.py` — `NumericGrid(QWidget)`**
 - `QTableView` + a small `QAbstractTableModel`. **Not `QTableWidget`** — validation
   series run to thousands of rows.
@@ -425,6 +432,10 @@ are the containers; keep creation of *parameters* in the `+ Add parameter` heade
 - Renaming a `Particle` invalidates any `dict[str, FloatInt]` MAP keyed by the old
   name. Decide then: rename-with-cascade, or let the validator report it (**default:
   let the validator report it**, consistent with F).
+- `RenameKey` moves the **address** (alias-path tuple) of every descendant of the
+  renamed node. Any future address-keyed sidecar metadata (e.g. per-value provenance)
+  must cascade on rename — record that requirement when designing `RenameKey`, even
+  though no sidecar exists yet.
 
 **Known blocker to check first:** `bpx_gateway.expected_fields()` raises `ValueError`
 for the electrode sections (the single/blended union needs live content). `Add section ▸`

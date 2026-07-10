@@ -46,6 +46,32 @@ def valid_spm_dict() -> dict:
 
 
 @pytest.fixture
+def spm_with_validation_path(valid_spm_dict, tmp_path) -> Path:
+    """A valid SPM document with a Validation experiment (four SERIES arrays).
+
+    The tracked SPM example has no Validation section, and every NMC/LFP example
+    with one fails validation on unrelated moved-field errors that short-circuit
+    the validator before it reaches the arrays. A SeriesCard test needs a
+    document that is *valid* and *has* a series, so it can prove that editing a
+    cell is what turns the badge invalid.
+    """
+    import json
+
+    doc = dict(valid_spm_dict)
+    doc["Validation"] = {
+        "C/20 discharge": {
+            "Time [s]": [0, 100, 200],
+            "Current [A]": [-0.6, -0.6, -0.6],
+            "Voltage [V]": [4.1, 4.0, 3.9],
+            "Temperature [K]": [298.15, 298.15, 298.15],
+        }
+    }
+    work = tmp_path / "spm_with_validation.json"
+    work.write_text(json.dumps(doc), encoding="utf-8")
+    return work
+
+
+@pytest.fixture
 def invalid_bpx_path() -> Path:
     """An example file that opens successfully but fails BPX validation."""
     return EXAMPLES_DIR / "invalid_blended_state_mismatch.json"

@@ -25,7 +25,7 @@ A card's rendering of its value is not injective -- ``TextCard`` renders both
 ``None`` and ``""`` as an empty box -- so a stored ``null`` would otherwise
 look like an edit to ``""`` the instant the card was built, and a bare Enter
 would silently rewrite the document. Requiring a real interaction first, then
-comparing values, keeps both halves honest (see ``_values_equal``).
+comparing values, keeps both halves honest (see ``values.values_equal``).
 """
 
 from __future__ import annotations
@@ -36,18 +36,7 @@ from PySide6.QtWidgets import QWidget
 from core.bpx_gateway import FieldMeta
 from core.tree_model import ParameterItem
 
-
-def _values_equal(a: object, b: object) -> bool:
-    """Type-aware equality for dirty-checking a draft against its original.
-
-    Python's bare ``==`` considers ``5 == 5.0`` and ``True == 1`` to be True,
-    but their JSON representations differ (``5`` vs ``5.0``, ``true`` vs
-    ``1``). Using a bare ``==`` for dirty-checking would therefore treat a
-    real, kind-changing edit (typing ``5.0`` over a stored ``5``) as a no-op
-    and silently skip the commit. Equality here requires the runtime types to
-    match exactly as well as the values comparing equal.
-    """
-    return type(a) is type(b) and a == b
+from .values import values_equal
 
 
 class EditorCard(QWidget):
@@ -108,7 +97,7 @@ class EditorCard(QWidget):
         Once touched, the draft still has to *differ* from the original, so
         typing a value and retyping the same value again commits nothing.
         """
-        return self._touched and not _values_equal(self.value(), self._original)
+        return self._touched and not values_equal(self.value(), self._original)
 
     # ------------------------------------------------------------------
     # Keyboard handling helpers

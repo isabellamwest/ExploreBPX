@@ -275,7 +275,8 @@ repaired in place.
 | Text editing (auto-growing, Shift+Enter newline, pattern hint) | Planned |
 | Boolean editing (toggle) | Planned |
 | Per-material map editing (keys seeded from sibling Particle names) | Planned |
-| Series/table inline grids with expanded in-place editor, paste and CSV import | Planned |
+| Series inline grid (raw-object cells, add/remove row, no coercion) | Implemented |
+| Table inline grid, expanded in-place editor, paste and CSV import | Planned |
 | Remove parameter (row context menu) | Planned |
 | Section add/remove controls | Planned |
 | Tree editing (add/remove sections; add/rename/remove materials and experiments) | Planned |
@@ -354,6 +355,18 @@ the same stack as adding or removing a parameter. A card's architectural contrac
 is fixed: it edits one `ParameterItem`, emits raw input, and does not decide
 validity. See the Editing and Command architecture in
 [01-architecture.md](01-architecture.md).
+
+**Grid cards (`SeriesCard`, and later interpolated tables) hold raw objects, not
+numbers.** `NumericGrid` is a `QTableView` over a small table model whose cells
+are the same lenient values the line editors emit (`cards/values.py`): a typed
+`oops` stays the string `"oops"`, a blank cell is `None`, and neither is ever
+coerced — the validator reports the type error. The registry keeps a card
+read-only only when the stored value has *no* grid representation at all (a
+dict, a nested list, or a `bool`, which would round-trip as `"True"`); a
+`None`-valued or `None`-celled series is representable, because the grid
+produces exactly those. Enter and Escape layer without colliding: inside an open
+cell editor they are Qt's cell confirm/cancel; on the grid itself they are the
+app-wide commit/revert.
 
 **Undo restores the selection too.** Each undo entry stores the document *and*
 the selection that was current when the command ran, so undo navigates to the

@@ -501,6 +501,98 @@ class AppDriver:
         return index.isValid() and view.isExpanded(index)
 
     # ------------------------------------------------------------------
+    # Grid cards (SeriesCard, and later interpolated tables)
+    # ------------------------------------------------------------------
+
+    def grid_values(self) -> list[list[object]]:
+        """Every row of the active card's grid, as raw cell objects."""
+        return self._grid().values()
+
+    def set_grid_cell(self, row: int, column: int, text) -> "AppDriver":
+        """Type *text* into one grid cell (what the cell delegate commits).
+
+        Drives the model's ``setData`` -- the same entry point the cell editor
+        uses on confirm -- so the lenient parse and no-coercion contract are
+        exercised without opening a per-cell editor widget.
+        """
+        from PySide6.QtCore import Qt
+
+        grid = self._grid()
+        grid._model.setData(grid._model.index(row, column), str(text), Qt.EditRole)
+        return self
+
+    def add_grid_row(self) -> "AppDriver":
+        self._grid().insert_row()
+        return self
+
+    def remove_grid_row(self, row: int | None = None) -> "AppDriver":
+        grid = self._grid()
+        if row is not None:
+            grid._view.setCurrentIndex(grid._model.index(row, 0))
+        grid.remove_row()
+        return self
+
+    def open_grid_cell_editor(self, row: int, column: int) -> "AppDriver":
+        """Open the real per-cell editor widget for one grid cell.
+
+        Types a digit into the cell -- the ``AnyKeyPressed`` trigger -- so the
+        delegate opens its ``QLineEdit``, exactly as a user editing a cell does.
+        The window is shown first: an item delegate opens and commits its editor
+        against a live view, and in an unshown window it never leaves the edit
+        state. Use with :meth:`press_in_cell_editor` to exercise the cell-level
+        (vs grid-level) Enter/Escape layer.
+        """
+        from PySide6.QtCore import Qt
+
+        grid = self._grid()
+        view = grid.focus_widget()
+        self._w.show()
+        view.setFocus()
+        view.setCurrentIndex(grid._model.index(row, column))
+        self._qtbot.keyClick(view, Qt.Key_1)
+        return self
+
+    def grid_cell_editor_open(self) -> bool:
+        from PySide6.QtWidgets import QAbstractItemView
+
+        return self._grid().focus_widget().state() == QAbstractItemView.State.EditingState
+
+    def press_in_cell_editor(self, key) -> "AppDriver":
+        """Send a key to the open cell editor widget (not the grid).
+
+        Waits for Qt to deliver the delegate's commit/close after the key, so
+        the caller observes the settled state rather than a mid-transition one.
+        """
+        from PySide6.QtWidgets import QLineEdit
+
+        editor = self._grid().focus_widget().findChild(QLineEdit)
+        assert editor is not None, "No cell editor is open."
+        self._qtbot.keyClick(editor, key)
+        self._qtbot.wait(10)
+        return self
+
+    def commit_grid(self) -> "AppDriver":
+        """Press Enter on the grid itself to commit the draft to the document."""
+        from PySide6.QtCore import Qt
+
+        self._qtbot.keyClick(self._grid().focus_widget(), Qt.Key_Return)
+        return self
+
+    def revert_grid(self) -> "AppDriver":
+        """Press Escape on the grid itself to discard the draft."""
+        from PySide6.QtCore import Qt
+
+        self._qtbot.keyClick(self._grid().focus_widget(), Qt.Key_Escape)
+        return self
+
+    def _grid(self):
+        card = self._w._inspector._card
+        assert card is not None, "No active card; navigate to a parameter first."
+        grid = getattr(card._editor, "_grid", None)
+        assert grid is not None, f"Card {type(card._editor).__name__} has no grid."
+        return grid
+
+    # ------------------------------------------------------------------
     # Internals -- the one place that knows card widget structure
     # ------------------------------------------------------------------
 
