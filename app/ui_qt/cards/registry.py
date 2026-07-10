@@ -16,10 +16,13 @@ from .scalar import ScalarCard
 from .series import SeriesCard
 from .text import TextCard
 from .unknown import ReadOnlyCard
+from .values import is_grid_cell
 
 # Interim until the remaining per-kind cards land; see docs/03-features.md §4
 # "Input system". Kinds whose card depends on the stored value's shape --
-# FUNCTION, MAP, SERIES -- are dispatched in ``_card_class`` instead.
+# MAP, SERIES -- are dispatched in ``_card_class`` instead. FUNCTION now owns
+# its own shape dispatch: ``FunctionCard`` is a mode strip that opens on
+# whichever representation the committed value has.
 _REGISTRY = {
     ParameterKind.SCALAR: ScalarCard,
     ParameterKind.INTEGER: IntegerCard,
@@ -36,25 +39,6 @@ def create_card(parameter: ParameterItem, meta: FieldMeta | None) -> EditorCard:
     return card_cls(parameter, meta)
 
 
-def _is_grid_cell(value: object) -> bool:
-    """Whether a stored item can round-trip through a grid cell.
-
-    ``None`` qualifies: it is a blank cell, which reads back as ``None``. It has
-    to, because the grid *produces* blank cells -- adding a row writes one --
-    and a card that could not re-render its own output would turn itself
-    read-only the moment the user added a row.
-
-    ``bool`` does not, even though it is an ``int`` subclass. A grid renders
-    ``True`` as the text ``"True"``, which reads back as the *string*
-    ``"True"``, so committing an untouched neighbouring cell would silently
-    rewrite a stored ``true``. The value is legal BPX (it validates as ``1``),
-    so it is shown read-only rather than corrupted.
-    """
-    if value is None:
-        return True
-    return isinstance(value, (int, float, str)) and not isinstance(value, bool)
-
-
 def series_is_representable(value: object) -> bool:
     """Whether a ``SERIES`` value can be shown in, and read back from, a grid.
 
@@ -67,7 +51,7 @@ def series_is_representable(value: object) -> bool:
         return True
     if not isinstance(value, list):
         return False
-    return all(_is_grid_cell(item) for item in value)
+    return all(is_grid_cell(item) for item in value)
 
 
 def _card_class(parameter: ParameterItem) -> type[EditorCard]:
@@ -75,16 +59,15 @@ def _card_class(parameter: ParameterItem) -> type[EditorCard]:
     # mode strip -- only a fallback for a value that grid cannot represent.
     if parameter.kind is ParameterKind.SERIES:
         return SeriesCard if series_is_representable(parameter.value) else ReadOnlyCard
-    # FUNCTION and MAP are union-typed kinds (docs/01-architecture.md): the
-    # kind is declared by the schema, but their real per-kind cards -- a
-    # mode-strip card for FUNCTION, MapCard for MAP -- are Phase 4 work. Until
-    # then, dispatch on the stored value's shape so today's UX doesn't
-    # regress, and so a table/map-shaped value is never handed to a free-text
-    # card that would commit its Python ``repr`` and corrupt it.
+    # FUNCTION is a union-typed kind (docs/01-architecture.md). Its card is a
+    # mode strip covering every legal representation -- including a conditional
+    # Raw mode -- so the registry hands it every value unconditionally and the
+    # card decides which mode to open in.
     if parameter.kind is ParameterKind.FUNCTION:
-        if isinstance(parameter.value, dict):
-            return ReadOnlyCard  # table-valued function; real mode strip is Phase 4
         return FunctionCard
+    # MAP remains a shim until Phase 4c's MapCard lands: dispatch on the stored
+    # value's shape so a dict-shaped value is never handed to a free-text card
+    # that would commit its Python ``repr`` and corrupt it.
     if parameter.kind is ParameterKind.MAP:
         value = parameter.value
         if isinstance(value, dict):

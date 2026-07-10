@@ -1,0 +1,294 @@
+"""Mode bodies: one editor per legal representation of a union-typed field.
+
+A body is *not* an :class:`~.base.EditorCard`. It edits one representation and
+knows nothing about drafts, dirtiness, commits or the document. The
+:class:`~.modal.ModalCard` that owns a strip of bodies supplies all of that.
+
+Each body implements the small protocol in :mod:`~.modal`:
+
+    ``value()``  ``set_value(v)``  ``reset()``  ``focus_widget()``  ``changed``
+
+Bodies keep their own draft. Switching mode swaps which body is visible; it
+never seeds, clears or copies between them (see decision C in the plan:
+switching mode *completely changes* the value, so ``3.7`` → ``InterpolatedTable``
+gives an empty grid, not a one-row table).
+
+``RawJsonBody`` is the one editor that gates on **syntax**. Every other card in
+the app emits raw input and lets the validator judge legality; a Raw body
+holding unparseable text has no value to emit *at all*, and committing its text
+as a string would replace a table with a broken string. That is data loss, not
+an invalid edit -- so it reports a ``commit_blocked_reason``.
+"""
+
+from __future__ import annotations
+
+import json
+
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPlainTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
+
+from core import bpx_gateway
+
+from ..style import ERROR, MUTED
+from .grid import NumericGrid
+from .values import format_value, parse_value
+
+
+class ModeBody(QWidget):
+    """Base class for a single representation's editor."""
+
+    changed = Signal()
+
+    def value(self) -> object:
+        """The body's current draft, in raw-dict form."""
+        raise NotImplementedError
+
+    def set_value(self, value: object) -> None:
+        """Seed the body from a committed value (never called on mode switch)."""
+        raise NotImplementedError
+
+    def reset(self) -> None:
+        """Restore whatever :meth:`set_value` last seeded, or empty."""
+        raise NotImplementedError
+
+    def focus_widget(self) -> QWidget:
+        """The widget that takes keyboard focus, for the card's key handler."""
+        raise NotImplementedError
+
+    def commit_blocked_reason(self) -> str | None:
+        """Why this body's draft has no representation, or ``None``."""
+        return None
+
+    @property
+    def accepts_multiline_input(self) -> bool:
+        """True when Shift+Enter should insert a newline rather than commit."""
+        return False
+
+    def insert_newline(self) -> None:  # pragma: no cover - only multiline bodies
+        raise NotImplementedError
+
+
+class NumberBody(ModeBody):
+    """``FloatInt``: a free-text number field plus the parameter's unit."""
+
+    def __init__(self, unit: str = "") -> None:
+        super().__init__()
+        self._seed: object = None
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self._edit = QLineEdit()
+        self._edit.textChanged.connect(lambda *_: self.changed.emit())
+        layout.addWidget(self._edit, 1)
+        if unit:
+            layout.addWidget(QLabel(unit))
+
+    def value(self) -> object:
+        return parse_value(self._edit.text())
+
+    def set_value(self, value: object) -> None:
+        self._seed = value
+        self._edit.setText(format_value(value))
+
+    def reset(self) -> None:
+        self._edit.setText(format_value(self._seed))
+
+    def focus_widget(self) -> QWidget:
+        return self._edit
+
+
+class ExpressionBody(ModeBody):
+    """``Function``: a free-text expression, hinted by ``bpx.Function``'s own docs."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._seed: object = None
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+        self._edit = QLineEdit()
+        self._edit.setPlaceholderText("e.g. 2*x + exp(-x)")
+        self._edit.textChanged.connect(lambda *_: self.changed.emit())
+        layout.addWidget(self._edit)
+
+        # Quoted from the package so the hint tracks what bpx actually accepts.
+        hint = QLabel(bpx_gateway.function_syntax_help())
+        hint.setWordWrap(True)
+        hint.setStyleSheet(f"color: {MUTED};")
+        layout.addWidget(hint)
+
+    def value(self) -> object:
+        """The expression verbatim -- but a bare number is still a number.
+
+        A ``Function`` field accepts a numeric constant, and the app's lenient
+        convention means typing ``3.7`` here commits the float, so the value
+        reclassifies to its numeric mode on the next rebuild rather than
+        becoming the string ``"3.7"``.
+        """
+        return parse_value(self._edit.text())
+
+    def set_value(self, value: object) -> None:
+        self._seed = value
+        self._edit.setText(format_value(value))
+
+    def reset(self) -> None:
+        self._edit.setText(format_value(self._seed))
+
+    def focus_widget(self) -> QWidget:
+        return self._edit
+
+
+class TableBody(ModeBody):
+    """``InterpolatedTable``: a two-column ``x``/``y`` grid."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._seed: object = None
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self._grid = NumericGrid(("x", "y"))
+        self._grid.changed.connect(self.changed)
+        layout.addWidget(self._grid)
+
+    def value(self) -> object:
+        """``{"x": [...], "y": [...]}``, cells verbatim. An empty grid is empty lists."""
+        rows = self._grid.values()
+        return {"x": [row[0] for row in rows], "y": [row[1] for row in rows]}
+
+    def set_value(self, value: object) -> None:
+        self._seed = value
+        self._grid.set_values(_table_rows(value))
+
+    def reset(self) -> None:
+        self._grid.set_values(_table_rows(self._seed))
+
+    def focus_widget(self) -> QWidget:
+        return self._grid.focus_widget()
+
+
+class RawJsonBody(ModeBody):
+    """``Raw``: the stored value as JSON text, for values no mode can represent.
+
+    The only editor in the app that refuses a draft. Unparseable text has no
+    value to commit; committing it as a string would destroy the stored
+    structure. The parse error is shown inline as the user types.
+    """
+
+    def __init__(self, notice: str = "") -> None:
+        super().__init__()
+        self._seed: object = None
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+
+        if notice:
+            label = QLabel(notice)
+            label.setWordWrap(True)
+            label.setStyleSheet(f"color: {MUTED};")
+            layout.addWidget(label)
+
+        self._edit = QPlainTextEdit()
+        self._edit.setTabChangesFocus(True)
+        self._edit.textChanged.connect(self._on_text_changed)
+        layout.addWidget(self._edit)
+
+        self._error = QLabel()
+        self._error.setWordWrap(True)
+        self._error.setStyleSheet(f"color: {ERROR};")
+        self._error.hide()
+        layout.addWidget(self._error)
+
+    def _on_text_changed(self) -> None:
+        self._refresh_error()
+        self.changed.emit()
+
+    def _refresh_error(self) -> None:
+        reason = self.commit_blocked_reason()
+        self._error.setText(reason or "")
+        self._error.setVisible(reason is not None)
+
+    def commit_blocked_reason(self) -> str | None:
+        text = self._edit.toPlainText().strip()
+        if not text:
+            return None  # empty means null, which is a real (if invalid) value
+        try:
+            json.loads(text)
+        except ValueError as exc:
+            return f"Not valid JSON: {exc}"
+        return None
+
+    def value(self) -> object:
+        """The parsed JSON, or the seeded value while the text does not parse.
+
+        Falling back to the seed rather than inventing a value is the last line
+        of defence: even if a caller ignored ``commit_blocked_reason``, the
+        worst it could write is the value already stored.
+
+        A consequence worth knowing: because the seed *is* the committed value,
+        a blocked draft always compares equal to the original, so ``is_dirty``
+        is False and the Inspector's dirty check would refuse the commit even
+        without the block. The block is what makes the refusal *deliberate*, and
+        it becomes decisive for a body whose blocked draft genuinely differs
+        from the original (duplicate map keys).
+        """
+        text = self._edit.toPlainText().strip()
+        if not text:
+            return None
+        try:
+            return json.loads(text)
+        except ValueError:
+            return self._seed
+
+    def set_value(self, value: object) -> None:
+        self._seed = value
+        self._edit.setPlainText(_to_json(value))
+        self._refresh_error()
+
+    def reset(self) -> None:
+        self._edit.setPlainText(_to_json(self._seed))
+        self._refresh_error()
+
+    def focus_widget(self) -> QWidget:
+        return self._edit
+
+    @property
+    def accepts_multiline_input(self) -> bool:
+        return True
+
+    def insert_newline(self) -> None:
+        self._edit.insertPlainText("\n")
+
+
+# ----------------------------------------------------------------------
+# helpers
+# ----------------------------------------------------------------------
+
+
+def _to_json(value: object) -> str:
+    """Pretty JSON for display; a value JSON cannot express falls back to text."""
+    if value is None:
+        return ""
+    try:
+        return json.dumps(value, indent=2, ensure_ascii=False)
+    except TypeError:  # pragma: no cover - defensive
+        return str(value)
+
+
+def _table_rows(value: object) -> list[list[object]]:
+    """Zip a ``{"x": [...], "y": [...]}`` dict into grid rows.
+
+    Only ever called with a value the registry judged representable, or with
+    ``None``/anything else for an unseeded body, which yields an empty grid.
+    """
+    if not isinstance(value, dict):
+        return []
+    xs, ys = value.get("x"), value.get("y")
+    if not isinstance(xs, list) or not isinstance(ys, list) or len(xs) != len(ys):
+        return []
+    return [[x, y] for x, y in zip(xs, ys)]

@@ -15,7 +15,7 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 pytest.importorskip("PySide6")
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QComboBox, QLineEdit, QSpinBox
 
 from core.bpx_gateway import FieldMeta
 from core.parameter_types import ParameterKind, classify
@@ -89,21 +89,39 @@ def test_unknown_kind_raw_card_commits_and_reverts():
     assert card.value() is None
 
 
-def _rendered_text(card) -> str:
-    """Return the visible text of whichever input widget the card is using."""
-    edit = getattr(card, "_edit", None)
-    if edit is not None:
-        return edit.text()
-    fallback = getattr(card, "_fallback", None)
-    if fallback is not None:
-        return fallback.text()
-    spin = getattr(card, "_spin", None)
-    if spin is not None:
-        return str(spin.value())
-    combo = getattr(card, "_combo", None)
-    if combo is not None:
-        return combo.currentText()
+def _input_widget(card):
+    """The card's active input widget, whatever layout the card uses.
+
+    A ``ModalCard`` (FunctionCard) has no single input: it delegates to
+    whichever mode body is showing, so ask it.
+    """
+    focus_widget = getattr(card, "focus_widget", None)
+    if callable(focus_widget):
+        return focus_widget()
+    for attr in ("_edit", "_fallback", "_spin", "_combo"):
+        widget = getattr(card, attr, None)
+        if widget is not None:
+            return widget
     raise AssertionError(f"unrecognised card widget layout: {card!r}")
+
+
+def _rendered_text(card) -> str:
+    """Return the visible text of whichever input widget the card is using.
+
+    Only single-line inputs have a rendered "text". A ModalCard in its Raw or
+    InterpolatedTable mode exposes a QPlainTextEdit or QTableView instead; fail
+    loudly there rather than let a future caller silently reach for ``.text()``.
+    """
+    widget = _input_widget(card)
+    if isinstance(widget, QSpinBox):
+        return str(widget.value())
+    if isinstance(widget, QComboBox):
+        return widget.currentText()
+    if isinstance(widget, QLineEdit):
+        return widget.text()
+    raise AssertionError(
+        f"{type(widget).__name__} has no single-line text; assert on card.value() instead."
+    )
 
 
 @pytest.mark.parametrize(
@@ -175,10 +193,10 @@ def test_none_value_can_be_typed_and_reverted(kind, text, expected_value):
     _app()
     param = ParameterItem(label="P", path=("Header", "P"), kind=kind, value=None)
     card = create_card(param, None)
-    card._edit.setText(text)
+    _input_widget(card).setText(text)
     assert card.value() == expected_value
     card.reset()
-    assert card._edit.text() == ""
+    assert _rendered_text(card) == ""
     assert card.value() is None
 
 
@@ -238,10 +256,10 @@ def test_series_kind_uses_series_card():
     assert card.is_editable
 
 
-def test_function_kind_with_dict_value_falls_back_to_read_only():
-    """A table-valued FUNCTION field must not reach the free-text
-    FunctionCard: str(dict) is Python repr and committing it would corrupt
-    the value."""
+def test_function_kind_with_dict_value_opens_the_table_mode():
+    """A table-valued FUNCTION field is a first-class representation now: the
+    mode strip opens on InterpolatedTable rather than trapping it read-only.
+    See test_modal_cards.py for the strip's full behaviour."""
     _app()
     param = ParameterItem(
         label="OCP [V]",
@@ -250,13 +268,15 @@ def test_function_kind_with_dict_value_falls_back_to_read_only():
         value={"x": [0, 1], "y": [2, 3]},
     )
     card = create_card(param, None)
-    assert type(card).__name__ == "ReadOnlyCard"
+    assert type(card).__name__ == "FunctionCard"
+    assert card.current_mode == "InterpolatedTable"
+    assert card.is_editable
 
 
 def test_function_kind_with_numeric_value_uses_function_card_with_unit():
-    """A numeric constant in a FUNCTION field now opens FunctionCard (not
-    ScalarCard, per the removed value-shape exception), and FunctionCard
-    shows the unit label exactly as ScalarCard does."""
+    """A numeric constant in a FUNCTION field opens FunctionCard's FloatInt
+    mode (not ScalarCard, per the removed value-shape exception), showing the
+    unit label exactly as ScalarCard does."""
     _app()
     param = ParameterItem(
         label="Diffusivity [m2.s-1]",
@@ -267,7 +287,8 @@ def test_function_kind_with_numeric_value_uses_function_card_with_unit():
     )
     card = create_card(param, None)
     assert type(card).__name__ == "FunctionCard"
-    assert card._edit.text() == str(3.3e-14)
+    assert card.current_mode == "FloatInt"
+    assert _rendered_text(card) == str(3.3e-14)
 
 
 @pytest.mark.parametrize(

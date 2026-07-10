@@ -81,6 +81,21 @@ class EditorCard(QWidget):
         """
         raise NotImplementedError
 
+    def commit_blocked_reason(self) -> str | None:
+        """Why this draft cannot be committed at all, or ``None`` to allow it.
+
+        Almost always ``None``: a card emits raw input and never judges whether
+        a value is *legal* -- the BPX validator owns that, and an invalid value
+        must be committable so it can be seen and repaired.
+
+        The exception is a draft with **no representation**. A Raw JSON editor
+        holding unparseable text has no value to hand over at all; committing
+        its text as a *string* would replace ``{"x": [...], "y": [...]}`` with
+        a broken string. That is data loss, not an invalid edit, so the card
+        refuses and explains why.
+        """
+        return None
+
     @property
     def is_editable(self) -> bool:
         return True

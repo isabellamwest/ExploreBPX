@@ -1,49 +1,85 @@
-"""Function-expression editing card.
+"""Function-expression card: the mode strip for ``FloatFunctionTable`` fields.
 
-BPX parameters declared with ``allows_function`` can hold either a constant
-numeric value or a function-expression string.  Classification no longer
-switches editor by stored-value shape (see ``core.parameter_types``), so this
-card is now the FUNCTION kind's card for every legal representation except a
-table-valued (dict) one -- see the interim dispatch in ``cards/registry.py``
--- including a plain numeric constant, which previously routed to
-``ScalarCard``.
+``bpx.schema`` declares these fields as
+``FloatFunctionTable = Union[float, int, Function, InterpolatedTable]``, so a
+single parameter may legally hold a number, an expression string, or a table of
+``x``/``y`` points. The kind is declared; the *mode* is the user's choice.
 
-Keyboard contract (inherited from :class:`~.base.EditorCard`):
-- Enter / Return  → emit ``commit_requested``.
-- Escape          → restore to original value, emit ``draft_reset``.
+Mode labels are verbatim schema vocabulary (see :mod:`~.modal`): ``float`` and
+``int`` fold into the one ``FloatInt`` button -- bpx's own alias for exactly
+that union, and what the numeric editor already emits.
+
+A ``Raw`` mode is appended only when the *committed* value fits no structured
+mode, and that decision is made once at construction so the strip never changes
+under the cursor.
 """
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit
+from .bodies import ExpressionBody, NumberBody, RawJsonBody, TableBody
+from .modal import RAW_MODE, Mode, ModalCard
+from .values import is_grid_cell
 
-from .base import EditorCard
-from .values import format_value, parse_value
+FLOAT_INT = "FloatInt"
+FUNCTION = "Function"
+INTERPOLATED_TABLE = "InterpolatedTable"
+
+_RAW_NOTICE = (
+    "This value has no structured representation, so it is shown as raw JSON. "
+    "Choosing another mode starts an empty editor; nothing changes until you commit."
+)
 
 
-class FunctionCard(EditorCard):
-    """Edits a function-expression value via a free-text field.
+def table_is_representable(value: object) -> bool:
+    """Whether *value* renders in, and reads back from, a two-column x/y grid.
 
-    ``value()`` uses the shared lenient convention (``cards.values``): if the
-    committed text parses as a plain number the result is a ``float`` (or
-    ``int``), allowing a seamless transition back to the scalar editor on the
-    next document rebuild.  Otherwise the raw string is returned -- an
-    expression, or simply wrong text -- and validation reports any type error.
+    A grid is rectangular, so a ragged ``{"x": [1, 2], "y": [1]}`` has no grid
+    form -- padding it would invent a data point. Extra keys have none either:
+    a two-column grid cannot carry a third list, and committing would silently
+    drop it. Both open in ``Raw`` instead, with the value intact.
     """
+    if not isinstance(value, dict):
+        return False
+    if set(value) != {"x", "y"}:
+        return False
+    xs, ys = value["x"], value["y"]
+    if not isinstance(xs, list) or not isinstance(ys, list) or len(xs) != len(ys):
+        return False
+    return all(is_grid_cell(item) for item in (*xs, *ys))
+
+
+def initial_mode(value: object) -> str:
+    """The mode a committed *value* opens in.
+
+    ``None`` -- a freshly added parameter -- opens in the union's first declared
+    member, an empty numeric editor, exactly as an added scalar does. A ``bool``
+    is legal BPX (it validates as ``1``) but no numeric editor can round-trip
+    it, so it opens in ``Raw`` rather than being rewritten as ``"True"``.
+    """
+    if value is None:
+        return FLOAT_INT
+    if isinstance(value, bool):
+        return RAW_MODE
+    if isinstance(value, (int, float)):
+        return FLOAT_INT
+    if isinstance(value, str):
+        return FUNCTION
+    if table_is_representable(value):
+        return INTERPOLATED_TABLE
+    return RAW_MODE
+
+
+class FunctionCard(ModalCard):
+    """Edits a ``FloatFunctionTable`` field through its legal representations."""
 
     def __init__(self, parameter, meta) -> None:
-        super().__init__(parameter, meta)
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        self._edit = QLineEdit(format_value(self._original))
-        self._edit.textChanged.connect(lambda *_: self.draft_changed.emit())
-        layout.addWidget(self._edit, 1)
-        if parameter.unit:
-            layout.addWidget(QLabel(parameter.unit))
-        self._install_keyboard_handler(self._edit)
-
-    def value(self) -> object:
-        return parse_value(self._edit.text())
-
-    def reset(self) -> None:
-        self._edit.setText(format_value(self._original))
+        opens_in = initial_mode(parameter.value)
+        modes = [
+            Mode(FLOAT_INT, NumberBody(parameter.unit)),
+            Mode(FUNCTION, ExpressionBody()),
+            Mode(INTERPOLATED_TABLE, TableBody()),
+        ]
+        if opens_in == RAW_MODE:
+            modes.append(Mode(RAW_MODE, RawJsonBody(_RAW_NOTICE)))
+        labels = [mode.label for mode in modes]
+        super().__init__(parameter, meta, modes, labels.index(opens_in))

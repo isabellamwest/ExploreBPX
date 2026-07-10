@@ -100,6 +100,10 @@ class ParameterCard(QWidget):
         """Whether the inner editor's draft differs from its original value."""
         return self._editor.is_dirty
 
+    def commit_blocked_reason(self) -> str | None:
+        """Why the inner editor's draft has no representation, if it has none."""
+        return self._editor.commit_blocked_reason()
+
     def set_validity(self, text: str, colour: str) -> None:
         """Drive the header badge; validity decisions stay in the Inspector."""
         self._badge.setText(text)

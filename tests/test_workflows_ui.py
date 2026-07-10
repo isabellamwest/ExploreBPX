@@ -19,6 +19,111 @@ pytest.importorskip("PySide6")
 _MODEL = ("Header", "Model")
 _CAPACITY = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
 _TIME_SERIES = ("Validation", "C/20 discharge", "Time [s]")
+_DIFFUSIVITY = ("Parameterisation", "Negative electrode", "Diffusivity [m2.s-1]")
+
+
+# ---------------------------------------------------------------------------
+# Mode strip: a union-typed field's representations, driven through the UI
+# ---------------------------------------------------------------------------
+
+def test_mode_strip_switch_alone_commits_nothing(app_driver, spm_workfile):
+    """Switching mode is not an edit: it must not dirty the card, must not
+    flash the badge, and a bare Enter after it must write nothing."""
+    d = app_driver
+    d.open(spm_workfile).go_to(_DIFFUSIVITY)
+    assert d.mode_labels() == ("FloatInt", "Function", "InterpolatedTable")
+    assert d.current_mode() == "FloatInt"
+    assert d.validity() == "Valid"
+
+    d.select_mode("Function")           # a real click on the strip button
+    d.wait_for_live_validation()
+
+    assert d.current_mode() == "Function"
+    assert d.validity() == "Valid"      # no preview kicked at the empty body
+    d.commit()
+    assert d.undo_enabled() is False    # nothing entered the undo stack
+
+
+def test_mode_strip_converts_a_number_into_an_interpolated_table(
+    app_driver, spm_workfile, main_window
+):
+    d = app_driver
+    d.open(spm_workfile).go_to(_DIFFUSIVITY)
+
+    d.select_mode("InterpolatedTable")
+    d.add_grid_row().set_grid_cell(0, 0, "0.1").set_grid_cell(0, 1, "5e-14")
+    d.commit_grid()
+
+    stored = main_window._state.active.document.raw["Parameterisation"][
+        "Negative electrode"
+    ]["Diffusivity [m2.s-1]"]
+    assert stored == {"x": [0.1], "y": [5e-14]}
+    assert d.current_mode() == "InterpolatedTable"
+
+
+def test_an_invalid_expression_still_commits_for_repair(app_driver, spm_workfile):
+    """A card never judges *legality*: an unparseable expression commits, and
+    the validator -- not the card -- reports it."""
+    d = app_driver
+    d.open(spm_workfile).go_to(_DIFFUSIVITY).select_mode("Function")
+
+    d.edit_field("not a function!!")
+    d.wait_for_live_validation()
+    assert d.validity() == "Invalid"
+
+    d.commit()
+    assert d.field_value() == "not a function!!"
+    assert d.validation_issue_count() >= 1
+
+
+def test_unrepresentable_value_opens_raw_and_blocks_a_broken_commit(
+    app_driver, spm_with_ragged_table_path, main_window
+):
+    """The one card that gates on *syntax*. Unparseable JSON has no value to
+    commit; writing its text as a string would destroy the stored table."""
+    d = app_driver
+    d.open(spm_with_ragged_table_path).go_to(_DIFFUSIVITY)
+
+    assert d.current_mode() == "Raw"
+    assert d.mode_labels()[-1] == "Raw"   # Raw appended only when unrepresentable
+    assert d.commit_blocked_reason() is None
+
+    stored = lambda: main_window._state.active.document.raw["Parameterisation"][
+        "Negative electrode"
+    ]["Diffusivity [m2.s-1]"]
+    assert stored() == {"x": [0, 1], "y": [1]}
+
+    d.set_raw_json('{"x": [0,1], "y": [1]')      # broken
+    reason = d.commit_blocked_reason()
+    assert reason is not None and "Not valid JSON" in reason
+
+    d.commit()
+
+    assert stored() == {"x": [0, 1], "y": [1]}   # untouched, not a broken string
+    assert d.undo_enabled() is False
+
+    d.set_raw_json('{"x": [0,1], "y": [1,2]}')   # repaired
+    assert d.commit_blocked_reason() is None
+    d.commit()
+
+    assert stored() == {"x": [0, 1], "y": [1, 2]}
+    assert d.current_mode() == "InterpolatedTable"
+    assert "Raw" not in d.mode_labels()          # representable now
+
+
+def test_a_blocked_draft_holds_the_badge_rather_than_previewing_a_stale_value(
+    app_driver, spm_with_ragged_table_path
+):
+    """While the Raw text is unparseable there is no value to validate, so the
+    badge must not report the last representable one as "Valid"."""
+    d = app_driver
+    d.open(spm_with_ragged_table_path).go_to(_DIFFUSIVITY)
+    before = d.validity()
+
+    d.set_raw_json("{definitely not json")
+    d.wait_for_live_validation()
+
+    assert d.validity() == before
 
 
 # ---------------------------------------------------------------------------

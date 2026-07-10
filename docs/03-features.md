@@ -271,7 +271,8 @@ repaired in place.
 | Undo (toolbar action, and focus-aware `Ctrl+Z`) | Implemented |
 | Unknown/raw fallback editor | Implemented |
 | Declared-kind taxonomy (text, boolean, map, series; table narrowed to `InterpolatedTable`) | Planned |
-| Mode strip on union-typed fields (verbatim BPX vocabulary, per-mode drafts, conditional Raw) | Planned |
+| Mode strip on union-typed fields (verbatim BPX vocabulary, per-mode drafts, conditional Raw) | Implemented for `FUNCTION`; `MAP` planned |
+| Raw JSON editor with a commit gate (refuses a draft with no representation) | Implemented |
 | Text editing (auto-growing, Shift+Enter newline, pattern hint) | Planned |
 | Boolean editing (toggle) | Planned |
 | Per-material map editing (keys seeded from sibling Particle names) | Planned |
@@ -355,6 +356,28 @@ the same stack as adding or removing a parameter. A card's architectural contrac
 is fixed: it edits one `ParameterItem`, emits raw input, and does not decide
 validity. See the Editing and Command architecture in
 [01-architecture.md](01-architecture.md).
+
+**A union-typed field carries a mode strip.** `FloatFunctionTable` fields open on
+whichever representation the committed value has — `FloatInt`, `Function` or
+`InterpolatedTable`, named in verbatim `bpx.schema` vocabulary. Bodies are built
+eagerly and kept alive, so each mode holds its own draft; only the initial mode
+is seeded, because switching mode *completely changes* the value (`3.7` →
+`InterpolatedTable` gives an empty grid, never a fabricated one-row table).
+Switching mode alone is not an edit: it does not mark the card dirty, does not
+kick live validation, and a bare Enter after it commits nothing. Escape reverts
+value *and* mode. A `Raw` mode — the sole non-schema label — is appended only
+when the committed value fits no structured mode (a ragged or extra-keyed
+table, a `bool`, a list), and that decision is made once at construction so the
+strip never changes under the cursor. Every mode stays clickable: nothing is
+destroyed until commit.
+
+**One editor gates on syntax.** Cards emit raw input and never judge *legality* —
+an invalid value must be committable so it can be seen and repaired. But the Raw
+JSON editor holding unparseable text has no value to emit *at all*, and
+committing its text as a string would replace `{"x": […], "y": […]}` with a
+broken string. That is data loss, not an invalid edit, so `commit_blocked_reason`
+refuses it and the parse error is shown inline. This is the only exception, and
+it turns on *representability*, never on schema validity.
 
 **Grid cards (`SeriesCard`, and later interpolated tables) hold raw objects, not
 numbers.** `NumericGrid` is a `QTableView` over a small table model whose cells

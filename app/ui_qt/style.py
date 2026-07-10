@@ -59,6 +59,17 @@ QLabel#IssuesPlaceholder { color: #57606a; font-size: 12px; padding: 16px; }
 QLabel#DocumentationPlaceholder { color: #57606a; font-size: 12px; padding: 16px; }
 QLabel#Hint { color: #57606a; font-size: 11px; }
 
+/* Mode strip: segmented buttons naming each legal representation of a
+   union-typed field, in verbatim bpx.schema vocabulary. */
+QToolButton#ModeButton {
+    border: 1px solid #d0d7de; border-left-width: 0;
+    padding: 3px 10px; background: #f6f8fa; color: #57606a; font-size: 11px;
+}
+QToolButton#ModeButton:first-child { border-left-width: 1px; border-top-left-radius: 4px; border-bottom-left-radius: 4px; }
+QToolButton#ModeButton:last-child { border-top-right-radius: 4px; border-bottom-right-radius: 4px; }
+QToolButton#ModeButton:hover { background: #eef1f4; }
+QToolButton#ModeButton:checked { background: #ffffff; color: #1f2328; font-weight: 600; border-bottom: 2px solid #1f6feb; }
+
 /* Parameter-list pane's "+ Add parameter" header: a shaded, inset button
    rather than a native full-bleed one, and honestly greyed (not error-red)
    while disabled (no section selected). */

@@ -72,6 +72,27 @@ def spm_with_validation_path(valid_spm_dict, tmp_path) -> Path:
 
 
 @pytest.fixture
+def spm_with_ragged_table_path(valid_spm_dict, tmp_path) -> Path:
+    """An SPM document whose Diffusivity holds a *ragged* interpolated table.
+
+    ``{"x": [0, 1], "y": [1]}`` is a legal JSON value that no structured mode
+    can represent -- a grid is rectangular, and padding it would invent a data
+    point -- so ``FunctionCard`` must open it in ``Raw``. Used to exercise the
+    Raw editor's commit gate against a real document.
+    """
+    import json
+
+    doc = dict(valid_spm_dict)
+    doc["Parameterisation"]["Negative electrode"]["Diffusivity [m2.s-1]"] = {
+        "x": [0, 1],
+        "y": [1],
+    }
+    work = tmp_path / "spm_ragged_table.json"
+    work.write_text(json.dumps(doc), encoding="utf-8")
+    return work
+
+
+@pytest.fixture
 def invalid_bpx_path() -> Path:
     """An example file that opens successfully but fails BPX validation."""
     return EXAMPLES_DIR / "invalid_blended_state_mismatch.json"

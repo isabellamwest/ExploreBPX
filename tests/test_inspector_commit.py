@@ -166,3 +166,52 @@ def test_issues_tab_count_restores_on_escape(qtbot, spm_workfile):
     panel._on_reset()
 
     assert panel._secondary._buttons["issues"].text() == "Issues"
+
+
+# ---------------------------------------------------------------------------
+# commit_blocked_reason: a draft with no representation is refused
+#
+# These stub the card's ``commit_blocked_reason`` rather than driving a real
+# Raw JSON body, deliberately. ``RawJsonBody.value()`` falls back to its seed
+# while the text is unparseable, so its blocked draft always *equals* the
+# original and the ``is_dirty`` check alone would stop the commit -- the guard
+# never gets to decide. Stubbing produces the state the guard actually exists
+# for: blocked **and** different from the committed value. That is the state
+# Phase 4c's MaterialMapBody reaches with duplicate map keys.
+# ---------------------------------------------------------------------------
+
+
+def test_a_blocked_draft_is_never_committed_even_when_dirty(qtbot, spm_workfile):
+    """The commit gate, isolated. Without it a draft with no representation
+    would be written to the document."""
+    state, panel = _panel_on(qtbot, spm_workfile, _CAPACITY)
+    session = state.active
+    assert session.document.raw["Parameterisation"]["Cell"][_CAPACITY[-1]] == 5
+
+    card = panel._card
+    card._editor._edit.setText("999.0")          # a genuinely dirty draft
+    assert card.is_dirty is True
+    card.commit_blocked_reason = lambda: "Not valid JSON: stubbed"
+
+    panel._on_commit()
+
+    assert session.document.raw["Parameterisation"]["Cell"][_CAPACITY[-1]] == 5
+    assert session.can_undo is False
+
+
+def test_a_blocked_draft_holds_the_badge_instead_of_previewing_its_value(
+    qtbot, spm_workfile
+):
+    """While a draft has no representation there is nothing to validate. The
+    badge must hold, not report on a value the editor is not showing."""
+    state, panel = _panel_on(qtbot, spm_workfile, _CAPACITY)
+    card = panel._card
+    panel._render_issues([], False)
+    assert card._badge.text() == "Valid"
+
+    card._editor._edit.setText("not-a-number")   # would preview as Invalid
+    card.commit_blocked_reason = lambda: "Not valid JSON: stubbed"
+
+    panel._validate_draft()
+
+    assert card._badge.text() == "Valid"         # held, not re-validated

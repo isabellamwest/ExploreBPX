@@ -588,9 +588,57 @@ class AppDriver:
     def _grid(self):
         card = self._w._inspector._card
         assert card is not None, "No active card; navigate to a parameter first."
-        grid = getattr(card._editor, "_grid", None)
-        assert grid is not None, f"Card {type(card._editor).__name__} has no grid."
+        editor = card._editor
+        grid = getattr(editor, "_grid", None)
+        if grid is None:
+            # A ModalCard's grid lives inside its active table body.
+            body = getattr(editor, "_body", None)
+            grid = getattr(body, "_grid", None)
+        assert grid is not None, f"Card {type(editor).__name__} has no grid."
         return grid
+
+    # ------------------------------------------------------------------
+    # Modal cards (mode strip)
+    # ------------------------------------------------------------------
+
+    def mode_labels(self) -> tuple[str, ...]:
+        """The strip's mode names, in verbatim bpx.schema vocabulary."""
+        return self._modal().mode_labels
+
+    def current_mode(self) -> str:
+        return self._modal().current_mode
+
+    def select_mode(self, label: str) -> "AppDriver":
+        """Click a mode button on the strip."""
+        modal = self._modal()
+        index = list(modal.mode_labels).index(label)
+        self._qtbot.mouseClick(modal._strip._buttons[index], Qt.LeftButton)
+        return self
+
+    def mode_strip_visible(self) -> bool:
+        """False for a kind with a single representation (no strip is built)."""
+        return self._modal()._strip is not None
+
+    def commit_blocked_reason(self) -> str | None:
+        card = self._w._inspector._card
+        assert card is not None, "No active card; navigate to a parameter first."
+        return card.commit_blocked_reason()
+
+    def set_raw_json(self, text: str) -> "AppDriver":
+        """Replace the Raw mode body's JSON text wholesale."""
+        modal = self._modal()
+        assert modal.current_mode == "Raw", f"Not in Raw mode ({modal.current_mode})."
+        modal._body._edit.setPlainText(text)
+        return self
+
+    def _modal(self):
+        card = self._w._inspector._card
+        assert card is not None, "No active card; navigate to a parameter first."
+        editor = card._editor
+        assert hasattr(editor, "mode_labels"), (
+            f"Card {type(editor).__name__} is not a ModalCard."
+        )
+        return editor
 
     # ------------------------------------------------------------------
     # Internals -- the one place that knows card widget structure
@@ -600,6 +648,11 @@ class AppDriver:
         card = self._w._inspector._card
         assert card is not None, "No active card; navigate to a parameter first."
         editor = card._editor
+        # A ModalCard has no single input widget: it delegates to whichever
+        # mode body is showing.
+        focus_widget = getattr(editor, "focus_widget", None)
+        if callable(focus_widget):
+            return focus_widget()
         for attr in ("_edit", "_fallback", "_spin", "_combo"):
             widget = getattr(editor, attr, None)
             if widget is not None:

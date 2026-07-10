@@ -185,6 +185,12 @@ class InspectorPanel(QWidget):
     def _validate_draft(self) -> None:
         if self._card is None or self._state.active is None:
             return
+        if self._card.commit_blocked_reason() is not None:
+            # The draft has no value to validate. ``value()`` would fall back to
+            # the last representable one, so the badge would report "Valid" for
+            # a value the user is not looking at, while the editor shows a parse
+            # error beside it. Hold the badge instead: the card explains itself.
+            return
         issues = self._state.active.preview_parameter_issues(
             self._card.parameter.path, self._card.value()
         )
@@ -201,6 +207,13 @@ class InspectorPanel(QWidget):
 
     def _on_commit(self) -> None:
         if self._card is None or self._state.active is None:
+            return
+        if self._card.commit_blocked_reason() is not None:
+            # The draft has no representation at all (unparseable Raw JSON,
+            # duplicate map keys). This is not an *invalid* value -- which the
+            # card would happily commit for the validator to report -- it is a
+            # value that cannot be written without destroying data. The card
+            # shows the reason inline; refuse the commit.
             return
         if not self._card.is_dirty:
             # No-op Enter: the draft equals the committed value (type-aware),

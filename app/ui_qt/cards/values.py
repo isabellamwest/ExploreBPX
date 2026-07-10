@@ -50,6 +50,25 @@ def parse_value(text: str) -> object:
     return int(number) if number.is_integer() and "." not in stripped else number
 
 
+def is_grid_cell(value: object) -> bool:
+    """Whether a stored item can round-trip through a grid cell.
+
+    ``None`` qualifies: it is a blank cell, which reads back as ``None``. It has
+    to, because a grid *produces* blank cells -- adding a row writes one -- and
+    an editor that could not re-render its own output would turn itself
+    read-only the moment the user added a row.
+
+    ``bool`` does not, even though it is an ``int`` subclass. A grid renders
+    ``True`` as the text ``"True"``, which reads back as the *string*
+    ``"True"``, so committing an untouched neighbouring cell would silently
+    rewrite a stored ``true``. Such a value is shown read-only or raw rather
+    than corrupted.
+    """
+    if value is None:
+        return True
+    return isinstance(value, (int, float, str)) and not isinstance(value, bool)
+
+
 def values_equal(a: object, b: object) -> bool:
     """Type-aware equality for deciding whether a draft really changed.
 

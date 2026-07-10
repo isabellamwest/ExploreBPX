@@ -11,6 +11,7 @@ Only the public ``bpx`` API is used:
 from __future__ import annotations
 
 import copy
+import inspect
 import json
 import warnings
 from dataclasses import dataclass, field
@@ -29,6 +30,16 @@ from .validation import (
 
 #: The exact BPX version this application is built and tested against.
 BPX_VERSION: str = bpx.__version__
+
+
+def function_syntax_help() -> str:
+    """The ``bpx.Function`` docstring: what a function expression may contain.
+
+    Read from the package rather than restated here, so the hint the user sees
+    tracks whatever ``bpx`` actually accepts. This module is the only one that
+    imports ``bpx``; the UI asks for the text through this seam.
+    """
+    return inspect.getdoc(bpx.Function) or ""
 
 
 class LoadError(Exception):
