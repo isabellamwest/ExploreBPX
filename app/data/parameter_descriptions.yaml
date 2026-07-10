@@ -1,0 +1,1249 @@
+# Technical descriptions of BPX parameters, shown in the Inspector's ( i )
+# popover and Documentation tab.
+#
+# This file is DATA, not code: it is a transcription of the Faraday
+# Institution's "BPX Parameter technical descriptions" document. When that
+# document is revised, update or replace this file -- the app renders whatever
+# it finds here (see core/parameter_descriptions.py for the format).
+#
+#   - `sections` scopes an alias: the same alias can carry different
+#     descriptions in different sections (Thickness, Conductivity, ...).
+#   - `symbol` is LaTeX (no surrounding $), rendered as maths in the UI.
+#   - `content` is an ordered map of heading -> prose, rendered verbatim in
+#     order. Headings are free: add or rename them here and the UI follows.
+#
+# Prose is verbatim from the source document, including its citation markers
+# (e.g. [39]), which refer to that document's reference list.
+
+source: BPX Parameter technical descriptions (Faraday Institution)
+version: October 2024, BPX standard 0.4.0
+
+entries:
+  # ------------------------------------------------------------------ Cell
+  - sections: [Cell]
+    alias: "Electrode area [m2]"
+    symbol: 'A'
+    battinfo: https://w3id.org/emmo/domain/electrochemistry#electrochemistry_fa7790d6_07bb_4b0f_9965_55966828f5f3
+    content:
+      Description: >-
+        The planar geometric area per electrode pair as a cross-section to the
+        current direction, corresponding to the unwound jelly-roll or
+        individual electrode in a stack.
+      Allowed values: scalar
+      Physical correspondence: >-
+        The electrode area is multiplied by the "number of electrode pairs
+        collected in parallel to make a cell" ("Cell" → "Number of electrode
+        pairs connected in parallel to make a cell", N_p) to determine the
+        total geometric area across which cell current is distributed,
+        allowing a degree of user definition for each parameter. This area
+        denotes the active area normal to which ionic current flows from the
+        delithiating electrode to the lithiating electrode; therefore, this
+        value is usually less than the total coated area of a single electrode
+        sheet, as areas of overhang, where one electrode coating extends
+        beyond the other, are not normally electrochemically active and should
+        not be included. Exceptions have been reported [40], but these effects
+        could only be captured in a macroscopically higher-dimensional model
+        than the 1D+1D DFN model described by BPX.
+
+
+        In a test cell (half-cell) context, this parameter is usually the
+        geometric area of the electrode. In a manufactured cell, the electrode
+        sheets are usually double-coated, so this parameter is usually the sum
+        of the overlapping positive-negative area (electrode pair area) across
+        each separator, which is approximately double the geometric area
+        (width × length) of the electrode sheet. Alternatively, if preferred,
+        the multiple of two can be introduced in N_p, but usually, the
+        electrode pairs across the two separators in a cylindrical cell do not
+        have identical areas when unwound.
+      Model sensitivity: >-
+        The product of electrode area with N_p to make a cell creates a total
+        geometric area. This area scales the current density computed in a 1D
+        DFN model to the total current of the cell.
+      Measurement methods: >-
+        This parameter is measured via dimensional measurement of coated areas
+        on electrode sheets after cell teardown. Measurements must be
+        interpreted appropriately to define this parameter consistently with
+        N_p.
+
+  - sections: [Cell]
+    alias: "External surface area [m2]"
+    symbol: '\mathcal{A}'
+    battinfo: https://w3id.org/emmo/domain/electrochemistry#electrochemistry_05cf26ef_782a_4f66_a196_7004dd973f8e
+    content:
+      Description: External surface area of cell used for cooling.
+      Allowed values: scalar
+      Physical correspondence: >-
+        This parameter represents the external battery surface area for heat
+        transfer between the cell and the surroundings. This parameter might
+        also be denoted as "cell cooling surface area". Typically, this
+        parameter is set to the total external surface area of the cell, but
+        alternative values can be used, with a corresponding scaling effect on
+        the areal heat transfer coefficient. This parameter must be set
+        consistently with the corresponding areal heat transfer coefficient
+        used for the particular thermal environment of the cell.
+      Model sensitivity: >-
+        Within the lumped thermal model, the total heat transfer coefficient
+        (W K⁻¹) between the cell and its surroundings is the product of the
+        external surface area with an areal heat transfer coefficient
+        (W K⁻¹ m⁻²). A higher value increases the efficiency of heat transfer,
+        reducing the temperature difference between the cell and its
+        surroundings for a given heat source.
+      Measurement methods: >-
+        The total external surface area may be obtained by dimensional
+        measurement of the cell, or calculated from datasheet dimensions using
+        a simple formula, such as surface area of a cylinder for a cylindrical
+        cell. It is a matter of interpretation and user preference whether to
+        include detailed features (terminals proud of the cell surface, pouch
+        cell tabs, etc.) or whether to express a geometrically idealised
+        surface area, such as the surface area of a 21 mm diameter × 70 mm
+        height cylinder for a 21700 cylindrical cell. Depending on the cooling
+        environment of the cell, a different measured area may be chosen. The
+        used value must be compatible with the corresponding areal heat
+        transfer coefficient.
+
+  - sections: [Cell]
+    alias: "Volume [m3]"
+    symbol: '\mathcal{V}'
+    content:
+      Description: Total cell volume.
+      Allowed values: scalar
+      Physical correspondence: >-
+        This parameter is used in the lumped thermal model to calculate the
+        heat capacity of the cell. It refers to the enclosed volume of the
+        cell, inclusive of electrochemically inactive components such as
+        casing, internal tabs, etc., and should not be conflated with the
+        total volume of active material.
+      Model sensitivity: >-
+        Within the lumped thermal model, the total heat capacity is the
+        product of cell volume with density and specific heat capacity. For a
+        fixed volumetric heat capacity and input heat flux, as cell volume is
+        increased the thermal mass of the system increases, proportionally
+        causing the magnitude and rate of temperature fluctuations to
+        decrease.
+      Measurement methods: >-
+        Cell volume can be measured using Archimedes' method by submerging the
+        cell in a suitable electrically insulating fluid, such as silicone
+        mechanical pump oil [14]. Alternatively, the volume can be estimated
+        from the cell dimensions using a volume formula; cell dimensions are
+        in turn determined by conventional dimensional measurement, or can be
+        obtained approximately from the cell datasheet.
+
+  - sections: [Cell]
+    alias: "Number of electrode pairs connected in parallel to make a cell"
+    symbol: 'N_\mathrm{p}'
+    content:
+      Description: >-
+        The number of positive and negative electrode pairs connected in
+        parallel within the cell.
+      Allowed values: integer
+      Physical correspondence: >-
+        This value denotes the number of stacked or unwound electrode pairs
+        within a cell, on the assumption that these combine in parallel within
+        a single cell through shared electrical connections to the positive
+        and negative terminals. "Electrode pair" means a facing pair of
+        electrodes (positive and negative), divided by the separator, between
+        which current can flow across a cross-sectional area defined by the
+        "Cell" → "Electrode area [m2]" parameter. This parameter is a
+        multiplier to the electrode area, and as such has a degree of user
+        interpretation in its definition.
+      Model sensitivity: >-
+        See "Cell" → "Electrode area [m2]".
+      Measurement methods: >-
+        The cell internal configuration and number of electrode sheets can be
+        determined via cell teardown, or may be provided within the cell
+        datasheet. The used value of the parameter involves user
+        interpretation of the measurements, alongside the electrode area; it
+        should yield a correct geometric area normal to which cell current is
+        distributed, and, for some cell designs, need not correspond to a
+        literal number of electrode sheets.
+
+  - sections: [Cell]
+    alias: "Lower voltage cut-off [V]"
+    symbol: 'V_\mathrm{min}'
+    battinfo: https://w3id.org/emmo/domain/electrochemistry#electrochemistry_534dd59c_904c_45d9_8550_ae9d2eb6bbc9
+    content:
+      Description: >-
+        The minimum terminal voltage for the cell in normal operation, also
+        known as lower cut-off voltage and commonly defined by the
+        manufacturer's datasheet.
+      Allowed values: scalar
+      Physical correspondence: >-
+        This value represents the lowest acceptable cell voltage during normal
+        operation, commonly defined by the manufacturer (for e.g. warranty
+        purposes) to minimise copper dissolution, excess solid-electrolyte
+        interface (SEI) growth [13], and corresponding cross-talk between the
+        electrodes [20]. The minimum safety cut-off voltage is usually more
+        negative than the lower cut-off voltage.
+
+
+        The cell state at equilibrium at the minimum cut-off voltage, and at
+        the reference temperature, provides a thermodynamic definition of
+        state-of-charge (SOC) at SOC 0%. SOC definitions in practical
+        applications are often defined more conservatively, based on a higher
+        practical minimum operating voltage.
+      Model sensitivity: >-
+        The cell cut-off voltages provide a thermodynamic range for SOC. The
+        cell capacity between the cut-off voltages depends on the choice of
+        voltage window, as well as the electrode balancing (total lithium
+        capacity) and open-circuit potentials of the two electrodes. A wider
+        voltage window yields more capacity.
+      Measurement methods: This parameter is typically stated on the cell datasheet.
+
+  - sections: [Cell]
+    alias: "Upper voltage cut-off [V]"
+    symbol: 'V_\mathrm{max}'
+    battinfo: https://w3id.org/emmo/domain/electrochemistry#electrochemistry_6dcd5baf_58cd_43f5_a692_51508e036c88
+    content:
+      Description: >-
+        The maximum terminal voltage for the cell in normal operation, also
+        known as upper cut-off voltage and commonly defined by the
+        manufacturer's datasheet.
+      Allowed values: scalar
+      Physical correspondence: >-
+        This value represents the highest acceptable cell voltage during
+        normal operation, commonly defined by the manufacturer (for e.g.
+        warranty purposes) to minimise the contribution of degradation
+        mechanisms in the positive electrode such as electrolyte
+        decomposition, lithium plating, and structure instability [13]. The
+        maximum safety cut-off voltage is usually more positive than the upper
+        cut-off voltage.
+
+
+        The cell state at equilibrium at the maximum cut-off voltage, and at
+        the reference temperature, provides a thermodynamic definition of
+        state-of-charge (SOC) at SOC 100%. Standard charging protocols usually
+        define a constant voltage (CV) hold at this voltage until charging
+        current falls below a defined value.
+      Model sensitivity: >-
+        The cell cut-off voltages provide a thermodynamic range for SOC. The
+        cell capacity between the cut-off voltages depends on the choice of
+        voltage window, as well as the electrode balancing (total lithium
+        capacity) and open-circuit potentials of the two electrodes. A wider
+        voltage window yields more capacity.
+      Measurement methods: This parameter is typically stated on the cell datasheet.
+
+  - sections: [Cell]
+    alias: "Nominal cell capacity [A.h]"
+    symbol: 'Q_\mathrm{nom}'
+    battinfo: https://w3id.org/emmo/domain/electrochemistry#electrochemistry_9b3b4668_0795_4a35_9965_2af383497a26
+    content:
+      Description: Nominal capacity of the cell.
+      Allowed values: scalar
+      Physical correspondence: >-
+        The nominal capacity is a manufacturer-specified constant. It is a
+        representative value for the capacity of a cell discharged from its
+        fully charged state until the voltage reaches the lower voltage
+        cut-off [30]. The nominal capacity is used to define the concept of
+        C-rate, which is a dimensionless (cell-normalised) specification of
+        current. A current of 1C is equivalent to one nominal capacity
+        (dis)charged in 1 hour. In practice, the nominal capacity and
+        corresponding C-rate are representative quantities, defined by the
+        manufacturer for a particular type of cell. They do not necessarily
+        equate to the measured capacity of the cell under any specific
+        operating current. For example, the 1C-discharge capacity of any
+        individual cell may be lower or higher than the nominal capacity, even
+        at beginning-of-life, depending on the degree of conservatism in the
+        nominal capacity specification, as well as because of manufacturing
+        variability and environmental conditions such as temperature. As cell
+        state-of-health (SOH) decreases with aging, measured cell capacity
+        will generally fall below the nominal capacity.
+      Model sensitivity: >-
+        The nominal capacity is used as a cell-specific charge normalisation
+        constant. This value scales the magnitude of the input current for an
+        experimental protocol defined in terms of C-rate. A larger nominal
+        capacity corresponds to higher current at 1C.
+      Measurement methods: >-
+        This value is a specified rather than measured quantity. It should be
+        stated on the cell datasheet provided by the manufacturer. The
+        parameter specified must be consistent with the expected cell current
+        for any experiment at chosen C-rate.
+
+  - sections: [Cell]
+    alias: "Ambient temperature [K]"
+    symbol: 'T_\mathrm{amb}'
+    battinfo: https://w3id.org/emmo/domain/electrochemistry#electrochemistry_39a44af0_0e1a_4859_b550_bdabad64386e
+    content:
+      Description: Temperature of the environment surrounding the cell.
+      Allowed values: scalar
+      Physical correspondence: >-
+        The BPX standard specifies a lumped thermal model in which the
+        environment surrounding the cell is treated as an ideal thermal
+        reservoir with the specified constant ambient temperature. The
+        difference between the cell temperature and the ambient temperature
+        controls the rate of cooling of a cell subject to internal heating.
+      Model sensitivity: >-
+        A higher ambient temperature will cause a higher cell temperature, by
+        altering the position of thermal equilibrium. Several cell parameters
+        are strongly temperature-dependent (see "Cell" → "Reference
+        temperature [K]").
+      Measurement methods: >-
+        The ambient temperature is often controlled using a thermal chamber
+        (also known as an environmental, climate or temperature chamber, or
+        convective control), conductive control via Peltier elements [37; 1],
+        or immersion cooling in a dielectric fluid [33]. The actual
+        temperature in a thermal chamber depends on ventilation settings such
+        as fan speed. The temperature can be measured using a thermometer or a
+        temperature sensor.
+      Notes on the thermal model: >-
+        The BPX standard uses a lumped thermal model, meaning that the cell
+        temperature can vary with time but is assumed to be spatially uniform
+        throughout the cell's internal volume. In a typical experimental
+        setup, it is only possible to measure the external surface
+        temperature, using a temperature sensor placed on the surface of the
+        cell [6]. It is good practice to specify the location of the sensor,
+        e.g. cell mid-height or top/bottom terminal. Several sensors may be
+        used for better resolution of practical temperature non-uniformity. To
+        measure the internal temperature directly, it is necessary to embed a
+        sensor within the cell [22]. The accuracy and reliability of
+        temperature measurements depend on appropriate selection and
+        calibration of the sensor. For contact sensors, such as
+        thermocouples, it is important to ensure good contact between the
+        sensor and the cell. Changes in the ambient temperature or cooling can
+        induce local temperature variation and, during operation, changes in
+        applied current also induce temperature changes in the cell; both
+        charging and discharging lead to localised heating. The temperature
+        logged using a sensor on the cell surface may be used in combination
+        with a heat transfer rate to estimate the internal cell temperature.
+        An alternative method is to use state estimation with electrical
+        impedance measurement as the input instead of the surface temperature
+        [35; 32].
+
+  - sections: [Cell]
+    alias: "Initial temperature [K]"
+    symbol: 'T_0'
+    battinfo: https://w3id.org/emmo/domain/electrochemistry#electrochemistry_9c9b80a4_a00b_4b91_8e17_3a7831f2bf2f
+    content:
+      Description: Initial temperature of the cell.
+      Allowed values: scalar
+      Physical correspondence: >-
+        The assumed uniform temperature of the cell at the start of the
+        simulation.
+      Model sensitivity: >-
+        Several cell parameters are strongly temperature-dependent (see
+        "Cell" → "Reference temperature [K]").
+      Measurement methods: >-
+        If the cell is in thermal equilibrium at the start of the experiment,
+        the initial temperature can be set equal to the measured initial
+        surface temperature.
+
+  - sections: [Cell]
+    alias: "Reference temperature [K]"
+    symbol: 'T_\mathrm{ref}'
+    battinfo: https://w3id.org/emmo/domain/electrochemistry#electrochemistry_db40df7e_1aa5_49a7_85cb_2aa2c1c70489
+    content:
+      Description: >-
+        Reference temperature for temperature-dependent properties, such as
+        thermodynamic, kinetic and transport parameters.
+      Allowed values: scalar
+      Physical correspondence: >-
+        The reference temperature is the temperature at which the reference
+        values for temperature-dependent properties are determined.
+        Temperature-dependent properties include: open-circuit potentials;
+        electrolyte and electrode diffusivities; electrolyte and electrode
+        conductivities; and the lithium insertion reaction rate constant
+        (hence exchange current density). Higher temperatures increase the
+        rates of the thermally activated processes occurring within the cell,
+        namely diffusion, conduction and the lithium insertion reaction. An
+        altered temperature will change cell open-circuit voltage. Both high
+        and low temperatures, compared to room temperature, can promote
+        degradation [27; 21], which is not described within the BPX standard.
+      Model sensitivity: >-
+        In the BPX standard, temperature-dependent parameters are quantified
+        depending on standard values at a reference temperature, which are
+        then scaled according to the difference between instantaneous cell
+        temperature and the reference temperature using a linear relation for
+        open-circuit potentials, and an Arrhenius (exponential) relation
+        quantified by activation energies for rates of activated processes.
+        These functional forms are approximations to the real nonlinear
+        temperature dependence. To improve the reliability of the
+        approximation, it is desirable for the reference temperature to be
+        within the temperature range across which the cell is being studied.
+      Measurement methods: >-
+        The reference temperature is selected as part of the parameter set
+        definition. A value of 25 °C is commonly used as the reference
+        temperature, but a higher or lower value could be appropriate if the
+        parameter set is designed to describe the cell at higher or lower
+        temperatures. The temperature must be carefully measured and
+        controlled during the characterisation experiments used to determine
+        the values of the activation energies and entropic change
+        coefficients at the reference temperature. Please see the measurement
+        methods for each temperature-dependent property for more details.
+
+  - sections: [Cell]
+    alias: "Density [kg.m-3]"
+    symbol: '\rho'
+    content:
+      Description: Volumetric mass density of the cell.
+      Allowed values: scalar
+      Physical correspondence: >-
+        The stated cell density is the mass per unit volume for the whole cell
+        (including casing).
+      Model sensitivity: >-
+        Within the lumped thermal model, the total heat capacity is the
+        product of cell density with cell volume and specific heat capacity.
+        For a fixed volume, specific heat capacity and input heat flux, as
+        cell density is increased the thermal mass of the system increases,
+        proportionally causing the magnitude and rate of temperature
+        fluctuations to decrease. Any change in density can be cancelled by a
+        corresponding change in the specific heat capacity.
+      Measurement methods: >-
+        Density is typically determined indirectly through direct
+        measurements of cell mass (using a balance) and cell volume (see
+        "Cell" → "Volume [m3]").
+
+  - sections: [Cell]
+    alias: "Specific heat capacity [J.K-1.kg-1]"
+    symbol: 'c_\mathrm{p}'
+    content:
+      Description: >-
+        Specific heat capacity (or massic heat capacity or specific heat) of
+        the cell.
+      Allowed values: scalar
+      Physical correspondence: >-
+        Specific heat capacity is the amount of heat required to change the
+        temperature of a sample of material by one kelvin. Specific heat
+        capacity is the ratio of heat capacity to the sample mass, meaning the
+        heat required to change the temperature of a unit mass of material by
+        one kelvin. In general, heat capacity is a function of both
+        temperature and pressure.
+      Model sensitivity: >-
+        The BPX standard uses a lumped thermal model that assumes a uniform
+        cell temperature, neglecting any spatial deviations which have been
+        reported e.g. for large pouch cells [25]. Within the lumped thermal
+        model, the total heat capacity is the product of cell density with
+        cell volume and specific heat capacity. For a fixed mass and input
+        heat flux, as specific heat capacity is increased the thermal mass of
+        the system increases, proportionally causing the magnitude and rate
+        of temperature fluctuations to decrease. Any change in specific heat
+        capacity can be negated by a corresponding change in the density.
+      Measurement methods: >-
+        The specific heat capacity can be empirically measured through a
+        calorimetry experiment conducted, for example, in an Accelerating
+        Rate Calorimeter (ARC) [19].
+
+  # ----------------------------------------------------------- Electrolyte
+  - sections: [Electrolyte]
+    alias: "Initial concentration [mol.m-3]"
+    symbol: 'c_\mathrm{e0}'
+    content:
+      Description: Initial concentration of lithium ions in the electrolyte.
+      Allowed values: scalar
+      Physical correspondence: >-
+        This parameter represents the initial concentration of lithium ions in
+        the electrolyte at the start of the simulation. In BPX, it is assumed
+        uniform in space. Many common Li-ion battery electrolytes have
+        concentrations close to 1 mol L⁻¹ (1 molar solution).
+      Model sensitivity: >-
+        This parameter affects the total amount of ions in the electrolyte and
+        therefore directly influences the mass balance in the electrolyte.
+        Further, this parameter influences other electrolyte
+        concentration-dependent parameters such as the electrolyte diffusivity
+        and conductivity, and appears in the Butler-Volmer equation as a
+        normalising factor.
+      Measurement methods: >-
+        Given a sample of electrolyte, the initial electrolyte concentration
+        and electrolyte chemical identity can be estimated using elemental
+        analysis / spectroscopy techniques, such as inductively coupled plasma
+        mass spectrometry (ICP-MS) [36] or nuclear magnetic resonance (NMR)
+        spectroscopy. Neat electrolyte for a manufactured cell is often
+        unavailable and cannot be easily extracted during teardown due to
+        solvent volatility, so a standard value is assumed. If directly
+        measured, the electrolyte concentration specified must be consistent
+        with the concentration-dependence of other electrolyte parameters.
+
+  - sections: [Electrolyte]
+    alias: "Cation transference number"
+    symbol: 't^+'
+    content:
+      Description: >-
+        The fraction of the electrolyte conductivity contributed by the
+        cation.
+      Allowed values: scalar
+      Physical correspondence: >-
+        This property represents the relative contribution from the cation to
+        the overall electrolyte conductivity of the dissolved lithium salt.
+        The cation and anion transference number must sum to one. A small
+        cation transference number means that the lithium ion mobility is
+        relatively lower than that of its counter-ion, with the specific value
+        depending on solvent composition as well as the choice of counter-ion.
+        The counter-ion is usually PF₆⁻, with which the typical cation
+        transference number is about 0.25 in usual electrolyte solvents. In
+        practice the transference number may depend on lithium concentration,
+        but it is assumed constant in the BPX standard.
+      Model sensitivity: >-
+        Because the cation (Li⁺) is the reacting ion at both electrodes in a
+        lithium-ion cell, a higher cation transference number causes a lower
+        electrolyte concentration gradient for a given current density and
+        electrolyte diffusivity. In the limit where the cation transference
+        number tends to 1, all cation transport occurs by migration, so its
+        concentration gradient vanishes. Generally, minimising concentration
+        gradients prevents losses due to lithium exhaustion (lithiating
+        electrode) or lithium surplus (delithiating electrode) under high
+        current operation, so higher cation transference numbers yield better
+        cell performance.
+      Measurement methods: >-
+        This parameter can be obtained by fitting the model response to data
+        (electrochemical impedance spectroscopy (EIS), or galvanostatic or
+        potentiostatic polarisation), or using other techniques such as the
+        Hittorf method and concentration cells (see Section 5 of [39]).
+
+  - sections: [Electrolyte]
+    alias: "Diffusivity [m2.s-1]"
+    symbol: 'D_\mathrm{e,ref}'
+    content:
+      Description: >-
+        The amount of dissolved lithium salt (LiX) that diffuses across a unit
+        area in unit time per a unit concentration gradient normal to the
+        area.
+      Allowed values: >-
+        scalar, or a function of electrolyte concentration, or a table of
+        values versus electrolyte concentration to be linearly interpolated
+      Physical correspondence: >-
+        This parameter determines the contribution to the ionic flux by
+        lithium-ion concentration gradients, at the reference temperature. It
+        is a function of the local concentration.
+      Model sensitivity: >-
+        This property appears in the equation for mass conservation in the
+        electrolyte. Its contribution to the mass flux is proportional to the
+        concentration gradient, according to Fick's law. This parameter
+        appears alongside the transport efficiency to give an "effective"
+        diffusivity in the porous electrode medium.
+      Measurement methods: >-
+        The electrolyte diffusivity can be measured with a restricted-
+        diffusion experiment [39]. As a strongly temperature- and
+        concentration-dependent parameter, it may require measurement over a
+        range of physical conditions, relevant to the model application. This
+        parameter is often approximated in the literature: for example, by
+        using the Nernst-Einstein relationship to estimate the electrolyte
+        diffusivity from the conductivity, which relies on the assumption of
+        an ideal, infinitely dilute electrolyte. It should be noted that this
+        approximation is poor for the concentrated electrolytes used in Li-ion
+        cells.
+
+  - sections: [Electrolyte]
+    alias: "Diffusivity activation energy [J.mol-1]"
+    symbol: 'E_{D_\mathrm{e}}'
+    content:
+      Description: >-
+        The activation energy (per mole) used in the Arrhenius relationship
+        for the temperature dependence of the electrolyte diffusivity.
+      Allowed values: scalar
+      Physical correspondence: >-
+        This parameter describes how the diffusion coefficient depends on
+        temperature, under the assumption that it exhibits a simple Arrhenius
+        dependence.
+      Model sensitivity: >-
+        This parameter controls the temperature dependence of the electrolyte
+        diffusivity.
+      Measurement methods: >-
+        Activation energies are typically determined by estimating the
+        underlying temperature-dependent parameter, here the electrolyte
+        diffusivity, at a series of different temperatures and then fitting
+        the parameter to the data assuming an Arrhenius temperature
+        dependence.
+
+  - sections: [Electrolyte]
+    alias: "Conductivity [S.m-1]"
+    symbol: '\sigma_\mathrm{e,ref}'
+    content:
+      Description: >-
+        A measure of the electrolyte's ability to conduct ionic current.
+      Allowed values: >-
+        scalar, or a function of electrolyte concentration, or a table of
+        values versus electrolyte concentration to be linearly interpolated
+      Physical correspondence: >-
+        The electrolyte conductivity is the ionic current density carried by
+        the electrolyte per unit electric field. It is a function of the local
+        concentration.
+      Model sensitivity: >-
+        This property appears in the equation for charge conservation in the
+        electrolyte. For a fixed electrolyte potential and Li-ion
+        concentration, a larger conductivity leads to a larger ionic current
+        density and vice versa. For a given current density, a higher
+        conductivity reduces electrolyte potential variation (electrolyte
+        resistance) as well as electrolyte concentration gradients. This
+        parameter appears alongside the transport efficiency to give an
+        "effective" conductivity in the porous electrode medium.
+      Measurement methods: >-
+        The electrical conductivity of a solution of an electrolyte is
+        typically determined from electrochemical impedance spectroscopy data
+        [39], specifically using high-frequency alternating current such that
+        electrolyte resistance is the dominant contributor to the cell
+        voltage.
+
+  - sections: [Electrolyte]
+    alias: "Conductivity activation energy [J.mol-1]"
+    symbol: 'E_{\sigma_\mathrm{e}}'
+    content:
+      Description: >-
+        The activation energy (per mole) used in the Arrhenius relationship
+        for the temperature dependence of the electrolyte conductivity.
+      Allowed values: scalar
+      Physical correspondence: >-
+        This parameter describes how the conductivity depends on temperature,
+        under the assumption that it exhibits a simple Arrhenius dependence.
+      Model sensitivity: >-
+        This parameter controls the temperature dependence of the electrolyte
+        conductivity.
+      Measurement methods: >-
+        See "Electrolyte" → "Diffusivity activation energy [J.mol-1]".
+
+  # ---------------------- Negative electrode / Separator / Positive electrode
+  - sections: [Negative electrode, Positive electrode]
+    alias: "Thickness [m]"
+    symbol: 'L_k'
+    content:
+      Description: >-
+        Thickness of electrode k coating in the cell post-formation.
+      Allowed values: scalar
+      Physical correspondence: >-
+        This parameter represents the thickness of one electrode coating in
+        the cell after formation. In reality, the coating thickness may vary
+        with position in the cell or due to mechanical effects such as
+        swelling during (de)lithiation of the active material or non-uniform
+        external pressure. Therefore, this parameter should be interpreted as
+        a suitable representative thickness.
+      Model sensitivity: >-
+        Together with the active material volume fraction, electrode
+        cross-sectional area and maximum concentration, this parameter
+        determines the electrode capacity. The electrode thickness provides
+        the length scale for transport in the electrode and can therefore
+        significantly affect the voltage losses and Li distribution through
+        the electrode predicted by the model.
+      Measurement methods: >-
+        Thicknesses are readily measured after cell teardown: for example, by
+        using calipers or a micrometre gauge. However, it should be noted that
+        coating thickness cannot be measured on its own, so it is usually
+        inferred from the difference of a single-coated (singly delaminated)
+        sample to the uncoated current collector (fully delaminated).
+        Thicknesses may also be estimated non-destructively using optical
+        techniques (e.g. X-ray tomography). In all cases, coating thicknesses
+        may change after teardown due to the release of cell pressure on
+        opening the cell casing — this effect is usually ignored.
+
+  - sections: [Separator]
+    alias: "Thickness [m]"
+    symbol: 'L_k'
+    content:
+      Description: Thickness of the separator in the cell.
+      Allowed values: scalar
+      Physical correspondence: >-
+        This parameter represents the thickness of the separator in the cell.
+        The separator thickness may vary with pressure; this property
+        represents the in-situ thickness of the separator under typical
+        operating pressures, although it is usually measured ex situ.
+        Manufactured cells often contain at least two separators, due to
+        double-coating of electrodes. Stacked prismatic or pouch cells may
+        contain multiple discrete separator sheets or a single Z-fold
+        separator that interleaves the electrodes. The BPX standard assumes
+        that a uniform separator thickness applies between all electrode
+        pairs.
+      Model sensitivity: >-
+        The separator thickness provides the length scale for mass and charge
+        transport in the separator and therefore affects predicted voltage
+        losses due to concentration and potential gradients in the
+        electrolyte.
+      Measurement methods: >-
+        See "Negative electrode/Positive electrode" → "Thickness [m]". The
+        separator material is usually more deformable than the electrodes, so
+        variation in thickness on release of cell pressure can contribute more
+        significant errors.
+
+  - sections: [Negative electrode, Separator, Positive electrode]
+    alias: "Porosity"
+    symbol: '\varepsilon_k'
+    content:
+      Description: >-
+        The pore (electrolyte-filled) volume fraction of the region k.
+      Allowed values: scalar
+      Physical correspondence: >-
+        The porosity represents the volume fraction of non-solid pore space in
+        a given region of the cell (electrode k or separator). In the DFN
+        framework, the two electrodes are treated as having three distinct
+        phases: active material, inactive material including conductive
+        additives and binder, and a pore-filling phase. The porosity
+        corresponds to the latter. In the assembled cell, the pore space is
+        flooded with electrolyte. If the Bruggeman correlation is used to
+        approximate the electrode tortuosity, then the porosity appears in the
+        parameter "Negative electrode/Separator/Positive electrode" →
+        "Transport efficiency".
+      Model sensitivity: >-
+        This property appears directly in the equation for mass transport in
+        the electrolyte and, in part, determines the effective relaxation time
+        for equilibration of Li ions in the electrolyte.
+      Measurement methods: >-
+        The porosity can be measured using imaging techniques, such as
+        scanning electron microscopy or X-ray computed tomography (XCT),
+        through mercury porosimetry, or estimated from the ratio of the bulk
+        density of the coated film to the theoretical density of the solid
+        compounds of the coated film.
+
+  - sections: [Negative electrode, Separator, Positive electrode]
+    alias: "Transport efficiency"
+    symbol: '\mathcal{B}_k'
+    content:
+      Description: >-
+        The ratio of a transport parameter in the composite material to the
+        value for pure electrolyte.
+      Allowed values: scalar
+      Physical correspondence: >-
+        This parameter captures the relative ratio of the values of transport
+        properties in a porous medium, such as the electrodes or separator, to
+        their values in free liquid electrolyte. The inverse of the transport
+        efficiency is the MacMullin number [39].
+      Model sensitivity: >-
+        This property appears in the definition of the flux of Li ions in the
+        electrolyte and in the definition of the ionic current. It accounts
+        for how the microstructure affects the apparent diffusivity and
+        conductivity of the electrolyte. Many models make use of the Bruggeman
+        correlation B_k = ε_k/τ_k, where τ_k = ε_k^(1−b) with b = 1.5 for
+        effective transport through spherical packed beds. However, it should
+        be noted that the Bruggeman correlation frequently gives poor
+        estimates of the transport efficiency of many battery materials
+        [38; 24].
+      Measurement methods: >-
+        Transport efficiency can be estimated by fitting EIS data [39] or can
+        be approximated from porosity under additional assumptions, such as
+        the Bruggeman correlation.
+
+  # -------------------------------- Negative electrode / Positive electrode
+  - sections: [Negative electrode, Positive electrode]
+    alias: "Conductivity [S.m-1]"
+    symbol: '\sigma_k'
+    content:
+      Description: >-
+        The electrical conductivity of an electrode is a measure of its
+        ability to conduct electric current as electrons in the solid phase.
+      Allowed values: scalar
+      Physical correspondence: >-
+        This parameter is a bulk property of a composite electrode, defined as
+        the ratio of current density per unit electric field, in the
+        dimensions of the averaged composite material. Composite electrical
+        conductivity is in theory dependent on temperature and pressure. In
+        electrodes with macroscopic anisotropy, such as those where
+        calendering induces particle alignment, the electrode conductivity is
+        an anisotropic property. Since the BPX standard only resolves the 1D
+        macroscopic direction normal to the electrode planes, only the
+        through-thickness component of electrode conductivity is relevant.
+      Model sensitivity: >-
+        Electrode conductivity appears in the expression of Ohm's law for
+        electric current. A higher electrode conductivity causes lower ohmic
+        losses in the solid electrode for a given current density. These
+        losses are usually small compared to other contributions to cell
+        overvoltage.
+      Measurement methods: >-
+        In principle, four-point probe measurement can be used to parameterise
+        the electronic conductivity of electrode materials. However, the
+        interpretation of the measurement is challenging, due to the
+        anisotropy mentioned above. AC resistance characterisation of stacked
+        dry electrodes can also be used, but care must be taken to exclude the
+        effect of contact resistances.
+
+  - sections: [Negative electrode, Positive electrode]
+    alias: "Minimum stoichiometry"
+    symbol: '\theta^\mathrm{min}_{k,m}'
+    battinfo: https://w3id.org/emmo/domain/electrochemistry#electrochemistry_86324806_4263_4d80_b5af_1a7be844ab5b
+    content:
+      Description: Minimum stoichiometry of particle type m in electrode k.
+      Allowed values: scalar
+      Physical correspondence: >-
+        Stoichiometry is a value representing the state of lithiation of the
+        electrode, with reference to a standard chemical formula. For example,
+        the "stoichiometry" of Li in LiₓC₆ (partially lithiated graphite) is
+        the value x. In the negative electrode, the minimum stoichiometry is
+        the lithiation level reached when the cell is brought to equilibrium
+        at the lower voltage limit. In the positive electrode, the minimum
+        stoichiometry is reached at the upper voltage limit.
+      Model sensitivity: >-
+        A lower minimum stoichiometry means that a greater proportion of the
+        theoretical electrode capacity may be utilised. The impact of this
+        value on the output voltage depends on the shape of the electrode OCP.
+      Measurement methods: >-
+        In the literature, there is sometimes a lack of reporting of the
+        relationship between cell-level state of charge and material-level
+        lithiation scales [39]. Minimum and maximum stoichiometry limits are
+        determined in a fitting process sometimes referred to as electrode
+        (stoichiometric) balancing due to its parallels with the cell
+        designer/manufacturer's decision-making process of the same name, from
+        which the stoichiometry limits are an indirect consequence.
+
+
+        Firstly, the open-circuit potential (OCP) of a single electrode can be
+        measured using a half-cell set up. For safety and to prevent
+        degradation, half-cell OCPs are usually measured between predefined
+        voltage limits and reported as specific charge (mAh/g) or versus a
+        normalised state-of-charge based on a standard theoretical specific
+        capacity. Note that this state of charge may not correspond to the
+        full stoichiometric range of the electrode [26].
+
+
+        In order to transform the OCP from electrode state-of-charge (or
+        specific charge) to stoichiometry, the stoichiometry limits of the
+        measurement must be determined. The state of lithiation after
+        equilibration at a given voltage may be determined experimentally,
+        albeit destructively and without resolution of electrochemical
+        accessibility of Li, using inductively coupled plasma optical emission
+        spectroscopy (ICP-OES) [15; 28], or analytically by comparison to an
+        existing OCP measurement for which the stoichiometry range is known.
+
+
+        Further care is needed to distinguish between the full-cell state of
+        charge and the electrode stoichiometry [39]. Given the electrode OCPs
+        as a function of stoichiometry, the electrode OCPs must be aligned
+        with a full-cell OCV measurement by identifying the values of the
+        minimum and maximum stoichiometry limits [2]. As part of the BPX
+        standard, some validation checks are provided which verify: (1) that
+        the difference between the positive OCP evaluated at its minimum
+        stoichiometry and the negative OCP at its maximum stoichiometry is
+        close to the maximum voltage limit; and (2) that the difference
+        between the positive OCP at its maximum stoichiometry and the negative
+        OCP at its minimum stoichiometry is close to the minimum voltage
+        limit. Alignment of the electrode OCPs with full-cell OCV data may be
+        achieved through examining turning points in the differential voltage
+        [12], least-squares regression [34], or a three-electrode-cell
+        configuration [3; 7].
+
+
+        The full-cell OCV curve degrades over time leading to changes in the
+        minimum and maximum stoichiometry values; such changes are usually
+        quantified as a loss of cyclable lithium inventory (often shortened to
+        loss of lithium inventory, LLI) as well as a loss of accessible active
+        material (often called loss of active material, LAM) in one or both of
+        the electrodes [5; 4; 3; 31; 11].
+
+  - sections: [Negative electrode, Positive electrode]
+    alias: "Maximum stoichiometry"
+    symbol: '\theta^\mathrm{max}_{k,m}'
+    battinfo: https://w3id.org/emmo/domain/electrochemistry#electrochemistry_95ef8c3c_62fe_467f_b5d4_dd0cd18a7ea8
+    content:
+      Description: Maximum stoichiometry of particle type m in electrode k.
+      Allowed values: scalar
+      Physical correspondence: >-
+        Stoichiometry is a value representing the state of lithiation of the
+        electrode. See "Negative/Positive electrode" → "Minimum stoichiometry"
+        for a fuller discussion. In the negative electrode, the maximum
+        stoichiometry is the lithiation level reached when the cell is brought
+        to equilibrium at the upper voltage limit. In the positive electrode,
+        the maximum stoichiometry is reached at the lower voltage limit.
+      Model sensitivity: >-
+        A lower maximum stoichiometry means that a smaller proportion of the
+        theoretical electrode capacity may be utilised. The impact of this
+        value on the output voltage depends on the shape of the electrode OCP.
+      Measurement methods: >-
+        See "Negative/Positive electrode" → "Minimum stoichiometry".
+
+  - sections: [Negative electrode, Positive electrode]
+    alias: "Maximum concentration [mol.m-3]"
+    symbol: 'c^\mathrm{max}_{k,m}'
+    battinfo: https://w3id.org/emmo/domain/electrochemistry#electrochemistry_47287d09_6108_45ca_ac65_8b9451b1065e
+    content:
+      Description: >-
+        Maximum inserted lithium concentration associated with particle type m
+        in electrode k.
+      Allowed values: scalar
+      Physical correspondence: >-
+        This material-dependent property is a theoretical reference value that
+        describes the maximum concentration of lithium that can be
+        intercalated (or inserted) into each electrode. This value is not
+        necessarily obtainable in practice. The reference volume is a unit
+        volume of active material within the electrode.
+      Model sensitivity: >-
+        In the model, the lithium concentration in each electrode is the
+        product of the maximum concentration and the stoichiometry. The total
+        Li content is the product of lithium concentration with electrode
+        area, electrode thickness, and active material volume fraction (see
+        "Negative/Positive electrode" → "Surface area per unit volume [m-1]").
+        Therefore this parameter appears in the electrode stoichiometry
+        balance as well as the exchange current density definition in
+        Butler-Volmer kinetics. However, since it is a scaling parameter, the
+        only role of the maximum concentration in the model is to determine
+        the lithium concentrations and capacity proportion of each electrode.
+        Given a fixed particle radius and surface area per unit volume, the
+        maximum concentration needs to be compatible with the electrode
+        capacity.
+      Measurement methods: >-
+        The maximum concentration can be calculated differently depending on
+        how the amount of active material can be quantified for each
+        electrode. Most simply, a theoretical (idealised) maximum
+        concentration can be calculated from the crystal density of an active
+        material with defined stoichiometry. Stoichiometry is then a measured
+        property against this theoretical reference. Alternatively, an
+        empirical maximum concentration, not necessarily equivalent to a
+        specific pure material, can be derived from the measured electrode
+        capacity per unit area [7].
+
+  - sections: [Negative electrode, Positive electrode]
+    alias: "Particle radius [m]"
+    symbol: 'R_{k,m}'
+    battinfo: https://w3id.org/emmo/domain/electrochemistry#electrochemistry_b92e382f_5109_4f60_ab5e_c89d340419a9
+    content:
+      Description: Particle radius of particle type m in electrode k.
+      Allowed values: scalar
+      Physical correspondence: >-
+        This property represents the radius of a representative active
+        material particle in one electrode. Smaller particles have a higher
+        surface area-to-volume ratio, requiring lower (de)lithiation current
+        density to achieve a given specific/geometric current density on the
+        electrode. They also exhibit faster relaxation, for a constant value
+        of inserted Li diffusivity.
+
+
+        In reality, Li-ion battery electrodes are composite structures
+        containing a large number of particles of different shapes and sizes.
+        These particles may have non-uniform electronic accessibility and/or
+        non-uniform chemical behaviour. Also, primary particles may form
+        secondary structures through agglomeration with a binder component in
+        the electrode. In this case, many primary particles lack a large
+        independent electrode-electrolyte interface where (de)lithiation can
+        take place; instead, their conductivity must be accessed through
+        inserted Li diffusion in the connected solid. Then, the characteristic
+        radius of the secondary structures is usually more relevant to report.
+
+
+        The specification of a unique "particle radius" therefore constitutes
+        an approximation within the governing chemical model. By specifying a
+        blended electrode containing discrete mass fractions of different
+        components, the BPX standard supports the representation of a weighted
+        mixture of particles with different radii.
+      Model sensitivity: >-
+        In combination with the active material volume fraction, the particle
+        radius determines the surface area-to-volume ratio of the electrode.
+        Also, in combination with the inserted Li diffusivity, it determines
+        the effective relaxation timescale for equilibration of inserted Li
+        content. Therefore, the particle radius has a significant effect on
+        magnitudes and timescales of both instantaneous (ohmic) and dynamic
+        voltage losses predicted by the cell model in response to constant or
+        pulse currents. However, it is important to understand that the
+        particle radius only influences the response of a physics-based model
+        in combination with other parameters; it has no outward effect in
+        isolation. Standard SPM/DFN models with different particle radii can
+        be made indistinguishable in terms of their predicted voltage-current
+        response, provided the inserted Li diffusivity and exchange current
+        density are scaled accordingly.
+      Measurement methods: >-
+        Particle radii are conventionally measured by scanning electron
+        microscopy (SEM). The particle size distribution is obtained by
+        post-processing of microscopy images. A median or other average of the
+        measured particle size distribution may be used, to obtain a single
+        value. Mass-weighted average should be employed to ensure that the
+        particle size distribution represents the distribution of accessible
+        Li capacity between different particle sizes. Depending on the
+        observed particle size distribution, a mean, median or multimodal
+        (blended electrode) interpretation could be more appropriate;
+        ultimately, validation against observed electrochemical response can
+        dictate the predictive suitability of the parameterisation.
+
+  - sections: [Negative electrode, Positive electrode]
+    alias: "Surface area per unit volume [m-1]"
+    symbol: 'b_{k,m}'
+    battinfo: https://w3id.org/emmo/domain/electrochemistry#electrochemistry_7f381c19_cf07_47a8_ab10_0b14d46901e8
+    content:
+      Description: >-
+        Electrochemically active (or reaction) surface area of particle type m
+        per unit volume in electrode k.
+      Allowed values: scalar
+      Physical correspondence: >-
+        This property is an averaged parameter that incorporates the
+        complexity of the electrode geometry into the model. The
+        electrochemically active (or reaction) surface area impacts the rate
+        at which lithium can transfer between the electrolyte and the active
+        material particles; it depends on the local geometry of the particles
+        and pore microstructure [39]. Although this parameter is typically
+        reported as a single, averaged value within each electrode, it can
+        vary with particle size distribution within the electrode [23]. The
+        optimal surface area is a trade-off between maximising the area for
+        lithium (de-)intercalation and reducing the area susceptible to
+        solid-electrolyte interphase (SEI) formation [39].
+      Model sensitivity: >-
+        The main influence of the surface area in the model is as a scaling
+        factor between the microscopic and volumetric lithium insertion
+        reaction current densities. This parameter directly affects the rate
+        capabilities of the cell. In the BPX standard, the surface area per
+        unit volume is also used as the indirect but explicit specification of
+        active material volume fraction, and hence capacity. Active material
+        volume fraction of particle m in electrode k (φ_act,k,m) relates to
+        surface area per unit volume and particle radius according to the BPX
+        standard specification that all particles are spheres [7]:
+        b_k,m = 3 φ_act,k,m / R_k,m. Thus, along with the particle radius and
+        maximum inserted lithium concentration, the surface area per unit
+        volume determines the Li insertion capacity contribution of each
+        particle type in the BPX standard. Therefore, given a fixed particle
+        radius and maximum lithium insertion concentration, the surface area
+        needs to be compatible with the electrode capacity.
+      Measurement methods: >-
+        The measured surface area varies dramatically depending on the
+        measurement technique used [39]. Various definitions have been used in
+        the literature: for example, the whole solid-pore interface including
+        the surface of the carbon/binder domain (CBD), the active particle
+        surface area, and the active particle-pore interface. In general,
+        physical surface area measurements, such as Brunauer-Emmett-Teller
+        (BET) adsorption, lack electrochemical specificity, and so while they
+        characterise the actual particle morphology, they do not necessarily
+        yield representative information on the surface area at which
+        (de)lithiation reactions take place. Several open-source tools are
+        available that can be used to calculate geometric parameters from
+        microscopic image data [9; 17].
+
+
+        Given the assumption of a spherical shape for the particles, the BPX
+        standard constrains the relation between surface area per unit volume,
+        particle radius, and maximum concentration. When the latter two
+        parameters are fixed, the surface area per unit volume may be
+        characterised indirectly by measurement of the active material volume
+        fraction. For example, this can be inferred from specific capacity
+        indicated in gravimetric electrochemical measurements, combined with a
+        standard density for the active material.
+
+  - sections: [Negative electrode, Positive electrode]
+    alias: "Diffusivity [m2.s-1]"
+    symbol: 'D_{k,m,\mathrm{ref}}'
+    battinfo: https://w3id.org/emmo/domain/electrochemistry#electrochemistry_37b24a94_cae0_4d7a_9519_9f7692dec607
+    content:
+      Description: >-
+        The amount of inserted lithium that diffuses across a unit area in the
+        active material in unit time per a unit concentration gradient normal
+        to the area.
+      Allowed values: >-
+        scalar, or a function of stoichiometry, or a table of values versus
+        stoichiometry to be linearly interpolated
+      Physical correspondence: >-
+        The solid-state diffusivity represents atomic lithium transport within
+        the electrode active materials. The diffusivity is conventionally
+        dependent on the lithium concentration within the active material
+        [39]. For linear (Fickian) diffusion models, the system is represented
+        with a single diffusion constant which can be represented with a
+        function with dependency on lithium concentration.
+
+
+        The diffusivity is the only source of electrode-specific dynamic
+        voltage relaxation described within the BPX standard. As such, when
+        parameterised from experimental data, this parameter is required to
+        represent a variety of processes causing voltage relaxation
+        (particle-to-particle lithiation exchange, macroscopic thermal
+        heterogeneity, inserted Li domain phase change, etc.) which are not
+        limited to physical diffusion of Li in the active material.
+        Contemporary understanding is that actual diffusion of inserted Li is
+        more prevalent for nickel-based positive electrode materials than for
+        graphite or LFP [39].
+      Model sensitivity: >-
+        The solid-state diffusivity is captured within the mass transport
+        equation in the particle models. A higher diffusivity causes the
+        particle-scale lithium concentration gradient to be more uniform for a
+        given current density history, reducing concentration overpotentials
+        that arise because of inequivalence of the particle average and
+        surface lithium concentrations. The diffusion coefficient and the
+        particle radius (R_k,m) are correlated within the mass transport
+        equation, so are not individually identifiable in the BPX standard
+        models. A variation in the particle radius can be compensated by a
+        corresponding variation in the diffusion constant without altering
+        apparent behaviour.
+      Measurement methods: >-
+        Diffusivity can be measured by fitting the gradual voltage relaxation
+        of a cell under dynamic load. Half-cell measurements are used to
+        isolate individual electrodes. The most used technique is the
+        galvanostatic intermittent titration technique (GITT) in which current
+        pulses are separated by long rests. Other similar techniques include
+        the potentiostatic intermittent titration technique (PITT) and
+        intermittent current interruption (ICI) method [8]. Electrochemical
+        impedance spectroscopy (EIS) can also yield diffusivity by fitting to
+        the low-frequency 'tail' of the impedance spectrum.
+
+  - sections: [Negative electrode, Positive electrode]
+    alias: "Diffusivity activation energy [J.mol-1]"
+    symbol: 'E_{D_{k,m}}'
+    content:
+      Description: >-
+        The activation energy (per mole) used in the Arrhenius relationship
+        for the temperature dependence of the solid-state diffusivity.
+      Allowed values: scalar
+      Physical correspondence: >-
+        This parameter describes how the diffusivity depends on temperature,
+        under the assumption that it exhibits a simple Arrhenius dependence.
+      Model sensitivity: >-
+        This parameter controls the temperature dependence of the solid-state
+        diffusivity.
+      Measurement methods: >-
+        See "Electrolyte" → "Diffusivity activation energy [J.mol-1]".
+
+  - sections: [Negative electrode, Positive electrode]
+    alias: "OCP [V]"
+    symbol: 'U_{k,m,\mathrm{ref}}'
+    battinfo: https://w3id.org/emmo/domain/electrochemistry#electrochemistry_9c657fdc_b9d3_4964_907c_f9a6e8c5f52b
+    content:
+      Description: The open-circuit potential (OCP) of the electrode.
+      Allowed values: >-
+        scalar, or a function of stoichiometry, or a table of values versus
+        stoichiometry to be linearly interpolated
+      Physical correspondence: >-
+        The open-circuit potential represents the equilibrium potential of the
+        active material electrode, on the reference scale of stripping/plating
+        of the intercalated ion. For lithium-based cells, the reference scale
+        is "Li⁺/Li", so that the OCP equals the negative molar Gibbs energy
+        change for inserting metallic Li(s) into a phase with the
+        stoichiometry of the electrode, normalised by the Faraday constant.
+        Therefore, open-circuit potential is a strong function of
+        stoichiometry (see also "Negative/Positive electrode" → "Minimum
+        stoichiometry"). From physical considerations, OCP has a negative
+        monotonic relation on lithiation extent [41].
+
+
+        The OCP is conventionally viewed as degradation-agnostic, with loss of
+        lithium inventory (LLI) and loss of active material (LAM) being the
+        underlying mechanisms that affect the electrode stoichiometry.
+        Variation of the OCP due to material degradation has been observed in
+        some cases [13; 29].
+
+
+        In hysteresis-exhibiting materials, such as lithium iron phosphate,
+        the apparent OCP under continuous charge or discharge depends on both
+        the stoichiometry and the previous state of the electrode. This is
+        typically due to the phase transitions that occur in the active
+        material. In the BPX standard, modelling of hysteresis effects is
+        currently supported through user-defined parameters and not through
+        the canonical BPX definition; however, modification of the
+        open-circuit potential can result in non-thermodynamically consistent
+        predictions [41].
+      Model sensitivity: >-
+        At equilibrium (zero current), the terminal voltage is the difference
+        between the positive and negative open-circuit potentials
+        ("open-circuit voltage"). Under load, the terminal voltage is the sum
+        of the open-circuit voltage and various current-dependent losses.
+        Typically, the contribution from the OCPs is higher than the other
+        terms in the terminal voltage equation, and forms a 'baseline' voltage
+        to which dynamic voltage losses are added.
+      Measurement methods: >-
+        The standard methods for characterising electrode OCP are to either
+        measure pseudo-open-circuit voltage (pOCV) in a half-cell (sample
+        electrode vs Li), or to use the galvanostatic intermittent titration
+        technique (GITT) [7; 39]. pOCV uses a very low constant current (C/20
+        or less, meaning full discharge in ≥ 20 hours) to minimise losses,
+        approximating the thermodynamic case of negligible current. GITT
+        measures at actual open-circuit (zero current) during rest periods,
+        but has the disadvantage that granular charge resolution requires
+        short pulse durations and long relaxation times, causing a very
+        time-consuming experiment.
+
+
+        Standard methods of OCP measurement yield OCP as a function of
+        specific charge passed on the electrode compared to a given reference
+        state. A charge normalisation is required to express OCP as a function
+        of lithiation extent or another unitless measure of electrode
+        state-of-charge (see also "Negative/Positive electrode" → "Minimum
+        stoichiometry") [26].
+
+  - sections: [Negative electrode, Positive electrode]
+    alias: "Entropic change coefficient [V.K-1]"
+    symbol: '\left.\frac{\mathrm{d}U_{k,m}}{\mathrm{d}T}\right|_{T=T_\mathrm{ref}}'
+    content:
+      Description: >-
+        Entropic change coefficient of particle type m in electrode k.
+      Allowed values: >-
+        scalar, or a function of stoichiometry, or a table of values versus
+        stoichiometry to be linearly interpolated
+      Physical correspondence: >-
+        The gradient of the open-circuit potential (OCP) variation of an
+        electrode with respect to the temperature, evaluated at the reference
+        temperature. In the definition of the OCP, the entropic change
+        coefficient accounts for variation in the equilibrium OCP due to
+        changes in cell temperature; this variation is attributable to the
+        entropy changes of the electrochemical reactions.
+      Model sensitivity: >-
+        This parameter influences both the output voltage and heat generation
+        in the model. The BPX standard assumes a linear variation in OCP, at a
+        given stoichiometry, proportional to the temperature deviation, with
+        the entropic change coefficient being the coefficient of
+        proportionality. Note that this is an approximation and will be
+        unreliable for temperatures beyond critical temperature limits. For
+        example, this approximation may return a non-monotonic (and thus
+        thermodynamically invalid) open-circuit potential, with respect to
+        state of charge, at temperatures away from the reference temperature.
+        In the conservation of energy equation, the reversible component of
+        the heat generation term is proportional to the entropic change
+        coefficient.
+      Measurement methods: >-
+        The entropy profile may be measured using three different methods: the
+        potentiometric method, the calorimetric method and the alternating
+        current method [16]. The potentiometric method refers to the
+        measurement of OCPs at different temperatures [18]. The calorimetric
+        method involves measuring the total heat generation, using an
+        accelerating rate calorimeter or isothermal heat conduction
+        calorimeter, and then subtracting the irreversible heat generation
+        obtained via electrochemical impedance spectroscopy or current
+        interruption measurement. The alternating current method [16] isolates
+        the reversible component of heat generation by applying an alternating
+        square-wave current to charge and discharge the battery within a small
+        state-of-charge interval.
+
+
+        All measurement methods characterise the entropic change coefficient
+        of a full cell. When applied to a half-cell (electrode vs Li), the
+        measured entropic change coefficient includes the entropy change of
+        stripping/plating of lithium at the counter electrode. This
+        contribution cancels at the full-cell scale, but means that when
+        measured half-cell data are used to define the entropic change
+        coefficients, the magnitude of the reversible heating rate is
+        incorrect when considered locally within a specific electrode. Only
+        the reversible heating rate integrated across the whole macroscopic 1D
+        dimension is correct.
+
+  - sections: [Negative electrode, Positive electrode]
+    alias: "Reaction rate constant [mol.m-2.s-1]"
+    symbol: 'K_{k,m,\mathrm{ref}}'
+    battinfo: https://w3id.org/emmo/domain/electrochemistry#electrochemistry_0335e3f6_d1d8_4daa_8376_a9285f1bc9f1
+    content:
+      Description: >-
+        The rate constant describing the (de)lithiation of the solid active
+        material at its interface with the electrolyte occurring alongside
+        electron transfer to/from the electronic conductor.
+      Allowed values: scalar
+      Physical correspondence: >-
+        This parameter represents the reaction rate constant for
+        (de)lithiation defined under reference conditions. This parameter
+        scales the applied current density, i, defined within the
+        Butler-Volmer equation and as such, provides a reference rate constant
+        for the Li intercalation between the electrolyte and the corresponding
+        electrode active material. This parameter is influenced by
+        temperature, and is conventionally modified via an Arrhenius
+        relationship. The reaction rate constant is specific not only to the
+        electrode material, but also to the adjoining electrolyte and the
+        structure of the electrode-electrolyte interface. Reaction rate
+        constant can be converted to charge units by multiplying with the
+        Faraday constant, yielding a value of the exchange current density,
+        j₀, at reference concentration conditions in alternative formulations
+        of the Butler-Volmer equation [10]. The exchange current density is
+        concentration-dependent and is defined as the current density
+        magnitude of simultaneous lithiation and delithiation at dynamic
+        equilibrium.
+      Model sensitivity: >-
+        This parameter has a proportional influence on the activation
+        overpotential required to achieve a given current density at the
+        corresponding electrode. Higher reaction rate constants reduce the
+        overpotential for a given current density, and vice versa.
+      Measurement methods: >-
+        Exchange current density (and hence reaction rate constant) can be
+        measured by fitting voltage data under current load. Common approaches
+        either use current steps or pulses, or alternating current. Current
+        pulse-based methods include: (staircase) galvanostatic intermittent
+        titration technique ((SC)GITT), potentiostatic intermittent titration
+        technique (PITT). The main alternating current method is
+        electrochemical impedance spectroscopy (EIS), from which lithium
+        insertion reaction rate can typically be resolved from semi-circular
+        (RC-parallel) features at 0.01 s - 1 s timescales.
+
+  - sections: [Negative electrode, Positive electrode]
+    alias: "Reaction rate constant activation energy [J.mol-1]"
+    symbol: 'E_{K_{k,m}}'
+    content:
+      Description: >-
+        The activation energy (per mole) used in the Arrhenius relationship
+        for the temperature dependence of the reaction rate constant.
+      Allowed values: scalar
+      Physical correspondence: >-
+        This parameter describes how the reaction rate constant depends on
+        temperature, under the assumption that it exhibits a simple Arrhenius
+        dependence.
+      Model sensitivity: >-
+        This parameter controls the temperature dependence of the reaction
+        rate constant.
+      Measurement methods: >-
+        See "Electrolyte" → "Diffusivity activation energy [J.mol-1]".

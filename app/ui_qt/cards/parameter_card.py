@@ -3,8 +3,9 @@
 Top to bottom, a ``ParameterCard`` holds:
 
   1. a header (title label + validity badge + ( i ) information button that
-     toggles a :class:`~ui_qt.parameter_info_popover.ParameterInfoPopover`;
-     roadmap 2.4 sub-step 2),
+     toggles a :class:`~ui_qt.parameter_info_popover.ParameterInfoPopover` —
+     the quick glance; the long-form prose lives in the Inspector's
+     Documentation tab),
   2. the per-kind value editor, produced by :func:`create_card`,
   3. the parameter's summary description, when present.
 
@@ -113,6 +114,6 @@ class ParameterCard(QWidget):
             return
         if self._popover is None:
             self._popover = ParameterInfoPopover(self)
-        metadata = resolve_parameter_metadata(self.parameter.label, self._meta)
+        metadata = resolve_parameter_metadata(self.parameter.path, self._meta)
         self._popover.show_metadata(metadata)
         self._popover.open_below(self._info_button)

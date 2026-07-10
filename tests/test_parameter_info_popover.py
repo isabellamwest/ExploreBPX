@@ -48,8 +48,8 @@ def test_only_populated_fields_are_rendered(qtbot):
     assert "The ambient temperature." in labels
     assert "Units" in labels
     assert "K" in labels
-    # Unpopulated categories (e.g. Symbols) never appear.
-    assert "Symbols" not in labels
+    # Unpopulated categories (e.g. the Symbol row) never appear.
+    assert "Symbol" not in labels
 
 
 def test_no_populated_fields_renders_nothing(qtbot):
@@ -58,6 +58,31 @@ def test_no_populated_fields_renders_nothing(qtbot):
     qtbot.addWidget(popover)
     popover.show_metadata(ParameterMetadata())
     assert popover._layout.count() == 0
+
+
+def test_symbol_link_and_docs_hint_render_when_populated(qtbot):
+    _app()
+    popover = ParameterInfoPopover()
+    qtbot.addWidget(popover)
+    popover.show_metadata(
+        ParameterMetadata(
+            symbol=r"N_\mathrm{p}",
+            specification_link="https://w3id.org/example",
+            documentation=(("Physical correspondence", "Long prose."),),
+        )
+    )
+    widgets = [
+        popover._layout.itemAt(i).widget() for i in range(popover._layout.count())
+    ]
+    texts = [w.text() for w in widgets]
+    assert "Symbol" in texts
+    assert any("w3id.org/example" in t for t in texts)
+    assert any("Documentation tab" in t for t in texts)
+    # The long-form prose itself must NOT render in the glance popover.
+    assert not any("Long prose." in t for t in texts)
+    # The symbol renders as a pixmap (matplotlib present), not as raw LaTeX.
+    symbol_row = widgets[texts.index("Symbol") + 1]
+    assert not symbol_row.pixmap().isNull()
 
 
 def test_escape_hides_popover(qtbot):

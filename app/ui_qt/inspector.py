@@ -13,10 +13,14 @@ The Inspector has two responsibilities, split top-to-bottom:
     ``DocumentSession.preview_parameter_issues`` -- so a document-level
     diagnostic elsewhere in the file never colours this parameter's badge.
   - **Secondary workspace** (bottom): a collapsible, tabbed panel for
-    parameter-centric tools (Issues today; Analysis, References in future).
-    Parameter documentation is delivered as the card's ( i ) popover, not a
-    secondary-workspace tab (roadmap 2.4).  A vertical splitter above the tab
-    strip resizes the whole secondary workspace.
+    parameter-centric tools (Issues and Documentation today; Analysis,
+    References in future).  Parameter documentation is split by depth: the
+    card's ( i ) popover is the quick glance (symbol, meaning, units, types,
+    ontology link) while the Documentation tab carries the multi-paragraph
+    technical prose, which persists beside the editor instead of dismissing
+    on the first outside click.  This supersedes roadmap 2.4's
+    popover-not-a-tab decision, which predated page-long content.  A vertical
+    splitter above the tab strip resizes the whole secondary workspace.
 
 The secondary workspace is workspace state, not parameter state: it starts
 collapsed, stays open across parameter changes, and only the user collapses it.
@@ -37,11 +41,13 @@ from PySide6.QtWidgets import (
 )
 
 from core import bpx_gateway
+from core.parameter_metadata import resolve_parameter_metadata
 from core.tree_model import ParameterItem
 from core.validation import Severity
 from state.app_state import AppState
 
 from .cards.parameter_card import ParameterCard
+from .documentation_tab import DocumentationTab
 from .issues_tab import IssuesTab
 from .secondary_workspace import SecondaryWorkspace
 from .style import ERROR, OK, WARNING
@@ -82,6 +88,8 @@ class InspectorPanel(QWidget):
         self._issues_tab = IssuesTab()
         self._issues_tab.issue_activated.connect(self.issue_activated)
         self._secondary.add_tab("issues", "Issues", self._issues_tab)
+        self._docs_tab = DocumentationTab()
+        self._secondary.add_tab("docs", "Documentation", self._docs_tab)
         self._secondary.expanded_changed.connect(self._on_secondary_expanded)
 
         self._splitter = QSplitter(Qt.Vertical)
@@ -118,6 +126,7 @@ class InspectorPanel(QWidget):
             QLabel("Select an object from the structure to inspect + edit it.")
         )
         self._issues_tab.show_parameter(None)
+        self._docs_tab.show_metadata(None)
         self._secondary.set_count("issues", 0)
         self._secondary.suspend()
 
@@ -152,10 +161,11 @@ class InspectorPanel(QWidget):
         self._content_layout.addStretch(1)
         self._render_issues(parameter.issues, parameter.has_errors)
 
-        # Refresh the secondary workspace's active tab without changing its
+        # Refresh the secondary workspace's tabs without changing its
         # open/collapsed state (workspace state, not parameter state).
         count = self._issues_tab.show_parameter(parameter)
         self._secondary.set_count("issues", count)
+        self._docs_tab.show_metadata(resolve_parameter_metadata(parameter.path, meta))
 
     def has_focused_draft(self, widget) -> bool:
         """True when *widget* is inside a card holding an uncommitted draft.

@@ -56,6 +56,8 @@ QToolButton#SecondaryTab:checked {
 }
 QListWidget#IssuesList { border: none; background: #ffffff; font-size: 12px; }
 QLabel#IssuesPlaceholder { color: #57606a; font-size: 12px; padding: 16px; }
+QLabel#DocumentationPlaceholder { color: #57606a; font-size: 12px; padding: 16px; }
+QLabel#Hint { color: #57606a; font-size: 11px; }
 
 /* Parameter-list pane's "+ Add parameter" header: a shaded, inset button
    rather than a native full-bleed one, and honestly greyed (not error-red)
