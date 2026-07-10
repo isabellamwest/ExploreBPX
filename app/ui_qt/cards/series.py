@@ -14,24 +14,35 @@ from PySide6.QtWidgets import QVBoxLayout
 
 from .base import EditorCard
 from .grid import NumericGrid
+from .table_preview import TablePreview
 
 
 class SeriesCard(EditorCard):
-    """Edits a list of numbers as a single grid column."""
+    """Edits a list of numbers as a single grid column, above a live preview."""
 
     def __init__(self, parameter, meta) -> None:
         super().__init__(parameter, meta)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+
+        self._preview = TablePreview(mode="series")
+        self._preview.set_axis_titles("row", parameter.label)
+        layout.addWidget(self._preview)
 
         self._grid = NumericGrid((parameter.label,))
         # Populate before wiring ``changed``: seeding must not mark the card
         # touched, or construction alone would make a bare Enter commit.
         self._grid.set_values(self._rows(self._original))
-        self._grid.changed.connect(lambda: self.draft_changed.emit())
+        self._preview.update_rows(self._grid.values())
+        self._grid.changed.connect(self._on_grid_changed)
         layout.addWidget(self._grid)
 
         self._install_keyboard_handler(self._grid.focus_widget())
+
+    def _on_grid_changed(self) -> None:
+        self._preview.update_rows(self._grid.values())
+        self.draft_changed.emit()
 
     @staticmethod
     def _rows(value: object) -> list[list[object]]:
@@ -56,3 +67,4 @@ class SeriesCard(EditorCard):
 
     def reset(self) -> None:
         self._grid.set_values(self._rows(self._original))
+        self._preview.update_rows(self._grid.values())

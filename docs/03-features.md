@@ -379,6 +379,19 @@ broken string. That is data loss, not an invalid edit, so `commit_blocked_reason
 refuses it and the parse error is shown inline. This is the only exception, and
 it turns on *representability*, never on schema validity.
 
+**A grid carries a live preview.** An interpolated table's value *is* the
+piecewise-linear function through its points, so the editor plots that line above
+the grid and updates it as cells change — a mistyped `y` spikes the curve at
+once. This is a rendering of the input, not analysis: it belongs in the editor,
+not the Analysis workspace. A one-column series plots value against row number, a
+quick look that catches gross outliers (the meaningful value-versus-`Time` view
+needs the sibling column and is deferred). The preview is drawn with `QtCharts`
+(bundled with PySide6, no new dependency) and only ever plots the numeric points
+— a string or blank cell is skipped, never coerced to zero — so the grid and the
+validator stay the source of truth. If a minimal PySide6 build lacks `QtCharts`
+the preview disables itself and the grid works unchanged; a plot is never a
+dependency of editing.
+
 **Grid cards (`SeriesCard`, and later interpolated tables) hold raw objects, not
 numbers.** `NumericGrid` is a `QTableView` over a small table model whose cells
 are the same lenient values the line editors emit (`cards/values.py`): a typed

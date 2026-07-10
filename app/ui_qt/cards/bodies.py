@@ -38,6 +38,7 @@ from core import bpx_gateway
 
 from ..style import ERROR, MUTED
 from .grid import NumericGrid
+from .table_preview import TablePreview
 from .values import format_value, parse_value
 
 
@@ -145,16 +146,31 @@ class ExpressionBody(ModeBody):
 
 
 class TableBody(ModeBody):
-    """``InterpolatedTable``: a two-column ``x``/``y`` grid."""
+    """``InterpolatedTable``: a two-column ``x``/``y`` grid over a live preview.
+
+    The plotted line is the value: an interpolated table *is* the piecewise-
+    linear function through its points, so the preview shows exactly what the
+    grid defines.
+    """
 
     def __init__(self) -> None:
         super().__init__()
         self._seed: object = None
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+
+        self._preview = TablePreview(mode="xy")
+        self._preview.set_axis_titles("x", "y")
+        layout.addWidget(self._preview)
+
         self._grid = NumericGrid(("x", "y"))
-        self._grid.changed.connect(self.changed)
+        self._grid.changed.connect(self._on_grid_changed)
         layout.addWidget(self._grid)
+
+    def _on_grid_changed(self) -> None:
+        self._preview.update_rows(self._grid.values())
+        self.changed.emit()
 
     def value(self) -> object:
         """``{"x": [...], "y": [...]}``, cells verbatim. An empty grid is empty lists."""
@@ -164,9 +180,11 @@ class TableBody(ModeBody):
     def set_value(self, value: object) -> None:
         self._seed = value
         self._grid.set_values(_table_rows(value))
+        self._preview.update_rows(self._grid.values())
 
     def reset(self) -> None:
         self._grid.set_values(_table_rows(self._seed))
+        self._preview.update_rows(self._grid.values())
 
     def focus_widget(self) -> QWidget:
         return self._grid.focus_widget()
