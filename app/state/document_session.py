@@ -9,14 +9,31 @@ shell."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 from core import bpx_gateway, command_service, editing, export
 from core.bpx_gateway import ValidationResult
-from core.commands import Command, Preview
+from core.commands import Command, Preview, SetValue
 from core.document import BPXDocument
 from core.tree_model import ParameterItem, TreeNode
 from core.validation import ValidatorDiagnostic
+
+
+@dataclass(frozen=True)
+class _HistoryEntry:
+    """One undo step: the document *and* where the user was when it was made.
+
+    Selection is part of the state a command changes, so restoring a document
+    without restoring its selection leaves the user looking at an unrelated
+    parameter while an off-screen one silently reverts. Because the selection
+    was valid in the document it is stored beside, it is always valid again
+    once that document is restored.
+    """
+
+    document: BPXDocument
+    selected_path: tuple[str, ...] | None
+    selected_parameter_path: tuple[str, ...] | None
 
 
 class DocumentSession:
@@ -35,7 +52,7 @@ class DocumentSession:
         self.document: BPXDocument | None = document
         self.selected_path: tuple[str, ...] | None = None
         self.selected_parameter_path: tuple[str, ...] | None = None
-        self._undo_stack: list[BPXDocument] = []
+        self._undo_stack: list[_HistoryEntry] = []
         self.dirty: bool = False
         self.backing_file: Path | None = None
 
@@ -58,7 +75,11 @@ class DocumentSession:
         raw = {} if self.document is None else self.document.raw
         result = command_service.execute(raw, command)
         if self.document is not None:
-            self._undo_stack.append(self.document)
+            self._undo_stack.append(
+                _HistoryEntry(
+                    self.document, self.selected_path, self.selected_parameter_path
+                )
+            )
             filename, fmt = self.document.filename, self.document.fmt
         else:
             filename, fmt = "untitled.json", "json"
@@ -69,9 +90,17 @@ class DocumentSession:
         self.selected_parameter_path = result.select_parameter_path
 
     def undo(self) -> None:
-        """Restore the previous document state, if any."""
+        """Restore the previous document state and selection, if any.
+
+        The selection is restored along with the document so undo lands on the
+        change it reverted, rather than leaving the user on whatever they
+        happen to be looking at while a parameter elsewhere silently changes.
+        """
         if self._undo_stack:
-            self.document = self._undo_stack.pop()
+            entry = self._undo_stack.pop()
+            self.document = entry.document
+            self.selected_path = entry.selected_path
+            self.selected_parameter_path = entry.selected_parameter_path
             self.dirty = True
 
     def select(self, path: tuple[str, ...]) -> None:
@@ -138,18 +167,16 @@ class DocumentSession:
         return list(parameter.issues) if parameter is not None else []
 
     def apply_value(self, path: tuple[str, ...], value: object) -> None:
-        """Commit an edit: mutate the raw dict, rebuild tree, revalidate.
+        """Commit an edit as an undoable ``SetValue`` command.
 
-        The visible selection is preserved so the UI stays on the parameter the
-        user just changed.
+        A value edit is a document mutation like any other, so it travels the
+        same command spine as add/remove: ``execute_command`` rebuilds the
+        document, records undo history and marks the session dirty. ``SetValue``
+        selects the edited parameter, so the UI stays on what the user changed.
         """
         if self.document is None:
             raise ValueError("No document loaded")
-        raw = editing.set_value(self.document.raw, path, value)
-        self.document = BPXDocument.from_raw(
-            raw, filename=self.document.filename, fmt=self.document.fmt
-        )
-        self.dirty = True
+        self.execute_command(SetValue(tuple(path), value))
 
     def save(self) -> None:
         """Write the current document to ``backing_file`` and clear dirty.

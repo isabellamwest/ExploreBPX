@@ -268,6 +268,7 @@ repaired in place.
 | Basic function-expression editing (constant or expression string) | Implemented |
 | Enter-to-commit / Escape-to-revert model | Implemented |
 | Command-based mutation with undo | Implemented |
+| Undo (toolbar action, and focus-aware `Ctrl+Z`) | Implemented |
 | Unknown/raw fallback editor | Implemented |
 | Declared-kind taxonomy (text, boolean, map, series; table narrowed to `InterpolatedTable`) | Planned |
 | Mode strip on union-typed fields (verbatim BPX vocabulary, per-mode drafts, conditional Raw) | Planned |
@@ -347,10 +348,36 @@ line fed by `FieldMeta.examples`; description):
 
 Editing is command-based: `commands.py` describes intent, `editing.py` performs
 pure raw-dict mutation, `command_service.py` previews and executes with structural
-guardrails, and `DocumentSession` records undo and dirty state. A card's
-architectural contract is fixed: it edits one `ParameterItem`, emits raw input, and
-does not decide validity. See the Editing and Command architecture in
+guardrails, and `DocumentSession` records undo and dirty state. Committing a card
+runs `apply_value`, which is a `SetValue` command, so a value edit is undoable on
+the same stack as adding or removing a parameter. A card's architectural contract
+is fixed: it edits one `ParameterItem`, emits raw input, and does not decide
+validity. See the Editing and Command architecture in
 [01-architecture.md](01-architecture.md).
+
+**Undo restores the selection too.** Each undo entry stores the document *and*
+the selection that was current when the command ran, so undo navigates to the
+change it reverted. Without this, undoing after navigating away would silently
+alter a parameter that is not on screen — and there is no redo to recover it.
+
+**Undo has two surfaces, deliberately unlike each other.** The toolbar's *Undo*
+button is a document command, like Save and Export beside it: it reverts the last
+committed change whatever holds keyboard focus, and greys out when there is
+nothing to revert.
+
+`Ctrl+Z` is *focus-aware*, because a window shortcut is matched before the focused
+widget sees the key, so binding it unguarded would strip undo from every text
+field in the app, the search box included. It resolves in three steps:
+
+1. a focused text editor with typing of its own to undo — undo that typing;
+2. otherwise, a focused card holding an uncommitted draft — do nothing. A spin
+   box or combo box has no undo history to offer, and reverting the previous
+   commit instead would change a parameter the user is not editing. Escape
+   reverts the draft; the toolbar button still reverts the document;
+3. otherwise — undo the document.
+
+Committing rebuilds the card around a fresh widget with neither typing history nor
+a draft, so the next `Ctrl+Z` reaches the document. There is still no redo anywhere.
 
 ### Dependencies
 

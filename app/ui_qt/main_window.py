@@ -14,11 +14,14 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMainWindow,
     QMessageBox,
+    QPlainTextEdit,
     QSizePolicy,
     QStackedWidget,
     QStatusBar,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -124,6 +127,17 @@ class MainWindow(QMainWindow):
 
         self._save_action = bar.addAction("Save", self._save)
         self._export_action = bar.addAction("Export", self._export)
+
+        # The button is a document command, like its neighbours Save and
+        # Export: it never edits whatever widget happens to hold focus. The
+        # *keyboard* shortcut lives on a separate QShortcut precisely because
+        # it must be focus-aware -- see _undo. Binding the sequence to the
+        # action instead would make one indistinguishable from the other.
+        self._undo_action = bar.addAction("Undo", self._undo_document)
+        undo_keys = QKeySequence(QKeySequence.Undo).toString(QKeySequence.NativeText)
+        self._undo_action.setToolTip(f"Undo ({undo_keys})")
+        self._undo_shortcut = QShortcut(QKeySequence.Undo, self, activated=self._undo)
+
         bar.addSeparator()
         bar.addWidget(self._search)
         for sequence in (QKeySequence.Find, QKeySequence("Ctrl+P")):
@@ -300,6 +314,78 @@ class MainWindow(QMainWindow):
         self._refresh_all()
         if kept:
             self._navigation.navigate(kept)
+
+    # --- undo -----------------------------------------------------------
+    def _undo(self) -> None:
+        """``Ctrl+Z``: undo the focused editor's own work, else the document.
+
+        A window-level shortcut is matched *before* the focused widget sees the
+        key, so an unguarded ``Ctrl+Z`` would steal undo from every text field
+        in the app -- the search box included. Dispatch therefore consults the
+        focus widget first and hands the key back to it.
+
+        Where an editor has no undo of its own, the key still must not reach
+        the document while that editor holds an uncommitted draft: a spin box
+        or a combo box cannot undo its own change, and reverting the *previous*
+        commit instead would silently alter a parameter the user is not looking
+        at, with no redo to recover it. In that state ``Ctrl+Z`` does nothing --
+        exactly as it does in a native spin box. Escape reverts the draft, and
+        the toolbar's Undo button remains available for the document.
+
+        Once the draft is committed the card is rebuilt around a fresh widget
+        with no history and no dirt, so the next ``Ctrl+Z`` reaches the
+        document.
+        """
+        # Focus is read from *this window*, not QApplication: a WindowShortcut
+        # only fires while this window is active, so the two agree whenever it
+        # matters, and the window's own focus widget is never confused by an
+        # active popup that owns its own text field. A compound editor reports
+        # itself, not its internal line edit -- a focused QSpinBox is a
+        # QSpinBox -- which is why step 1 below cannot match one.
+        widget = self.focusWidget()
+        if self._undo_focused_editor(widget):
+            return
+        if self._inspector.has_focused_draft(widget):
+            return
+        self._undo_document()
+
+    def _undo_document(self) -> None:
+        """Revert the last committed change, whatever holds keyboard focus.
+
+        This is what the toolbar's Undo button does: it is a document command,
+        like Save and Export beside it, and a toolbar button takes no focus.
+
+        ``DocumentSession.undo`` restores the selection that was current when
+        the command ran, so navigating to it reveals the reverted change rather
+        than leaving the user where they happened to be. That selection was
+        valid in the restored document, so no existence check is needed here.
+        """
+        session = self._state.active
+        if session is None or not session.can_undo:
+            return
+        session.undo()
+        target = session.selected_parameter_path or session.selected_path
+        self._refresh_all()
+        if target:
+            self._navigation.navigate(target)
+
+    @staticmethod
+    def _undo_focused_editor(widget) -> bool:
+        """Undo one step inside *widget* when it is a text editor; True if it did.
+
+        Returns False when *widget* is not a text editor, or is one with an
+        empty undo history. Any text widget qualifies, not just a card's: the
+        search box must keep the ``Ctrl+Z`` this shortcut intercepted from it.
+        """
+        if isinstance(widget, QLineEdit):
+            if widget.isUndoAvailable():
+                widget.undo()
+                return True
+        elif isinstance(widget, (QPlainTextEdit, QTextEdit)):
+            if widget.document().isUndoAvailable():
+                widget.undo()
+                return True
+        return False
 
     # --- file actions ---------------------------------------------------
     def open_document(self, path: Path) -> None:
@@ -488,11 +574,16 @@ class MainWindow(QMainWindow):
 
     def _update_actions_enabled(self) -> None:
         """Save/Export are only enabled once a document is loaded (a session
-        alone is not enough: a session may exist with no document yet)."""
+        alone is not enough: a session may exist with no document yet), and the
+        Undo *button* only once that document has something to undo.
+
+        The ``Ctrl+Z`` shortcut stays live regardless: with an empty document
+        history it still has a focused text field's typing to undo."""
         session = self._state.active
         has_document = session is not None and session.document is not None
         self._save_action.setEnabled(has_document)
         self._export_action.setEnabled(has_document)
+        self._undo_action.setEnabled(has_document and session.can_undo)
 
     @staticmethod
     def _validation_tooltip(errors: int, warnings: int) -> str:

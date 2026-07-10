@@ -238,21 +238,72 @@ class AppDriver:
         return self
 
     def undo(self) -> "AppDriver":
-        """Undo the most recent command and refresh every view.
+        """Click the toolbar's Undo button: a document command.
 
-        The app has no dedicated Undo affordance yet (no redo either -- see
-        PROJECT_STATUS's deferred-debt note); this drives the same
-        ``DocumentSession.undo`` + refresh-and-reveal sequence a future Undo
-        action would, so tests can verify a command is undo-able without
-        inventing UI that does not exist.
+        ``QAction.trigger()`` is ignored by a disabled action exactly as a
+        click on it would be, so this faithfully reproduces "Undo is currently
+        unavailable" too. It does bypass one thing a real mouse click meets
+        first: an open popup's ``OutsideDismissFilter`` swallows the click that
+        dismisses it, so in the running app a click with the search popup open
+        closes the popup and a second click reaches Undo. That is the app's
+        dismissal convention (shared by Save and Export), tested in
+        ``test_dismissal.py``, and orthogonal to what Undo does.
         """
-        session = self._w._state.active
-        session.undo()
-        target = session.selected_path
-        self._w._refresh_all()
-        if target:
-            self._w._navigation.navigate(target)
+        self._w._undo_action.trigger()
         return self
+
+    def press_undo_shortcut(self) -> "AppDriver":
+        """Press ``Ctrl+Z``: focus-aware undo (see ``MainWindow._undo``).
+
+        Emits the real ``QShortcut``'s ``activated`` signal rather than a
+        ``Ctrl+Z`` key event, because ``QTest`` delivers key events straight to
+        the target widget and never consults the window's shortcut map -- so a
+        synthesised key press would silently exercise nothing.
+        """
+        self._w._undo_shortcut.activated.emit()
+        return self
+
+    def focus_search(self) -> "AppDriver":
+        """Give the top-bar search box keyboard focus within the window."""
+        self._focus(self._w._search)
+        return self
+
+    def type_in_search(self, text: str) -> "AppDriver":
+        self._qtbot.keyClicks(self._w._search, str(text))
+        return self
+
+    def search_text(self) -> str:
+        return self._w._search.text()
+
+    def _focus(self, widget) -> None:
+        """Give *widget* keyboard focus within the window.
+
+        The window must be shown first: ``setFocus`` on a hidden widget only
+        propagates as far as its first non-hidden ancestor, so a toolbar widget
+        in an unshown window never becomes the window's focus widget. That is
+        real Qt behaviour, not a test artefact -- a hidden widget cannot hold
+        the keyboard.
+        """
+        self._w.show()
+        widget.setFocus()
+        assert self._w.focusWidget() is widget, f"{widget!r} did not take focus"
+
+    def focus_field(self) -> "AppDriver":
+        """Give the active card's editor keyboard focus within the window."""
+        self._focus(self._editor_widget())
+        return self
+
+    def type_in_field(self, text: str) -> "AppDriver":
+        """Type into the active card's editor without clearing it first, so the
+        widget accumulates its own undo history."""
+        self._qtbot.keyClicks(self._editor_widget(), str(text))
+        return self
+
+    def field_text(self) -> str:
+        """The raw text currently shown in the active card's editor."""
+        widget = self._editor_widget()
+        assert isinstance(widget, QLineEdit), f"{type(widget).__name__} has no text()"
+        return widget.text()
 
     def click_workspace_new(self, model: str) -> "AppDriver":
         """Click the New button for *model* on the Workspace page's inline chooser."""
@@ -298,6 +349,12 @@ class AppDriver:
     def export_enabled(self) -> bool:
         return self._w._export_action.isEnabled()
 
+    def undo_enabled(self) -> bool:
+        return self._w._undo_action.isEnabled()
+
+    def undo_shortcut(self) -> str:
+        return self._w._undo_shortcut.key().toString()
+
     def inspector_title(self) -> str:
         return self._w._inspector._card._title.text()
 
@@ -311,6 +368,16 @@ class AppDriver:
     def card_is_editable(self) -> bool:
         card = self._w._inspector._card
         return card is not None and card.is_editable
+
+    def card_is_dirty(self) -> bool:
+        """True when the active card holds an uncommitted draft."""
+        card = self._w._inspector._card
+        return card is not None and card.is_dirty
+
+    def shown_parameter_path(self) -> tuple[str, ...] | None:
+        """Path of the parameter the Inspector is currently showing."""
+        card = self._w._inspector._card
+        return tuple(card.parameter.path) if card is not None else None
 
     def showing_placeholder(self) -> bool:
         """True when the Inspector shows its 'select an object' placeholder."""

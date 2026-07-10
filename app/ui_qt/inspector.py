@@ -157,6 +157,21 @@ class InspectorPanel(QWidget):
         count = self._issues_tab.show_parameter(parameter)
         self._secondary.set_count("issues", count)
 
+    def has_focused_draft(self, widget) -> bool:
+        """True when *widget* is inside a card holding an uncommitted draft.
+
+        The Undo shortcut asks this before reverting the document: a spin box
+        or combo box has no undo history of its own, so an unguarded ``Ctrl+Z``
+        would skip past the draft in front of the user and revert the previous
+        commit -- possibly to a parameter off-screen, with no redo. Whether the
+        draft is discardable is the card's business (Escape), so the Inspector
+        answers only whether one exists here.
+        """
+        card = self._card
+        if card is None or widget is None:
+            return False
+        return card.is_dirty and card.isAncestorOf(widget)
+
     def _validate_draft(self) -> None:
         if self._card is None or self._state.active is None:
             return

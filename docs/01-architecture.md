@@ -288,6 +288,17 @@ Editing is built around command intent and raw-dict mutation:
 - `command_service.py` previews and executes commands with structural guardrails;
 - `DocumentSession` records undo history and dirty/backing-file state.
 
+Every mutation travels this spine, value edits included: `DocumentSession.apply_value`
+is a thin wrapper over `execute_command(SetValue(...))` rather than a second,
+history-less mutation path. Committing a card is therefore undoable exactly as
+adding or removing a parameter is.
+
+An undo entry is a `(document, selected_path, selected_parameter_path)` triple, not
+a bare document: selection is part of the state a command changes, so undo restores
+both and lands on the change it reverted. Because the selection was valid in the
+document it is stored beside, it is always valid again once that document is
+restored — no existence check is needed at the navigation seam.
+
 The raw dict remains the editing state. User input can be committed even when
 invalid; the derived validated model rejects that state visibly by producing
 validation issues. This preserves the ability to open, edit and repair invalid
