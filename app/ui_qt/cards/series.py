@@ -17,9 +17,13 @@ first column is the card's value; ``value()`` never reads the context.
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QVBoxLayout
+from PySide6.QtWidgets import QFileDialog, QToolButton, QVBoxLayout
+
+from core.commands import SetValues
 
 from .base import EditorCard
+from .csv_dialog import CsvImportDialog
+from .csv_import import read_csv_text
 from .grid import NumericGrid
 from .table_preview import TablePreview
 
@@ -54,11 +58,79 @@ class SeriesCard(EditorCard):
         self._grid.expand_toggled.connect(self.expand_toggled)
         layout.addWidget(self._grid)
 
+        # CSV import lives in the expanded (takeover) editor only: it is a
+        # bulk operation over the whole run, not a cell-level edit, and the
+        # takeover is where the user has the room to review it.
+        self._import_button = QToolButton()
+        self._import_button.setText("Import CSV…")
+        self._import_button.setToolTip(
+            "Fill this run's arrays from the columns of a CSV file"
+        )
+        self._import_button.setAutoRaise(True)
+        self._import_button.clicked.connect(self._import_csv)
+        self._import_button.hide()
+        self._grid.add_toolbar_widget(self._import_button)
+        self._grid.expand_toggled.connect(self._import_button.setVisible)
+
         self._install_keyboard_handler(self._grid.focus_widget())
 
     def _on_grid_changed(self) -> None:
         self._preview.update_rows(self._grid.values())
         self.draft_changed.emit()
+
+    # ------------------------------------------------------------------
+    # CSV import
+    # ------------------------------------------------------------------
+
+    def _csv_targets(self) -> tuple[tuple[str, tuple[str, ...]], ...]:
+        """The parameters a CSV can fill: this one first, then its siblings.
+
+        First because the resulting ``SetValues`` selects its first path, so
+        the user stays on the card they imported from. Siblings come from the
+        tree's seeding (a Validation run's other arrays); a lone series simply
+        offers one target.
+        """
+        return ((self.parameter.label, self.parameter.path),) + tuple(
+            (sibling.label, sibling.path) for sibling in self.parameter.sibling_series
+        )
+
+    def _import_csv(self) -> None:
+        """Pick a file, map its columns, and commit the batch atomically."""
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Import CSV",
+            "",
+            "CSV files (*.csv *.tsv *.txt);;All files (*)",
+        )
+        if not path:
+            return
+        # BOM-tolerant; a byte that is not UTF-8 survives as a visible
+        # replacement character in the preview rather than aborting the import.
+        with open(path, encoding="utf-8-sig", errors="replace") as handle:
+            data = read_csv_text(handle.read())
+        if data.row_count == 0:
+            return
+        targets = self._csv_targets()
+        dialog = CsvImportDialog(data, tuple(label for label, _ in targets), self)
+        dialog.exec()
+        if dialog.accepted_mapping is not None:
+            self._apply_csv_import(data, dialog.accepted_mapping)
+
+    def _apply_csv_import(self, data, mapping: tuple[int | None, ...]) -> None:
+        """Turn a confirmed *mapping* into one atomic ``SetValues`` commit.
+
+        Every mapped target gets its file column verbatim (raw objects, blanks
+        as ``None``); an unmapped target is *not touched* -- skipping a column
+        must never blank a stored array. The batch is a single command, so the
+        whole import is one undo step.
+        """
+        updates = tuple(
+            (path, list(data.columns[column]))
+            for (_, path), column in zip(self._csv_targets(), mapping)
+            if column is not None
+        )
+        if updates:
+            self.bulk_commit_requested.emit(SetValues(updates, label="Import CSV"))
 
     @staticmethod
     def _rows(value: object) -> list[list[object]]:

@@ -39,6 +39,7 @@ class ParameterCard(QWidget):
     draft_reset = Signal()
     commit_requested = Signal()
     expand_toggled = Signal(bool)
+    bulk_commit_requested = Signal(object)
 
     def __init__(self, parameter: ParameterItem, meta: FieldMeta | None) -> None:
         super().__init__()
@@ -84,6 +85,7 @@ class ParameterCard(QWidget):
         self._editor.draft_reset.connect(self.draft_reset)
         self._editor.commit_requested.connect(self.commit_requested)
         self._editor.expand_toggled.connect(self.expand_toggled)
+        self._editor.bulk_commit_requested.connect(self.bulk_commit_requested)
         # Value row: the editor plus a trailing slot. The trailing slot is
         # reserved -- not built -- for a future Reference document's value
         # and delta once multi-document lands (docs/03-features.md §4); no

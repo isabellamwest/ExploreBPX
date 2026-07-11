@@ -173,6 +173,7 @@ class InspectorPanel(QWidget):
         self._card.draft_changed.connect(self._debounce.start)
         self._card.draft_reset.connect(self._on_reset)
         self._card.commit_requested.connect(self._on_commit)
+        self._card.bulk_commit_requested.connect(self._on_bulk_commit)
         self._card.expand_toggled.connect(self._on_card_expanded)
         # Top-aligned so the card sits at its natural height with space beneath;
         # expanding (a grid takeover) clears the alignment so the card -- and its
@@ -243,6 +244,21 @@ class InspectorPanel(QWidget):
             # "empty" is (e.g. "").
             return
         self._state.active.apply_value(self._card.parameter.path, self._card.value())
+        self.committed.emit()
+
+    def _on_bulk_commit(self, command) -> None:
+        """Execute a card's multi-parameter command (CSV import) as one step.
+
+        The card hands over a ready-made ``SetValues`` naming every path it
+        writes; it travels the same command spine as a single-value commit
+        (one document rebuild, one undo entry) and the same ``committed``
+        signal refreshes the UI. No dirty/blocked gating applies: the payload
+        is confirm-gated by its own dialog and independent of this card's
+        draft state.
+        """
+        if self._state.active is None:
+            return
+        self._state.active.execute_command(command)
         self.committed.emit()
 
     def _render_issues(self, issues, has_errors: bool) -> None:

@@ -48,6 +48,13 @@ class EditorCard(QWidget):
     #: Emitted (with the new expanded state) when a card's grid asks to take
     #: over the Inspector pane. Cards without a grid never emit it.
     expand_toggled = Signal(bool)
+    #: Emitted with a ready-made :class:`core.commands.SetValues` when the
+    #: user confirms an edit that spans *several* parameters (CSV import
+    #: filling a Validation run's four arrays). Unlike ``commit_requested``,
+    #: which asks the Inspector to commit this card's own draft, the payload
+    #: here already names every path it writes; the Inspector executes it as
+    #: one undoable command. Only cards that own such a flow ever emit it.
+    bulk_commit_requested = Signal(object)
 
     #: Multi-line cards (e.g. ``TextCard``) set this True so Shift+Enter
     #: inserts a newline via ``_insert_newline`` instead of committing.
