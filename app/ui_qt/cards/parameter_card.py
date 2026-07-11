@@ -26,7 +26,9 @@ from core.bpx_gateway import FieldMeta
 from core.parameter_metadata import resolve_parameter_metadata
 from core.tree_model import ParameterItem
 
+from ..latex import symbol_label
 from ..parameter_info_popover import ParameterInfoPopover
+from ..style import MUTED
 from .registry import create_card
 
 
@@ -42,6 +44,10 @@ class ParameterCard(QWidget):
         self.parameter = parameter
         self._meta = meta
         self._popover: ParameterInfoPopover | None = None
+        # Resolved once and reused by the ( i ) popover: the symbol shown in the
+        # header comes from the same source, so both render identical maths and
+        # neither invents anything the dataset does not carry.
+        self._metadata = resolve_parameter_metadata(parameter.path, meta)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -49,7 +55,16 @@ class ParameterCard(QWidget):
         header = QHBoxLayout()
         self._title = QLabel(parameter.label)
         self._title.setObjectName("CardTitle")
-        header.addWidget(self._title, 1)
+        header.addWidget(self._title)
+        # The parameter's symbol, as rendered maths, sits beside its name -- the
+        # glance the modeller reads by ("Electrode area [m2]", A). Present only
+        # for parameters the technical-descriptions dataset documents; every
+        # other parameter simply shows no symbol (see resolve_parameter_metadata).
+        if self._metadata.symbol:
+            symbol = symbol_label(self._metadata.symbol, point_size=13.0, color=MUTED)
+            symbol.setObjectName("CardSymbol")
+            header.addWidget(symbol)
+        header.addStretch(1)
         self._badge = QLabel("")
         header.addWidget(self._badge)
         self._info_button = QPushButton("i")
@@ -118,6 +133,5 @@ class ParameterCard(QWidget):
             return
         if self._popover is None:
             self._popover = ParameterInfoPopover(self)
-        metadata = resolve_parameter_metadata(self.parameter.path, self._meta)
-        self._popover.show_metadata(metadata)
+        self._popover.show_metadata(self._metadata)
         self._popover.open_below(self._info_button)

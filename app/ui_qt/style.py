@@ -36,6 +36,7 @@ QTreeView#StructureTree, QListWidget#ParameterListView { border: none; }
    internal (top/bottom) splitter, whose handle stays at its default width. */
 QSplitter#EditorSplitter::handle { background: #d0d7de; }
 QLabel#CardTitle { font-size: 15px; font-weight: 600; }
+QLabel#CardSymbol { margin-left: 8px; }
 QLabel#Heading { color: #57606a; font-weight: 600; }
 QFrame#Card { border: 1px solid #d0d7de; }
 QStatusBar { background: #f6f8fa; border-top: 1px solid #d0d7de; font-size: 12px; color: #57606a; }

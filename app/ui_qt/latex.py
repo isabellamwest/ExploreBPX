@@ -16,7 +16,9 @@ from __future__ import annotations
 from functools import lru_cache
 from io import BytesIO
 
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
+from PySide6.QtWidgets import QLabel
 
 
 def latex_pixmap(latex: str, point_size: float = 11.0, color: str = "#202020") -> QPixmap | None:
@@ -34,6 +36,26 @@ def latex_pixmap(latex: str, point_size: float = 11.0, color: str = "#202020") -
     # Rendered at 2x DPI for crispness; scale back down in device pixels.
     pixmap.setDevicePixelRatio(2.0)
     return pixmap
+
+
+def symbol_label(latex: str, point_size: float = 11.0, color: str = "#202020") -> QLabel:
+    """A ``QLabel`` showing *latex* as rendered maths, or its source text if the
+    renderer is unavailable -- the symbol is never silently dropped.
+
+    Shared by every surface that shows a parameter's symbol (the ( i ) popover,
+    the Documentation tab, the card header) so they render it identically. The
+    symbol is verbatim from the descriptions dataset; this function invents
+    nothing, and returns an empty-but-valid label only when handed empty text.
+    """
+    label = QLabel()
+    pixmap = latex_pixmap(latex, point_size=point_size, color=color) if latex else None
+    if pixmap is not None:
+        label.setPixmap(pixmap)
+    else:
+        label.setTextFormat(Qt.PlainText)
+        label.setText(latex)
+    label.setToolTip(latex)
+    return label
 
 
 @lru_cache(maxsize=256)

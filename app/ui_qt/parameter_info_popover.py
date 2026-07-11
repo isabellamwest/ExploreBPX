@@ -19,7 +19,7 @@ from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 from core.parameter_metadata import ParameterMetadata
 
 from .dismissal import OutsideDismissFilter
-from .latex import latex_pixmap
+from .latex import symbol_label
 
 #: (heading, ParameterMetadata field name) for the quick-glance facts, in
 #: display order. A field that resolves empty/``None`` is simply omitted.
@@ -60,7 +60,7 @@ class ParameterInfoPopover(QWidget):
         self._clear()
         if metadata.symbol:
             self._layout.addWidget(QLabel("Symbol", objectName="Heading"))
-            self._layout.addWidget(_symbol_label(metadata.symbol))
+            self._layout.addWidget(symbol_label(metadata.symbol))
         for heading, field_name in _SECTIONS:
             value = getattr(metadata, field_name)
             if not value:
@@ -118,15 +118,3 @@ class ParameterInfoPopover(QWidget):
         super().keyPressEvent(event)
 
 
-def _symbol_label(latex: str) -> QLabel:
-    """A label showing *latex* as rendered maths, or as source text if the
-    renderer is unavailable — the information is never silently dropped."""
-    label = QLabel()
-    pixmap = latex_pixmap(latex)
-    if pixmap is not None:
-        label.setPixmap(pixmap)
-    else:
-        label.setTextFormat(Qt.PlainText)
-        label.setText(latex)
-    label.setToolTip(latex)
-    return label
