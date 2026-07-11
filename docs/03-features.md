@@ -283,9 +283,8 @@ repaired in place.
 | Paste into a grid (Ctrl+V or right-click; delimiter auto-detect, header skip, preview, replace/append, no coercion) | Implemented |
 | Read-only sibling columns on a Validation run's series grid (length mismatch visible) | Implemented |
 | CSV import (expanded editor; always-shown column-mapping dialog; fills a run's arrays as one undo step) | Implemented |
-| Remove parameter (row context menu) | Planned |
-| Section add/remove controls | Planned |
-| Tree editing (add/remove sections; add/rename/remove materials and experiments) | Planned |
+| Remove parameter (row context menu, Delete key) | Implemented |
+| Tree editing (add/remove sections via context menu; add/rename/remove materials and experiments; confirm before removing populated content) | Implemented |
 | Enhanced function-expression editor (syntax highlighting, validation) | Planned |
 | Model-switch handling for structural model changes | Planned |
 | Compact quick inputs in the parameter list | Planned |
@@ -368,9 +367,17 @@ runs `apply_value`, which is a `SetValue` command, so a value edit is undoable o
 the same stack as adding or removing a parameter. An edit that spans several
 parameters — a CSV import filling a Validation run's four arrays — is a single
 `SetValues` command: one document rebuild, one undo entry, applied
-all-or-nothing so the arrays can never desynchronise halfway. A card's
-architectural contract is fixed: it edits one `ParameterItem`, emits raw input,
-and does not decide validity. See the Editing and Command architecture in
+all-or-nothing so the arrays can never desynchronise halfway. Structure edits
+travel the same spine (`AddSection`, `RemoveSection`, `RenameKey`). `RenameKey`
+applies only to user-named dict keys (materials, Validation runs — enforced by
+`structure.can_rename`), preserves the key's position in the raw dict (key
+order is what exports), and never merges onto an existing sibling. It moves
+the *address* of every descendant of the renamed node; any future
+address-keyed sidecar metadata must cascade with it. Values that refer to the
+old name — a per-material MAP key — are deliberately not rewritten: the
+validator reports them, the app invents nothing. A card's architectural
+contract is fixed: it edits one `ParameterItem`, emits raw input, and does not
+decide validity. See the Editing and Command architecture in
 [01-architecture.md](01-architecture.md).
 
 **A union-typed field carries a mode strip.** `FloatFunctionTable` fields open on
