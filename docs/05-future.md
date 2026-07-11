@@ -16,6 +16,34 @@ specification document, with any implementation sequencing added to
 - Additional source adapters implemented as anti-corruption layers that return raw
   BPX dictionaries, mirroring `bpx_gateway.py`.
 
+### Bundled PyBaMM parameter sets as a reference library
+
+Suggested externally (2026-07): ship a small, read-only library of well-known
+parameter sets (Chen2020, Marquis2019, …), converted from PyBaMM into BPX, so a
+user can pull one up as a **reference for comparison and plotting**. This is the
+concrete first candidate for the "other BPX database sources" bullet above and a
+natural source of Reference documents for the future Workspace.
+
+Feasibility has been checked on Chen2020 (converted to BPX, passes the `bpx`
+validator, and round-trips back into PyBaMM). Findings that constrain any future
+design — recorded so they are not rediscovered:
+
+- **A converter is ours to own.** PyBaMM reads BPX (`create_from_bpx`) but has no
+  official BPX *writer*; the PyBaMM → BPX direction is bespoke.
+- **A converted set is a reference artifact, not a simulation-grade substitute.**
+  Only a subset of parameters map: functions (OCP, electrolyte properties) become
+  sampled interpolated tables, stoichiometry limits must be computed, the reaction
+  rate constant is reconstructed, and degradation / current-collector / detailed
+  thermal parameters have no BPX home. Each generated file should say so in its
+  Description. Only DFN-shaped lithium-ion sets convert; MSMR and lead-acid do not.
+- **Generation is offline, not a runtime dependency.** A dev-time tool (which may
+  import PyBaMM) would emit validated static BPX files that the app loads as
+  ordinary data; the application itself never imports PyBaMM, preserving the rule
+  that BPX coupling lives only behind `bpx_gateway.py`.
+
+Not accepted design. Promotion would require a UI design pass for how the library
+is browsed and chosen, and agreement on which sets to include.
+
 ## Export and simulator integration
 
 - Simulator hand-off targets such as PyBOP and PyProBE.
