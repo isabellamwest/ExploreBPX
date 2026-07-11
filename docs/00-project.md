@@ -11,7 +11,7 @@ Read the specification in order:
 2. [01-architecture.md](01-architecture.md) — domain model, architecture, state, seams.
 3. [02-ui.md](02-ui.md) — application-wide UI framework.
 4. [03-features.md](03-features.md) — authoritative specification of every feature.
-5. [04-roadmap.md](04-roadmap.md) — implementation order and acceptance criteria.
+5. [04-roadmap.md](04-roadmap.md) — remaining implementation work and acceptance criteria.
 6. [05-future.md](05-future.md) — speculative ideas not yet accepted as design.
 
 ## Vision

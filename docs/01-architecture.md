@@ -148,10 +148,7 @@ Union-typed fields (`FloatFunctionTable`, `FloatInt | dict[str, FloatInt]`) are
 one kind, not several: the kind identifies the declared union, and the card for
 that kind carries a **mode strip** naming each legal representation in verbatim
 `bpx` schema vocabulary. The stored value's shape selects the *initial mode*
-only; the user may switch mode freely. (This replaces an earlier rule where
-value shape selected among scalar/function/table kinds for `allows_function`
-fields — that exception made a field's other legal representations unreachable
-from the UI and is removed.)
+only; the user may switch mode freely.
 
 Value shape still classifies in exactly two places: metadata-absent parameters
 (the honest fallback below), and undeclared dicts/lists, whose topology no

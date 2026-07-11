@@ -458,10 +458,9 @@ a draft, so the next `Ctrl+Z` reaches the document. There is still no redo anywh
 - Per-document undo and dirty state on `DocumentSession`.
 - The Inspector cards in `ui_qt/cards/`.
 - The `meta=None` contract for user-defined parameter metadata
-  ([01-architecture.md](01-architecture.md)) is resolved: authoring-created
-  parameters do not synthesise or persist metadata, and absence is a valid
-  classification state, so this no longer blocks or constrains section
-  add/remove.
+  ([01-architecture.md](01-architecture.md)): authoring-created parameters do
+  not synthesise or persist metadata, and absence is a valid classification
+  state.
 
 ### Implementation Notes
 
@@ -830,9 +829,8 @@ the source of truth for whether such a parameter is legal.
 - `core/document_factory.py` for skeletons.
 - The completion/authoring layer (Planned) separate from exported BPX.
 - The `meta=None` contract for user-defined parameter metadata
-  ([01-architecture.md](01-architecture.md)), resolved: no persistence
-  mechanism is needed for authoring-created parameters to be classified
-  reliably.
+  ([01-architecture.md](01-architecture.md)): no persistence mechanism is
+  needed for authoring-created parameters to be classified reliably.
 - `NavigationService` for completion-task navigation.
 
 ### Implementation Notes

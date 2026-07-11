@@ -175,21 +175,3 @@ class ParameterTool:
 and surface each tab only when `supports()` returns True. Do not build this before
 a second concrete tool is ready — the abstraction should be derived from two
 examples, not invented for one.
-
-## Reference — superseded design register
-
-The project previously kept a numbered Design Decision register (DD-001 through
-DD-012) in the UI document. Those decisions have been promoted into the documents
-that own their subject matter, embedded inline as design rationale:
-
-- Workspace shell, activity bar, secondary surfaces, toolbar shape → [02-ui.md](02-ui.md).
-- DocumentSession/AppState split, navigation ownership → [01-architecture.md](01-architecture.md).
-- Editing commit model, validation review and cursor behaviour, parameter-scoped
-  Issues tab, SearchPopup, Save/Export semantics → [03-features.md](03-features.md).
-
-The one decision that was still **Proposed** — the BPX authoring lifecycle
-(formerly DD-012) — has since been accepted as a core product commitment and is now
-part of [00-project.md](00-project.md), [01-architecture.md](01-architecture.md) and
-the Authoring feature in [03-features.md](03-features.md). No separate decision
-register is maintained; this note exists only to explain the history for anyone
-looking for the old DD numbers.
