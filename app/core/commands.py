@@ -33,6 +33,24 @@ class SetValue(Command):
 
 
 @dataclass(frozen=True)
+class SetValues(Command):
+    """Atomically set several leaf values as **one** operation.
+
+    ``updates`` is an ordered tuple of ``(path, value)`` pairs. The whole batch
+    is a single document rebuild and a single undo entry: a CSV import that
+    fills four experiment arrays must revert as one step, never as four. The
+    *first* update's path is where the UI selection lands afterwards, so
+    callers put the parameter the user was editing first.
+
+    ``label`` titles the undo entry (e.g. "Import CSV"); the default matches
+    the ``SetValue`` convention.
+    """
+
+    updates: tuple[tuple[tuple[str, ...], object], ...]
+    label: str = "Set values"
+
+
+@dataclass(frozen=True)
 class AddSection(Command):
     """Add an empty object section ``key`` under ``parent_path``."""
 

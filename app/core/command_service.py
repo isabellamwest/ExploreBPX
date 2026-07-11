@@ -21,6 +21,7 @@ from .commands import (
     RemoveParameter,
     RemoveSection,
     SetValue,
+    SetValues,
 )
 from . import document_factory
 
@@ -33,6 +34,8 @@ def preview(raw: dict, command: Command) -> Preview:
     """Describe what ``command`` would change, without executing it."""
     if isinstance(command, SetValue):
         return Preview("Set value", (command.path,))
+    if isinstance(command, SetValues):
+        return Preview(command.label, tuple(path for path, _ in command.updates))
     if isinstance(command, AddSection):
         return Preview("Add section", (command.parent_path + (command.key,),))
     if isinstance(command, RemoveSection):
@@ -52,6 +55,12 @@ def execute(raw: dict, command: Command) -> CommandResult:
     if isinstance(command, SetValue):
         new = editing.set_value(raw, command.path, command.value)
         return CommandResult(new, "Set value", command.path[:-1], command.path)
+    if isinstance(command, SetValues):
+        if not command.updates:
+            raise CommandError("Nothing to set.")
+        new = editing.set_values(raw, command.updates)
+        first = command.updates[0][0]
+        return CommandResult(new, command.label, first[:-1], first)
     if isinstance(command, AddSection):
         new = editing.add_section(raw, command.parent_path, command.key)
         path = command.parent_path + (command.key,)

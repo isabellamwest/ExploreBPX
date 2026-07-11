@@ -46,6 +46,28 @@ def set_value(raw: dict, path: tuple[str, ...], value: object) -> dict:
     return updated
 
 
+def set_values(
+    raw: dict, updates: tuple[tuple[tuple[str, ...], object], ...]
+) -> dict:
+    """Return a copy of ``raw`` with every ``(path, value)`` in *updates* applied.
+
+    All-or-nothing: the writes go into a single copy, so if any path fails to
+    resolve the :class:`EditError` propagates before the copy is returned and
+    the caller's dict is never half-updated. One deep copy for the whole batch,
+    not one per write -- a CSV import touching four multi-thousand-row arrays
+    should not copy the document four times.
+    """
+    if not updates:
+        raise EditError("No updates to apply")
+    updated = copy.deepcopy(raw)
+    for path, value in updates:
+        if not path:
+            raise EditError("Cannot set a value at the document root")
+        parent = _navigate(updated, path)
+        parent[path[-1]] = value
+    return updated
+
+
 def add_parameter(raw: dict, parent_path: tuple[str, ...], key: str, value: object) -> dict:
     """Return a copy of ``raw`` with ``key`` added under ``parent_path``."""
     updated = copy.deepcopy(raw)

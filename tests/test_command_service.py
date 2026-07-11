@@ -11,6 +11,7 @@ from core.commands import (
     RemoveParameter,
     RemoveSection,
     SetValue,
+    SetValues,
 )
 
 import pytest
@@ -42,6 +43,84 @@ def test_set_value_is_non_destructive():
     result = command_service.execute(raw, SetValue(("Header", "Title"), "b"))
     assert result.raw["Header"]["Title"] == "b"
     assert raw["Header"]["Title"] == "a"
+
+
+# --- SetValues: the atomic multi-path write behind CSV import ---
+
+
+def test_set_values_applies_every_update_non_destructively():
+    raw = {"Validation": {"Run": {"Time [s]": [0], "Voltage [V]": [4.2]}}}
+    result = command_service.execute(
+        raw,
+        SetValues(
+            (
+                (("Validation", "Run", "Time [s]"), [0, 1]),
+                (("Validation", "Run", "Voltage [V]"), [4.2, 4.1]),
+            ),
+            label="Import CSV",
+        ),
+    )
+    assert result.raw["Validation"]["Run"]["Time [s]"] == [0, 1]
+    assert result.raw["Validation"]["Run"]["Voltage [V]"] == [4.2, 4.1]
+    assert result.label == "Import CSV"
+    # Selection lands on the FIRST update: callers put the active parameter first.
+    assert result.select_parameter_path == ("Validation", "Run", "Time [s]")
+    assert result.select_path == ("Validation", "Run")
+    assert raw["Validation"]["Run"]["Time [s]"] == [0]  # source untouched
+
+
+def test_set_values_is_all_or_nothing():
+    """A bad path anywhere in the batch must leave the document untouched --
+    a half-applied CSV import would desynchronise the four experiment arrays."""
+    raw = {"Header": {"Title": "a"}}
+    with pytest.raises(editing.EditError):
+        command_service.execute(
+            raw,
+            SetValues(
+                (
+                    (("Header", "Title"), "b"),
+                    (("Nope", "Missing"), 1),
+                )
+            ),
+        )
+    assert raw == {"Header": {"Title": "a"}}
+
+
+def test_set_values_empty_batch_is_an_error():
+    with pytest.raises(CommandError):
+        command_service.execute({"Header": {}}, SetValues(()))
+
+
+def test_set_values_preview_lists_every_path():
+    preview = command_service.preview(
+        {},
+        SetValues(((("A", "x"), 1), (("A", "y"), 2)), label="Import CSV"),
+    )
+    assert preview.label == "Import CSV"
+    assert preview.changed_paths == (("A", "x"), ("A", "y"))
+
+
+def test_set_values_is_one_undo_step():
+    """Four arrays filled by one import revert together with a single undo."""
+    from state.document_session import DocumentSession
+
+    session = DocumentSession()
+    session.execute_command(CreateDocument("SPM", "T"))
+    session.execute_command(AddSection((), "Validation"))
+    session.execute_command(AddSection(("Validation",), "Run"))
+    session.execute_command(
+        SetValues(
+            (
+                (("Validation", "Run", "Time [s]"), [0, 1]),
+                (("Validation", "Run", "Current [A]"), [0.1, 0.2]),
+            ),
+            label="Import CSV",
+        )
+    )
+    run = session.document.raw["Validation"]["Run"]
+    assert run["Time [s]"] == [0, 1] and run["Current [A]"] == [0.1, 0.2]
+    session.undo()
+    assert session.document.raw["Validation"]["Run"] == {}
 
 
 def test_remove_protected_section_raises():
