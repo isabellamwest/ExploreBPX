@@ -31,17 +31,22 @@ double-click, which is how a cell is edited.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, Signal
+from PySide6.QtCore import QAbstractTableModel, QEvent, QModelIndex, Qt, Signal
+from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QApplication,
     QHBoxLayout,
     QHeaderView,
+    QSizePolicy,
     QTableView,
     QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
+from .paste import parse_clipboard
+from .paste_dialog import PastePreviewDialog, PastePreviewResult
 from .values import format_value, parse_value, values_equal
 
 #: Rows shown before the grid scrolls. The grid keeps this height whatever it
@@ -122,6 +127,10 @@ class _GridModel(QAbstractTableModel):
         return str(section + 1)  # 1-based row-number gutter
 
     # --- content ------------------------------------------------------
+    @property
+    def headers(self) -> tuple[str, ...]:
+        return self._headers
+
     def rows(self) -> list[list[object]]:
         return [list(row) for row in self._rows]
 
@@ -157,14 +166,25 @@ class NumericGrid(QWidget):
     #: so seeding must never mark the card touched (see ``EditorCard``).
     changed = Signal()
 
+    #: Emitted when the user toggles the expand (⤢) affordance: ``True`` to take
+    #: over the pane, ``False`` to collapse. The grid grows itself; a host (the
+    #: Inspector) may additionally react -- hiding the secondary workspace -- but
+    #: the grid works standalone when nobody listens.
+    expand_toggled = Signal(bool)
+
     def __init__(
         self,
         headers: tuple[str, ...],
         text_columns: frozenset[int] = frozenset(),
+        bulk: bool = True,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._model = _GridModel(headers, text_columns, self)
+        #: Bulk affordances (expand + clipboard paste) suit a numeric array, not
+        #: the tiny key/value material map -- which passes ``bulk=False``.
+        self._bulk = bulk
+        self._expanded = False
 
         self._view = QTableView()
         self._view.setModel(self._model)
@@ -187,6 +207,19 @@ class NumericGrid(QWidget):
         self._buttons.addWidget(self._add_button)
         self._buttons.addWidget(self._remove_button)
         self._buttons.addStretch(1)
+
+        # Paste is reachable by Ctrl+V anywhere in the grid; the explicit button
+        # appears only while expanded, where there is room and the intent to do
+        # bulk work is clear.
+        self._paste_button = None
+        self._expand_button = None
+        if self._bulk:
+            self._paste_button = self._row_button("Paste", "Paste rows (Ctrl+V)", self.paste)
+            self._paste_button.setVisible(False)
+            self._buttons.addWidget(self._paste_button)
+            self._expand_button = self._row_button("⤢", "Expand editor", self._toggle_expanded)
+            self._buttons.addWidget(self._expand_button)
+            self._view.installEventFilter(self)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -213,6 +246,66 @@ class NumericGrid(QWidget):
         header = self._view.horizontalHeader().sizeHint().height()
         row = self._view.verticalHeader().defaultSectionSize()
         return header + row * VISIBLE_ROWS + 2 * self._view.frameWidth()
+
+    # --- bulk affordances: expand + clipboard paste -------------------
+    def eventFilter(self, obj, event):  # noqa: N802
+        """Catch Ctrl+V on the grid (not inside a cell editor) to paste rows."""
+        if obj is self._view and event.type() == QEvent.KeyPress:
+            if event.matches(QKeySequence.Paste):
+                self.paste()
+                return True
+        return super().eventFilter(obj, event)
+
+    def _toggle_expanded(self) -> None:
+        self.set_expanded(not self._expanded)
+        self.expand_toggled.emit(self._expanded)
+
+    def set_expanded(self, expanded: bool) -> None:
+        """Grow the grid to fill the pane (expanded) or return to compact height.
+
+        Expanding reveals the Paste button and lets the view stretch; collapsing
+        restores the fixed eight-row height so the surrounding card is unchanged.
+        """
+        self._expanded = expanded
+        if expanded:
+            self._view.setMinimumHeight(self._compact_height())
+            self._view.setMaximumHeight(16_777_215)  # Qt's QWIDGETSIZE_MAX
+            self._view.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        else:
+            self._view.setFixedHeight(self._compact_height())
+            self._view.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        if self._paste_button is not None:
+            self._paste_button.setVisible(expanded)
+        if self._expand_button is not None:
+            self._expand_button.setText("⤡" if expanded else "⤢")
+            self._expand_button.setToolTip("Collapse editor" if expanded else "Expand editor")
+
+    @property
+    def is_expanded(self) -> bool:
+        return self._expanded
+
+    def paste(self) -> None:
+        """Parse the clipboard, preview it, and (on confirm) replace or append."""
+        text = QApplication.clipboard().text()
+        if not text.strip():
+            return
+        parsed = parse_clipboard(text, self._model.columnCount())
+        if parsed.row_count == 0:
+            return
+        dialog = PastePreviewDialog(parsed, self._model.headers, self)
+        dialog.exec()
+        if dialog.choice is not None:
+            self.apply_paste(parsed.rows, dialog.choice)
+
+    def apply_paste(self, rows, mode: str) -> None:
+        """Write parsed *rows* into the grid; a paste is a real user edit.
+
+        ``set_rows`` is silent by design (it seeds), so this emits ``changed``
+        itself -- a paste must mark the card dirty and kick live validation.
+        """
+        existing = self._model.rows() if mode == PastePreviewResult.APPEND else []
+        self._model.set_rows(existing + [list(row) for row in rows])
+        self.changed.emit()
 
     def _refresh_buttons(self) -> None:
         """Greying an inapplicable action is the app's convention; hiding is for

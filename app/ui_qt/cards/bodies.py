@@ -48,6 +48,9 @@ class ModeBody(QWidget):
     """Base class for a single representation's editor."""
 
     changed = Signal()
+    #: Forwarded up to the card when a grid body asks to expand. A body with no
+    #: grid (numbers, expressions, JSON) never emits it.
+    expand_toggled = Signal(bool)
 
     def value(self) -> object:
         """The body's current draft, in raw-dict form."""
@@ -168,6 +171,7 @@ class TableBody(ModeBody):
 
         self._grid = NumericGrid(("x", "y"))
         self._grid.changed.connect(self._on_grid_changed)
+        self._grid.expand_toggled.connect(self.expand_toggled)
         layout.addWidget(self._grid)
 
     def _on_grid_changed(self) -> None:
@@ -214,7 +218,9 @@ class MaterialMapBody(ModeBody):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(2)
 
-        self._grid = NumericGrid(("Material", "Value"), text_columns=frozenset({0}))
+        self._grid = NumericGrid(
+            ("Material", "Value"), text_columns=frozenset({0}), bulk=False
+        )
         self._grid.changed.connect(self._on_changed)
         layout.addWidget(self._grid)
 

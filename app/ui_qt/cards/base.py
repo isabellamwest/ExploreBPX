@@ -45,6 +45,9 @@ class EditorCard(QWidget):
     draft_changed = Signal()
     draft_reset = Signal()
     commit_requested = Signal()
+    #: Emitted (with the new expanded state) when a card's grid asks to take
+    #: over the Inspector pane. Cards without a grid never emit it.
+    expand_toggled = Signal(bool)
 
     #: Multi-line cards (e.g. ``TextCard``) set this True so Shift+Enter
     #: inserts a newline via ``_insert_newline`` instead of committing.

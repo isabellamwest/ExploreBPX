@@ -36,6 +36,7 @@ class SeriesCard(EditorCard):
         self._grid.set_values(self._rows(self._original))
         self._preview.update_rows(self._grid.values())
         self._grid.changed.connect(self._on_grid_changed)
+        self._grid.expand_toggled.connect(self.expand_toggled)
         layout.addWidget(self._grid)
 
         self._install_keyboard_handler(self._grid.focus_widget())

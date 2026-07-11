@@ -121,6 +121,7 @@ class ModalCard(EditorCard):
         modes[initial].body.set_value(self._original)
         for mode in modes:
             mode.body.changed.connect(self.draft_changed)
+            mode.body.expand_toggled.connect(self.expand_toggled)
             self._install_keyboard_handler(mode.body.focus_widget())
 
         self._stack.setCurrentIndex(initial)

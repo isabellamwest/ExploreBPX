@@ -106,6 +106,23 @@ class InspectorPanel(QWidget):
     # Secondary workspace coordination
     # ------------------------------------------------------------------
 
+    def _on_card_expanded(self, expanded: bool) -> None:
+        """Give the whole editing pane to a grid that asked to take it over.
+
+        Clearing the card's top alignment lets it (and its expanding grid) fill
+        the pane; the secondary workspace collapses to its tab strip so the grid
+        has the room. Collapsing restores both.
+        """
+        if self._card is None:
+            return
+        self._content_layout.setAlignment(
+            self._card, Qt.Alignment() if expanded else Qt.AlignTop
+        )
+        if expanded:
+            self._secondary.suspend()
+        else:
+            self._secondary.resume()
+
     def _on_secondary_expanded(self, expanded: bool) -> None:
         if not expanded:
             return
@@ -156,9 +173,13 @@ class InspectorPanel(QWidget):
         self._card.draft_changed.connect(self._debounce.start)
         self._card.draft_reset.connect(self._on_reset)
         self._card.commit_requested.connect(self._on_commit)
+        self._card.expand_toggled.connect(self._on_card_expanded)
+        # Top-aligned so the card sits at its natural height with space beneath;
+        # expanding (a grid takeover) clears the alignment so the card -- and its
+        # now-stretching grid -- fills the pane. This replaces a trailing stretch
+        # so the switch is a single alignment change, no relayout.
         self._content_layout.addWidget(self._card)
-
-        self._content_layout.addStretch(1)
+        self._content_layout.setAlignment(self._card, Qt.AlignTop)
         self._render_issues(parameter.issues, parameter.has_errors)
 
         # Refresh the secondary workspace's tabs without changing its
