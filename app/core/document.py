@@ -7,6 +7,7 @@ BPX model and validation issues are *derived* from it.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 from . import bpx_gateway
@@ -48,6 +49,38 @@ def _nav_path_for(issue: ValidatorDiagnostic) -> tuple[str, ...]:
     if isinstance(issue, PydanticErrorDiagnostic):
         return _derive_nav_path(issue.loc)
     return ()
+
+
+#: Single-quoted tokens in a validator message. BPX's model-level validators
+#: (e.g. ``material_check``) report ``loc == ()`` -- pydantic cannot attribute a
+#: whole-model check to one field -- but name the offending parameter in the
+#: message as a quoted, dot-joined path (``'State.Initial conditions.Initial
+#: hysteresis state: Positive electrode'``). This recovers that path so the
+#: error lands on the parameter's own badge, not the document root.
+_QUOTED_TOKEN = re.compile(r"'([^']+)'")
+
+
+def _parameter_from_message(
+    issue: ValidatorDiagnostic,
+    parameter_map: dict[tuple[str, ...], ParameterItem],
+) -> ParameterItem | None:
+    """Recover the parameter a model-level diagnostic is about from its message.
+
+    Matches each quoted token in the message against the dot-joined path of a
+    real parameter, so an alias that itself contains a ``.`` (e.g. ``Nominal
+    cell capacity [A.h]``) is handled correctly -- the token is compared to
+    actual paths, never split on ``.``. Returns ``None`` when no token names a
+    known parameter, leaving today's document-root attachment untouched.
+    """
+    message = issue.message
+    if not message:
+        return None
+    dotted = {".".join(path): parameter for path, parameter in parameter_map.items()}
+    for token in _QUOTED_TOKEN.findall(message):
+        parameter = dotted.get(token)
+        if parameter is not None:
+            return parameter
+    return None
 
 
 @dataclass(frozen=True)
@@ -132,14 +165,25 @@ class BPXDocument:
     def _attach_issues(self) -> None:
         for issue in self.issues:
             nav_path = _nav_path_for(issue)
+            parameter = match_parameter(self._parameter_path_map, nav_path)
+
+            # A model-level check (bpx material_check) reports loc == (), so it
+            # matches no parameter by location -- but its message names the
+            # parameter. Recover it, so the error shows on that parameter's
+            # badge and Issues tab rather than only in the document-level
+            # Validation view. This runs through the same attachment for the
+            # committed rebuild and the live preview, so the two never disagree.
+            if parameter is None:
+                recovered = _parameter_from_message(issue, self._parameter_path_map)
+                if recovered is not None:
+                    parameter, nav_path = recovered, recovered.path
+
             self._issue_nav_paths.append(nav_path)
 
-            parameter = match_parameter(self._parameter_path_map, nav_path)
             if parameter is not None:
                 parameter.issues.append(issue)
-
-            target = match_path(self._node_path_map, nav_path) or self.tree
-            if parameter is None:
+            else:
+                target = match_path(self._node_path_map, nav_path) or self.tree
                 target.issues.append(issue)
 
     def iter_issues(self) -> list[tuple[ValidatorDiagnostic, tuple[str, ...]]]:

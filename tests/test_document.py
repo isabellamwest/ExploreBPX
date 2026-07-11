@@ -14,6 +14,35 @@ def test_valid_document(valid_spm_bytes):
     assert document.find(("Parameterisation", "Cell")) is not None
 
 
+def test_model_level_error_attaches_to_the_named_parameter(valid_spm_dict):
+    """A bpx model-level check (material_check) reports loc == (), but names the
+    parameter in its message. The error must land on that parameter -- so its
+    badge and Issues tab show it -- not only at the document root.
+    """
+    import json
+
+    path = (
+        "State",
+        "Initial conditions",
+        "Initial hysteresis state: Positive electrode",
+    )
+    # The Positive electrode is blended, so a bare scalar here is invalid: the
+    # field must be a dict keyed by the particle names. This is a real validator
+    # error, surfaced verbatim -- not invented by the app.
+    valid_spm_dict["State"]["Initial conditions"][
+        "Initial hysteresis state: Positive electrode"
+    ] = 1.0
+    data = json.dumps(valid_spm_dict).encode("utf-8")
+    document = BPXDocument.from_bytes(data, "blended.json")
+
+    assert document.is_valid is False
+    parameter = document.find_parameter(path)
+    assert parameter is not None
+    assert parameter.has_errors is True
+    # The same diagnostic is not double-counted onto the document root.
+    assert not any(issue in document.tree.issues for issue in parameter.issues)
+
+
 def test_identity_reads_header_fields(valid_spm_dict):
     """A fully-populated Header yields all three identity fields."""
     import json
