@@ -19,7 +19,7 @@ pytest.importorskip("PySide6")
 from PySide6.QtCore import Qt
 
 from core.parameter_types import ParameterKind
-from core.tree_model import ParameterItem
+from core.tree_model import ParameterItem, SiblingSeries
 from ui_qt.cards.grid import NumericGrid
 from ui_qt.cards.registry import create_card, series_is_representable
 from ui_qt.cards.series import SeriesCard
@@ -236,6 +236,94 @@ def test_empty_grid_reads_back_as_empty_list():
     card = _series([5])
     card._grid.remove_row()
     assert card.value() == []
+
+
+# ----------------------------------------------------------------------
+# Read-only context columns (a Validation run's sibling arrays)
+# ----------------------------------------------------------------------
+
+
+def test_context_columns_render_beside_the_editable_one():
+    grid = NumericGrid(("Time [s]",), context_columns=(("Voltage [V]", (4.1, 4.0)),))
+    grid.set_values([[0], [100]])
+    model = grid._model
+    assert model.columnCount() == 2
+    assert model.headerData(1, Qt.Horizontal) == "Voltage [V]"
+    assert model.data(model.index(0, 1)) == "4.1"
+
+
+def test_context_cells_are_never_writable():
+    grid = NumericGrid(("Time [s]",), context_columns=(("Voltage [V]", (4.1, 4.0)),))
+    grid.set_values([[0], [100]])
+    model = grid._model
+    assert not model.flags(model.index(0, 1)) & Qt.ItemIsEditable
+    assert model.setData(model.index(0, 1), "9.9", Qt.EditRole) is False
+    assert model.data(model.index(0, 1)) == "4.1"
+
+
+def test_values_never_include_context_or_phantom_rows():
+    """A sibling longer than the edited column shows phantom rows, but the
+    value that reads back is exactly the edited column -- committing an
+    unrelated cell must not append invented Nones."""
+    grid = NumericGrid(("Time [s]",), context_columns=(("Voltage [V]", (4.1, 4.0, 3.9)),))
+    grid.set_values([[0]])
+    model = grid._model
+    assert model.rowCount() == 3  # mismatch is visible...
+    assert grid.row_count == 1  # ...but not part of the value
+    assert grid.values() == [[0]]
+    # The phantom cell is neither editable nor writable.
+    assert not model.flags(model.index(2, 0)) & Qt.ItemIsEditable
+    assert model.setData(model.index(2, 0), "5", Qt.EditRole) is False
+    assert grid.values() == [[0]]
+
+
+def test_row_ops_with_context_stay_within_the_value_and_emit_changed():
+    grid = NumericGrid(("Time [s]",), context_columns=(("Voltage [V]", (4.1, 4.0, 3.9)),))
+    grid.set_values([[0]])
+    fired = []
+    grid.changed.connect(lambda: fired.append(1))
+    # Select a phantom cell, then insert: the new row lands at the value's
+    # end (index 1), not at the phantom position.
+    grid._view.setCurrentIndex(grid._model.index(2, 0))
+    grid.insert_row()
+    assert grid.values() == [[0], [None]]
+    grid._view.setCurrentIndex(grid._model.index(2, 0))
+    grid.remove_row()
+    assert grid.values() == [[0]]
+    assert fired == [1, 1]
+
+
+def _series_with_siblings(value, siblings):
+    param = ParameterItem(
+        label="Time [s]",
+        path=("Validation", "run", "Time [s]"),
+        kind=ParameterKind.SERIES,
+        value=value,
+        sibling_series=tuple(
+            SiblingSeries(label, ("Validation", "run", label), sibling_value)
+            for label, sibling_value in siblings
+        ),
+    )
+    return create_card(param, None)
+
+
+def test_series_card_shows_siblings_but_commits_only_its_column():
+    card = _series_with_siblings(
+        [0, 100],
+        [("Current [A]", [-0.6, -0.6]), ("Voltage [V]", [4.1, 4.0, 3.9])],
+    )
+    model = card._grid._model
+    assert model.columnCount() == 3
+    assert model.headerData(0, Qt.Horizontal) == "Time [s]"
+    assert model.headerData(2, Qt.Horizontal) == "Voltage [V]"
+    assert card.value() == [0, 100]  # the longer Voltage sibling adds nothing
+
+
+def test_series_card_omits_a_non_list_sibling():
+    """A sibling holding garbage (not a list) has no column to show; its own
+    card and the validator report it -- nothing is fabricated here."""
+    card = _series_with_siblings([0], [("Current [A]", {"not": "a list"})])
+    assert card._grid._model.columnCount() == 1
 
 
 # ----------------------------------------------------------------------

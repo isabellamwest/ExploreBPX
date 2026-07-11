@@ -32,7 +32,7 @@ double-click, which is how a cell is edited.
 from __future__ import annotations
 
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, Signal
-from PySide6.QtGui import QKeySequence
+from PySide6.QtGui import QBrush, QColor, QKeySequence
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -45,6 +45,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ..style import MUTED
 from .paste import parse_clipboard
 from .paste_dialog import PastePreviewDialog, PastePreviewResult
 from .values import format_value, parse_value, values_equal
@@ -55,25 +56,43 @@ VISIBLE_ROWS = 8
 
 
 class _GridModel(QAbstractTableModel):
-    """Rows of raw cell objects behind a fixed set of columns."""
+    """Rows of raw cell objects behind a fixed set of columns.
+
+    Optionally carries *context columns*: read-only columns appended after the
+    editable ones, each with its own independent length (a Validation run's
+    sibling arrays beside the one being edited). Context cells are display
+    only -- ``rows()`` never includes them and their length never pads the
+    editable rows, so a sibling longer than the edited column shows *phantom*
+    rows (visible, disabled) that no commit can ever pick up as invented data.
+    """
 
     def __init__(
         self,
         headers: tuple[str, ...],
         text_columns: frozenset[int] = frozenset(),
+        context_columns: tuple[tuple[str, tuple[object, ...]], ...] = (),
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        self._headers = tuple(headers)
         #: Columns whose cells are verbatim text, not lenient-parsed numbers
         #: (a material map's key column). Empty by default, so a numeric grid
         #: (series, x/y table) is unchanged.
         self._text_columns = frozenset(text_columns)
+        self._editable = len(headers)
+        self._context = tuple(
+            (str(label), tuple(cells)) for label, cells in context_columns
+        )
+        self._headers = tuple(headers) + tuple(label for label, _ in self._context)
         self._rows: list[list[object]] = []
+
+    def _context_rows(self) -> int:
+        return max((len(cells) for _, cells in self._context), default=0)
 
     # --- Qt model interface -------------------------------------------
     def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:  # noqa: N802
-        return 0 if parent.isValid() else len(self._rows)
+        if parent.isValid():
+            return 0
+        return max(len(self._rows), self._context_rows())
 
     def columnCount(self, parent: QModelIndex = QModelIndex()) -> int:  # noqa: N802
         return 0 if parent.isValid() else len(self._headers)
@@ -81,12 +100,22 @@ class _GridModel(QAbstractTableModel):
     def data(self, index: QModelIndex, role: int = Qt.DisplayRole):
         if not index.isValid():
             return None
+        row, column = index.row(), index.column()
         if role in (Qt.DisplayRole, Qt.EditRole):
-            return format_value(self._rows[index.row()][index.column()])
+            if column >= self._editable:
+                cells = self._context[column - self._editable][1]
+                return format_value(cells[row]) if row < len(cells) else ""
+            if row >= len(self._rows):
+                return ""  # phantom row: a longer sibling, not a value
+            return format_value(self._rows[row][column])
+        if role == Qt.ForegroundRole and column >= self._editable:
+            # Context columns read as background material, not as the value
+            # under edit.
+            return QBrush(QColor(MUTED))
         if role == Qt.TextAlignmentRole:
             # Text columns (map keys) read left-aligned like the words they
             # hold; numeric columns stay right-aligned under their header.
-            if index.column() in self._text_columns:
+            if column in self._text_columns:
                 return int(Qt.AlignLeft | Qt.AlignVCenter)
             return int(Qt.AlignRight | Qt.AlignVCenter)
         return None
@@ -95,6 +124,8 @@ class _GridModel(QAbstractTableModel):
         """Store the typed text as a raw object, never as a coerced number."""
         if not index.isValid() or role != Qt.EditRole:
             return False
+        if index.column() >= self._editable or index.row() >= len(self._rows):
+            return False  # context or phantom cell: never writable
         parsed = self._parse_cell(index.column(), str(value))
         current = self._rows[index.row()][index.column()]
         if values_equal(parsed, current):
@@ -117,6 +148,12 @@ class _GridModel(QAbstractTableModel):
     def flags(self, index: QModelIndex) -> Qt.ItemFlags:
         if not index.isValid():
             return Qt.NoItemFlags
+        if index.column() >= self._editable:
+            # Read-only context: selectable (so it can be inspected/copied)
+            # but never editable.
+            return Qt.ItemIsEnabled | Qt.ItemIsSelectable
+        if index.row() >= len(self._rows):
+            return Qt.ItemIsEnabled  # phantom row below the edited column's end
         return Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable
 
     def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.DisplayRole):  # noqa: N802
@@ -131,7 +168,22 @@ class _GridModel(QAbstractTableModel):
     def headers(self) -> tuple[str, ...]:
         return self._headers
 
+    @property
+    def editable_column_count(self) -> int:
+        return self._editable
+
+    def editable_row_count(self) -> int:
+        """How many rows the edited value actually has -- phantom rows shown
+        under a longer context column do not count."""
+        return len(self._rows)
+
     def rows(self) -> list[list[object]]:
+        """The editable rows only, each ``editable_column_count`` cells wide.
+
+        Context cells are never included and a longer context column never
+        pads the result: the value that reads back is exactly the value the
+        user edited.
+        """
         return [list(row) for row in self._rows]
 
     def set_rows(self, rows) -> None:
@@ -140,18 +192,37 @@ class _GridModel(QAbstractTableModel):
         self.endResetModel()
 
     def insert_row(self, at: int) -> None:
+        if self._context:
+            # With context columns the display row count is a max() over
+            # independent lengths, so an insert may not add a display row at
+            # all (the phantom region shrinks by one instead). A reset is the
+            # one notification that is correct in every case.
+            self.beginResetModel()
+            self._rows.insert(at, [None] * self._editable)
+            self.endResetModel()
+            return
         self.beginInsertRows(QModelIndex(), at, at)
-        self._rows.insert(at, [None] * len(self._headers))
+        self._rows.insert(at, [None] * self._editable)
         self.endInsertRows()
 
     def append_row(self, cells) -> int:
         at = len(self._rows)
+        if self._context:
+            self.beginResetModel()
+            self._rows.append(list(cells))
+            self.endResetModel()
+            return at
         self.beginInsertRows(QModelIndex(), at, at)
         self._rows.append(list(cells))
         self.endInsertRows()
         return at
 
     def remove_row(self, at: int) -> None:
+        if self._context:
+            self.beginResetModel()
+            del self._rows[at]
+            self.endResetModel()
+            return
         self.beginRemoveRows(QModelIndex(), at, at)
         del self._rows[at]
         self.endRemoveRows()
@@ -177,10 +248,11 @@ class NumericGrid(QWidget):
         headers: tuple[str, ...],
         text_columns: frozenset[int] = frozenset(),
         bulk: bool = True,
+        context_columns: tuple[tuple[str, tuple[object, ...]], ...] = (),
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        self._model = _GridModel(headers, text_columns, self)
+        self._model = _GridModel(headers, text_columns, context_columns, self)
         #: Bulk affordances (expand + clipboard paste) suit a numeric array, not
         #: the tiny key/value material map -- which passes ``bulk=False``.
         self._bulk = bulk
@@ -226,9 +298,12 @@ class NumericGrid(QWidget):
         layout.addWidget(self._view)
         layout.addLayout(self._buttons)
 
+        # Cell edits arrive via ``dataChanged``. Row additions/removals emit
+        # ``changed`` from the grid methods below instead of from the model's
+        # insert/remove signals: with context columns the model notifies
+        # structural changes as resets, and a reset is deliberately silent
+        # (``set_values`` seeds through it).
         self._model.dataChanged.connect(lambda *_: self.changed.emit())
-        self._model.rowsInserted.connect(lambda *_: self.changed.emit())
-        self._model.rowsRemoved.connect(lambda *_: self.changed.emit())
         self._model.modelReset.connect(self._refresh_buttons)
         self.changed.connect(self._refresh_buttons)
         self._refresh_buttons()
@@ -305,7 +380,7 @@ class NumericGrid(QWidget):
         text = QApplication.clipboard().text()
         if not text.strip():
             return
-        parsed = parse_clipboard(text, self._model.columnCount())
+        parsed = parse_clipboard(text, self._model.editable_column_count)
         if parsed.row_count == 0:
             return
         dialog = PastePreviewDialog(parsed, self._model.headers, self)
@@ -331,7 +406,9 @@ class NumericGrid(QWidget):
     # --- API ----------------------------------------------------------
     @property
     def row_count(self) -> int:
-        return self._model.rowCount()
+        """Rows of the *edited value*; phantom rows under a longer read-only
+        sibling column are display only and never counted."""
+        return self._model.editable_row_count()
 
     def focus_widget(self) -> QWidget:
         """The widget that takes keyboard focus, for the card's key handler."""
@@ -346,11 +423,18 @@ class NumericGrid(QWidget):
         self._model.set_rows(rows)
 
     def insert_row(self) -> None:
-        """Add an empty row below the current one, or at the end."""
+        """Add an empty row below the current one, or at the end.
+
+        The insertion point is clamped to the edited value's length: with a
+        longer sibling column alongside, the current cell can sit in the
+        phantom region, and a row must never be created beyond the value's
+        end (the gap would read back as invented ``None`` items).
+        """
         index = self._view.currentIndex()
-        at = index.row() + 1 if index.isValid() else self.row_count
+        at = min(index.row() + 1, self.row_count) if index.isValid() else self.row_count
         self._model.insert_row(at)
         self._view.setCurrentIndex(self._model.index(at, 0))
+        self.changed.emit()
 
     def append_row(self, cells) -> None:
         """Append a row pre-filled with *cells* and select its first cell.
@@ -361,6 +445,7 @@ class NumericGrid(QWidget):
         """
         at = self._model.append_row(cells)
         self._view.setCurrentIndex(self._model.index(at, 0))
+        self.changed.emit()
 
     def add_toolbar_widget(self, widget: QWidget) -> None:
         """Place *widget* in the +/− button row, before the trailing stretch.
@@ -372,9 +457,14 @@ class NumericGrid(QWidget):
         self._buttons.insertWidget(self._buttons.count() - 1, widget)
 
     def remove_row(self) -> None:
-        """Remove the current row, or the last one when nothing is selected."""
+        """Remove the current row, or the last one when nothing is selected.
+
+        Clamped like :meth:`insert_row`: a current cell in the phantom region
+        under a longer sibling column removes the value's last row.
+        """
         if not self.row_count:
             return
         index = self._view.currentIndex()
-        at = index.row() if index.isValid() else self.row_count - 1
+        at = min(index.row(), self.row_count - 1) if index.isValid() else self.row_count - 1
         self._model.remove_row(at)
+        self.changed.emit()

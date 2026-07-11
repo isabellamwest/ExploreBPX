@@ -6,6 +6,13 @@ representation, so the card shows a grid and no mode strip.
 
 The column header is the parameter's label, which already carries the unit
 (``Time [s]``), so the grid needs no separate unit affordance.
+
+Inside a Validation run the card also shows the run's *other* arrays as
+read-only context columns beside the edited one (seeded on the parameter as
+``sibling_series`` by ``core.tree_model``): the arrays are row-aligned samples
+of one experiment, so a length mismatch -- the validator error these fields
+actually produce -- is visible as trailing phantom rows while editing. Only the
+first column is the card's value; ``value()`` never reads the context.
 """
 
 from __future__ import annotations
@@ -30,7 +37,15 @@ class SeriesCard(EditorCard):
         self._preview.set_axis_titles("row", parameter.label)
         layout.addWidget(self._preview)
 
-        self._grid = NumericGrid((parameter.label,))
+        # A sibling whose value is not a list has nothing tabular to show;
+        # its own card (and the validator) report it, so it is simply absent
+        # here rather than rendered as a fabricated column.
+        context = tuple(
+            (sibling.label, tuple(sibling.value))
+            for sibling in parameter.sibling_series
+            if isinstance(sibling.value, list)
+        )
+        self._grid = NumericGrid((parameter.label,), context_columns=context)
         # Populate before wiring ``changed``: seeding must not mark the card
         # touched, or construction alone would make a bare Enter commit.
         self._grid.set_values(self._rows(self._original))
