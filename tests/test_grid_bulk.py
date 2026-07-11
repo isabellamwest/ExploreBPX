@@ -26,34 +26,36 @@ def _qapp():
 
 
 def test_bulk_grid_has_expand_and_paste_affordances():
+    """Paste has no button: it lives in the grid's right-click menu, and the
+    same action's WidgetShortcut is what makes Ctrl+V work. Expand is a text
+    action, matching the app's named-action convention."""
     grid = NumericGrid(("x", "y"))
     assert grid._expand_button is not None
-    assert grid._paste_button is not None
-    # Paste button is hidden until expanded (Ctrl+V still works meanwhile).
-    # isHidden(), not isVisible(): the grid is never shown in this suite.
-    assert grid._paste_button.isHidden() is True
+    assert grid._expand_button.text() == "Expand"
+    actions = [a.text() for a in grid._view.actions()]
+    assert actions == ["Paste", "Add row", "Remove row"]
 
 
 def test_non_bulk_grid_has_no_expand_or_paste():
     """The material map (bulk=False) is a tiny key/value grid: no expand, no
-    bulk paste button."""
+    paste in its context menu."""
     grid = NumericGrid(("Material", "Value"), text_columns=frozenset({0}), bulk=False)
     assert grid._expand_button is None
-    assert grid._paste_button is None
+    assert grid._view.actions() == []
 
 
-def test_expand_toggle_emits_and_reveals_paste():
+def test_expand_toggle_emits_and_relabels():
     grid = NumericGrid(("x", "y"))
     seen = []
     grid.expand_toggled.connect(seen.append)
     grid._toggle_expanded()
     assert seen == [True]
     assert grid.is_expanded is True
-    assert grid._paste_button.isHidden() is False
+    assert grid._expand_button.text() == "Collapse"
     grid._toggle_expanded()
     assert seen == [True, False]
     assert grid.is_expanded is False
-    assert grid._paste_button.isHidden() is True
+    assert grid._expand_button.text() == "Expand"
 
 
 def test_apply_paste_replace_and_append_emit_changed():

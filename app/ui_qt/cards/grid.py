@@ -31,7 +31,7 @@ double-click, which is how a cell is edited.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QAbstractTableModel, QEvent, QModelIndex, Qt, Signal
+from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, Signal
 from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -208,18 +208,18 @@ class NumericGrid(QWidget):
         self._buttons.addWidget(self._remove_button)
         self._buttons.addStretch(1)
 
-        # Paste is reachable by Ctrl+V anywhere in the grid; the explicit button
-        # appears only while expanded, where there is room and the intent to do
-        # bulk work is clear.
-        self._paste_button = None
+        # Paste needs no button: Ctrl+V works whenever the grid has focus, and
+        # the same action sits in the grid's right-click menu -- spreadsheet
+        # muscle memory, with no chrome on the card. Expand/Collapse is a text
+        # action, the app's convention for named actions (Save, Export, Undo).
         self._expand_button = None
         if self._bulk:
-            self._paste_button = self._row_button("Paste", "Paste rows (Ctrl+V)", self.paste)
-            self._paste_button.setVisible(False)
-            self._buttons.addWidget(self._paste_button)
-            self._expand_button = self._row_button("⤢", "Expand editor", self._toggle_expanded)
+            self._expand_button = self._row_button(
+                "Expand", "Grow the editor to fill the panel", self._toggle_expanded
+            )
             self._buttons.addWidget(self._expand_button)
             self._view.installEventFilter(self)
+            self._install_context_menu()
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -248,13 +248,27 @@ class NumericGrid(QWidget):
         return header + row * VISIBLE_ROWS + 2 * self._view.frameWidth()
 
     # --- bulk affordances: expand + clipboard paste -------------------
-    def eventFilter(self, obj, event):  # noqa: N802
-        """Catch Ctrl+V on the grid (not inside a cell editor) to paste rows."""
-        if obj is self._view and event.type() == QEvent.KeyPress:
-            if event.matches(QKeySequence.Paste):
-                self.paste()
-                return True
-        return super().eventFilter(obj, event)
+    def _install_context_menu(self) -> None:
+        """Right-click on the grid offers Paste and the row actions.
+
+        ``ActionsContextMenu`` lets Qt own the popup (no ``QMenu.exec()`` of our
+        own -- see the remove-parameter tests for why that matters offscreen).
+        The Paste action's ``WidgetShortcut`` is also what makes Ctrl+V work
+        while the grid has focus: one action, reachable both ways, showing its
+        shortcut in the menu.
+        """
+        from PySide6.QtGui import QAction
+
+        self._paste_action = QAction("Paste", self._view)
+        self._paste_action.setShortcut(QKeySequence.Paste)
+        self._paste_action.setShortcutContext(Qt.WidgetShortcut)
+        self._paste_action.triggered.connect(self.paste)
+        add = QAction("Add row", self._view)
+        add.triggered.connect(self.insert_row)
+        remove = QAction("Remove row", self._view)
+        remove.triggered.connect(self.remove_row)
+        self._view.addActions([self._paste_action, add, remove])
+        self._view.setContextMenuPolicy(Qt.ActionsContextMenu)
 
     def _toggle_expanded(self) -> None:
         self.set_expanded(not self._expanded)
@@ -274,11 +288,13 @@ class NumericGrid(QWidget):
         else:
             self._view.setFixedHeight(self._compact_height())
             self._view.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
-        if self._paste_button is not None:
-            self._paste_button.setVisible(expanded)
         if self._expand_button is not None:
-            self._expand_button.setText("⤡" if expanded else "⤢")
-            self._expand_button.setToolTip("Collapse editor" if expanded else "Expand editor")
+            self._expand_button.setText("Collapse" if expanded else "Expand")
+            self._expand_button.setToolTip(
+                "Return the editor to its compact size"
+                if expanded
+                else "Grow the editor to fill the panel"
+            )
 
     @property
     def is_expanded(self) -> bool:

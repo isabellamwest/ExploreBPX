@@ -279,8 +279,8 @@ repaired in place.
 | Per-material map editing (keys seeded from sibling Particle names; duplicate keys blocked) | Implemented |
 | Series inline grid (raw-object cells, add/remove row, no coercion) | Implemented |
 | Table inline grid (x/y grid over a live preview) | Implemented |
-| Expanded (takeover) grid editor — ⤢ grows the grid to fill the pane | Implemented |
-| Paste into a grid (Ctrl+V; delimiter auto-detect, header skip, preview, replace/append, no coercion) | Implemented |
+| Expanded (takeover) grid editor — Expand/Collapse grows the grid to fill the pane | Implemented |
+| Paste into a grid (Ctrl+V or right-click; delimiter auto-detect, header skip, preview, replace/append, no coercion) | Implemented |
 | CSV import (column mapping) and read-only sibling columns | Planned |
 | Remove parameter (row context menu) | Planned |
 | Section add/remove controls | Planned |
