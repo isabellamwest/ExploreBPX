@@ -270,14 +270,16 @@ repaired in place.
 | Command-based mutation with undo | Implemented |
 | Undo (toolbar action, and focus-aware `Ctrl+Z`) | Implemented |
 | Unknown/raw fallback editor | Implemented |
-| Declared-kind taxonomy (text, boolean, map, series; table narrowed to `InterpolatedTable`) | Planned |
-| Mode strip on union-typed fields (verbatim BPX vocabulary, per-mode drafts, conditional Raw) | Implemented for `FUNCTION`; `MAP` planned |
+| Declared-kind taxonomy (text, boolean, map, series; table narrowed to `InterpolatedTable`) | Implemented |
+| Mode strip on union-typed fields (verbatim BPX vocabulary, per-mode drafts, conditional Raw) | Implemented (`FUNCTION` and `MAP`) |
 | Raw JSON editor with a commit gate (refuses a draft with no representation) | Implemented |
-| Text editing (auto-growing, Shift+Enter newline, pattern hint) | Planned |
-| Boolean editing (toggle) | Planned |
-| Per-material map editing (keys seeded from sibling Particle names) | Planned |
+| Parameter symbol shown beside the card title (rendered maths, from the descriptions dataset) | Implemented |
+| Text editing (auto-growing, Shift+Enter newline, pattern hint) | Implemented |
+| Boolean editing (toggle) | Implemented |
+| Per-material map editing (keys seeded from sibling Particle names; duplicate keys blocked) | Implemented |
 | Series inline grid (raw-object cells, add/remove row, no coercion) | Implemented |
-| Table inline grid, expanded in-place editor, paste and CSV import | Planned |
+| Table inline grid (x/y grid over a live preview) | Implemented |
+| Expanded in-place editor, paste and CSV import | Planned |
 | Remove parameter (row context menu) | Planned |
 | Section add/remove controls | Planned |
 | Tree editing (add/remove sections; add/rename/remove materials and experiments) | Planned |
@@ -309,7 +311,7 @@ Editing is performed in per-kind cards in the Inspector, selected by
 Any `allows_function` field may hold either a numeric constant or a
 function-expression string; both are editable today.
 
-#### Input system (Planned)
+#### Input system
 
 The input system is designed by declared kind — one card per kind, one
 skeleton for every card (title, authoring flag, validity badge, ( i ) info
@@ -318,7 +320,7 @@ line fed by `FieldMeta.examples`; description):
 
 - **Kind is declared; mode is chosen.** The schema's declared type fixes one
   `ParameterKind`. Union-typed fields carry a **mode strip** naming each legal
-  representation in verbatim `bpx` schema vocabulary — `Float` · `Function` ·
+  representation in verbatim `bpx` schema vocabulary — `FloatInt` · `Function` ·
   `InterpolatedTable` for `FloatFunctionTable` fields; `FloatInt` ·
   `dict[str, FloatInt]` for per-material fields. Labels, hints and messages are
   taken from the BPX schema unchanged, never translated. The stored value's
@@ -331,9 +333,10 @@ line fed by `FieldMeta.examples`; description):
   value parses. Values are never silently coerced or discarded.
 - **Empty and null.** An empty text input commits `""`; an empty numeric input
   commits `null`. A card commits only when its draft differs from the committed
-  value, so a no-op Enter never rewrites a stored `null`. Nullable fields carry
-  an explicit *Set to null* action. Removing the key itself is the separate
-  Remove-parameter action, keeping presence and emptiness independent.
+  value, so a no-op Enter never rewrites a stored `null`. Removing the key
+  itself is the separate Remove-parameter action, keeping presence and emptiness
+  independent. (No reachable BPX field is nullable, so there is no *Set to null*
+  affordance — it would be dead UI.)
 - **Multi-line text.** Enter commits everywhere; Shift+Enter inserts a newline
   in multi-line text fields, so the app-wide commit contract is unchanged.
 - **Large values.** Series and table cards show a compact inline grid plus an

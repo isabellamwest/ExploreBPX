@@ -43,7 +43,7 @@ from PySide6.QtWidgets import (
 )
 
 from .base import EditorCard
-from .bodies import ModeBody
+from .bodies import ModeBody, RawJsonBody
 
 #: The label of the app's one non-schema mode. Kept here so cards, the registry
 #: and tests all name it once.
@@ -179,3 +179,22 @@ class ModalCard(EditorCard):
 
     def _insert_newline(self) -> None:
         self._body.insert_newline()
+
+
+class RawValueCard(ModalCard):
+    """A single-mode ``Raw`` JSON editor for an unrepresentable value of an
+    otherwise single-representation kind (``SERIES``, ``TABLE``).
+
+    A single-representation kind shows no mode strip: there is nothing to choose
+    between. When its stored value cannot be shown structurally (a series that
+    is not a flat list, a ragged x/y table), the registry hands it this card
+    rather than a read-only view -- so the value stays editable -- and rather
+    than a free-text editor, which would commit a dict's Python ``repr`` and
+    corrupt it. The JSON body refuses to commit unparseable text (decision D).
+
+    With one mode, :class:`ModalCard` draws no strip, so the user sees only the
+    JSON editor and its notice.
+    """
+
+    def __init__(self, parameter, meta, notice: str = "") -> None:
+        super().__init__(parameter, meta, [Mode(RAW_MODE, RawJsonBody(notice))], 0)

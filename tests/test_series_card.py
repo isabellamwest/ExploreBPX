@@ -262,11 +262,14 @@ def test_representable_series_values_get_the_series_card(value):
         42,
     ],
 )
-def test_unrepresentable_series_values_fall_back_to_read_only(value):
+def test_unrepresentable_series_values_fall_back_to_raw_json(value):
+    """A SERIES value the grid cannot show stays editable as Raw JSON (structure
+    preserved), never a read-only view -- so no declared field reaches a
+    ReadOnlyCard, and a free-text card never commits a dict's repr."""
     assert series_is_representable(value) is False
     card = _series(value)
-    assert type(card).__name__ == "ReadOnlyCard"
-    assert card.is_editable is False
+    assert type(card).__name__ == "RawValueCard"
+    assert card.is_editable is True
 
 
 def test_a_bool_item_is_not_representable_even_though_it_is_an_int():

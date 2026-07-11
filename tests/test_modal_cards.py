@@ -27,7 +27,7 @@ from PySide6.QtWidgets import QLabel
 from core import bpx_gateway
 from core.parameter_types import ParameterKind
 from core.tree_model import ParameterItem
-from ui_qt.cards.bodies import ExpressionBody, NumberBody
+from ui_qt.cards.bodies import ExpressionBody, MaterialMapBody, NumberBody
 from ui_qt.cards.function import (
     FLOAT_INT,
     FUNCTION,
@@ -36,8 +36,15 @@ from ui_qt.cards.function import (
     initial_mode,
     table_is_representable,
 )
-from ui_qt.cards.modal import RAW_MODE, Mode, ModalCard
+from ui_qt.cards.map import (
+    DICT_STR_FLOAT_INT,
+    MapCard,
+    map_is_representable,
+)
+from ui_qt.cards.map import initial_mode as map_initial_mode
+from ui_qt.cards.modal import RAW_MODE, Mode, ModalCard, RawValueCard
 from ui_qt.cards.registry import create_card
+from ui_qt.cards.table import TableCard
 
 
 @pytest.fixture(autouse=True)
@@ -314,3 +321,227 @@ def test_modal_card_with_a_single_mode_shows_no_strip():
     card = ModalCard(param, None, [Mode("Only", NumberBody(""))], 0)
     assert card._strip is None
     assert card.mode_labels == ("Only",)
+
+
+# ======================================================================
+# MapCard: FloatInt | dict[str, FloatInt] (+ conditional Raw)
+# ======================================================================
+
+
+def _map(value, suggestions=()) -> MapCard:
+    param = ParameterItem(
+        label="LAM: Positive electrode",
+        path=("State", "Degradation", "LAM: Positive electrode"),
+        kind=ParameterKind.MAP,
+        value=value,
+        key_suggestions=suggestions,
+    )
+    return create_card(param, None)
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        (1.0, FLOAT_INT),
+        (5, FLOAT_INT),
+        (None, FLOAT_INT),
+        ({"Primary": 1.0, "Secondary": 2.0}, DICT_STR_FLOAT_INT),
+        ({"Primary": 1.0}, DICT_STR_FLOAT_INT),
+        (True, RAW_MODE),  # bool: no numeric editor round-trips it
+        ([1, 2], RAW_MODE),
+        ({"Primary": [1, 2]}, RAW_MODE),  # a list value has no cell to sit in
+    ],
+)
+def test_map_initial_mode(value, expected):
+    assert map_initial_mode(value) == expected
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        {"Primary": 1.0, "Secondary": 2.0},
+        {"Primary": 1},
+        {},
+        {"Primary": None},  # a None cell is a blank row the grid produces
+    ],
+)
+def test_map_representable(value):
+    assert map_is_representable(value) is True
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        {"Primary": [1, 2]},  # nested list -- no cell form
+        {"Primary": {"a": 1}},  # nested dict
+        {"Primary": True},  # bool cell would round-trip as "True"
+        [1, 2],
+        42,
+    ],
+)
+def test_map_not_representable(value):
+    assert map_is_representable(value) is False
+
+
+def test_map_representable_dict_gets_no_raw_mode():
+    card = _map({"Primary": 1.0}, ("Primary", "Secondary"))
+    assert card.mode_labels == (FLOAT_INT, DICT_STR_FLOAT_INT)
+    assert card.current_mode == DICT_STR_FLOAT_INT
+
+
+def test_map_unrepresentable_value_appends_raw():
+    card = _map([1, 2])
+    assert card.mode_labels == (FLOAT_INT, DICT_STR_FLOAT_INT, RAW_MODE)
+    assert card.current_mode == RAW_MODE
+
+
+def test_map_scalar_opens_in_float_int():
+    card = _map(1.0)
+    assert card.current_mode == FLOAT_INT
+    assert card.value() == 1.0
+
+
+def test_map_dict_round_trips_its_value():
+    card = _map({"Primary": 1.0, "Secondary": 2.0}, ("Primary", "Secondary"))
+    assert card.value() == {"Primary": 1.0, "Secondary": 2.0}
+    assert card.is_dirty is False
+
+
+def test_map_mode_switch_alone_is_not_an_edit():
+    card = _map(3.7, ("Primary",))
+    fired = []
+    card.draft_changed.connect(lambda: fired.append(1))
+    card.select_mode(DICT_STR_FLOAT_INT)
+    assert fired == []
+    assert card._touched is False
+    assert card.is_dirty is False
+    assert card.value() == {}  # empty dict body, never seeded from 3.7
+
+
+def test_map_float_int_to_dict_commits_a_real_dict():
+    card = _map(3.7, ("Primary",))
+    card.select_mode(DICT_STR_FLOAT_INT)
+    body = card._modes[1].body
+    body._add_material("Primary")
+    grid = body._grid
+    grid._model.setData(grid._model.index(0, 1), "0.5", Qt.EditRole)
+    assert card.value() == {"Primary": 0.5}
+    assert card.is_dirty is True
+
+
+def test_map_escape_reverts_value_and_mode():
+    card = _map(3.7, ("Primary",))
+    card.select_mode(DICT_STR_FLOAT_INT)
+    card._modes[1].body._add_material("Primary")
+    card._reset_draft()
+    assert card.current_mode == FLOAT_INT
+    assert card.value() == 3.7
+    assert card.is_dirty is False
+
+
+# ----------------------------------------------------------------------
+# MaterialMapBody: keys verbatim, duplicates blocked, suggestions offered
+# ----------------------------------------------------------------------
+
+
+def test_material_map_body_builds_a_dict_from_rows():
+    body = MaterialMapBody(("Primary", "Secondary"))
+    body.set_value({"Primary": 1.0, "Secondary": 2.0})
+    assert body.value() == {"Primary": 1.0, "Secondary": 2.0}
+    assert body.commit_blocked_reason() is None
+
+
+def test_material_map_body_keeps_a_numeric_key_as_text():
+    """The key column is verbatim text (a material name), so a key that looks
+    like a number is never coerced into one."""
+    body = MaterialMapBody(())
+    body._grid.append_row(["1", 5.0])
+    assert body.value() == {"1": 5.0}
+    assert list(body.value().keys()) == ["1"]
+
+
+def test_material_map_body_blocks_a_duplicate_key():
+    body = MaterialMapBody(())
+    body.set_value({"Primary": 1.0})
+    body._grid.append_row(["Primary", 9.0])
+    reason = body.commit_blocked_reason()
+    assert reason is not None and "Duplicate material" in reason and "Primary" in reason
+    assert not body._error.isHidden()
+
+
+def test_material_map_body_skips_an_unkeyed_row():
+    """A value typed before its material name is not yet a dict entry -- it is
+    skipped rather than inventing a "" key for it."""
+    body = MaterialMapBody(())
+    body._grid.append_row([None, 5.0])
+    assert body.value() == {}
+    assert body.commit_blocked_reason() is None
+
+
+def test_material_map_body_offers_only_unused_suggestions():
+    body = MaterialMapBody(("Primary", "Secondary"))
+    body.set_value({"Primary": 1.0})
+    body._populate_menu()
+    labels = [a.text() for a in body._menu.actions()]
+    assert labels == ["Secondary"]  # Primary is already used
+
+
+def test_material_map_body_with_no_suggestions_has_no_menu_button():
+    """A single-particle electrode: the dict mode is still reachable (decision
+    F), but there are no names to suggest, so only the plain + row remains."""
+    body = MaterialMapBody(())
+    assert not hasattr(body, "_menu")
+
+
+# ======================================================================
+# TableCard: a User-defined x/y table, no strip; Raw fallback for ragged
+# ======================================================================
+
+
+def _table(value) -> TableCard:
+    param = ParameterItem(
+        label="My table",
+        path=("Parameterisation", "User-defined", "My table"),
+        kind=ParameterKind.TABLE,
+        value=value,
+    )
+    return create_card(param, None)
+
+
+def test_table_card_has_no_strip_and_round_trips():
+    card = _table({"x": [0, 1, 2], "y": [3, 4, 5]})
+    assert isinstance(card, TableCard)
+    assert card._strip is None  # one representation, no mode strip
+    assert card.value() == {"x": [0, 1, 2], "y": [3, 4, 5]}
+    assert card.is_dirty is False
+
+
+def test_table_ragged_value_falls_back_to_raw():
+    card = _table({"x": [0, 1], "y": [1]})
+    assert isinstance(card, RawValueCard)
+    assert card.is_editable is True
+    assert card._strip is None
+
+
+# ======================================================================
+# RawValueCard: the JSON fallback for single-representation kinds
+# ======================================================================
+
+
+def test_raw_value_card_gates_on_json_and_stays_editable():
+    param = ParameterItem(
+        label="badseries",
+        path=("Validation", "run", "Time [s]"),
+        kind=ParameterKind.SERIES,
+        value={"oops": 1},  # not a list -- unrepresentable series
+    )
+    card = create_card(param, None)
+    assert isinstance(card, RawValueCard)
+    assert card._strip is None
+    assert card.is_editable is True
+    assert card.value() == {"oops": 1}
+
+    edit = card._modes[0].body._edit
+    edit.setPlainText("{not json")
+    assert card.commit_blocked_reason() is not None
+    assert card.value() == {"oops": 1}  # falls back to seed, never a broken string

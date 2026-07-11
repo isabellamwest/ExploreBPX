@@ -36,6 +36,12 @@ def _app() -> QApplication:
         (ParameterKind.ENUM, "SPM"),
         (ParameterKind.FUNCTION, "not-a-function"),
         (ParameterKind.UNKNOWN, None),
+        # TABLE gets a real editor now: a rectangular x/y table (TableCard) or,
+        # for a value the grid cannot show, an editable Raw fallback -- never a
+        # read-only view.
+        (ParameterKind.TABLE, {"x": [0, 1], "y": [2, 3]}),
+        (ParameterKind.TABLE, {"x": [0, 1], "y": [2]}),  # ragged -> Raw fallback
+        (ParameterKind.TABLE, {}),
     ],
 )
 def test_editable_kinds_produce_editable_cards(kind, value):
@@ -47,15 +53,13 @@ def test_editable_kinds_produce_editable_cards(kind, value):
     assert card.is_editable
 
 
-@pytest.mark.parametrize("kind", [ParameterKind.TABLE, ParameterKind.SECTION])
-def test_structural_kinds_fall_back_to_read_only(kind):
-    """Structural kinds (tables/sections) have no editor and stay read-only.
-
-    ``UNKNOWN`` is deliberately excluded here: B1 gives it a real editable
-    raw fallback card (see ``test_unknown_kind_produces_editable_raw_card``).
-    """
+def test_section_kind_falls_back_to_read_only():
+    """A SECTION is a container, not a value: it has no editor and stays
+    read-only. (TABLE used to sit here too; it now has a real editor.)"""
     _app()
-    param = ParameterItem(label="T", path=("Header", "T"), kind=kind, value={})
+    param = ParameterItem(
+        label="T", path=("Header", "T"), kind=ParameterKind.SECTION, value={}
+    )
     card = create_card(param, None)
     assert card.is_editable is False
 
@@ -292,17 +296,13 @@ def test_function_kind_with_numeric_value_uses_function_card_with_unit():
 
 
 @pytest.mark.parametrize(
-    "value, expected_card",
-    [
-        (1.0, "ScalarCard"),
-        (5, "ScalarCard"),
-        (None, "RawCard"),
-        ({"Primary": 1.0, "Secondary": 5.0}, "ReadOnlyCard"),
-    ],
+    "value",
+    [1.0, 5, None, {"Primary": 1.0, "Secondary": 5.0}, [1, 2], True],
 )
-def test_map_kind_dispatches_by_stored_value_shape(value, expected_card):
-    """MAP's interim dispatch: numeric (non-bool) -> ScalarCard, None ->
-    RawCard, dict -> ReadOnlyCard (real MapCard is Phase 4)."""
+def test_map_kind_always_gets_an_editable_map_card(value):
+    """Every MAP value -- scalar, None, per-material dict, or an invalid shape
+    -- gets the editable MapCard, never a read-only view. The card decides its
+    own opening mode (FloatInt / dict / Raw); the registry never falls back."""
     _app()
     param = ParameterItem(
         label="LAM: Positive electrode",
@@ -311,7 +311,8 @@ def test_map_kind_dispatches_by_stored_value_shape(value, expected_card):
         value=value,
     )
     card = create_card(param, None)
-    assert type(card).__name__ == expected_card
+    assert type(card).__name__ == "MapCard"
+    assert card.is_editable is True
 
 
 def test_integer_none_value_uses_fallback_and_can_be_typed():

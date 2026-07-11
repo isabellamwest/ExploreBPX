@@ -52,9 +52,18 @@ VISIBLE_ROWS = 8
 class _GridModel(QAbstractTableModel):
     """Rows of raw cell objects behind a fixed set of columns."""
 
-    def __init__(self, headers: tuple[str, ...], parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        headers: tuple[str, ...],
+        text_columns: frozenset[int] = frozenset(),
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         self._headers = tuple(headers)
+        #: Columns whose cells are verbatim text, not lenient-parsed numbers
+        #: (a material map's key column). Empty by default, so a numeric grid
+        #: (series, x/y table) is unchanged.
+        self._text_columns = frozenset(text_columns)
         self._rows: list[list[object]] = []
 
     # --- Qt model interface -------------------------------------------
@@ -70,6 +79,10 @@ class _GridModel(QAbstractTableModel):
         if role in (Qt.DisplayRole, Qt.EditRole):
             return format_value(self._rows[index.row()][index.column()])
         if role == Qt.TextAlignmentRole:
+            # Text columns (map keys) read left-aligned like the words they
+            # hold; numeric columns stay right-aligned under their header.
+            if index.column() in self._text_columns:
+                return int(Qt.AlignLeft | Qt.AlignVCenter)
             return int(Qt.AlignRight | Qt.AlignVCenter)
         return None
 
@@ -77,13 +90,24 @@ class _GridModel(QAbstractTableModel):
         """Store the typed text as a raw object, never as a coerced number."""
         if not index.isValid() or role != Qt.EditRole:
             return False
-        parsed = parse_value(str(value))
+        parsed = self._parse_cell(index.column(), str(value))
         current = self._rows[index.row()][index.column()]
         if values_equal(parsed, current):
             return False  # a no-op re-type is not a change
         self._rows[index.row()][index.column()] = parsed
         self.dataChanged.emit(index, index, [Qt.DisplayRole, Qt.EditRole])
         return True
+
+    def _parse_cell(self, column: int, text: str) -> object:
+        """Turn typed *text* into a stored cell object.
+
+        A text column keeps the string verbatim (empty is ``None``), never
+        coercing a key like ``"1"`` into a number. A numeric column uses the
+        app-wide lenient convention (:func:`parse_value`).
+        """
+        if column in self._text_columns:
+            return text.strip() or None
+        return parse_value(text)
 
     def flags(self, index: QModelIndex) -> Qt.ItemFlags:
         if not index.isValid():
@@ -111,6 +135,13 @@ class _GridModel(QAbstractTableModel):
         self._rows.insert(at, [None] * len(self._headers))
         self.endInsertRows()
 
+    def append_row(self, cells) -> int:
+        at = len(self._rows)
+        self.beginInsertRows(QModelIndex(), at, at)
+        self._rows.append(list(cells))
+        self.endInsertRows()
+        return at
+
     def remove_row(self, at: int) -> None:
         self.beginRemoveRows(QModelIndex(), at, at)
         del self._rows[at]
@@ -126,9 +157,14 @@ class NumericGrid(QWidget):
     #: so seeding must never mark the card touched (see ``EditorCard``).
     changed = Signal()
 
-    def __init__(self, headers: tuple[str, ...], parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        headers: tuple[str, ...],
+        text_columns: frozenset[int] = frozenset(),
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
-        self._model = _GridModel(headers, self)
+        self._model = _GridModel(headers, text_columns, self)
 
         self._view = QTableView()
         self._view.setModel(self._model)
@@ -146,16 +182,16 @@ class NumericGrid(QWidget):
         self._add_button = self._row_button("+", "Add row", self.insert_row)
         self._remove_button = self._row_button("−", "Remove row", self.remove_row)
 
-        buttons = QHBoxLayout()
-        buttons.setContentsMargins(0, 0, 0, 0)
-        buttons.addWidget(self._add_button)
-        buttons.addWidget(self._remove_button)
-        buttons.addStretch(1)
+        self._buttons = QHBoxLayout()
+        self._buttons.setContentsMargins(0, 0, 0, 0)
+        self._buttons.addWidget(self._add_button)
+        self._buttons.addWidget(self._remove_button)
+        self._buttons.addStretch(1)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self._view)
-        layout.addLayout(buttons)
+        layout.addLayout(self._buttons)
 
         self._model.dataChanged.connect(lambda *_: self.changed.emit())
         self._model.rowsInserted.connect(lambda *_: self.changed.emit())
@@ -206,6 +242,25 @@ class NumericGrid(QWidget):
         at = index.row() + 1 if index.isValid() else self.row_count
         self._model.insert_row(at)
         self._view.setCurrentIndex(self._model.index(at, 0))
+
+    def append_row(self, cells) -> None:
+        """Append a row pre-filled with *cells* and select its first cell.
+
+        Used to add a keyed row from a suggestion (a material map's ``+ ▾``),
+        where the row is not blank but carries a known key. Emits ``changed``
+        like any other user-initiated row addition.
+        """
+        at = self._model.append_row(cells)
+        self._view.setCurrentIndex(self._model.index(at, 0))
+
+    def add_toolbar_widget(self, widget: QWidget) -> None:
+        """Place *widget* in the +/− button row, before the trailing stretch.
+
+        Lets a specialised card (the material map) add its own affordance --
+        a suggestions dropdown -- alongside the shared add/remove buttons
+        without the grid needing to know what it is.
+        """
+        self._buttons.insertWidget(self._buttons.count() - 1, widget)
 
     def remove_row(self) -> None:
         """Remove the current row, or the last one when nothing is selected."""
