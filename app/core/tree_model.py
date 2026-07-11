@@ -30,6 +30,23 @@ class NodeType(str, Enum):
     UNKNOWN = "unknown"
 
 
+@dataclass(frozen=True)
+class SiblingSeries:
+    """A read-only snapshot of a co-located experiment array.
+
+    Carried on a Validation run's ``SERIES`` parameters so an editor can show
+    the run's other arrays alongside (a length mismatch is visible while
+    editing) and a CSV import can target all of them in one atomic command.
+    A plain (label, path, value) triple rather than a reference to the sibling
+    :class:`ParameterItem`: mutual item references would make the dataclass
+    repr recurse and tie the editor to tree internals it must not mutate.
+    """
+
+    label: str
+    path: tuple[str, ...]
+    value: object
+
+
 @dataclass
 class ParameterItem:
     """A direct parameter owned by a navigable BPX object node."""
@@ -48,6 +65,10 @@ class ParameterItem:
     #: entry, not a schema constraint. Empty for every other kind and for a
     #: single-particle (unblended) electrode.
     key_suggestions: tuple[str, ...] = ()
+    #: For a ``SERIES`` parameter inside a Validation run, the run's *other*
+    #: series arrays (e.g. Current/Voltage/Temperature beside Time). Seeded by
+    #: ``_seed_sibling_series``; empty everywhere else.
+    sibling_series: tuple[SiblingSeries, ...] = ()
 
     @property
     def icon(self) -> str:
@@ -124,6 +145,7 @@ def build_tree(raw: dict, root_label: str = "BPX File") -> TreeNode:
     """Build the node tree for a raw BPX dictionary."""
     root = _build_node(root_label, (), raw)
     _seed_key_suggestions(root, raw)
+    _seed_sibling_series(root)
     return root
 
 
@@ -208,6 +230,33 @@ def _seed_key_suggestions(root: TreeNode, raw: dict) -> None:
             if meta is None:
                 continue
             parameter.key_suggestions = suggestions_by_material_check.get(meta.material_check, ())
+        for child in node.children:
+            walk(child)
+
+    walk(root)
+
+
+def _seed_sibling_series(root: TreeNode) -> None:
+    """Populate ``sibling_series`` on each SERIES parameter of a Validation run.
+
+    Like ``_seed_key_suggestions``, a post-pass over the finished tree: it is a
+    display/import hint over the result, not a classification input. Scoped to
+    ``Validation/<run>`` nodes -- the one place the schema declares co-owned
+    arrays -- so an undeclared list elsewhere never sprouts invented context.
+    Sibling values are carried verbatim (whatever the run holds, valid or not);
+    consumers render defensively and the validator keeps judging legality.
+    """
+
+    def walk(node: TreeNode) -> None:
+        if len(node.path) == 2 and node.path[0] == "Validation":
+            series = [p for p in node.parameters if p.kind is ParameterKind.SERIES]
+            if len(series) >= 2:
+                for parameter in series:
+                    parameter.sibling_series = tuple(
+                        SiblingSeries(other.label, other.path, other.value)
+                        for other in series
+                        if other is not parameter
+                    )
         for child in node.children:
             walk(child)
 

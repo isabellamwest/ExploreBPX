@@ -250,3 +250,69 @@ def test_key_suggestions_empty_for_single_particle_electrode(valid_spm_dict):
         ("State", "Initial conditions", "Initial hysteresis state: Negative electrode")
     ]
     assert hysteresis.key_suggestions == ()
+
+
+# ---------------------------------------------------------------------------
+# sibling_series seeding for a Validation run's SERIES parameters.
+# ---------------------------------------------------------------------------
+
+
+def _with_validation_run(valid_spm_dict, arrays):
+    doc = dict(valid_spm_dict)
+    doc["Validation"] = {"C/20 discharge": arrays}
+    return doc
+
+
+def test_sibling_series_seeded_for_validation_run(valid_spm_dict):
+    """Each of a run's four arrays carries the other three -- label, path and
+    verbatim value -- so an editor can show them and CSV import can target
+    them, without referencing the sibling ParameterItems themselves."""
+    doc = _with_validation_run(
+        valid_spm_dict,
+        {
+            "Time [s]": [0, 100, 200],
+            "Current [A]": [-0.6, -0.6, -0.6],
+            "Voltage [V]": [4.1, 4.0, 3.9],
+            "Temperature [K]": [298.15, 298.15, 298.15],
+        },
+    )
+    tree = build_tree(doc)
+    parameter_map = build_parameter_path_map(tree)
+    time = parameter_map[("Validation", "C/20 discharge", "Time [s]")]
+    assert [s.label for s in time.sibling_series] == [
+        "Current [A]",
+        "Voltage [V]",
+        "Temperature [K]",
+    ]
+    voltage = next(s for s in time.sibling_series if s.label == "Voltage [V]")
+    assert voltage.path == ("Validation", "C/20 discharge", "Voltage [V]")
+    assert voltage.value == [4.1, 4.0, 3.9]
+    # The value is carried, never re-derived: whatever the run holds.
+    current = parameter_map[("Validation", "C/20 discharge", "Current [A]")]
+    assert [s.label for s in current.sibling_series] == [
+        "Time [s]",
+        "Voltage [V]",
+        "Temperature [K]",
+    ]
+
+
+def test_sibling_series_not_seeded_outside_validation(valid_spm_dict):
+    """An undeclared list elsewhere (kind SERIES by shape) gets no invented
+    context: seeding is scoped to Validation/<run> nodes."""
+    doc = dict(valid_spm_dict)
+    doc["Parameterisation"] = dict(valid_spm_dict["Parameterisation"])
+    doc["Parameterisation"]["User-defined"] = {
+        "List A": [1, 2],
+        "List B": [3, 4],
+    }
+    tree = build_tree(doc)
+    parameter_map = build_parameter_path_map(tree)
+    assert parameter_map[("Parameterisation", "User-defined", "List A")].sibling_series == ()
+
+
+def test_sibling_series_needs_a_second_series(valid_spm_dict):
+    """A run holding a single array has nothing to show alongside it."""
+    doc = _with_validation_run(valid_spm_dict, {"Time [s]": [0, 100]})
+    tree = build_tree(doc)
+    parameter_map = build_parameter_path_map(tree)
+    assert parameter_map[("Validation", "C/20 discharge", "Time [s]")].sibling_series == ()
