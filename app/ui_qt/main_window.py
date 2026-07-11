@@ -28,7 +28,13 @@ from PySide6.QtWidgets import (
 
 from core import export, structure
 from core.bpx_gateway import BPX_VERSION, LoadError
-from core.commands import AddParameter, RemoveParameter
+from core.commands import (
+    AddParameter,
+    AddSection,
+    RemoveParameter,
+    RemoveSection,
+    RenameKey,
+)
 from state.app_state import AppState
 from state.document_session import DocumentSession
 
@@ -212,6 +218,9 @@ class MainWindow(QMainWindow):
         # request navigation, and the views reveal the resolved target.
         self._navigation.navigated.connect(self._on_navigated)
         self._tree.node_selected.connect(self._navigation.navigate)
+        self._tree.add_section_requested.connect(self._on_add_section_requested)
+        self._tree.rename_requested.connect(self._on_rename_requested)
+        self._tree.remove_requested.connect(self._on_remove_section_requested)
         self._params.parameter_selected.connect(self._navigation.navigate)
         self._params.add_parameter_requested.connect(self._on_add_parameter_requested)
         self._params.remove_parameter_requested.connect(self._on_remove_parameter_requested)
@@ -303,6 +312,69 @@ class MainWindow(QMainWindow):
         self._refresh_all()
         if target:
             self._navigation.navigate(target)
+
+    def _on_add_section_requested(self, parent_path: tuple, key: str) -> None:
+        """Add the object section *key* under *parent_path* and reveal it.
+
+        One handler for both menu flavours -- a schema-named child section and
+        a user-named material/experiment -- because both are exactly an
+        ``AddSection``. The menu/popup already scoped what is offerable, so a
+        backend refusal here is nothing to swallow silently.
+        """
+        session = self._state.active
+        if session is None or session.document is None:
+            return
+        session.execute_command(AddSection(tuple(parent_path), key))
+        target = session.selected_path
+        self._refresh_all()
+        if target:
+            self._navigation.navigate(target)
+
+    def _on_rename_requested(self, path: tuple, new_name: str) -> None:
+        """Rename the user-named key at *path* and reveal its new address."""
+        session = self._state.active
+        if session is None or session.document is None:
+            return
+        session.execute_command(RenameKey(tuple(path), new_name))
+        target = session.selected_path
+        self._refresh_all()
+        if target:
+            self._navigation.navigate(target)
+
+    def _on_remove_section_requested(self, path: tuple) -> None:
+        """Remove the section at *path*, confirming first when it has content.
+
+        The command's own preview supplies the "not empty" warning, so the
+        confirmation threshold and the backend can never disagree about what
+        counts as populated. An empty section removes instantly; undo restores
+        either as one step.
+        """
+        session = self._state.active
+        if session is None or session.document is None:
+            return
+        command = RemoveSection(tuple(path))
+        preview = session.preview_command(command)
+        if preview.warnings and not self._confirm_populated_removal(path[-1]):
+            return
+        session.execute_command(command)
+        target = session.selected_path
+        self._refresh_all()
+        if target:
+            self._navigation.navigate(target)
+
+    def _confirm_populated_removal(self, label: str) -> bool:
+        """Ask before destroying content; Cancel is the default (safe) answer."""
+        from PySide6.QtWidgets import QMessageBox
+
+        choice = QMessageBox.question(
+            self,
+            "Remove section",
+            f"“{label}” is not empty. Remove it and everything it contains?\n"
+            "Undo restores it.",
+            QMessageBox.Yes | QMessageBox.Cancel,
+            QMessageBox.Cancel,
+        )
+        return choice == QMessageBox.Yes
 
     def _on_committed(self) -> None:
         if self._state.active is None:
