@@ -281,7 +281,8 @@ repaired in place.
 | Table inline grid (x/y grid over a live preview) | Implemented |
 | Expanded (takeover) grid editor — Expand/Collapse grows the grid to fill the pane | Implemented |
 | Paste into a grid (Ctrl+V or right-click; delimiter auto-detect, header skip, preview, replace/append, no coercion) | Implemented |
-| CSV import (column mapping) and read-only sibling columns | Planned |
+| Read-only sibling columns on a Validation run's series grid (length mismatch visible) | Implemented |
+| CSV import (expanded editor; always-shown column-mapping dialog; fills a run's arrays as one undo step) | Implemented |
 | Remove parameter (row context menu) | Planned |
 | Section add/remove controls | Planned |
 | Tree editing (add/remove sections; add/rename/remove materials and experiments) | Planned |
@@ -341,13 +342,20 @@ line fed by `FieldMeta.examples`; description):
   affordance — it would be dead UI.)
 - **Multi-line text.** Enter commits everywhere; Shift+Enter inserts a newline
   in multi-line text fields, so the app-wide commit contract is unchanged.
-- **Large values.** Series and table cards show a compact inline grid plus an
-  expanded editor that temporarily replaces the card within the Inspector pane
-  (✕ returns; see [02-ui.md](02-ui.md)). Paste (with a preview reporting
-  rejected cells) and CSV import (with column mapping for experiment data) are
-  first-class. A series card in a Validation run shows its sibling columns
-  read-only, so length mismatches are visible while editing; a CSV import
-  there offers to fill all sibling columns from the same file.
+- **Large values.** Series and table cards show a compact inline grid; a text
+  **Expand** action grows the grid to fill the Inspector pane (the secondary
+  workspace collapses to its tab strip; **Collapse** restores both). Paste
+  (Ctrl+V or right-click; with a preview reporting rejected cells) is
+  first-class. A series card in a Validation run shows its sibling arrays as
+  read-only, muted columns beside the edited one — a length mismatch appears
+  as trailing phantom rows, which are display only and can never read back
+  into the value. The expanded editor additionally offers **Import CSV…**: the
+  file's columns are auto-matched to the run's arrays by header name (or by
+  position when there is no header), but the mapping dialog is *always* shown
+  and editable — a wrong guess is visible, never silently imported. Mapped
+  columns fill their arrays in one atomic step (a single undo); skipped
+  targets are left untouched; non-numeric cells are kept as text and counted,
+  never zero-filled.
 - **Reference slot.** Every card's value row reserves a trailing slot for a
   future Reference document's value and delta; nothing renders there today.
 
@@ -357,9 +365,12 @@ Editing is command-based: `commands.py` describes intent, `editing.py` performs
 pure raw-dict mutation, `command_service.py` previews and executes with structural
 guardrails, and `DocumentSession` records undo and dirty state. Committing a card
 runs `apply_value`, which is a `SetValue` command, so a value edit is undoable on
-the same stack as adding or removing a parameter. A card's architectural contract
-is fixed: it edits one `ParameterItem`, emits raw input, and does not decide
-validity. See the Editing and Command architecture in
+the same stack as adding or removing a parameter. An edit that spans several
+parameters — a CSV import filling a Validation run's four arrays — is a single
+`SetValues` command: one document rebuild, one undo entry, applied
+all-or-nothing so the arrays can never desynchronise halfway. A card's
+architectural contract is fixed: it edits one `ParameterItem`, emits raw input,
+and does not decide validity. See the Editing and Command architecture in
 [01-architecture.md](01-architecture.md).
 
 **A union-typed field carries a mode strip.** `FloatFunctionTable` fields open on
