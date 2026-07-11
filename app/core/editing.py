@@ -86,6 +86,32 @@ def remove_parameter(raw: dict, path: tuple[str, ...]) -> dict:
     return updated
 
 
+def rename_key(raw: dict, path: tuple[str, ...], new_key: str) -> dict:
+    """Return a copy of ``raw`` with the key at ``path`` renamed to ``new_key``.
+
+    The key keeps its **position** in the owning dict -- the raw dict's key
+    order is what exports, so a rename must not shuffle the renamed section to
+    the end of the file. The value moves untouched, descendants and all.
+
+    Raises :class:`EditError` when the key is missing or when ``new_key``
+    already exists in the parent (overwriting a sibling would silently destroy
+    its contents -- a rename is a move, never a merge).
+    """
+    if not path:
+        raise EditError("Cannot rename the document root")
+    updated = copy.deepcopy(raw)
+    parent = _navigate(updated, path)
+    old_key = path[-1]
+    if old_key not in parent:
+        raise EditError(f"Path segment not found: {old_key!r} in {path!r}")
+    if new_key != old_key and new_key in parent:
+        raise EditError(f"Key already exists: {new_key!r}")
+    items = [(new_key if key == old_key else key, value) for key, value in parent.items()]
+    parent.clear()
+    parent.update(items)
+    return updated
+
+
 def add_section(raw: dict, parent_path: tuple[str, ...], key: str) -> dict:
     """Return a copy of ``raw`` with an empty object ``key`` under the parent."""
     return add_parameter(raw, parent_path, key, {})

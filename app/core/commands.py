@@ -66,6 +66,23 @@ class RemoveSection(Command):
 
 
 @dataclass(frozen=True)
+class RenameKey(Command):
+    """Rename the user-named dict key at ``path`` to ``new_key``.
+
+    Only keys the user owns are renamable (Particle material instances,
+    Validation runs -- see ``structure.can_rename``); schema property names
+    never are. Renaming moves the **address** of every descendant of the
+    renamed node: any future address-keyed sidecar metadata (e.g. per-value
+    provenance) must cascade here. Values referring to the old name (a
+    per-material MAP key) are deliberately *not* rewritten -- the validator
+    reports them, the app invents nothing.
+    """
+
+    path: tuple[str, ...]
+    new_key: str
+
+
+@dataclass(frozen=True)
 class AddParameter(Command):
     """Add a parameter ``key`` with an initial ``value`` under ``parent_path``."""
 

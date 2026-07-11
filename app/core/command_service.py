@@ -20,6 +20,7 @@ from .commands import (
     Preview,
     RemoveParameter,
     RemoveSection,
+    RenameKey,
     SetValue,
     SetValues,
 )
@@ -41,6 +42,9 @@ def preview(raw: dict, command: Command) -> Preview:
     if isinstance(command, RemoveSection):
         warn = () if not raw_at(raw, command.path) else ("Section is not empty.",)
         return Preview("Remove section", (command.path,), warn)
+    if isinstance(command, RenameKey):
+        new_path = command.path[:-1] + (command.new_key,)
+        return Preview("Rename", (command.path, new_path))
     if isinstance(command, AddParameter):
         return Preview("Add parameter", (command.parent_path + (command.key,),))
     if isinstance(command, RemoveParameter):
@@ -70,6 +74,19 @@ def execute(raw: dict, command: Command) -> CommandResult:
             raise CommandError("This section cannot be removed.")
         new = editing.remove_section(raw, command.path)
         return CommandResult(new, "Remove section", command.path[:-1])
+    if isinstance(command, RenameKey):
+        if not structure.can_rename(command.path):
+            raise CommandError("This name cannot be changed.")
+        new_key = command.new_key.strip()
+        if not new_key:
+            raise CommandError("Name cannot be empty.")
+        if new_key == command.path[-1]:
+            raise CommandError("Name is unchanged.")
+        parent = raw_at(raw, command.path[:-1])
+        if isinstance(parent, dict) and new_key in parent:
+            raise CommandError(f"“{new_key}” already exists here.")
+        new = editing.rename_key(raw, command.path, new_key)
+        return CommandResult(new, "Rename", command.path[:-1] + (new_key,))
     if isinstance(command, AddParameter):
         new = editing.add_parameter(raw, command.parent_path, command.key, command.value)
         return CommandResult(new, "Add parameter", command.parent_path, command.parent_path + (command.key,))

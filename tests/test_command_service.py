@@ -10,6 +10,7 @@ from core.commands import (
     CreateDocument,
     RemoveParameter,
     RemoveSection,
+    RenameKey,
     SetValue,
     SetValues,
 )
@@ -43,6 +44,132 @@ def test_set_value_is_non_destructive():
     result = command_service.execute(raw, SetValue(("Header", "Title"), "b"))
     assert result.raw["Header"]["Title"] == "b"
     assert raw["Header"]["Title"] == "a"
+
+
+# --- RenameKey: user-owned dict keys only (materials, Validation runs) ---
+
+
+def _raw_with_run(run_name="C/20 discharge"):
+    return {
+        "Header": {},
+        "Validation": {run_name: {"Time [s]": [0, 1]}, "1C discharge": {}},
+    }
+
+
+def test_rename_run_moves_value_and_preserves_key_order():
+    raw = _raw_with_run()
+    result = command_service.execute(
+        raw, RenameKey(("Validation", "C/20 discharge"), "C/10 discharge")
+    )
+    assert list(result.raw["Validation"]) == ["C/10 discharge", "1C discharge"]
+    assert result.raw["Validation"]["C/10 discharge"] == {"Time [s]": [0, 1]}
+    assert result.label == "Rename"
+    assert result.select_path == ("Validation", "C/10 discharge")
+    assert raw["Validation"]["C/20 discharge"] == {"Time [s]": [0, 1]}  # source untouched
+
+
+def test_rename_particle_material_is_allowed():
+    raw = {
+        "Parameterisation": {
+            "Positive electrode": {"Particle": {"Primary": {"a": 1}, "Secondary": {}}}
+        }
+    }
+    path = ("Parameterisation", "Positive electrode", "Particle", "Primary")
+    result = command_service.execute(raw, RenameKey(path, "Main"))
+    particle = result.raw["Parameterisation"]["Positive electrode"]["Particle"]
+    assert list(particle) == ["Main", "Secondary"]
+    assert particle["Main"] == {"a": 1}
+
+
+def test_rename_a_schema_property_is_refused():
+    """Schema property names are never editable; only the dict-keyed
+    collections (materials, runs) carry user-owned names."""
+    with pytest.raises(CommandError):
+        command_service.execute({"Header": {}}, RenameKey(("Header",), "Kopfzeile"))
+
+
+def test_rename_onto_an_existing_sibling_is_refused():
+    """A rename is a move, never a merge -- overwriting the sibling would
+    silently destroy its contents."""
+    raw = _raw_with_run()
+    with pytest.raises(CommandError):
+        command_service.execute(
+            raw, RenameKey(("Validation", "C/20 discharge"), "1C discharge")
+        )
+    assert "C/20 discharge" in raw["Validation"]
+
+
+def test_rename_to_blank_or_unchanged_is_refused():
+    raw = _raw_with_run()
+    with pytest.raises(CommandError):
+        command_service.execute(raw, RenameKey(("Validation", "C/20 discharge"), "   "))
+    with pytest.raises(CommandError):
+        command_service.execute(
+            raw, RenameKey(("Validation", "C/20 discharge"), "C/20 discharge")
+        )
+
+
+def test_rename_then_undo_restores_the_old_name_and_position():
+    from state.document_session import DocumentSession
+
+    session = DocumentSession()
+    session.execute_command(CreateDocument("SPM", "T"))
+    session.execute_command(AddSection((), "Validation"))
+    session.execute_command(AddSection(("Validation",), "Run A"))
+    session.execute_command(AddSection(("Validation",), "Run B"))
+    session.execute_command(RenameKey(("Validation", "Run A"), "Run C"))
+    assert list(session.document.raw["Validation"]) == ["Run C", "Run B"]
+    session.undo()
+    assert list(session.document.raw["Validation"]) == ["Run A", "Run B"]
+
+
+# --- structure queries behind the tree's context menu ---
+
+
+def test_can_rename_only_materials_and_runs():
+    assert structure.can_rename(("Validation", "C/20 discharge"))
+    assert structure.can_rename(
+        ("Parameterisation", "Negative electrode", "Particle", "Primary")
+    )
+    assert not structure.can_rename(("Header",))
+    assert not structure.can_rename(("Parameterisation", "Cell"))
+    assert not structure.can_rename(("Validation",))
+
+
+def test_named_child_noun_for_the_two_dict_keyed_containers():
+    assert structure.named_child_noun(("Validation",)) == "experiment"
+    assert (
+        structure.named_child_noun(("Parameterisation", "Positive electrode", "Particle"))
+        == "material"
+    )
+    assert structure.named_child_noun(("Parameterisation",)) is None
+
+
+def test_addable_child_sections_come_from_the_schema():
+    """State is missing Thermal environment and Degradation here, so exactly
+    those (both schema-declared containers) are offered."""
+    value = {"Initial conditions": {}}
+    additions = structure.addable_child_sections(("State",), value)
+    assert additions == ("Thermal environment", "Degradation")
+
+
+def test_addable_child_sections_at_the_root_are_the_optional_top_levels():
+    assert structure.addable_child_sections((), {"Header": {}, "Parameterisation": {}}) == (
+        "State",
+        "Validation",
+    )
+    assert structure.addable_child_sections((), {"Header": {}, "State": {}}) == ("Validation",)
+
+
+def test_addable_child_sections_degrade_to_empty_for_the_electrode_union():
+    """The electrode's single/blended union has no single schema definition;
+    offering nothing beats guessing."""
+    assert (
+        structure.addable_child_sections(
+            ("Parameterisation", "Positive electrode"), {"Particle": {}}
+        )
+        == ()
+    )
 
 
 # --- SetValues: the atomic multi-path write behind CSV import ---
