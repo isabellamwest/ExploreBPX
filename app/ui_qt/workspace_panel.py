@@ -14,12 +14,22 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QMimeData, Signal
+from PySide6.QtCore import QMimeData, Qt, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QFormLayout,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from core.document import BPXDocument
 from core.document_factory import SUPPORTED_MODELS
+
+from .style import ERROR, OK, WARNING
 
 _INFO_PANEL_EMPTY_STATE_TEXT = "No document open"
 
@@ -66,24 +76,61 @@ class WorkspacePanel(QWidget):
         self.setObjectName("Panel")
         self.setAcceptDrops(True)
 
-        layout = QVBoxLayout(self)
+        # Two columns: actions on the left (open + new-from-model), the current
+        # document's details on the right. A single full-width Open button over
+        # a stack of everything read awkwardly; splitting actions from data
+        # makes each half legible on its own.
+        layout = QHBoxLayout(self)
         layout.setContentsMargins(24, 24, 24, 24)
-        layout.setSpacing(16)
+        layout.setSpacing(24)
 
-        self._open_button = QPushButton("Open File")
+        left = QVBoxLayout()
+        left.setSpacing(16)
+        self._open_button = QPushButton("Open File…")
+        self._open_button.setObjectName("WorkspaceOpen")
         self._open_button.clicked.connect(self.open_requested)
-        layout.addWidget(self._open_button, 0)
+        left.addWidget(self._open_button, 0, Qt.AlignLeft)
+        left.addWidget(self._build_new_chooser(), 0)
+        left.addStretch(1)
+        layout.addLayout(left, 1)
 
-        layout.addWidget(self._build_new_chooser(), 0)
-
-        self._info = QLabel()
-        self._info.setObjectName("WorkspaceInfo")
-        self._info.setWordWrap(True)
-        layout.addWidget(self._info, 0)
-
-        layout.addStretch(1)
+        layout.addWidget(self._build_info_card(), 1)
 
         self.refresh(None, None, False)
+
+    def _build_info_card(self) -> QWidget:
+        """The right-hand current-document card: identity, validity, contents."""
+        card = QFrame()
+        card.setObjectName("DocInfoCard")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(16, 16, 16, 16)
+        card_layout.setSpacing(10)
+
+        self._info_title = QLabel()
+        self._info_title.setObjectName("DocInfoTitle")
+        self._info_title.setWordWrap(True)
+        card_layout.addWidget(self._info_title)
+
+        self._info_badge = QLabel()
+        self._info_badge.setObjectName("DocInfoBadge")
+        card_layout.addWidget(self._info_badge, 0, Qt.AlignLeft)
+
+        self._info_form = QFormLayout()
+        self._info_form.setContentsMargins(0, 4, 0, 0)
+        self._info_form.setHorizontalSpacing(12)
+        self._info_form.setVerticalSpacing(6)
+        self._info_fields: dict[str, QLabel] = {}
+        for key in ("Model", "BPX version", "File", "State", "Contents"):
+            value = QLabel()
+            value.setObjectName("DocInfoValue")
+            value.setWordWrap(True)
+            label = QLabel(f"{key}:")
+            label.setObjectName("DocInfoKey")
+            self._info_form.addRow(label, value)
+            self._info_fields[key] = value
+        card_layout.addLayout(self._info_form)
+        card_layout.addStretch(1)
+        return card
 
     def _build_new_chooser(self) -> QWidget:
         """Inline "New" surface: one labelled button per supported model.
@@ -125,24 +172,61 @@ class WorkspacePanel(QWidget):
         return row
 
     def refresh(self, document: BPXDocument | None, filename: str | None, dirty: bool) -> None:
-        """Update the info panel from the active document's identity and file state.
+        """Update the info card from the active document's identity and state.
 
-        Identity (Title/Model/BPX version) is read only through
-        ``document.identity``; ``filename``/``dirty`` are caller-supplied
-        facts derived from the active session, never from the raw dict.
+        Identity (Title/Model/BPX version) and the section/parameter counts are
+        read only through the document's own properties; ``filename``/``dirty``
+        are caller-supplied facts derived from the active session, never from
+        the raw dict.
         """
         if document is None:
-            self._info.setText(_INFO_PANEL_EMPTY_STATE_TEXT)
+            self._info_title.setText(_INFO_PANEL_EMPTY_STATE_TEXT)
+            self._info_title.setEnabled(False)
+            self._info_badge.hide()
+            for value in self._info_fields.values():
+                value.setText("")
+            self._set_form_visible(False)
             return
+
+        self._info_title.setEnabled(True)
         identity = document.identity
-        lines = [
-            f"Title: {identity.title or '—'}",
-            f"Model: {identity.model or '—'}",
-            f"BPX version: {identity.bpx_version or '—'}",
-            f"File: {filename or '—'}",
-            f"State: {'Modified' if dirty else 'Saved'}",
-        ]
-        self._info.setText("\n".join(lines))
+        self._info_title.setText(identity.title or "Untitled document")
+        self._set_form_visible(True)
+        self._info_fields["Model"].setText(identity.model or "—")
+        self._info_fields["BPX version"].setText(identity.bpx_version or "—")
+        self._info_fields["File"].setText(filename or "—")
+        self._info_fields["State"].setText("Modified" if dirty else "Saved")
+        self._info_fields["Contents"].setText(
+            f"{document.section_count} sections · {document.parameter_count} parameters"
+        )
+        self._set_validity_badge(document)
+
+    def _set_validity_badge(self, document: BPXDocument) -> None:
+        errors, warnings = document.error_count, document.warning_count
+        if document.is_valid and not warnings:
+            text, colour = "Valid", OK
+        elif errors:
+            parts = [f"{errors} error" + ("s" if errors != 1 else "")]
+            if warnings:
+                parts.append(f"{warnings} warning" + ("s" if warnings != 1 else ""))
+            text, colour = ", ".join(parts), ERROR
+        else:
+            text, colour = (
+                f"{warnings} warning" + ("s" if warnings != 1 else ""),
+                WARNING,
+            )
+        self._info_badge.setText(text)
+        self._info_badge.setStyleSheet(
+            f"color: white; background: {colour}; padding: 2px 10px; border-radius: 3px;"
+        )
+        self._info_badge.show()
+
+    def _set_form_visible(self, visible: bool) -> None:
+        for row in range(self._info_form.rowCount()):
+            for role in (QFormLayout.LabelRole, QFormLayout.FieldRole):
+                item = self._info_form.itemAt(row, role)
+                if item is not None and item.widget() is not None:
+                    item.widget().setVisible(visible)
 
     # --- drag-and-drop ---------------------------------------------------
 

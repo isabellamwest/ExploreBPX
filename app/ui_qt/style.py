@@ -39,6 +39,12 @@ QLabel#CardTitle { font-size: 15px; font-weight: 600; }
 QLabel#CardSymbol { margin-left: 8px; }
 QLabel#Heading { color: #57606a; font-weight: 600; }
 QFrame#Card { border: 1px solid #d0d7de; }
+/* Workspace page: the current-document card and its field rows. */
+QFrame#DocInfoCard { border: 1px solid #d0d7de; border-radius: 6px; background: #f6f8fa; }
+QLabel#DocInfoTitle { font-size: 15px; font-weight: 600; }
+QLabel#DocInfoTitle:disabled { color: #8c959f; font-weight: 400; }
+QLabel#DocInfoKey { color: #57606a; }
+QLabel#NewChooserHeading { color: #57606a; font-weight: 600; }
 QStatusBar { background: #f6f8fa; border-top: 1px solid #d0d7de; font-size: 12px; color: #57606a; }
 QWidget#ActivityBar { background: #f6f8fa; border-right: 1px solid #d0d7de; }
 QToolButton#ActivityButton { background: transparent; border: none; border-left: 2px solid transparent; }

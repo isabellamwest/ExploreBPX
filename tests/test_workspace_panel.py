@@ -154,6 +154,32 @@ def test_opening_from_workspace_page_goes_through_discard_guard(
     assert d.status_text() == original_status
 
 
+def test_document_card_shows_validity_and_contents(app_driver, valid_spm_path):
+    app_driver.open(valid_spm_path)
+    ws = app_driver._w._workspace
+    assert ws._info_badge.text() == "Valid"
+    assert not ws._info_badge.isHidden()
+    # section/parameter counts come straight from the document, not invented.
+    doc = app_driver._w._state.active.document
+    assert ws._info_fields["Contents"].text() == (
+        f"{doc.section_count} sections · {doc.parameter_count} parameters"
+    )
+
+
+def test_document_card_badge_reports_errors(app_driver, invalid_bpx_path):
+    app_driver.open(invalid_bpx_path)
+    ws = app_driver._w._workspace
+    doc = app_driver._w._state.active.document
+    assert not doc.is_valid
+    assert "error" in ws._info_badge.text()
+
+
+def test_document_card_is_blank_with_no_document(app_driver):
+    ws = app_driver._w._workspace
+    assert ws._info_title.text() == "No document open"
+    assert ws._info_badge.isHidden()
+
+
 def test_new_chooser_offers_exactly_the_supported_models(app_driver):
     assert sorted(app_driver.workspace_new_model_options()) == sorted(SUPPORTED_MODELS)
 

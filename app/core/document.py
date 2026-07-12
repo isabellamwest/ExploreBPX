@@ -203,6 +203,16 @@ class BPXDocument:
     def warning_count(self) -> int:
         return sum(1 for issue in self.issues if issue.severity == Severity.WARNING)
 
+    @property
+    def section_count(self) -> int:
+        """Navigable object sections in the tree, excluding the invisible root."""
+        return max(len(self._node_path_map) - 1, 0)
+
+    @property
+    def parameter_count(self) -> int:
+        """Direct parameters across every section."""
+        return len(self._parameter_path_map)
+
     def find(self, path: tuple[str, ...]) -> TreeNode | None:
         """Return the visible object node at an exact path, if it exists."""
         return self._node_path_map.get(tuple(path))

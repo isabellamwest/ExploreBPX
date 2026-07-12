@@ -483,8 +483,22 @@ class AppDriver:
         return None
 
     def workspace_info_text(self) -> str:
-        """Text shown in the Workspace page's current-document info panel."""
-        return self._w._workspace._info.text()
+        """Text of the Workspace page's current-document card, flattened.
+
+        Composed from the card's title, validity badge and field rows into the
+        ``Key: value`` lines the workspace assertions read, so a layout change
+        (single label -> formatted card) does not ripple into every test.
+        """
+        ws = self._w._workspace
+        title = ws._info_title.text()
+        if title == "No document open":
+            return title
+        lines = [f"Title: {title}"]
+        if ws._info_badge.text():
+            lines.append(f"Validity: {ws._info_badge.text()}")
+        for key in ("Model", "BPX version", "File", "State", "Contents"):
+            lines.append(f"{key}: {ws._info_fields[key].text()}")
+        return "\n".join(lines)
 
     def tree_selection_label(self) -> str | None:
         """Label of the node currently selected in the structure tree, if any."""
