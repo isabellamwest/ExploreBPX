@@ -303,6 +303,12 @@ Editing is performed in per-kind cards in the Inspector, selected by
 
 - **Enter commits** the current raw input to the working document, valid or
   invalid.
+- **A discrete pick commits immediately**: choosing an entry from an enum's
+  opened dropdown, or clicking a boolean's checkbox, is a complete deliberate
+  act and applies without a further Enter (this is how the document's Model is
+  switched). Arrowing through an enum's values on the *closed* combo remains a
+  draft under the Enter/Escape contract — a step-through is browsing, not
+  choosing.
 - Invalid data is not silently accepted by the validated BPX model; it is surfaced
   as validation issues after revalidation.
 - Cards emit raw user input and never gatekeep values.
