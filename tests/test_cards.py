@@ -183,6 +183,52 @@ def test_enum_none_value_can_be_selected_and_reverted():
     assert card.value() is None
 
 
+def _model_enum_card():
+    meta = FieldMeta(alias="Model", is_enum=True, enum_values=("SPM", "SPMe", "DFN"))
+    param = ParameterItem(
+        label="Model", path=("Header", "Model"), kind=ParameterKind.ENUM, value="SPM"
+    )
+    return create_card(param, meta)
+
+
+def test_enum_popup_pick_commits_immediately():
+    """Opening the dropdown and choosing an entry is a complete act: it must
+    commit without a further Enter (this is how the document's Model is
+    switched -- a pick that silently stays a draft looks like it didn't take).
+    The draft fires before the commit, so the commit sees the new value."""
+    _app()
+    card = _model_enum_card()
+    order = []
+    card.draft_changed.connect(lambda: order.append("draft"))
+    card.commit_requested.connect(lambda: order.append("commit"))
+
+    card._combo.showPopup()  # the user opened the menu...
+    index = card._combo.findText("DFN")
+    card._combo.setCurrentIndex(index)
+    card._combo.activated.emit(index)  # ...and picked an entry
+
+    assert order == ["draft", "commit"]
+    assert card.value() == "DFN"
+
+
+def test_enum_closed_combo_arrowing_stays_a_draft():
+    """Stepping through values on the *closed* combo is browsing, not
+    choosing: it must not commit each step (Enter still commits, Escape still
+    reverts, and every step would otherwise become an undo entry)."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    _app()
+    card = _model_enum_card()
+    commits = []
+    card.commit_requested.connect(lambda: commits.append(True))
+
+    QTest.keyClick(card._combo, Qt.Key_Down)  # SPM -> SPMe, popup never opened
+
+    assert card.value() == "SPMe"
+    assert commits == []  # a draft; Enter is what commits it
+
+
 @pytest.mark.parametrize(
     "kind, text, expected_value",
     [

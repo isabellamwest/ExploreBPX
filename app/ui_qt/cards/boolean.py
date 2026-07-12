@@ -15,6 +15,12 @@ class BooleanCard(EditorCard):
     metadata-declared), so the original is always a real ``bool``. Unlike
     :class:`~.integer.IntegerCard`, no invalid-original fallback widget is
     needed.
+
+    Commit model: **clicking the checkbox commits immediately**. A toggle is a
+    complete, discrete act -- the same rule as picking from an enum's opened
+    dropdown -- so requiring a further Enter only makes the change look like it
+    didn't take. ``clicked`` fires solely on user interaction (click or Space),
+    never from ``setChecked``, so seeding and ``reset()`` stay silent.
     """
 
     def __init__(self, parameter, meta) -> None:
@@ -25,6 +31,7 @@ class BooleanCard(EditorCard):
         self._check.setChecked(bool(self._original))
         self._sync_label(self._check.isChecked())
         self._check.toggled.connect(self._on_toggled)
+        self._check.clicked.connect(lambda *_: self.commit_requested.emit())
         layout.addWidget(self._check)
         layout.addStretch(1)
         self._install_keyboard_handler(self._check)

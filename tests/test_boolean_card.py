@@ -57,6 +57,30 @@ def test_toggling_emits_draft_changed():
     assert received == [True]
 
 
+def test_a_user_click_commits_immediately():
+    """A checkbox toggle is a complete, discrete act: clicking commits without
+    a further Enter (the draft still fires first, so the commit sees it)."""
+    _app()
+    card = BooleanCard(_param(False), None)
+    order = []
+    card.draft_changed.connect(lambda: order.append("draft"))
+    card.commit_requested.connect(lambda: order.append("commit"))
+    card._check.click()
+    assert order == ["draft", "commit"]
+    assert card.value() is True
+
+
+def test_a_programmatic_setchecked_does_not_commit():
+    """Seeding/reset go through setChecked; only a real user click commits."""
+    _app()
+    card = BooleanCard(_param(False), None)
+    received = []
+    card.commit_requested.connect(lambda: received.append(True))
+    card._check.setChecked(True)
+    card.reset()
+    assert received == []
+
+
 def test_reset_restores_original():
     _app()
     card = BooleanCard(_param(True), None)
