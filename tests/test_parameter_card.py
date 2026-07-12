@@ -47,3 +47,28 @@ def test_undocumented_parameter_shows_no_symbol():
     card = _card(path)
     assert card._metadata.symbol is None
     assert card.findChildren(object, "CardSymbol") == []
+
+
+def _series_card_with_description() -> ParameterCard:
+    param = ParameterItem(
+        label="Time [s]",
+        path=("Validation", "run", "Time [s]"),
+        kind=ParameterKind.SERIES,
+        value=[0, 1, 2],
+        description="Time in seconds (list of FloatInts).",
+    )
+    return ParameterCard(param, None)
+
+
+def test_description_hides_while_the_grid_is_expanded():
+    """Expanding a grid takes over the pane; the description hides to make room
+    (the preview chart above the grid stays), and returns on collapse."""
+    card = _series_card_with_description()
+    assert card._description_widgets  # a description block was built
+    assert all(w.isVisibleTo(card) for w in card._description_widgets)
+
+    card._editor.expand_toggled.emit(True)
+    assert all(not w.isVisibleTo(card) for w in card._description_widgets)
+
+    card._editor.expand_toggled.emit(False)
+    assert all(w.isVisibleTo(card) for w in card._description_widgets)

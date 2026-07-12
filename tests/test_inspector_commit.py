@@ -130,6 +130,36 @@ def test_noop_enter_does_not_emit_committed(qtbot, spm_workfile):
     assert received == []
 
 
+def test_expanding_a_grid_reclaims_the_secondary_workspace_space(
+    qtbot, spm_with_validation_path
+):
+    """When a grid takes over the pane, the secondary workspace must collapse
+    to its tab strip and *give its space back* -- not merely hide its content
+    and leave a dead band (the splitter has to be resized, since lowering the
+    max height alone does not make it redistribute)."""
+    time_path = ("Validation", "C/20 discharge", "Time [s]")
+    state, panel = _panel_on(qtbot, spm_with_validation_path, time_path)
+    panel.resize(460, 720)
+    panel.show()
+    qtbot.waitExposed(panel)
+
+    # Open the drawer so it holds a real slice of the splitter, then expand.
+    panel._secondary.open("issues")
+    qtbot.wait(1)
+    assert panel._splitter.sizes()[1] > panel._secondary.tab_strip_height()
+
+    panel._card._editor._grid._toggle_expanded()
+    qtbot.wait(1)
+
+    strip = panel._secondary.tab_strip_height()
+    assert not panel._secondary.is_expanded
+    assert panel._splitter.sizes()[1] <= strip  # space reclaimed, no dead band
+    # Collapsing the grid restores the drawer to what the user last wanted.
+    panel._card._editor._grid._toggle_expanded()
+    qtbot.wait(1)
+    assert panel._splitter.sizes()[1] > strip
+
+
 def test_real_edit_still_commits_and_emits(qtbot, spm_workfile):
     """The dirty guard must not block a genuine edit."""
     state, panel = _panel_on(qtbot, spm_workfile, _CAPACITY)

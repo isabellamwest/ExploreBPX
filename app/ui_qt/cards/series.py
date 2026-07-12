@@ -56,7 +56,9 @@ class SeriesCard(EditorCard):
         self._preview.update_rows(self._grid.values())
         self._grid.changed.connect(self._on_grid_changed)
         self._grid.expand_toggled.connect(self.expand_toggled)
-        layout.addWidget(self._grid)
+        # Stretch factor 1: when the card fills an expanded pane, the grid (not
+        # the fixed-height preview) absorbs the extra height.
+        layout.addWidget(self._grid, 1)
 
         # CSV import lives in the expanded (takeover) editor only: it is a
         # bulk operation over the whole run, not a cell-level edit, and the

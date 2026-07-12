@@ -360,9 +360,15 @@ class NumericGrid(QWidget):
             self._view.setMinimumHeight(self._compact_height())
             self._view.setMaximumHeight(16_777_215)  # Qt's QWIDGETSIZE_MAX
             self._view.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+            # The grid *widget* must expand too, not just its inner view: the
+            # card's layout sizes this NumericGrid, and if it stays Preferred
+            # the leftover pane height lands as a gap above the grid rather
+            # than growing it.
+            self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         else:
             self._view.setFixedHeight(self._compact_height())
             self._view.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+            self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
         if self._expand_button is not None:
             self._expand_button.setText("Collapse" if expanded else "Expand")
             self._expand_button.setToolTip(

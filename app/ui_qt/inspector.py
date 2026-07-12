@@ -124,10 +124,18 @@ class InspectorPanel(QWidget):
             self._secondary.resume()
 
     def _on_secondary_expanded(self, expanded: bool) -> None:
-        if not expanded:
-            return
         total = self._splitter.height()
-        height = max(self._panel_height, self._secondary.tab_strip_height())
+        if not total:
+            return  # not laid out yet; the default splitter sizes are correct
+        if expanded:
+            height = max(self._panel_height, self._secondary.tab_strip_height())
+        else:
+            # Collapsing must give the drawer's space back to the editor.
+            # Lowering the secondary's maximum height alone does not make the
+            # splitter redistribute sizes it was already handed, so clamp pane 1
+            # to its tab strip here -- otherwise the content hides but a dead
+            # band of empty space is left where it was.
+            height = self._secondary.tab_strip_height()
         self._splitter.setSizes([max(total - height, 0), height])
 
     def _remember_panel_height(self, *_args) -> None:

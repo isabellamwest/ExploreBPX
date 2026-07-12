@@ -85,6 +85,7 @@ class ParameterCard(QWidget):
         self._editor.draft_reset.connect(self.draft_reset)
         self._editor.commit_requested.connect(self.commit_requested)
         self._editor.expand_toggled.connect(self.expand_toggled)
+        self._editor.expand_toggled.connect(self._on_expand_toggled)
         self._editor.bulk_commit_requested.connect(self.bulk_commit_requested)
         # Value row: the editor plus a trailing slot. The trailing slot is
         # reserved -- not built -- for a future Reference document's value
@@ -95,12 +96,23 @@ class ParameterCard(QWidget):
         value_row.addWidget(self._editor, 1)
         layout.addLayout(value_row)
 
+        # Description block, hidden while the editor's grid takes over the pane
+        # (a big table needs the room; the live preview chart above the grid
+        # stays, so the modeller keeps the value in view while editing).
+        self._description_widgets: list[QWidget] = []
         if parameter.description:
-            layout.addWidget(QLabel("Description:", objectName="Heading"))
+            heading = QLabel("Description:", objectName="Heading")
+            layout.addWidget(heading)
             desc = QTextEdit(parameter.description)
             desc.setReadOnly(True)
             desc.setMaximumHeight(120)
             layout.addWidget(desc)
+            self._description_widgets = [heading, desc]
+
+    def _on_expand_toggled(self, expanded: bool) -> None:
+        """Hide the description while the grid is expanded, restore on collapse."""
+        for widget in self._description_widgets:
+            widget.setVisible(not expanded)
 
     def value(self) -> object:
         """Return the inner editor's current draft value in raw-dict form."""
