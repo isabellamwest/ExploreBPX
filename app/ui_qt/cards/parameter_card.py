@@ -19,8 +19,8 @@ all validation orchestration stays in ``InspectorPanel``.
 
 from __future__ import annotations
 
-from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QTextEdit, QVBoxLayout, QWidget
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from core.bpx_gateway import FieldMeta
 from core.parameter_metadata import resolve_parameter_metadata
@@ -96,18 +96,19 @@ class ParameterCard(QWidget):
         value_row.addWidget(self._editor, 1)
         layout.addLayout(value_row)
 
-        # Description block, hidden while the editor's grid takes over the pane
-        # (a big table needs the room; the live preview chart above the grid
-        # stays, so the modeller keeps the value in view while editing).
+        # Description: quiet muted prose under the editor -- not a boxed text
+        # widget, which read as another input and claimed a fixed slab of
+        # height whatever its one sentence needed. Selectable so it can still
+        # be copied. Hidden while the editor's grid takes over the pane (a big
+        # table needs the room; the live preview chart above the grid stays).
         self._description_widgets: list[QWidget] = []
         if parameter.description:
-            heading = QLabel("Description:", objectName="Heading")
-            layout.addWidget(heading)
-            desc = QTextEdit(parameter.description)
-            desc.setReadOnly(True)
-            desc.setMaximumHeight(120)
+            desc = QLabel(parameter.description)
+            desc.setObjectName("CardDescription")
+            desc.setWordWrap(True)
+            desc.setTextInteractionFlags(Qt.TextSelectableByMouse)
             layout.addWidget(desc)
-            self._description_widgets = [heading, desc]
+            self._description_widgets = [desc]
 
     def _on_expand_toggled(self, expanded: bool) -> None:
         """Hide the description while the grid is expanded, restore on collapse."""

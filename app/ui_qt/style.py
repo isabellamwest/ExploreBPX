@@ -38,6 +38,7 @@ QSplitter#EditorSplitter::handle { background: #d0d7de; }
 QLabel#CardTitle { font-size: 15px; font-weight: 600; }
 QLabel#CardSymbol { margin-left: 8px; }
 QLabel#Heading { color: #57606a; font-weight: 600; }
+QLabel#CardDescription { color: #57606a; padding-top: 4px; }
 QFrame#Card { border: 1px solid #d0d7de; }
 /* Workspace page: the current-document card and its field rows. */
 QFrame#DocInfoCard { border: 1px solid #d0d7de; border-radius: 6px; background: #f6f8fa; }

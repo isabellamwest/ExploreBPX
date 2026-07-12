@@ -94,7 +94,20 @@ class WorkspacePanel(QWidget):
         left.addStretch(1)
         layout.addLayout(left, 1)
 
-        layout.addWidget(self._build_info_card(), 1)
+        # The document card is a compact, top-aligned tile, not a page-filling
+        # panel: its height follows its content and its width is capped. The
+        # future multi-document Workspace stacks one tile per document in this
+        # column, so the single tile today already has that shape.
+        right = QVBoxLayout()
+        right.setSpacing(8)
+        heading = QLabel("Current document")
+        heading.setObjectName("Heading")
+        right.addWidget(heading)
+        self._info_card = self._build_info_card()
+        self._info_card.setMaximumWidth(420)
+        right.addWidget(self._info_card, 0, Qt.AlignTop)
+        right.addStretch(1)
+        layout.addLayout(right, 1)
 
         self.refresh(None, None, False)
 
@@ -119,6 +132,13 @@ class WorkspacePanel(QWidget):
         self._info_form.setContentsMargins(0, 4, 0, 0)
         self._info_form.setHorizontalSpacing(12)
         self._info_form.setVerticalSpacing(6)
+        # Explicit left alignment throughout: macOS's native form style centres
+        # the rows and right-aligns the labels, which reads as scattered text
+        # rather than a keyed record. Growing fields keep a long value ("11
+        # sections · 44 parameters") fully visible instead of squeezed.
+        self._info_form.setFormAlignment(Qt.AlignLeft | Qt.AlignTop)
+        self._info_form.setLabelAlignment(Qt.AlignLeft)
+        self._info_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
         self._info_fields: dict[str, QLabel] = {}
         for key in ("Model", "BPX version", "File", "State", "Contents"):
             value = QLabel()
@@ -129,7 +149,6 @@ class WorkspacePanel(QWidget):
             self._info_form.addRow(label, value)
             self._info_fields[key] = value
         card_layout.addLayout(self._info_form)
-        card_layout.addStretch(1)
         return card
 
     def _build_new_chooser(self) -> QWidget:
