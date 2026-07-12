@@ -286,7 +286,7 @@ repaired in place.
 | Remove parameter (row context menu, Delete key) | Implemented |
 | Tree editing (add/remove sections via context menu; add/rename/remove materials and experiments; confirm before removing populated content) | Implemented |
 | Enhanced function-expression editor (syntax highlighting, validation) | Planned |
-| Model-switch handling for structural model changes | Planned |
+| Model switch completes structure (adds the target model's required sections empty; removes nothing; one undo step) | Implemented |
 | Compact quick inputs in the parameter list | Planned |
 
 ### User Workflow
@@ -483,11 +483,22 @@ rejected as surprising. The single emit-raw contract also serves future
 function/table cards and remediation auto-fixes. The cost is that Enter-to-commit
 is implicit and relies on clear affordances.
 
+**Switching model completes the structure.** Committing a new value to
+`Header.Model` routes through a dedicated `ChangeModel` command: the value and
+the target model's required-but-missing sections (added **empty**, exactly as
+the new-document scaffolds do) arrive as one atomic step and revert as one
+undo. With the empty sections present, the validator reports the actual
+missing parameters field by field instead of one opaque root error. Nothing is
+ever removed: a section the new model does not know (a populated Electrolyte
+after DFN → SPM) stays put, the validator reports it as an extra input, and
+the tree's confirm-gated Remove section is the deliberate way to drop it. An
+unknown model string is still set verbatim — never gatekept — but no structure
+is presumed for it.
+
 ### Future Extensions
 
-An enhanced function editor, an editable table grid, section add/remove, an
-unknown/raw fallback and model-switch handling are Planned above. Broader
-authoring-driven editing states are covered in [Authoring](#8-authoring).
+An enhanced function editor is Planned above. Broader authoring-driven editing
+states are covered in [Authoring](#8-authoring).
 
 ---
 

@@ -30,13 +30,6 @@ The items below are the capabilities still marked Planned.
 - **Acceptance criteria:** syntax highlighting and expression validation for
   function fields. See [Editing](03-features.md#4-editing).
 
-### Model-switch handling
-
-- **Depends on:** section add/remove (built).
-- **Acceptance criteria:** structural model changes (e.g. SPM → DFN) are handled
-  through the command layer, adding and removing the sections the target model
-  requires. See [Editing](03-features.md#4-editing).
-
 ### Compact quick inputs in the parameter list
 
 - **Depends on:** the parameter list and per-kind editors (built).
