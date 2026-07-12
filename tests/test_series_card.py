@@ -327,6 +327,34 @@ def test_series_card_omits_a_non_list_sibling():
 
 
 # ----------------------------------------------------------------------
+# "How this works" hint
+# ----------------------------------------------------------------------
+
+
+def test_series_card_has_a_collapsed_hint():
+    from ui_qt.cards.hint import GridHint
+
+    card = _series([0, 1])
+    hint = card.findChild(GridHint)
+    assert hint is not None
+    assert not hint._body.isVisibleTo(card)  # collapsed by default
+    hint._toggle.click()
+    assert hint._body.isVisibleTo(card)  # opens in place
+
+
+def test_hint_mentions_sibling_columns_only_when_there_are_siblings():
+    with_siblings = _series_with_siblings([0], [("Voltage [V]", [4.1])])
+    plain = _series([0])
+    from ui_qt.cards.hint import GridHint
+
+    def body_text(card):
+        return card.findChild(GridHint)._body.text()
+
+    assert "read-only columns" in body_text(with_siblings)
+    assert "read-only columns" not in body_text(plain)
+
+
+# ----------------------------------------------------------------------
 # Registry representability predicate
 # ----------------------------------------------------------------------
 

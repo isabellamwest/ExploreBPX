@@ -40,6 +40,7 @@ from core import bpx_gateway
 
 from ..style import ERROR, MUTED
 from .grid import NumericGrid
+from .hint import GridHint
 from .table_preview import TablePreview
 from .values import format_value, parse_value
 
@@ -172,7 +173,18 @@ class TableBody(ModeBody):
         self._grid = NumericGrid(("x", "y"))
         self._grid.changed.connect(self._on_grid_changed)
         self._grid.expand_toggled.connect(self.expand_toggled)
-        layout.addWidget(self._grid)
+        layout.addWidget(self._grid, 1)
+
+        layout.addWidget(
+            GridHint(
+                (
+                    "Each row is one (x, y) point; the line above plots them in order.",
+                    "Double-click a cell to edit; press Enter to commit, Esc to discard.",
+                    "Paste two columns from a spreadsheet with Ctrl+V, or right-click → Paste.",
+                    "Use + and − to add or remove points; Expand fills the panel.",
+                )
+            )
+        )
 
     def _on_grid_changed(self) -> None:
         self._preview.update_rows(self._grid.values())

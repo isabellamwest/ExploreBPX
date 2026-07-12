@@ -25,6 +25,7 @@ from .base import EditorCard
 from .csv_dialog import CsvImportDialog
 from .csv_import import read_csv_text
 from .grid import NumericGrid
+from .hint import GridHint
 from .table_preview import TablePreview
 
 
@@ -74,7 +75,24 @@ class SeriesCard(EditorCard):
         self._grid.add_toolbar_widget(self._import_button)
         self._grid.expand_toggled.connect(self._import_button.setVisible)
 
+        layout.addWidget(GridHint(self._hint_lines(parameter)))
+
         self._install_keyboard_handler(self._grid.focus_widget())
+
+    @staticmethod
+    def _hint_lines(parameter) -> tuple[str, ...]:
+        lines = [
+            "Double-click a cell to edit; press Enter to commit, Esc to discard.",
+            "Paste a column from a spreadsheet with Ctrl+V, or right-click → Paste.",
+            "Use + and − to add or remove rows.",
+            "Expand fills the panel and adds Import CSV… to load arrays from a file.",
+        ]
+        if parameter.sibling_series:
+            lines.append(
+                "The run's other arrays show as read-only columns, so a length "
+                "mismatch is visible while you edit."
+            )
+        return tuple(lines)
 
     def _on_grid_changed(self) -> None:
         self._preview.update_rows(self._grid.values())
