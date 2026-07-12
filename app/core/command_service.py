@@ -14,6 +14,7 @@ from . import editing, structure
 from .commands import (
     AddParameter,
     AddSection,
+    ChangeModel,
     Command,
     CommandResult,
     CreateDocument,
@@ -37,6 +38,9 @@ def preview(raw: dict, command: Command) -> Preview:
         return Preview("Set value", (command.path,))
     if isinstance(command, SetValues):
         return Preview(command.label, tuple(path for path, _ in command.updates))
+    if isinstance(command, ChangeModel):
+        changed = (("Header", "Model"),) + _sections_to_add(raw, command.model)
+        return Preview("Change model", changed)
     if isinstance(command, AddSection):
         return Preview("Add section", (command.parent_path + (command.key,),))
     if isinstance(command, RemoveSection):
@@ -65,6 +69,14 @@ def execute(raw: dict, command: Command) -> CommandResult:
         new = editing.set_values(raw, command.updates)
         first = command.updates[0][0]
         return CommandResult(new, command.label, first[:-1], first)
+    if isinstance(command, ChangeModel):
+        updates = ((("Header", "Model"), command.model),) + tuple(
+            (path, {}) for path in _sections_to_add(raw, command.model)
+        )
+        new = editing.set_values(raw, updates)
+        return CommandResult(
+            new, "Change model", ("Header",), ("Header", "Model")
+        )
     if isinstance(command, AddSection):
         new = editing.add_section(raw, command.parent_path, command.key)
         path = command.parent_path + (command.key,)
@@ -107,3 +119,31 @@ def raw_at(raw: dict, path: tuple[str, ...]) -> object:
             return None
         node = node[key]
     return node
+
+
+def _sections_to_add(raw: dict, model: str) -> tuple[tuple[str, ...], ...]:
+    """The required sections *model* expects that ``raw`` does not have.
+
+    Requirements come from :func:`structure.required_sections` (the same
+    authority the new-document factory uses), returned parents-first, so a
+    sequential batch creates a missing parent before its child. Defensive on
+    two fronts: an existing section is never touched, whatever it holds (a
+    non-dict there is the validator's to report, not ours to overwrite), and a
+    child under a broken (non-dict, non-added) parent is skipped rather than
+    failing the whole model change.
+    """
+    if model not in document_factory.SUPPORTED_MODELS:
+        # An unknown model string is still *set* (never gatekept; the
+        # validator judges it), but no structure is presumed for it.
+        return ()
+    added: set[tuple[str, ...]] = set()
+    out: list[tuple[str, ...]] = []
+    for path in structure.required_sections(model):
+        if raw_at(raw, path) is not None:
+            continue
+        parent = path[:-1]
+        if parent and parent not in added and not isinstance(raw_at(raw, parent), dict):
+            continue
+        added.add(path)
+        out.append(path)
+    return tuple(out)

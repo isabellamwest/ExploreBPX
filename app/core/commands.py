@@ -99,6 +99,27 @@ class RemoveParameter(Command):
 
 
 @dataclass(frozen=True)
+class ChangeModel(Command):
+    """Declare the document to be ``model``, completing its structure.
+
+    Sets ``Header.Model`` and, in the same atomic step, adds any section the
+    target model requires that is missing -- **empty**, exactly as the
+    new-document scaffolds do (structure carries no invented values). Without
+    this, a model switch strands the document on one opaque root error
+    ("parameter set does not correspond with the model type ..."); with the
+    empty sections present, the validator instead reports the actual missing
+    parameters, field by field.
+
+    Nothing is ever removed: a section the new model does not know (e.g. a
+    populated Electrolyte after DFN -> SPM) stays put, the validator reports
+    it as an extra input, and the tree's Remove section -- with its
+    populated-content confirmation -- is the deliberate way to drop it.
+    """
+
+    model: str
+
+
+@dataclass(frozen=True)
 class CreateDocument(Command):
     """Create a new incomplete structural document for ``model``."""
 

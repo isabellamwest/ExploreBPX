@@ -130,6 +130,31 @@ def test_noop_enter_does_not_emit_committed(qtbot, spm_workfile):
     assert received == []
 
 
+def test_model_popup_pick_switches_model_and_completes_structure(qtbot, spm_workfile):
+    """The full model-switch gesture: open the Model dropdown, pick DFN. No
+    Enter. The commit lands as one ChangeModel -- value plus the empty
+    required sections -- and a single undo reverts all of it."""
+    state, panel = _panel_on(qtbot, spm_workfile, _MODEL)
+    session = state.active
+    combo = panel._card._editor._combo
+
+    combo.showPopup()
+    index = combo.findText("DFN")
+    combo.setCurrentIndex(index)
+    combo.activated.emit(index)
+    combo.hidePopup()  # a real pick closes the popup; leaving it open crashes teardown
+
+    raw = session.document.raw
+    assert raw["Header"]["Model"] == "DFN"
+    assert raw["Parameterisation"]["Electrolyte"] == {}
+    assert raw["Parameterisation"]["Separator"] == {}
+
+    session.undo()
+    raw = session.document.raw
+    assert raw["Header"]["Model"] == "SPM"
+    assert "Electrolyte" not in raw["Parameterisation"]
+
+
 def test_expanding_a_grid_reclaims_the_secondary_workspace_space(
     qtbot, spm_with_validation_path
 ):

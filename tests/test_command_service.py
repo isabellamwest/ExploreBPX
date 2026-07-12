@@ -7,6 +7,7 @@ from core.command_service import CommandError
 from core.commands import (
     AddParameter,
     AddSection,
+    ChangeModel,
     CreateDocument,
     RemoveParameter,
     RemoveSection,
@@ -44,6 +45,97 @@ def test_set_value_is_non_destructive():
     result = command_service.execute(raw, SetValue(("Header", "Title"), "b"))
     assert result.raw["Header"]["Title"] == "b"
     assert raw["Header"]["Title"] == "a"
+
+
+# --- ChangeModel: switch the declared model, completing structure ---
+
+
+def test_change_model_adds_the_missing_required_sections_empty(valid_spm_dict):
+    """SPM -> DFN adds Electrolyte and Separator as empty sections (structure
+    only, exactly like the new-document scaffolds): with them present the
+    validator reports the actual missing parameters field-by-field instead of
+    one opaque root error. Populated sections are untouched."""
+    import copy
+
+    original = copy.deepcopy(valid_spm_dict)
+    result = command_service.execute(valid_spm_dict, ChangeModel("DFN"))
+    parameterisation = result.raw["Parameterisation"]
+    assert result.raw["Header"]["Model"] == "DFN"
+    assert parameterisation["Electrolyte"] == {}
+    assert parameterisation["Separator"] == {}
+    # Existing content untouched; source dict untouched.
+    assert parameterisation["Cell"] == original["Parameterisation"]["Cell"]
+    assert valid_spm_dict == original
+    assert result.label == "Change model"
+    assert result.select_parameter_path == ("Header", "Model")
+
+
+def test_change_model_never_removes_sections(valid_spm_dict):
+    """Switching down (DFN -> SPM) keeps a now-extraneous Electrolyte: the
+    validator reports it as an extra input, and the tree's confirm-gated
+    Remove section is the deliberate way to drop populated data."""
+    dfn = command_service.execute(valid_spm_dict, ChangeModel("DFN")).raw
+    dfn["Parameterisation"]["Electrolyte"]["Initial concentration [mol.m-3]"] = 1000
+    back = command_service.execute(dfn, ChangeModel("SPM")).raw
+    assert back["Header"]["Model"] == "SPM"
+    assert back["Parameterisation"]["Electrolyte"] == {
+        "Initial concentration [mol.m-3]": 1000
+    }
+
+
+def test_change_model_to_an_unknown_string_presumes_no_structure():
+    """The value is set verbatim (never gatekept; the validator judges it),
+    but no sections are presumed for a model the app does not know."""
+    raw = {"Header": {"Model": "SPM"}, "Parameterisation": {}}
+    result = command_service.execute(raw, ChangeModel("NOT_A_MODEL"))
+    assert result.raw["Header"]["Model"] == "NOT_A_MODEL"
+    assert result.raw["Parameterisation"] == {}
+    assert "State" not in result.raw
+
+
+def test_change_model_skips_children_of_a_broken_parent():
+    """A non-dict Parameterisation must not fail the whole model change: the
+    model is still set, the unreachable child sections are skipped, and the
+    validator reports the broken parent."""
+    raw = {"Header": {"Model": "SPM"}, "Parameterisation": "oops"}
+    result = command_service.execute(raw, ChangeModel("DFN"))
+    assert result.raw["Header"]["Model"] == "DFN"
+    assert result.raw["Parameterisation"] == "oops"
+    assert "State" in result.raw  # top-level additions still happen
+
+
+def test_change_model_creates_a_missing_parent_before_its_children():
+    raw = {"Header": {"Model": "Partial"}}
+    result = command_service.execute(raw, ChangeModel("SPM"))
+    assert result.raw["Parameterisation"]["Cell"] == {}
+    assert result.raw["State"] == {}
+
+
+def test_change_model_preview_lists_the_model_and_every_addition(valid_spm_dict):
+    preview = command_service.preview(valid_spm_dict, ChangeModel("DFN"))
+    assert preview.label == "Change model"
+    assert ("Header", "Model") in preview.changed_paths
+    assert ("Parameterisation", "Electrolyte") in preview.changed_paths
+    assert ("Parameterisation", "Separator") in preview.changed_paths
+
+
+def test_apply_value_on_header_model_is_one_undoable_model_change(spm_workfile):
+    """Committing the Model parameter routes through ChangeModel: the value
+    and the added sections arrive together and revert together."""
+    from state.app_state import AppState
+
+    state = AppState()
+    state.open(spm_workfile)
+    session = state.active
+    assert "Electrolyte" not in session.document.raw["Parameterisation"]
+
+    session.apply_value(("Header", "Model"), "DFN")
+    assert session.document.raw["Header"]["Model"] == "DFN"
+    assert session.document.raw["Parameterisation"]["Electrolyte"] == {}
+
+    session.undo()
+    assert session.document.raw["Header"]["Model"] == "SPM"
+    assert "Electrolyte" not in session.document.raw["Parameterisation"]
 
 
 # --- RenameKey: user-owned dict keys only (materials, Validation runs) ---

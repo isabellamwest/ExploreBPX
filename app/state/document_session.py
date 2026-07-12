@@ -14,7 +14,7 @@ from pathlib import Path
 
 from core import bpx_gateway, command_service, editing, export
 from core.bpx_gateway import ValidationResult
-from core.commands import Command, Preview, SetValue
+from core.commands import ChangeModel, Command, Preview, SetValue
 from core.document import BPXDocument
 from core.tree_model import ParameterItem, TreeNode
 from core.validation import ValidatorDiagnostic
@@ -167,15 +167,25 @@ class DocumentSession:
         return list(parameter.issues) if parameter is not None else []
 
     def apply_value(self, path: tuple[str, ...], value: object) -> None:
-        """Commit an edit as an undoable ``SetValue`` command.
+        """Commit an edit as an undoable command.
 
         A value edit is a document mutation like any other, so it travels the
         same command spine as add/remove: ``execute_command`` rebuilds the
-        document, records undo history and marks the session dirty. ``SetValue``
-        selects the edited parameter, so the UI stays on what the user changed.
+        document, records undo history and marks the session dirty, and the
+        edited parameter stays selected.
+
+        One value edit carries structural meaning: committing a string to
+        ``Header.Model`` *is* a model change, so it routes to ``ChangeModel``,
+        which also adds the target model's required-but-missing sections
+        (empty) in the same undo step. A non-string committed there stays a
+        plain ``SetValue`` -- it is never gatekept, but no structure is
+        presumed for it either; the validator reports it.
         """
         if self.document is None:
             raise ValueError("No document loaded")
+        if tuple(path) == ("Header", "Model") and isinstance(value, str):
+            self.execute_command(ChangeModel(value))
+            return
         self.execute_command(SetValue(tuple(path), value))
 
     def save(self) -> None:
