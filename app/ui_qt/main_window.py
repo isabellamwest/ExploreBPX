@@ -584,7 +584,11 @@ class MainWindow(QMainWindow):
         if self._state.active is None or self._state.active.document is None:
             return
         session = self._state.active
-        default = str(session.backing_file) if session.backing_file else session.document.filename
+        if session.backing_file is not None:
+            backing = session.backing_file
+            default = str(backing.with_name(f"{backing.stem} (copy){backing.suffix}"))
+        else:
+            default = session.document.filename
         name, _ = QFileDialog.getSaveFileName(
             self, "Export BPX", default, "BPX (*.json *.yaml *.yml)"
         )
