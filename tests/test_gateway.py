@@ -147,7 +147,7 @@ def test_field_meta_validation_run_resolves_experiment_schema():
     assert slashy.description == "Voltage vs time"
 
 
-def test_build_tree_electrolyte_conductivity_is_a_function_end_to_end(examples_dir):
+def test_build_tree_electrolyte_conductivity_is_a_function_end_to_end(fixtures_dir):
     """Finding 2, end-to-end: with correct per-section metadata, the
     Electrolyte's function-valued "Conductivity [S.m-1]" in this example file
     renders as a FUNCTION parameter, not a SCALAR one. This example file does
@@ -155,7 +155,7 @@ def test_build_tree_electrolyte_conductivity_is_a_function_end_to_end(examples_d
     does not require validity."""
     import json
 
-    raw = json.loads((examples_dir / "nmc_pouch_cell_BPX.json").read_text("utf-8"))
+    raw = json.loads((fixtures_dir / "nmc_pouch_cell_BPX.json").read_text("utf-8"))
     tree = build_tree(raw)
     parameters = build_parameter_path_map(tree)
     conductivity = parameters[("Parameterisation", "Electrolyte", "Conductivity [S.m-1]")]
@@ -163,14 +163,14 @@ def test_build_tree_electrolyte_conductivity_is_a_function_end_to_end(examples_d
     assert isinstance(conductivity.value, str)
 
 
-def test_build_tree_validation_parameters_have_descriptions_end_to_end(examples_dir):
+def test_build_tree_validation_parameters_have_descriptions_end_to_end(fixtures_dir):
     """Regression: every `Validation/<run>/<alias>` parameter must resolve
     real `Experiment` schema metadata, not `None` -- this example file has
     two runs (one, "C/20 discharge", with a "/" in its name), each with all
     four `Experiment` aliases."""
     import json
 
-    raw = json.loads((examples_dir / "nmc_pouch_cell_BPX.json").read_text("utf-8"))
+    raw = json.loads((fixtures_dir / "nmc_pouch_cell_BPX.json").read_text("utf-8"))
     tree = build_tree(raw)
     parameters = build_parameter_path_map(tree)
     validation_parameters = [

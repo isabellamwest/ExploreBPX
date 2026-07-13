@@ -99,8 +99,8 @@ def test_identity_coerces_non_string_bpx_version(valid_spm_dict):
     "filename",
     ["lfp_18650_cell_BPX.json", "nmc_pouch_cell_BPX.json"],
 )
-def test_invalid_files_still_open(examples_dir, filename):
-    data = (examples_dir / filename).read_bytes()
+def test_invalid_files_still_open(fixtures_dir, filename):
+    data = (fixtures_dir / filename).read_bytes()
     document = BPXDocument.from_bytes(data, filename)
     # The whole point: invalid files load and remain explorable.
     assert document.is_valid is False
@@ -108,7 +108,7 @@ def test_invalid_files_still_open(examples_dir, filename):
     assert document.tree.children
 
 
-def test_missing_field_attaches_to_owning_section_not_sibling_leaf(examples_dir):
+def test_missing_field_attaches_to_owning_section_not_sibling_leaf(fixtures_dir):
     """A missing required field must be flagged on the section that lacks it.
 
     Regression test for a presentation-layer mis-mapping: when a required
@@ -123,7 +123,7 @@ def test_missing_field_attaches_to_owning_section_not_sibling_leaf(examples_dir)
     """
     import json
 
-    raw = json.loads((examples_dir / "nmc_pouch_cell_BPX.json").read_text("utf-8"))
+    raw = json.loads((fixtures_dir / "nmc_pouch_cell_BPX.json").read_text("utf-8"))
     del raw["Parameterisation"]["Negative electrode"]["Reaction rate constant [mol.m-2.s-1]"]
     raw["Parameterisation"]["Positive electrode"]["Reaction rate constant [mol.m-2.s-1]"] = 444
     data = json.dumps(raw).encode("utf-8")

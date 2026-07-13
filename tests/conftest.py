@@ -17,39 +17,39 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 APP_DIR = REPO_ROOT / "app"
-EXAMPLES_DIR = REPO_ROOT / "examples"
+FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
 if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
 
 
 @pytest.fixture
-def examples_dir() -> Path:
-    return EXAMPLES_DIR
+def fixtures_dir() -> Path:
+    return FIXTURES_DIR
 
 
 @pytest.fixture
 def valid_spm_path() -> Path:
-    return EXAMPLES_DIR / "spm_example_valid.json"
+    return FIXTURES_DIR / "spm_example_valid.json"
 
 
 @pytest.fixture
 def valid_spm_bytes() -> bytes:
-    return (EXAMPLES_DIR / "spm_example_valid.json").read_bytes()
+    return (FIXTURES_DIR / "spm_example_valid.json").read_bytes()
 
 
 @pytest.fixture
 def valid_spm_dict() -> dict:
     import json
 
-    return json.loads((EXAMPLES_DIR / "spm_example_valid.json").read_text("utf-8"))
+    return json.loads((FIXTURES_DIR / "spm_example_valid.json").read_text("utf-8"))
 
 
 @pytest.fixture
 def spm_with_validation_path(valid_spm_dict, tmp_path) -> Path:
     """A valid SPM document with a Validation experiment (four SERIES arrays).
 
-    The tracked SPM example has no Validation section, and every NMC/LFP example
+    The tracked SPM fixture has no Validation section, and every NMC/LFP fixture
     with one fails validation on unrelated moved-field errors that short-circuit
     the validator before it reaches the arrays. A SeriesCard test needs a
     document that is *valid* and *has* a series, so it can prove that editing a
@@ -94,21 +94,21 @@ def spm_with_ragged_table_path(valid_spm_dict, tmp_path) -> Path:
 
 @pytest.fixture
 def invalid_bpx_path() -> Path:
-    """An example file that opens successfully but fails BPX validation."""
-    return EXAMPLES_DIR / "invalid_blended_state_mismatch.json"
+    """A fixture file that opens successfully but fails BPX validation."""
+    return FIXTURES_DIR / "invalid_blended_state_mismatch.json"
 
 
 @pytest.fixture
 def warning_only_bpx_path() -> Path:
-    """An example file that is valid but emits a warning-severity issue."""
-    return EXAMPLES_DIR / "warning_legacy_bpx_float.json"
+    """A fixture file that is valid but emits a warning-severity issue."""
+    return FIXTURES_DIR / "warning_legacy_bpx_float.json"
 
 
 @pytest.fixture
 def spm_workfile(valid_spm_path, tmp_path) -> Path:
-    """A writable copy of the valid SPM example.
+    """A writable copy of the valid SPM fixture.
 
-    Using a copy keeps a session's ``backing_file`` off the repository example
+    Using a copy keeps a session's ``backing_file`` off the repository fixture
     so tests can exercise the save path without risking the fixture file.
     """
     import shutil

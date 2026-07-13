@@ -40,7 +40,7 @@ _NEGATIVE_ELECTRODE = ("Parameterisation", "Negative electrode")
 _POSITIVE_ELECTRODE = ("Parameterisation", "Positive electrode")
 
 #: The Cell section's schema-expected aliases actually present in the SPM
-#: example file (see examples/spm_example_valid.json), so suggestion tests can
+#: fixture (see tests/fixtures/spm_example_valid.json), so suggestion tests can
 #: reliably pick an alias the schema expects but the section does not yet have.
 _CELL_PRESENT_ALIASES = {
     "Reference temperature [K]",

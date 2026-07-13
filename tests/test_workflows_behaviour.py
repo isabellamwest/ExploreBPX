@@ -74,7 +74,9 @@ def test_edit_lifecycle_updates_validation_dirty_and_issues(spm_workfile):
     assert not session.document.find_parameter(_CAPACITY).has_errors
 
 
-def test_preview_parameter_issues_excludes_document_level_diagnostics(tmp_path):
+def test_preview_parameter_issues_excludes_document_level_diagnostics(
+    warning_only_bpx_path, tmp_path
+):
     """A document-level warning must never colour an unrelated parameter's
     validity badge while the user types.
 
@@ -83,9 +85,8 @@ def test_preview_parameter_issues_excludes_document_level_diagnostics(tmp_path):
     unrelated parameter must therefore report *no* issues for that parameter,
     even though the document as a whole still has one.
     """
-    source = Path(__file__).parent.parent / "examples" / "warning_legacy_bpx_float.json"
     workfile = tmp_path / "warning.json"
-    workfile.write_bytes(source.read_bytes())
+    workfile.write_bytes(warning_only_bpx_path.read_bytes())
 
     session = _open(workfile).active
     assert session.document.warning_count == 1, "fixture must carry a document-level warning"

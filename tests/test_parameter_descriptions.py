@@ -39,8 +39,8 @@ def test_every_entry_is_well_formed():
             assert heading and prose, f"{entry.alias}: empty {heading!r} section"
 
 
-def test_every_entry_matches_a_real_parameter(examples_dir):
-    """No orphans: each entry resolves from at least one example document, so
+def test_every_entry_matches_a_real_parameter(fixtures_dir):
+    """No orphans: each entry resolves from at least one fixture document, so
     a typo in an alias or section name cannot silently strand an entry."""
     import json
 
@@ -52,7 +52,7 @@ def test_every_entry_matches_a_real_parameter(examples_dir):
         "nmc_pouch_cell_BPX.json",
         "lfp_18650_cell_BPX.json",
     ):
-        raw = json.loads((examples_dir / name).read_text("utf-8"))
+        raw = json.loads((fixtures_dir / name).read_text("utf-8"))
         document = BPXDocument.from_raw(raw, filename=name, fmt="json")
         for path in document._parameter_path_map:
             entry = descriptions.lookup(path)

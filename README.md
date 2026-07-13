@@ -92,9 +92,9 @@ python app/main_qt.py
 The PySide6 desktop app is the Version 1 frontend. Further editing, creation and
 visualisation workflows will be added here.
 
-Then open a file from [examples/](examples/) — `spm_example_valid.json` is a
-valid file; the two A:E example files are older-format and load as *invalid*,
-which is a good demonstration of exploring a broken file.
+Then open your own BPX file (JSON or YAML) to explore it, or use **New** on
+the workspace page to start a fresh scaffold for a chosen model (SPM, SPMe,
+DFN or Partial).
 
 ### 3. Clean up (reclaim disk space)
 
@@ -212,7 +212,6 @@ app/
   state/
     app_state.py     AppState — document session + selection + command undo
   ui_qt/             PySide6 desktop frontend
-examples/            Sample BPX files
 tests/               Headless tests
 docs/                Architecture and roadmap
 ```
