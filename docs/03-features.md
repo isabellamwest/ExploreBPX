@@ -458,7 +458,9 @@ app-wide commit/revert.
 **Undo restores the selection too.** Each undo entry stores the document *and*
 the selection that was current when the command ran, so undo navigates to the
 change it reverted. Without this, undoing after navigating away would silently
-alter a parameter that is not on screen — and there is no redo to recover it.
+alter a parameter that is not on screen, leaving the user unaware anything
+changed at all — even though Redo can bring the change back, they would first
+have to notice it went missing.
 
 **Undo has two surfaces, deliberately unlike each other.** The toolbar's *Undo*
 button is a document command, like Save and Export beside it: it reverts the last
@@ -477,7 +479,22 @@ field in the app, the search box included. It resolves in three steps:
 3. otherwise — undo the document.
 
 Committing rebuilds the card around a fresh widget with neither typing history nor
-a draft, so the next `Ctrl+Z` reaches the document. There is still no redo anywhere.
+a draft, so the next `Ctrl+Z` reaches the document.
+
+**Redo mirrors Undo, including its two-surface split.** The toolbar's *Redo*
+button is a document command that reapplies the most recently undone change
+and navigates to it, exactly as Undo's button reverts one; it greys out when
+there is nothing to reapply. `Ctrl+Y` (the platform's standard Redo binding)
+is bound separately and is focus-aware in exactly the same three steps as
+`Ctrl+Z` — redoing a focused editor's own typing first, doing nothing while a
+card holds an uncommitted draft (reapplying a commit past it would alter an
+off-screen parameter, the same danger the undo guard exists to prevent), then
+redoing the document. A new command clears the redo stack: the redone future
+of a reverted change is no longer reachable once history branches.
+`Ctrl+Shift+Z` is registered as an alternate shortcut only where it is not
+already one of the platform's own Redo key bindings — registering it a second
+time where it already is one would make Qt see two shortcuts claiming the same
+key and fire neither.
 
 ### Dependencies
 

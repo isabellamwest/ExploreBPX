@@ -263,6 +263,29 @@ class AppDriver:
         self._w._undo_shortcut.activated.emit()
         return self
 
+    def redo(self) -> "AppDriver":
+        """Click the toolbar's Redo button: a document command.
+
+        Mirrors ``undo()`` -- see its docstring for why a disabled action and
+        an open popup are handled the way they are.
+        """
+        self._w._redo_action.trigger()
+        return self
+
+    def press_redo_shortcut(self) -> "AppDriver":
+        """Press ``Ctrl+Y``: focus-aware redo (see ``MainWindow._redo``).
+
+        Emits the real ``QShortcut``'s ``activated`` signal -- see
+        ``press_undo_shortcut`` for why a synthesised key press would not do.
+        """
+        self._w._redo_shortcut.activated.emit()
+        return self
+
+    def press_redo_shortcut_alt(self) -> "AppDriver":
+        """Press ``Ctrl+Shift+Z``: the alternate focus-aware redo shortcut."""
+        self._w._redo_shortcut_alt.activated.emit()
+        return self
+
     def focus_search(self) -> "AppDriver":
         """Give the top-bar search box keyboard focus within the window."""
         self._focus(self._w._search)
@@ -354,6 +377,12 @@ class AppDriver:
 
     def undo_shortcut(self) -> str:
         return self._w._undo_shortcut.key().toString()
+
+    def redo_enabled(self) -> bool:
+        return self._w._redo_action.isEnabled()
+
+    def redo_shortcut(self) -> str:
+        return self._w._redo_shortcut.key().toString()
 
     def inspector_title(self) -> str:
         return self._w._inspector._card._title.text()

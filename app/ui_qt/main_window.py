@@ -144,6 +144,39 @@ class MainWindow(QMainWindow):
         self._undo_action.setToolTip(f"Undo ({undo_keys})")
         self._undo_shortcut = QShortcut(QKeySequence.Undo, self, activated=self._undo)
 
+        # Redo mirrors Undo exactly, including the button/shortcut split above.
+        # ``QShortcut(QKeySequence.Redo, ...)`` matches *every* platform
+        # binding of the standard Redo key at dispatch time -- Qt resolves a
+        # StandardKey shortcut against ``QKeySequence.keyBindings``, not just
+        # the single sequence its own ``.key()`` reports -- and on Windows
+        # that set already includes Ctrl+Shift+Z, the binding most users
+        # actually reach for. Registering "Ctrl+Shift+Z" a *second* time, as
+        # its own QShortcut, then makes Qt see two WindowShortcuts claiming
+        # the same key: it emits ``activatedAmbiguously`` and neither handler
+        # runs, so the key goes dead -- on Windows as much as macOS/X11. The
+        # alternate shortcut is therefore registered only where it is
+        # genuinely additional; elsewhere ``_redo_shortcut_alt`` aliases the
+        # primary, since that one QShortcut already serves the key.
+        self._redo_action = bar.addAction("Redo", self._redo_document)
+        self._redo_shortcut = QShortcut(QKeySequence.Redo, self, activated=self._redo)
+        redo_alt_sequence = QKeySequence("Ctrl+Shift+Z")
+        if redo_alt_sequence in QKeySequence.keyBindings(QKeySequence.Redo):
+            self._redo_shortcut_alt = self._redo_shortcut
+        else:
+            self._redo_shortcut_alt = QShortcut(
+                redo_alt_sequence, self, activated=self._redo
+            )
+        redo_primary_text = QKeySequence(QKeySequence.Redo).toString(
+            QKeySequence.NativeText
+        )
+        redo_alt_text = redo_alt_sequence.toString(QKeySequence.NativeText)
+        redo_keys = (
+            redo_primary_text
+            if redo_alt_text == redo_primary_text
+            else f"{redo_primary_text}, {redo_alt_text}"
+        )
+        self._redo_action.setToolTip(f"Redo ({redo_keys})")
+
         bar.addSeparator()
         bar.addWidget(self._search)
         for sequence in (QKeySequence.Find, QKeySequence("Ctrl+P")):
@@ -400,9 +433,9 @@ class MainWindow(QMainWindow):
         the document while that editor holds an uncommitted draft: a spin box
         or a combo box cannot undo its own change, and reverting the *previous*
         commit instead would silently alter a parameter the user is not looking
-        at, with no redo to recover it. In that state ``Ctrl+Z`` does nothing --
-        exactly as it does in a native spin box. Escape reverts the draft, and
-        the toolbar's Undo button remains available for the document.
+        at. In that state ``Ctrl+Z`` does nothing -- exactly as it does in a
+        native spin box. Escape reverts the draft, and the toolbar's Undo
+        button remains available for the document.
 
         Once the draft is committed the card is rebuilt around a fresh widget
         with no history and no dirt, so the next ``Ctrl+Z`` reaches the
@@ -456,6 +489,62 @@ class MainWindow(QMainWindow):
         elif isinstance(widget, (QPlainTextEdit, QTextEdit)):
             if widget.document().isUndoAvailable():
                 widget.undo()
+                return True
+        return False
+
+    # --- redo -------------------------------------------------------------
+    def _redo(self) -> None:
+        """``Ctrl+Y`` / ``Ctrl+Shift+Z``: redo the focused editor's own work,
+        else the document.
+
+        Mirrors ``_undo`` exactly, including why: a window-level shortcut is
+        matched before the focused widget sees the key, so an unguarded redo
+        would steal it from every text field, the search box included. A
+        focused card holding an uncommitted draft is left alone too --
+        reapplying a commit while a card holds a draft would silently alter a
+        parameter the user is not looking at.
+        """
+        widget = self.focusWidget()
+        if self._redo_focused_editor(widget):
+            return
+        if self._inspector.has_focused_draft(widget):
+            return
+        self._redo_document()
+
+    def _redo_document(self) -> None:
+        """Reapply the last undone change, whatever holds keyboard focus.
+
+        This is what the toolbar's Redo button does: it is a document
+        command, like Undo beside it, and a toolbar button takes no focus.
+
+        ``DocumentSession.redo`` restores the selection that was current when
+        the redone command ran, so navigating to it reveals the change rather
+        than leaving the user where they happened to be. That selection was
+        valid in the restored document, so no existence check is needed here.
+        """
+        session = self._state.active
+        if session is None or not session.can_redo:
+            return
+        session.redo()
+        target = session.selected_parameter_path or session.selected_path
+        self._refresh_all()
+        if target:
+            self._navigation.navigate(target)
+
+    @staticmethod
+    def _redo_focused_editor(widget) -> bool:
+        """Redo one step inside *widget* when it is a text editor; True if it did.
+
+        Mirrors ``_undo_focused_editor``. Returns False when *widget* is not a
+        text editor, or is one with an empty redo history.
+        """
+        if isinstance(widget, QLineEdit):
+            if widget.isRedoAvailable():
+                widget.redo()
+                return True
+        elif isinstance(widget, (QPlainTextEdit, QTextEdit)):
+            if widget.document().isRedoAvailable():
+                widget.redo()
                 return True
         return False
 
@@ -651,15 +740,17 @@ class MainWindow(QMainWindow):
     def _update_actions_enabled(self) -> None:
         """Save/Export are only enabled once a document is loaded (a session
         alone is not enough: a session may exist with no document yet), and the
-        Undo *button* only once that document has something to undo.
+        Undo/Redo *buttons* only once that document has something to undo/redo.
 
-        The ``Ctrl+Z`` shortcut stays live regardless: with an empty document
-        history it still has a focused text field's typing to undo."""
+        The ``Ctrl+Z``/``Ctrl+Y``/``Ctrl+Shift+Z`` shortcuts stay live
+        regardless: with an empty document history they still have a focused
+        text field's typing to undo/redo."""
         session = self._state.active
         has_document = session is not None and session.document is not None
         self._save_action.setEnabled(has_document)
         self._export_action.setEnabled(has_document)
         self._undo_action.setEnabled(has_document and session.can_undo)
+        self._redo_action.setEnabled(has_document and session.can_redo)
 
     @staticmethod
     def _validation_tooltip(errors: int, warnings: int) -> str:

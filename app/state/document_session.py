@@ -21,19 +21,35 @@ from core.validation import ValidatorDiagnostic
 
 
 @dataclass(frozen=True)
-class _HistoryEntry:
-    """One undo step: the document *and* where the user was when it was made.
+class _Selection:
+    """Which object and, if any, which parameter were showing."""
 
-    Selection is part of the state a command changes, so restoring a document
-    without restoring its selection leaves the user looking at an unrelated
-    parameter while an off-screen one silently reverts. Because the selection
-    was valid in the document it is stored beside, it is always valid again
-    once that document is restored.
+    path: tuple[str, ...] | None
+    parameter_path: tuple[str, ...] | None
+
+
+@dataclass(frozen=True)
+class _Transition:
+    """One undo/redo step: the document on both sides of a command, and the
+    selection each side reveals.
+
+    Selection belongs to the *transition*, not to either document alone: undo
+    must land on the change it reverted (``before_selection`` -- the selection
+    that was current when the command ran) and redo must land on the change it
+    reapplied (``after_selection`` -- the command's own target). Neither of
+    those is "whatever the user happens to be looking at" when Undo or Redo is
+    pressed, which can differ if they navigated away in between.
+
+    Because the *same* ``_Transition`` object moves between the undo and redo
+    stacks (see ``undo``/``redo``), the two selections can never drift apart:
+    there is exactly one record of what this command did, not two that must
+    be kept in sync by hand.
     """
 
-    document: BPXDocument
-    selected_path: tuple[str, ...] | None
-    selected_parameter_path: tuple[str, ...] | None
+    before: BPXDocument
+    after: BPXDocument
+    before_selection: _Selection
+    after_selection: _Selection
 
 
 class DocumentSession:
@@ -44,15 +60,16 @@ class DocumentSession:
     In normal use, sessions are created by ``AppState.open``.
 
     ``dirty`` is set by any mutation (``execute_command``, ``apply_value``,
-    ``undo``) and cleared by ``save``. ``backing_file`` is the path from which
-    the document was opened and to which ``save`` writes.
+    ``undo``, ``redo``) and cleared by ``save``. ``backing_file`` is the path
+    from which the document was opened and to which ``save`` writes.
     """
 
     def __init__(self, document: BPXDocument | None = None) -> None:
         self.document: BPXDocument | None = document
         self.selected_path: tuple[str, ...] | None = None
         self.selected_parameter_path: tuple[str, ...] | None = None
-        self._undo_stack: list[_HistoryEntry] = []
+        self._undo_stack: list[_Transition] = []
+        self._redo_stack: list[_Transition] = []
         self.dirty: bool = False
         self.backing_file: Path | None = None
 
@@ -64,6 +81,19 @@ class DocumentSession:
     def can_undo(self) -> bool:
         return bool(self._undo_stack)
 
+    @property
+    def can_redo(self) -> bool:
+        return bool(self._redo_stack)
+
+    def _selection(self) -> _Selection:
+        """Capture the current selection.
+
+        Shared by ``execute_command``, which uses it to record both sides of
+        a transition -- the selection before the command runs, and (after
+        applying the command's own result) the selection after.
+        """
+        return _Selection(self.selected_path, self.selected_parameter_path)
+
     def preview_command(self, command: Command) -> Preview:
         """Describe a command's effect without executing it."""
         if self.document is None:
@@ -71,36 +101,81 @@ class DocumentSession:
         return command_service.preview(self.document.raw, command)
 
     def execute_command(self, command: Command) -> None:
-        """Run a command, rebuild the document, and record undo history."""
+        """Run a command, rebuild the document, and record undo history.
+
+        A new command branches history: whatever was undone-and-redoable is no
+        longer reachable from the document this command produces, so the redo
+        stack is cleared. This is the standard rule for a linear undo/redo
+        history and it must be explicit here.
+
+        The pushed ``_Transition`` records the selection on *both* sides of
+        the command: ``before`` is the selection the user made to reach this
+        edit (today's selection, since they must have selected a parameter to
+        change it); ``after`` is the command's own target
+        (``result.select_path`` / ``result.select_parameter_path``), which is
+        what a later redo must land on regardless of where the user has
+        navigated to since.
+        """
         raw = {} if self.document is None else self.document.raw
         result = command_service.execute(raw, command)
-        if self.document is not None:
-            self._undo_stack.append(
-                _HistoryEntry(
-                    self.document, self.selected_path, self.selected_parameter_path
-                )
-            )
-            filename, fmt = self.document.filename, self.document.fmt
+        previous_document = self.document
+        if previous_document is not None:
+            before_selection = self._selection()
+            filename, fmt = previous_document.filename, previous_document.fmt
         else:
             filename, fmt = "untitled.json", "json"
+        self._redo_stack.clear()
         self.document = BPXDocument.from_raw(result.raw, filename=filename, fmt=fmt)
         self.dirty = True
         if result.select_path is not None:
             self.selected_path = result.select_path
         self.selected_parameter_path = result.select_parameter_path
+        if previous_document is not None:
+            self._undo_stack.append(
+                _Transition(
+                    before=previous_document,
+                    after=self.document,
+                    before_selection=before_selection,
+                    after_selection=self._selection(),
+                )
+            )
 
     def undo(self) -> None:
-        """Restore the previous document state and selection, if any.
+        """Restore the document and selection from before the last command.
 
-        The selection is restored along with the document so undo lands on the
-        change it reverted, rather than leaving the user on whatever they
-        happen to be looking at while a parameter elsewhere silently changes.
+        The popped transition already carries the selection that was current
+        when the command ran, so undo lands on the change it reverted rather
+        than leaving the user on whatever they happen to be looking at while a
+        parameter elsewhere silently changes.
+
+        The same transition is pushed onto the redo stack, not a fresh
+        snapshot of the current state: that keeps undo and redo permanently in
+        agreement about what this command's own selection was.
         """
         if self._undo_stack:
-            entry = self._undo_stack.pop()
-            self.document = entry.document
-            self.selected_path = entry.selected_path
-            self.selected_parameter_path = entry.selected_parameter_path
+            transition = self._undo_stack.pop()
+            self.document = transition.before
+            self.selected_path = transition.before_selection.path
+            self.selected_parameter_path = transition.before_selection.parameter_path
+            self._redo_stack.append(transition)
+            self.dirty = True
+
+    def redo(self) -> None:
+        """Reapply the most recently undone command and land on its own target.
+
+        The popped transition carries the selection the command itself
+        produced (``result.select_path`` / ``result.select_parameter_path`` at
+        the time it ran), not whatever the user has navigated to since --
+        otherwise redo would reapply a change off-screen. Mirrors ``undo``:
+        the same transition object is pushed back onto the undo stack, so a
+        further undo returns to exactly the state this redo left.
+        """
+        if self._redo_stack:
+            transition = self._redo_stack.pop()
+            self.document = transition.after
+            self.selected_path = transition.after_selection.path
+            self.selected_parameter_path = transition.after_selection.parameter_path
+            self._undo_stack.append(transition)
             self.dirty = True
 
     def select(self, path: tuple[str, ...]) -> None:

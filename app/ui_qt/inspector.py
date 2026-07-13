@@ -204,9 +204,10 @@ class InspectorPanel(QWidget):
         The Undo shortcut asks this before reverting the document: a spin box
         or combo box has no undo history of its own, so an unguarded ``Ctrl+Z``
         would skip past the draft in front of the user and revert the previous
-        commit -- possibly to a parameter off-screen, with no redo. Whether the
-        draft is discardable is the card's business (Escape), so the Inspector
-        answers only whether one exists here.
+        commit -- possibly to a parameter off-screen. The Redo shortcut asks
+        the same question before reapplying one, for the same reason. Whether
+        the draft is discardable is the card's business (Escape), so the
+        Inspector answers only whether one exists here.
         """
         card = self._card
         if card is None or widget is None:
