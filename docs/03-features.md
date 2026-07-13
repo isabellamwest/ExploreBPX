@@ -361,6 +361,16 @@ line fed by `FieldMeta.examples`; description):
   columns fill their arrays in one atomic step (a single undo); skipped
   targets are left untouched; non-numeric cells are kept as text and counted,
   never zero-filled.
+- **The validator tints the cell it blames.** For a list-valued field the
+  validator already names which element failed — a bad series entry, a bad
+  table point — so the grid washes exactly that cell and shows the
+  validator's own message on hover. Only error-severity diagnostics ever
+  carry an element location, so a tinted cell is always an error, never a
+  warning. The grid decides nothing: it renders what it is told, and
+  re-tinting is deliberately *not* an edit. Inserting or removing a row, or
+  pasting a block, clears any stale tint immediately (a shifted row must
+  never keep the previous cell's tint); the next live-validation pass — or a
+  commit — re-asserts the real state.
 - **Reference slot.** Every card's value row reserves a trailing slot for a
   future Reference document's value and delta; nothing renders there today.
 

@@ -22,6 +22,7 @@ from PySide6.QtWidgets import QFileDialog, QToolButton, QVBoxLayout
 from core.commands import SetValues
 
 from .base import EditorCard
+from .cell_issues import series_cells
 from .csv_dialog import CsvImportDialog
 from .csv_import import read_csv_text
 from .grid import NumericGrid
@@ -97,6 +98,9 @@ class SeriesCard(EditorCard):
     def _on_grid_changed(self) -> None:
         self._preview.update_rows(self._grid.values())
         self.draft_changed.emit()
+
+    def set_cell_issues(self, issues) -> None:
+        self._grid.set_cell_issues(series_cells(issues, self.parameter.label))
 
     # ------------------------------------------------------------------
     # CSV import

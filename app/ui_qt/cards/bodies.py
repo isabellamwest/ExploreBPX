@@ -39,6 +39,7 @@ from PySide6.QtWidgets import (
 from core import bpx_gateway
 
 from ..style import ERROR, MUTED
+from .cell_issues import table_cells
 from .grid import NumericGrid
 from .hint import GridHint
 from .table_preview import TablePreview
@@ -72,6 +73,13 @@ class ModeBody(QWidget):
     def commit_blocked_reason(self) -> str | None:
         """Why this body's draft has no representation, or ``None``."""
         return None
+
+    def set_cell_issues(self, issues) -> None:
+        """Render the validator's per-cell diagnostics, if this body has cells.
+
+        A no-op for most bodies. ``ModalCard`` only ever calls this on the
+        *active* body, so a body currently hidden never needs to answer.
+        """
 
     @property
     def accepts_multiline_input(self) -> bool:
@@ -189,6 +197,9 @@ class TableBody(ModeBody):
     def _on_grid_changed(self) -> None:
         self._preview.update_rows(self._grid.values())
         self.changed.emit()
+
+    def set_cell_issues(self, issues) -> None:
+        self._grid.set_cell_issues(table_cells(issues))
 
     def value(self) -> object:
         """``{"x": [...], "y": [...]}``, cells verbatim. An empty grid is empty lists."""

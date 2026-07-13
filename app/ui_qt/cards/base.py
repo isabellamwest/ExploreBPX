@@ -106,6 +106,15 @@ class EditorCard(QWidget):
         """
         return None
 
+    def set_cell_issues(self, issues) -> None:
+        """Render the validator's per-cell diagnostics, if this card has cells.
+
+        A no-op for most cards. A grid-bearing card maps *issues* onto the
+        cells the validator blamed and tints them (see ``cell_issues``); the
+        card never judges anything itself -- it renders exactly what it is
+        told, so the validator stays the sole source of truth.
+        """
+
     @property
     def is_editable(self) -> bool:
         return True

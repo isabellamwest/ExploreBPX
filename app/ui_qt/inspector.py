@@ -190,6 +190,7 @@ class InspectorPanel(QWidget):
         self._content_layout.addWidget(self._card)
         self._content_layout.setAlignment(self._card, Qt.AlignTop)
         self._render_issues(parameter.issues, parameter.has_errors)
+        self._card.set_cell_issues(parameter.issues)
 
         # Refresh the secondary workspace's tabs without changing its
         # open/collapsed state (workspace state, not parameter state).
@@ -226,6 +227,7 @@ class InspectorPanel(QWidget):
         )
         errors = [i for i in issues if i.severity == Severity.ERROR]
         self._render_issues(issues, bool(errors))
+        self._card.set_cell_issues(issues)
         self._secondary.set_count("issues", len(issues))
 
     def _on_reset(self) -> None:
@@ -233,6 +235,7 @@ class InspectorPanel(QWidget):
             return
         self._debounce.stop()
         self._render_issues(self._card.parameter.issues, self._card.parameter.has_errors)
+        self._card.set_cell_issues(self._card.parameter.issues)
         self._secondary.set_count("issues", len(self._card.parameter.issues))
 
     def _on_commit(self) -> None:

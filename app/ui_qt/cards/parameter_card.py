@@ -136,6 +136,10 @@ class ParameterCard(QWidget):
         """Why the inner editor's draft has no representation, if it has none."""
         return self._editor.commit_blocked_reason()
 
+    def set_cell_issues(self, issues) -> None:
+        """Pass the validator's per-cell diagnostics to the inner editor."""
+        self._editor.set_cell_issues(issues)
+
     def set_validity(self, text: str, colour: str) -> None:
         """Drive the header badge; validity decisions stay in the Inspector."""
         self._badge.setText(text)

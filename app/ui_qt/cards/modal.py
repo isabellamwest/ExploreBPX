@@ -174,6 +174,11 @@ class ModalCard(EditorCard):
     def commit_blocked_reason(self) -> str | None:
         return self._body.commit_blocked_reason()
 
+    def set_cell_issues(self, issues) -> None:
+        """Only the active body is showing the value the diagnostics describe;
+        tinting a hidden body's grid from them would be nonsense."""
+        self._body.set_cell_issues(issues)
+
     @property
     def accepts_multiline_input(self) -> bool:
         return self._body.accepts_multiline_input
