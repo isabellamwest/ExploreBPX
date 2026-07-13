@@ -28,6 +28,7 @@ from core import bpx_gateway
 from core.parameter_types import ParameterKind
 from core.tree_model import ParameterItem
 from ui_qt.cards.bodies import ExpressionBody, MaterialMapBody, NumberBody
+from ui_qt.cards.csv_import import read_csv_text
 from ui_qt.cards.function import (
     FLOAT_INT,
     FUNCTION,
@@ -43,6 +44,7 @@ from ui_qt.cards.map import (
 )
 from ui_qt.cards.map import initial_mode as map_initial_mode
 from ui_qt.cards.modal import RAW_MODE, Mode, ModalCard, RawValueCard
+from ui_qt.cards.paste_dialog import PastePreviewResult
 from ui_qt.cards.registry import create_card
 from ui_qt.cards.table import TableCard
 
@@ -223,6 +225,56 @@ def test_float_int_to_interpolated_table_commits_a_real_dict():
 
     assert card.value() == {"x": [0.1], "y": [2.5]}
     assert card.is_dirty is True
+
+
+# ----------------------------------------------------------------------
+# CSV import into TableBody: a draft like a paste, not a command -- this
+# body writes only the parameter it belongs to, unlike SeriesCard's import,
+# which fills sibling parameters and therefore must go through a command.
+# ----------------------------------------------------------------------
+
+
+def test_function_card_table_mode_has_a_csv_import_button_always_visible():
+    """The entry point itself, not just the write path the tests above reach
+    past: ``InterpolatedTable``'s grid must actually opt into ``csv_import``,
+    and the button must stay visible whether or not the grid is expanded."""
+    card = _fn(3.7)
+    card.select_mode(INTERPOLATED_TABLE)
+    grid = card._modes[2].body._grid
+    assert grid._import_button is not None
+    assert not grid._import_button.isHidden()
+    grid._toggle_expanded()
+    assert not grid._import_button.isHidden()
+    grid._toggle_expanded()
+    assert not grid._import_button.isHidden()
+
+
+def test_function_card_csv_import_into_table_mode_is_dirty_and_commits_a_real_dict():
+    card = _fn(3.7)
+    card.select_mode(INTERPOLATED_TABLE)
+    grid = card._modes[2].body._grid
+
+    data = read_csv_text("x,y\n0.1,2.5\n0.2,3.0\n")
+    grid._apply_csv_mapping(data, (0, 1), PastePreviewResult.REPLACE)
+
+    assert card.is_dirty is True
+    assert card.value() == {"x": [0.1, 0.2], "y": [2.5, 3.0]}
+
+
+def test_function_card_escape_discards_a_table_csv_import():
+    card = _fn(3.7)
+    card.select_mode(INTERPOLATED_TABLE)
+    grid = card._modes[2].body._grid
+
+    data = read_csv_text("x,y\n0.1,2.5\n")
+    grid._apply_csv_mapping(data, (0, 1), PastePreviewResult.REPLACE)
+    assert card.is_dirty is True
+
+    card._reset_draft()
+
+    assert card.current_mode == FLOAT_INT  # mode reverts too (decision C)
+    assert card.value() == 3.7
+    assert card.is_dirty is False
 
 
 # ----------------------------------------------------------------------
@@ -521,6 +573,36 @@ def test_table_ragged_value_falls_back_to_raw():
     assert isinstance(card, RawValueCard)
     assert card.is_editable is True
     assert card._strip is None
+
+
+def test_table_card_has_a_csv_import_button_always_visible():
+    """The entry point itself, not just the write path the test below reaches
+    past: the grid must actually opt into ``csv_import``, and the button must
+    stay visible whether or not the grid is expanded."""
+    card = _table({"x": [0, 1], "y": [1, 2]})
+    grid = card._modes[0].body._grid
+    assert grid._import_button is not None
+    assert not grid._import_button.isHidden()
+    grid._toggle_expanded()
+    assert not grid._import_button.isHidden()
+    grid._toggle_expanded()
+    assert not grid._import_button.isHidden()
+
+
+def test_table_card_csv_import_is_dirty_and_escape_restores_the_original():
+    card = _table({"x": [0, 1], "y": [1, 2]})
+    grid = card._modes[0].body._grid
+
+    data = read_csv_text("x,y\n5,6\n7,8\n")
+    grid._apply_csv_mapping(data, (0, 1), PastePreviewResult.REPLACE)
+
+    assert card.is_dirty is True
+    assert card.value() == {"x": [5, 7], "y": [6, 8]}
+
+    card._reset_draft()
+
+    assert card.value() == {"x": [0, 1], "y": [1, 2]}
+    assert card.is_dirty is False
 
 
 # ======================================================================

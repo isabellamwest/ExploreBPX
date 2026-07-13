@@ -282,7 +282,7 @@ repaired in place.
 | Expanded (takeover) grid editor — Expand/Collapse grows the grid to fill the pane | Implemented |
 | Paste into a grid (Ctrl+V or right-click; delimiter auto-detect, header skip, preview, replace/append, no coercion) | Implemented |
 | Read-only sibling columns on a Validation run's series grid (length mismatch visible) | Implemented |
-| CSV import (expanded editor; always-shown column-mapping dialog; fills a run's arrays as one undo step) | Implemented |
+| CSV import (inline button in the grid's +/−/Expand row, always visible; always-shown column-mapping dialog) — a Validation series fills the run's sibling arrays as one atomic undo step; an x/y table (declared `InterpolatedTable` or User-defined) fills its own two columns via positional mapping, both required, with Replace/Append | Implemented |
 | Remove parameter (row context menu, Delete key) | Implemented |
 | Tree editing (add/remove sections via context menu; add/rename/remove materials and experiments; confirm before removing populated content) | Implemented |
 | Enhanced function-expression editor (syntax highlighting, validation) | Planned |
@@ -354,13 +354,25 @@ line fed by `FieldMeta.examples`; description):
   first-class. A series card in a Validation run shows its sibling arrays as
   read-only, muted columns beside the edited one — a length mismatch appears
   as trailing phantom rows, which are display only and can never read back
-  into the value. The expanded editor additionally offers **Import CSV…**: the
-  file's columns are auto-matched to the run's arrays by header name (or by
-  position when there is no header), but the mapping dialog is *always* shown
-  and editable — a wrong guess is visible, never silently imported. Mapped
-  columns fill their arrays in one atomic step (a single undo); skipped
-  targets are left untouched; non-numeric cells are kept as text and counted,
-  never zero-filled.
+  into the value. An **Import CSV…** button sits inline in the grid's
+  +/−/Expand row, always visible (not gated on Expand), on both grid kinds —
+  the mapping dialog is *always* shown and editable, and non-numeric cells are
+  kept as text and counted, never zero-filled, on either path:
+  - On a Validation series, the file's columns are auto-matched to the run's
+    *sibling* arrays by header name (or by position when there is no header).
+    Confirming fills the mapped arrays in one atomic undo step (`SetValues`);
+    a skipped target is left untouched, a valid partial import. This import
+    writes parameters the card does not itself own, so it must commit through
+    a command — a card has no draft for a value outside its own field.
+  - On an x/y table (declared `InterpolatedTable` or User-defined), the file's
+    columns are proposed *positionally*, never by `auto_map`'s substring rule
+    — that heuristic is unsafe for one-letter names like `x`/`y` (e.g. a
+    header "Capacity" would swallow "y"). Both `x` and `y` must be mapped: a
+    half-mapped import would blank the other column, which is data loss, not
+    a skip. The user chooses Replace or Append. This import writes only the
+    value the grid owns, so it is a draft exactly like a paste: it commits
+    with the rest of the card and Escape reverts it like any other unwritten
+    edit.
 - **The validator tints the cell it blames.** For a list-valued field the
   validator already names which element failed — a bad series entry, a bad
   table point — so the grid washes exactly that cell and shows the

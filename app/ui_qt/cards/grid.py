@@ -36,6 +36,7 @@ from PySide6.QtGui import QBrush, QColor, QKeySequence
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
+    QFileDialog,
     QHBoxLayout,
     QHeaderView,
     QSizePolicy,
@@ -46,6 +47,8 @@ from PySide6.QtWidgets import (
 )
 
 from ..style import ERROR_TINT, MUTED
+from .csv_dialog import CsvImportDialog
+from .csv_import import positional_map, read_csv_file
 from .paste import parse_clipboard
 from .paste_dialog import PastePreviewDialog, PastePreviewResult
 from .values import format_value, parse_value, values_equal
@@ -292,6 +295,7 @@ class NumericGrid(QWidget):
         text_columns: frozenset[int] = frozenset(),
         bulk: bool = True,
         context_columns: tuple[tuple[str, tuple[object, ...]], ...] = (),
+        csv_import: bool = False,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -335,6 +339,18 @@ class NumericGrid(QWidget):
             self._buttons.addWidget(self._expand_button)
             self._view.installEventFilter(self)
             self._install_context_menu()
+
+        # Opt-in via ``csv_import``: a grid whose value is *only* what it
+        # holds -- the x/y table -- can fill itself from a file directly (see
+        # :meth:`import_csv`). A grid that would need to reach sibling
+        # parameters (the Validation series) must not sprout a second import
+        # button here; that surface stays on the card that owns those paths.
+        self._import_button = None
+        if csv_import:
+            self._import_button = self._row_button(
+                "Import CSV…", "Fill this table from the columns of a file", self.import_csv
+            )
+            self.add_toolbar_widget(self._import_button)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -458,6 +474,66 @@ class NumericGrid(QWidget):
         existing = self._model.rows() if mode == PastePreviewResult.APPEND else []
         self._model.set_rows(existing + [list(row) for row in rows])
         self.changed.emit()
+
+    def import_csv(self) -> None:
+        """Pick a file and, after mapping + preview, write it into this grid.
+
+        Only reachable when the constructor's ``csv_import`` flag is set. The
+        proposal is :func:`~.csv_import.positional_map`, not ``auto_map``:
+        this grid's own headers (``x``/``y``) are exactly the short, generic
+        names ``auto_map``'s substring rule is unsafe for -- "x" would match
+        an unrelated header like "Extraction". Every target must be mapped
+        (``require_all_targets``): the columns together are *one* value, so a
+        half-mapped import would blank the other column, which is data loss,
+        not a skip. Replace/Append (``offer_append``) is offered because,
+        unlike a freshly-added parameter, this grid may already hold rows.
+
+        This writes only what this grid holds, so it is a draft exactly like
+        a paste: :meth:`apply_paste` is the terminal step, ``changed`` marks
+        the card dirty, and Escape reverts it like any other unwritten edit --
+        no command is involved. Contrast the series card's own CSV import,
+        which fills *sibling* parameters this grid does not own: a card has
+        no draft for a value it does not hold, so that import must commit
+        through a command instead.
+        """
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Import CSV",
+            "",
+            "CSV files (*.csv *.tsv *.txt);;All files (*)",
+        )
+        if not path:
+            return
+        data = read_csv_file(path)
+        if data.row_count == 0:
+            return
+        headers = self._model.headers[: self._model.editable_column_count]
+        dialog = CsvImportDialog(
+            data,
+            headers,
+            self,
+            proposed=positional_map(data.column_count, len(headers)),
+            require_all_targets=True,
+            offer_append=True,
+        )
+        dialog.exec()
+        if dialog.accepted_mapping is not None:
+            self._apply_csv_mapping(data, dialog.accepted_mapping, dialog.accepted_mode)
+
+    def _apply_csv_mapping(self, data, mapping, mode: str) -> None:
+        """Turn a confirmed column *mapping* into rows for :meth:`apply_paste`.
+
+        An unmapped target reads as a column of ``None``s rather than raising
+        -- ``require_all_targets`` already stops the dialog from confirming a
+        partial mapping, so this only needs to be safe, not re-enforce it.
+        """
+        columns = [data.columns[index] if index is not None else () for index in mapping]
+        row_count = max((len(column) for column in columns), default=0)
+        rows = [
+            [column[r] if r < len(column) else None for column in columns]
+            for r in range(row_count)
+        ]
+        self.apply_paste(rows, mode)
 
     def _refresh_buttons(self) -> None:
         """Greying an inapplicable action is the app's convention; hiding is for

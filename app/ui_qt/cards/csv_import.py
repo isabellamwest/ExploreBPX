@@ -61,6 +61,18 @@ class CsvData:
         return f"Column {index + 1}"
 
 
+def read_csv_file(path: str) -> CsvData:
+    """Read *path* BOM-tolerantly and parse it like :func:`read_csv_text`.
+
+    Shared by both import surfaces (the series card and the grid's own
+    ``import_csv``) so the file-reading convention -- a byte that is not
+    UTF-8 survives as a visible replacement character rather than aborting
+    the import -- lives in one place.
+    """
+    with open(path, encoding="utf-8-sig", errors="replace") as handle:
+        return read_csv_text(handle.read())
+
+
 def read_csv_text(text: str) -> CsvData:
     """Parse CSV *text* into :class:`CsvData`.
 
@@ -111,15 +123,12 @@ def auto_map(data: CsvData, targets: tuple[str, ...]) -> tuple[int | None, ...]:
     With headers, columns are matched by normalised name (units and
     punctuation stripped): "time (s)" finds "Time [s]", "Temp" finds
     "Temperature [K]". Each column is proposed at most once. Without headers,
-    the proposal is positional -- column N for target N -- which is exactly
-    what an export of the four arrays in order looks like. Either way the
-    mapping dialog shows the result for the user to correct.
+    the proposal is positional (:func:`positional_map`) -- exactly what an
+    export of the four arrays in order looks like. Either way the mapping
+    dialog shows the result for the user to correct.
     """
     if data.headers is None:
-        return tuple(
-            index if index < data.column_count else None
-            for index in range(len(targets))
-        )
+        return positional_map(data.column_count, len(targets))
 
     normalised = [_normalise(header) for header in data.headers]
     used: set[int] = set()
@@ -137,6 +146,25 @@ def auto_map(data: CsvData, targets: tuple[str, ...]) -> tuple[int | None, ...]:
             used.add(match)
         mapping.append(match)
     return tuple(mapping)
+
+
+def positional_map(width: int, count: int) -> tuple[int | None, ...]:
+    """Propose file column N for target N, with ``None`` past the file's *width*.
+
+    This is :func:`auto_map`'s own no-header branch, lifted out so a caller
+    with short, generic target names -- an x/y table's "x" and "y" -- can use
+    it directly. ``auto_map``'s header-matching rule (``key in header or
+    header in key``) is a reasonable heuristic for a distinctive name like
+    "Temperature [K]", but for a single letter it is dangerous: "x" would
+    happily match a header like "Extraction", "y" would match "Capacity".
+    Positional order is the safe, honest guess for such targets; the mapping
+    dialog still shows it for the user to correct.
+
+    Takes the file's column count as a plain ``int`` (not a whole
+    :class:`CsvData`) -- it reads exactly one integer, so it is a pure
+    function of two numbers.
+    """
+    return tuple(index if index < width else None for index in range(count))
 
 
 def _normalise(name: str) -> str:

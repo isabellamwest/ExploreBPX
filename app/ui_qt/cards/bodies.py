@@ -178,7 +178,7 @@ class TableBody(ModeBody):
         self._preview.set_axis_titles("x", "y")
         layout.addWidget(self._preview)
 
-        self._grid = NumericGrid(("x", "y"))
+        self._grid = NumericGrid(("x", "y"), csv_import=True)
         self._grid.changed.connect(self._on_grid_changed)
         self._grid.expand_toggled.connect(self.expand_toggled)
         layout.addWidget(self._grid, 1)
@@ -190,6 +190,7 @@ class TableBody(ModeBody):
                     "Double-click a cell to edit; press Enter to commit, Esc to discard.",
                     "Paste two columns from a spreadsheet with Ctrl+V, or right-click → Paste.",
                     "Use + and − to add or remove points; Expand fills the panel.",
+                    "Import CSV… loads x and y from the columns of a file.",
                 )
             )
         )

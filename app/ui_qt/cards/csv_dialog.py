@@ -4,9 +4,24 @@ Nothing is written until the user confirms here, and the mapping is **always**
 shown -- a wrong auto-detection must be visible and correctable, never silently
 imported. The dialog presents what the parser made of the file (delimiter,
 header row, cells kept as text), one selector per target parameter proposing
-the auto-mapped column, and a preview of the file itself. Import is blocked --
-with the reason spelled out -- while the mapping is unusable (no column chosen,
-or one column routed to two parameters).
+a mapping, and a preview of the file itself. Import is blocked -- with the
+reason spelled out -- while the mapping is unusable.
+
+Three optional parameters let a second caller (the x/y table grid) reuse this
+same dialog without changing the series import's behaviour, which is the
+default in every case:
+
+* ``proposed`` overrides the auto-mapped proposal (the table passes
+  :func:`~.csv_import.positional_map`, since ``auto_map``'s substring rule is
+  unsafe for one-letter targets like "x"/"y").
+* ``require_all_targets`` tightens the gate from "at least one column chosen"
+  to "every target mapped". A series import deliberately leaves an unmapped
+  array untouched -- skipping a column is a valid, partial import. A table's
+  two columns are *one value*, so a half-mapped import would blank the other
+  column: that is data loss, not a skip, so it is required.
+* ``offer_append`` adds Replace/Append buttons and an ``accepted_mode``
+  (reusing :class:`~.paste_dialog.PastePreviewResult`), for a caller that
+  writes into an existing grid rather than only ever filling parameters fresh.
 """
 
 from __future__ import annotations
@@ -26,6 +41,7 @@ from PySide6.QtWidgets import (
 
 from ..style import ERROR, MUTED
 from .csv_import import CsvData, auto_map
+from .paste_dialog import PastePreviewResult
 from .values import format_value
 
 #: Rows shown in the preview; the parse itself is complete (same convention as
@@ -44,12 +60,19 @@ class CsvImportDialog(QDialog):
         data: CsvData,
         targets: tuple[str, ...],
         parent=None,
+        *,
+        proposed: tuple[int | None, ...] | None = None,
+        require_all_targets: bool = False,
+        offer_append: bool = False,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Import CSV")
         self._data = data
         self._targets = targets
+        self._require_all_targets = require_all_targets
+        self._offer_append = offer_append
         self._accepted_mapping: tuple[int | None, ...] | None = None
+        self._accepted_mode: str | None = None
 
         layout = QVBoxLayout(self)
         layout.addWidget(
@@ -64,14 +87,15 @@ class CsvImportDialog(QDialog):
         detail.setWordWrap(True)
         layout.addWidget(detail)
 
-        # One selector per target, preselected from the auto-map. The names
-        # come straight from the file (or a positional "Column N"); nothing
-        # is guessed invisibly.
-        proposed = auto_map(data, targets)
+        # One selector per target, preselected from the proposal -- the
+        # auto-map, or an explicit override (the table's positional_map). The
+        # names come straight from the file (or a positional "Column N");
+        # nothing is guessed invisibly.
+        proposal = proposed if proposed is not None else auto_map(data, targets)
         form = QFormLayout()
         self._combos: list[QComboBox] = []
         column_names = [data.column_name(i) for i in range(data.column_count)]
-        for target, guess in zip(targets, proposed):
+        for target, guess in zip(targets, proposal):
             combo = QComboBox()
             combo.addItem(_SKIP)
             combo.addItems(column_names)
@@ -95,12 +119,34 @@ class CsvImportDialog(QDialog):
         self._reason.hide()
         layout.addWidget(self._reason)
 
+        # Import is one plain button by default (the series path, byte-
+        # identical to before); a caller that also wants to choose between
+        # replacing and appending gets two buttons instead, both gated the
+        # same way.
         buttons = QDialogButtonBox()
-        self._import_button = QPushButton("Import")
-        self._import_button.setDefault(True)
-        buttons.addButton(self._import_button, QDialogButtonBox.AcceptRole)
+        if self._offer_append:
+            self._import_button = QPushButton("Replace")
+            append_button = QPushButton("Append")
+            self._import_button.setDefault(True)
+            buttons.addButton(self._import_button, QDialogButtonBox.AcceptRole)
+            buttons.addButton(append_button, QDialogButtonBox.AcceptRole)
+            self._import_button.clicked.connect(
+                lambda: self._choose(PastePreviewResult.REPLACE)
+            )
+            append_button.clicked.connect(lambda: self._choose(PastePreviewResult.APPEND))
+            self._confirm_buttons = [self._import_button, append_button]
+        else:
+            self._import_button = QPushButton("Import")
+            self._import_button.setDefault(True)
+            buttons.addButton(self._import_button, QDialogButtonBox.AcceptRole)
+            # A lambda, not ``self._choose`` directly: PySide6 passes the
+            # button's own ``clicked(checked=False)`` argument straight through
+            # to a bare-connected slot, which would make ``accepted_mode`` read
+            # ``False`` instead of ``None`` -- matching the two Replace/Append
+            # lambdas above.
+            self._import_button.clicked.connect(lambda: self._choose())
+            self._confirm_buttons = [self._import_button]
         buttons.addButton(QDialogButtonBox.Cancel)
-        self._import_button.clicked.connect(self._choose)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
@@ -120,9 +166,27 @@ class CsvImportDialog(QDialog):
         """The confirmed mapping, or ``None`` if the dialog was cancelled."""
         return self._accepted_mapping
 
+    @property
+    def accepted_mode(self) -> str | None:
+        """``PastePreviewResult.REPLACE``/``.APPEND`` when ``offer_append`` is
+        set and the dialog was confirmed; ``None`` otherwise (including a
+        caller that never offered the choice, and a cancelled dialog)."""
+        return self._accepted_mode
+
     def _blocked_reason(self) -> str | None:
         chosen = [column for column in self.mapping() if column is not None]
-        if not chosen:
+        if self._require_all_targets and len(chosen) < len(self._targets):
+            if self._data.column_count < len(self._targets):
+                # Naming a column to choose is not actionable when the file
+                # simply does not have enough of them -- say what is actually
+                # wrong instead.
+                count = self._data.column_count
+                return (
+                    f"This file has {count} column{'s' if count != 1 else ''}; "
+                    f"{_join_targets(self._targets)} each need one."
+                )
+            return f"Choose a column for {_join_targets(self._targets)}."
+        if not self._require_all_targets and not chosen:
             return "Choose a column for at least one parameter."
         if len(set(chosen)) != len(chosen):
             return "Each column can fill only one parameter."
@@ -130,15 +194,24 @@ class CsvImportDialog(QDialog):
 
     def _refresh_gate(self, *_args) -> None:
         reason = self._blocked_reason()
-        self._import_button.setEnabled(reason is None)
+        for button in self._confirm_buttons:
+            button.setEnabled(reason is None)
         self._reason.setVisible(reason is not None)
         self._reason.setText(reason or "")
 
-    def _choose(self) -> None:
+    def _choose(self, mode: str | None = None) -> None:
         if self._blocked_reason() is not None:
             return
         self._accepted_mapping = self.mapping()
+        self._accepted_mode = mode
         self.accept()
+
+
+def _join_targets(targets: tuple[str, ...]) -> str:
+    """"x" -> "x"; ("x", "y") -> "x and y"; more targets get an Oxford list."""
+    if len(targets) <= 1:
+        return ", ".join(targets)
+    return f"{', '.join(targets[:-1])} and {targets[-1]}"
 
 
 def _detail(data: CsvData) -> str:

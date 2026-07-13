@@ -24,7 +24,7 @@ from core.commands import SetValues
 from .base import EditorCard
 from .cell_issues import series_cells
 from .csv_dialog import CsvImportDialog
-from .csv_import import read_csv_text
+from .csv_import import read_csv_file
 from .grid import NumericGrid
 from .hint import GridHint
 from .table_preview import TablePreview
@@ -62,9 +62,11 @@ class SeriesCard(EditorCard):
         # the fixed-height preview) absorbs the extra height.
         layout.addWidget(self._grid, 1)
 
-        # CSV import lives in the expanded (takeover) editor only: it is a
-        # bulk operation over the whole run, not a cell-level edit, and the
-        # takeover is where the user has the room to review it.
+        # Inline in the grid's +/−/Expand row, always visible -- the same
+        # surface an x/y table's import uses (see NumericGrid.import_csv).
+        # It stays a card-level button rather than the grid's own opt-in
+        # affordance because it fills *sibling* parameters (the run's other
+        # arrays), which the grid this button sits on does not own.
         self._import_button = QToolButton()
         self._import_button.setText("Import CSV…")
         self._import_button.setToolTip(
@@ -72,9 +74,7 @@ class SeriesCard(EditorCard):
         )
         self._import_button.setAutoRaise(True)
         self._import_button.clicked.connect(self._import_csv)
-        self._import_button.hide()
         self._grid.add_toolbar_widget(self._import_button)
-        self._grid.expand_toggled.connect(self._import_button.setVisible)
 
         layout.addWidget(GridHint(self._hint_lines(parameter)))
 
@@ -86,7 +86,7 @@ class SeriesCard(EditorCard):
             "Double-click a cell to edit; press Enter to commit, Esc to discard.",
             "Paste a column from a spreadsheet with Ctrl+V, or right-click → Paste.",
             "Use + and − to add or remove rows.",
-            "Expand fills the panel and adds Import CSV… to load arrays from a file.",
+            "Import CSV… loads this run's arrays from the columns of a file.",
         ]
         if parameter.sibling_series:
             lines.append(
@@ -128,10 +128,7 @@ class SeriesCard(EditorCard):
         )
         if not path:
             return
-        # BOM-tolerant; a byte that is not UTF-8 survives as a visible
-        # replacement character in the preview rather than aborting the import.
-        with open(path, encoding="utf-8-sig", errors="replace") as handle:
-            data = read_csv_text(handle.read())
+        data = read_csv_file(path)
         if data.row_count == 0:
             return
         targets = self._csv_targets()

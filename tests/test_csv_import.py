@@ -19,7 +19,13 @@ pytest.importorskip("PySide6")
 
 from core.parameter_types import ParameterKind
 from core.tree_model import ParameterItem, SiblingSeries
-from ui_qt.cards.csv_import import CsvData, auto_map, read_csv_text
+from ui_qt.cards.csv_import import (
+    CsvData,
+    auto_map,
+    positional_map,
+    read_csv_file,
+    read_csv_text,
+)
 
 _TARGETS = ("Time [s]", "Current [A]", "Voltage [V]", "Temperature [K]")
 
@@ -81,7 +87,36 @@ def test_column_names_fall_back_to_numbering():
 
 
 # ----------------------------------------------------------------------
-# auto_map: a proposal, matched by normalised name or by position
+# read_csv_file: the BOM-tolerant, shared file read
+# ----------------------------------------------------------------------
+
+
+def test_read_csv_file_is_bom_tolerant(tmp_path):
+    path = tmp_path / "bom.csv"
+    path.write_bytes("time,value\n0,1\n100,2\n".encode("utf-8-sig"))
+
+    data = read_csv_file(path)
+
+    assert data.headers == ("time", "value")
+    assert data.columns == ((0, 100), (1, 2))
+
+
+def test_read_csv_file_replaces_undecodable_bytes_rather_than_raising(tmp_path):
+    """A byte that is not UTF-8 must not abort the import -- it survives as a
+    visible replacement character (kept as text), same as any other cell the
+    parser cannot read as a number."""
+    path = tmp_path / "bad_bytes.csv"
+    path.write_bytes(b"name,value\n\xffoops,5\n")
+
+    data = read_csv_file(path)
+
+    assert data.rejected == 1
+    assert isinstance(data.columns[0][0], str)
+
+
+# ----------------------------------------------------------------------
+# auto_map / positional_map: a proposal, matched by normalised name or by
+# position
 # ----------------------------------------------------------------------
 
 
@@ -105,6 +140,20 @@ def test_auto_map_without_headers_is_positional():
     assert auto_map(data, _TARGETS) == (0, 1, 2, None)
 
 
+def test_positional_map_proposes_column_n_for_target_n():
+    assert positional_map(3, 3) == (0, 1, 2)
+
+
+def test_positional_map_is_none_for_targets_past_the_files_width():
+    """Fewer file columns than targets: the rest are unmapped, not invented."""
+    assert positional_map(2, 4) == (0, 1, None, None)
+
+
+def test_positional_map_is_what_auto_map_uses_without_headers():
+    data = read_csv_text("0,1,2\n3,4,5\n")
+    assert auto_map(data, _TARGETS) == positional_map(data.column_count, len(_TARGETS))
+
+
 # ----------------------------------------------------------------------
 # CsvImportDialog: always-editable mapping, blocked with a reason
 # ----------------------------------------------------------------------
@@ -117,10 +166,10 @@ def _qapp():
     yield QApplication.instance() or QApplication([])
 
 
-def _dialog(text="time,voltage\n0,4.1\n100,4.0\n", targets=("Time [s]", "Voltage [V]")):
+def _dialog(text="time,voltage\n0,4.1\n100,4.0\n", targets=("Time [s]", "Voltage [V]"), **kwargs):
     from ui_qt.cards.csv_dialog import CsvImportDialog
 
-    return CsvImportDialog(read_csv_text(text), targets)
+    return CsvImportDialog(read_csv_text(text), targets, **kwargs)
 
 
 def test_dialog_preselects_the_auto_map():
@@ -159,6 +208,94 @@ def test_dialog_cancel_leaves_no_mapping():
 
 
 # ----------------------------------------------------------------------
+# CsvImportDialog: the three optional table-import parameters
+# ----------------------------------------------------------------------
+
+
+def test_dialog_proposed_overrides_the_auto_map():
+    """A hostile header: "y" is a substring of "capacity", so on this file
+    ``auto_map(("x", "y"))`` proposes ``(None, 0)`` -- y filled from the x
+    column, x left unmapped. An explicit ``proposed`` (the table's
+    positional_map) is what the dialog actually preselects, overriding that
+    wrong guess entirely rather than merely coinciding with it."""
+    text = "Capacity,Voltage\n0,1\n2,3\n"
+    assert auto_map(read_csv_text(text), ("x", "y")) == (None, 0)  # sanity check
+    dialog = _dialog(text=text, targets=("x", "y"), proposed=(0, 1))
+    assert dialog.mapping() == (0, 1)
+
+
+def test_dialog_require_all_targets_blocks_when_only_one_is_mapped():
+    dialog = _dialog(
+        text="x,y\n0,1\n2,3\n", targets=("x", "y"), require_all_targets=True
+    )
+    assert dialog.mapping() == (0, 1)  # both auto-mapped to start
+    dialog._combos[1].setCurrentIndex(0)  # skip y
+
+    assert dialog._import_button.isEnabled() is False
+    assert "x and y" in dialog._reason.text()
+
+
+def test_dialog_require_all_targets_names_the_files_column_shortfall():
+    """A one-column file cannot fill two required targets: telling the user to
+    "choose a column for x and y" is not actionable when there simply isn't a
+    second column, so the reason instead says what is actually wrong."""
+    dialog = _dialog(text="0\n1\n", targets=("x", "y"), require_all_targets=True)
+    assert dialog._import_button.isEnabled() is False
+    assert dialog._reason.text() == "This file has 1 column; x and y each need one."
+
+
+def test_default_construction_keeps_the_at_least_one_gate():
+    """Without ``require_all_targets`` (the series path), mapping only one of
+    several targets is still a valid, partial import."""
+    dialog = _dialog(
+        text="time,voltage\n0,4.1\n", targets=("Time [s]", "Voltage [V]")
+    )
+    dialog._combos[1].setCurrentIndex(0)  # skip Voltage
+    assert dialog._import_button.isEnabled() is True
+    assert not dialog._reason.isVisible()
+
+
+def test_default_construction_has_no_append_button():
+    """``offer_append`` defaults False: the series path's dialog is
+    byte-identical to before -- one "Import" button, no Replace/Append.
+
+    Clicks the button rather than calling ``_choose()`` directly: PySide6's
+    ``clicked`` signal carries a ``checked`` argument that a bare
+    ``clicked.connect(self._choose)`` would pass straight through as ``mode``,
+    turning ``accepted_mode`` into ``False`` instead of ``None`` -- calling
+    ``_choose()`` by hand would never catch that regression.
+    """
+    dialog = _dialog()
+    assert dialog._import_button.text() == "Import"
+    assert len(dialog._confirm_buttons) == 1
+    dialog._import_button.click()
+    assert dialog.accepted_mode is None
+
+
+def test_dialog_offer_append_records_the_chosen_mode():
+    from ui_qt.cards.paste_dialog import PastePreviewResult
+
+    dialog = _dialog(offer_append=True)
+    assert dialog._import_button.text() == "Replace"
+    assert len(dialog._confirm_buttons) == 2
+
+    dialog._choose(PastePreviewResult.APPEND)
+
+    assert dialog.accepted_mapping == (0, 1)
+    assert dialog.accepted_mode == PastePreviewResult.APPEND
+
+
+def test_dialog_offer_append_replace_button_also_records_its_mode():
+    from ui_qt.cards.paste_dialog import PastePreviewResult
+
+    dialog = _dialog(offer_append=True)
+    dialog._import_button.click()
+
+    assert dialog.accepted_mapping == (0, 1)
+    assert dialog.accepted_mode == PastePreviewResult.REPLACE
+
+
+# ----------------------------------------------------------------------
 # SeriesCard: the write path (one atomic SetValues; skips never blank)
 # ----------------------------------------------------------------------
 
@@ -181,13 +318,15 @@ def _validation_card():
     return create_card(param, None)
 
 
-def test_import_button_appears_only_in_the_expanded_editor():
+def test_import_button_is_always_visible_not_only_when_expanded():
+    """Import sits inline in the grid's +/-/Expand row now, the same surface
+    an x/y table's import uses -- not gated on the expanded takeover."""
     card = _validation_card()
-    assert card._import_button.isHidden()
+    assert not card._import_button.isHidden()
     card._grid._toggle_expanded()
     assert not card._import_button.isHidden()
     card._grid._toggle_expanded()
-    assert card._import_button.isHidden()
+    assert not card._import_button.isHidden()
 
 
 def test_apply_csv_import_emits_one_setvalues_own_parameter_first():
