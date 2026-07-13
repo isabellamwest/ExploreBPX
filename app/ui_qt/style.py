@@ -12,6 +12,9 @@ ERROR = "#c62828"
 WARNING = "#ef6c00"
 ACCENT = "#1f6feb"
 BORDER = "#d0d7de"
+#: Wash behind a grid cell the validator blamed -- a background tint, so it
+#: reads distinctly from ``ERROR``, which is used as text/badge colour.
+ERROR_TINT = "#ffebe9"
 #: Muted/de-emphasised text. Used for secondary labels (e.g. QLabel#Heading)
 #: and reused as the foreground for the add-parameter popup's "other BPX
 #: alias" suggestion tier (aliases the section doesn't expect), so grey rows

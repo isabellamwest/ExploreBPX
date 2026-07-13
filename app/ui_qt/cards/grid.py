@@ -45,7 +45,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..style import MUTED
+from ..style import ERROR_TINT, MUTED
 from .paste import parse_clipboard
 from .paste_dialog import PastePreviewDialog, PastePreviewResult
 from .values import format_value, parse_value, values_equal
@@ -84,6 +84,10 @@ class _GridModel(QAbstractTableModel):
         )
         self._headers = tuple(headers) + tuple(label for label, _ in self._context)
         self._rows: list[list[object]] = []
+        #: ``{(row, column): validator message}``, editable cells only. The
+        #: model never judges a cell; the Inspector pushes what the validator
+        #: said (see ``cell_issues``) through :meth:`set_issues`.
+        self._issues: dict[tuple[int, int], str] = {}
 
     def _context_rows(self) -> int:
         return max((len(cells) for _, cells in self._context), default=0)
@@ -112,6 +116,11 @@ class _GridModel(QAbstractTableModel):
             # Context columns read as background material, not as the value
             # under edit.
             return QBrush(QColor(MUTED))
+        cell = (row, column)
+        if role == Qt.BackgroundRole and cell in self._issues:
+            return QBrush(QColor(ERROR_TINT))
+        if role == Qt.ToolTipRole and cell in self._issues:
+            return self._issues[cell]
         if role == Qt.TextAlignmentRole:
             # Text columns (map keys) read left-aligned like the words they
             # hold; numeric columns stay right-aligned under their header.
@@ -190,6 +199,34 @@ class _GridModel(QAbstractTableModel):
         self.beginResetModel()
         self._rows = [list(row) for row in rows]
         self.endResetModel()
+        self.set_issues({})  # stale tints would misattribute (see set_issues)
+
+    def issues(self) -> dict[tuple[int, int], str]:
+        return dict(self._issues)
+
+    def set_issues(self, issues: dict[tuple[int, int], str]) -> None:
+        """Re-tint from the validator's own diagnostics.
+
+        A no-op when nothing changed, so a live-preview refresh that reports
+        the same issues neither repaints nor -- via ``NumericGrid`` -- marks
+        the card touched on every keystroke.
+
+        Called with ``{}`` after any structural edit (insert/remove/replace
+        rows): the map is keyed by row index, and a row shift or wholesale
+        replacement invalidates every key without moving it, so a stale entry
+        would silently tint whatever cell now sits at that index rather than
+        the one the validator meant. Clearing is honest, not judgment -- an
+        empty map asserts nothing -- and the real answer returns as soon as
+        the debounced live validation (or a commit) calls this again.
+        """
+        if issues == self._issues:
+            return
+        self._issues = dict(issues)
+        if not self._rows:
+            return
+        top_left = self.index(0, 0)
+        bottom_right = self.index(len(self._rows) - 1, self._editable - 1)
+        self.dataChanged.emit(top_left, bottom_right, [Qt.BackgroundRole, Qt.ToolTipRole])
 
     def insert_row(self, at: int) -> None:
         if self._context:
@@ -200,10 +237,12 @@ class _GridModel(QAbstractTableModel):
             self.beginResetModel()
             self._rows.insert(at, [None] * self._editable)
             self.endResetModel()
+            self.set_issues({})  # stale tints would misattribute (see set_issues)
             return
         self.beginInsertRows(QModelIndex(), at, at)
         self._rows.insert(at, [None] * self._editable)
         self.endInsertRows()
+        self.set_issues({})  # stale tints would misattribute (see set_issues)
 
     def append_row(self, cells) -> int:
         at = len(self._rows)
@@ -211,10 +250,12 @@ class _GridModel(QAbstractTableModel):
             self.beginResetModel()
             self._rows.append(list(cells))
             self.endResetModel()
+            self.set_issues({})  # stale tints would misattribute (see set_issues)
             return at
         self.beginInsertRows(QModelIndex(), at, at)
         self._rows.append(list(cells))
         self.endInsertRows()
+        self.set_issues({})  # stale tints would misattribute (see set_issues)
         return at
 
     def remove_row(self, at: int) -> None:
@@ -222,10 +263,12 @@ class _GridModel(QAbstractTableModel):
             self.beginResetModel()
             del self._rows[at]
             self.endResetModel()
+            self.set_issues({})  # stale tints would misattribute (see set_issues)
             return
         self.beginRemoveRows(QModelIndex(), at, at)
         del self._rows[at]
         self.endRemoveRows()
+        self.set_issues({})  # stale tints would misattribute (see set_issues)
 
 
 class NumericGrid(QWidget):
@@ -303,10 +346,22 @@ class NumericGrid(QWidget):
         # insert/remove signals: with context columns the model notifies
         # structural changes as resets, and a reset is deliberately silent
         # (``set_values`` seeds through it).
-        self._model.dataChanged.connect(lambda *_: self.changed.emit())
+        self._model.dataChanged.connect(self._on_data_changed)
         self._model.modelReset.connect(self._refresh_buttons)
         self.changed.connect(self._refresh_buttons)
         self._refresh_buttons()
+
+    def _on_data_changed(self, _top_left, _bottom_right, roles=()) -> None:
+        """A cell edit marks the card dirty; a validator re-tint does not.
+
+        ``set_cell_issues`` repaints through this same ``dataChanged`` signal,
+        but with only ``BackgroundRole``/``ToolTipRole`` in its role list.
+        Treating that as a change would mark the card touched -- and kick live
+        validation -- on every validator refresh, not just on a real edit.
+        """
+        if roles and Qt.EditRole not in roles and Qt.DisplayRole not in roles:
+            return
+        self.changed.emit()
 
     def _row_button(self, text: str, tooltip: str, slot) -> QToolButton:
         button = QToolButton()
@@ -427,6 +482,15 @@ class NumericGrid(QWidget):
     def set_values(self, rows) -> None:
         """Replace the contents. Does not emit ``changed`` (see the signal)."""
         self._model.set_rows(rows)
+
+    def set_cell_issues(self, issues: dict[tuple[int, int], str]) -> None:
+        """Tint the cells the validator blamed, with its message on hover.
+
+        The grid never decides this: it renders exactly what it is told (see
+        ``cell_issues``), so the validator stays the source of truth. Passing
+        an empty map clears every tint.
+        """
+        self._model.set_issues(issues)
 
     def insert_row(self) -> None:
         """Add an empty row below the current one, or at the end.
