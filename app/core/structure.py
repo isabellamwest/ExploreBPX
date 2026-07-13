@@ -112,15 +112,21 @@ def addable_child_sections(
     The source is the live schema (``bpx_gateway.expected_fields``), so the
     menu can never offer a section the schema does not declare. The document
     root offers the optional top-level sections instead (it has no schema
-    definition of its own). A path with no single schema definition -- notably
-    the electrode sections, whose single/blended union needs live content to
-    resolve -- degrades to ``()`` rather than guessing.
+    definition of its own). ``value`` is also passed to ``expected_fields``,
+    which needs it to discriminate the electrode sections' single/blended
+    union (no longer a genuine fallback case). A path still has no single
+    schema definition for the user-named dict-keyed collections themselves --
+    a ``Particle`` container, or the ``Validation`` collection at
+    ``("Validation",)`` (its named runs, ``("Validation", <name>)``, do
+    resolve, to ``Experiment``) -- those offer "Add material…"/"Add
+    experiment…" instead (see :func:`named_child_noun`), never "Add
+    section", so this degrades to ``()`` for them rather than raising.
     """
     present = set(value) if isinstance(value, dict) else set()
     if not path:
         return available_top_level_additions(value if isinstance(value, dict) else {})
     try:
-        fields = bpx_gateway.expected_fields(path, model)
+        fields = bpx_gateway.expected_fields(path, model, value)
     except ValueError:
         return ()
     return tuple(

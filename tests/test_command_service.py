@@ -253,15 +253,15 @@ def test_addable_child_sections_at_the_root_are_the_optional_top_levels():
     assert structure.addable_child_sections((), {"Header": {}, "State": {}}) == ("Validation",)
 
 
-def test_addable_child_sections_degrade_to_empty_for_the_electrode_union():
-    """The electrode's single/blended union has no single schema definition;
-    offering nothing beats guessing."""
-    assert (
-        structure.addable_child_sections(
-            ("Parameterisation", "Positive electrode"), {"Particle": {}}
-        )
-        == ()
-    )
+# Deliberately no electrode-union test here: neither electrode shape
+# (``ElectrodeSingle``/``ElectrodeSingleSPM`` have no container properties at
+# all; a blended electrode's only container property, ``Particle``, is
+# necessarily already present -- it is what discriminates blended in the
+# first place) ever offers a further child *section* through this function,
+# so an assertion here can't distinguish correct single/blended resolution
+# from the old unconditional-``()`` behaviour. The gateway tests in
+# test_gateway.py (`test_expected_fields_electrode_*`) are the layer where
+# that resolution is actually observable.
 
 
 # --- SetValues: the atomic multi-path write behind CSV import ---

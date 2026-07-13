@@ -6,9 +6,10 @@ The popup lists the whole BPX standard for the target section up front (no
 typing required) under at most two headed groups -- "Suggested" (the section's
 schema-expected, still-absent fields, highlighted in accent blue) and "Other
 parameters" (everything else in the standard) -- with a pinned "Create custom
-parameter" footer beneath. Sections whose schema can't be resolved (the
-electrode single/blended union) simply have no suggested group; they still list
-the whole standard.
+parameter" footer beneath. A handful of sections still have no single schema
+definition to resolve at all (a ``Particle`` container, a ``Validation`` run
+instance) and simply have no suggested group; they still list the whole
+standard.
 
 Covers the popup in isolation (grouping, highlighting, filtering, custom-add,
 keyboard navigation), the Parameter-list pane's header eligibility rule and
@@ -36,6 +37,7 @@ from ui_qt.parameter_list import ParameterListPanel
 
 _CELL = ("Parameterisation", "Cell")
 _NEGATIVE_ELECTRODE = ("Parameterisation", "Negative electrode")
+_POSITIVE_ELECTRODE = ("Parameterisation", "Positive electrode")
 
 #: The Cell section's schema-expected aliases actually present in the SPM
 #: example file (see examples/spm_example_valid.json), so suggestion tests can
@@ -131,11 +133,57 @@ def test_empty_input_lists_the_whole_standard_in_two_groups(popup, anchor):
     assert _headers(popup) == [_SUGGESTED_HEADER, _OTHER_HEADER]
 
 
-def test_unresolvable_section_still_lists_the_standard_with_no_suggested_group(popup, anchor):
+def test_electrode_section_suggests_single_particle_fields_when_value_empty(popup, anchor):
+    """No live value (the common case) has no ``Particle`` discriminator, so
+    the electrode resolves to the single-particle shape and does suggest
+    fields -- an electrode is not one of the genuinely unresolvable sections."""
     popup.open_for_section(anchor, "Negative electrode", set(), _NEGATIVE_ELECTRODE, "SPM")
 
-    # The electrode schema is an unresolvable union, so there is no suggested
-    # group -- but the section is not a dead end: the whole standard still lists.
+    suggested = set(_aliases(popup, "suggested"))
+    assert "Diffusivity [m2.s-1]" in suggested
+    assert "Porosity" not in suggested  # SPM's electrode shape excludes it
+    assert _headers(popup) == [_SUGGESTED_HEADER, _OTHER_HEADER]
+
+
+def test_electrode_section_suggests_blended_fields_when_particle_present(popup, anchor):
+    """The blended shape's only container property is ``Particle`` itself
+    (a child *section*, not a parameter) -- offering it here would let
+    activating the row silently overwrite the whole ``Particle`` dict (every
+    material, every parameter under it) via
+    ``core.editing.add_parameter``'s unconditional ``parent[key] = value``.
+    The popup filters it out, leaving the section's genuine leaf field."""
+    popup.open_for_section(
+        anchor, "Positive electrode", set(), _POSITIVE_ELECTRODE, "SPM", {"Particle": {}}
+    )
+
+    assert set(_aliases(popup, "suggested")) == {"Thickness [m]"}
+
+
+def test_container_property_is_never_offered_as_an_addable_parameter(popup, anchor):
+    """Regression for the popup-destroys-a-section defect: a container-link
+    schema property (identifies a child *section*, not a leaf parameter) must
+    never appear in either group, whatever section is open -- activating it
+    would route through ``AddParameter`` -> ``core.editing.add_parameter``'s
+    unconditional ``parent[key] = value`` and silently replace the whole
+    child section with ``None``."""
+    popup.open_for_section(
+        anchor, "Positive electrode", set(), _POSITIVE_ELECTRODE, "SPM", {"Particle": {}}
+    )
+    assert "Particle" not in _aliases(popup, "suggested")
+    assert "Particle" not in _aliases(popup, "other")
+
+    popup.open_for_section(anchor, "Parameterisation", set(), ("Parameterisation",), "SPM")
+    assert "Cell" not in _aliases(popup, "suggested")
+    assert "Cell" not in _aliases(popup, "other")
+
+
+def test_unresolvable_section_still_lists_the_standard_with_no_suggested_group(popup, anchor):
+    """A ``Particle`` container itself (not a named instance) has no single
+    schema definition -- it is a dict-keyed collection, addressed by "Add
+    material…" instead -- so it genuinely has no suggested group."""
+    particle_container = ("Parameterisation", "Negative electrode", "Particle")
+    popup.open_for_section(anchor, "Particle", set(), particle_container, "SPM")
+
     assert _aliases(popup, "suggested") == []
     assert len(_aliases(popup, "other")) > 10
     assert _headers(popup) == []  # a single ungrouped list needs no header
@@ -532,15 +580,32 @@ def test_popup_receives_section_path_and_model_for_suggestions(panel):
     assert _aliases(panel._popup, "suggested") == ["Density [kg.m-3]"]
 
 
-def test_popup_lists_standard_for_electrode_node_without_suggestions(panel):
+def test_popup_suggests_single_particle_fields_for_electrode_node_without_value(panel):
+    """No live value on the node (the common case) has no ``Particle``
+    discriminator, so the electrode still resolves -- to the single-particle
+    shape -- and does suggest fields."""
     node = _section_node(label="Negative electrode", path=_NEGATIVE_ELECTRODE)
     panel.show_node(node, model="SPM")
     panel._open_add_popup()
-    assert _aliases(panel._popup, "suggested") == []
+    suggested = set(_aliases(panel._popup, "suggested"))
+    assert "Diffusivity [m2.s-1]" in suggested
+    assert "Porosity" not in suggested  # SPM's electrode shape excludes it
     assert len(_aliases(panel._popup, "other")) > 10
 
     panel._popup._input.setText("New field")
     assert panel._popup._footer_shown is True  # custom footer still works
+
+
+def test_popup_suggests_blended_fields_for_electrode_node_with_particle_value(panel):
+    """``Particle`` itself is a container-link property (identifies the child
+    ``Particle`` section, not a leaf parameter) -- it must never be offered,
+    or activating it would silently overwrite the whole ``Particle`` dict."""
+    node = TreeNode(
+        label="Positive electrode", path=_POSITIVE_ELECTRODE, value={"Particle": {}}
+    )
+    panel.show_node(node, model="SPM")
+    panel._open_add_popup()
+    assert set(_aliases(panel._popup, "suggested")) == {"Thickness [m]"}
 
 
 # ---------------------------------------------------------------------------
@@ -612,9 +677,9 @@ def test_add_other_bpx_alias_end_to_end(app_driver, spm_workfile):
 def test_electrode_section_lists_standard_and_custom_add_works_end_to_end(
     app_driver, spm_workfile
 ):
-    """An electrode section has no resolvable single/blended schema definition
-    without content, so it has no suggested group -- but it still lists the whole
-    standard and the custom-add path stays fully functional."""
+    """An electrode section resolves (Negative electrode here has no ``Particle``
+    key, so the single-particle shape) and lists the whole standard; the
+    custom-add path stays fully functional regardless."""
     d = app_driver
     d.open(spm_workfile)
     d.select_object(_NEGATIVE_ELECTRODE)

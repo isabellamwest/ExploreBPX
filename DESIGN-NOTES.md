@@ -143,9 +143,12 @@ only when committed; templates.
   command with an honest empty value.
 - **Add BPX parameter** — the same popup lists a section's expected aliases on
   empty input and, on search, filters those (emphasised) while surfacing other
-  matching BPX aliases (greyed). Known limitation: electrode sections cannot
-  enumerate expected fields (the single/blended union needs live content), so
-  they show no expected suggestions — search and custom-add still work.
+  matching BPX aliases (greyed). The electrode single/blended union is resolved
+  from the section's live content (a `Particle` key means blended; an empty
+  electrode resolves to single-particle), so electrodes — and named `Particle`
+  materials and `Validation` runs — enumerate expected fields like any other
+  section. Container properties are never offered as parameters: adding one
+  would overwrite the section it names.
 
 ### Input-system editor
 

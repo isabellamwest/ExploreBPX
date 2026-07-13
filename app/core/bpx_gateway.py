@@ -223,14 +223,18 @@ _ELECTRODE_FAMILY: tuple[str, ...] = (
 )
 
 
-def expected_fields(path: tuple[str, ...], model: str | None = None) -> tuple[ExpectedField, ...]:
+def expected_fields(
+    path: tuple[str, ...], model: str | None = None, value: object = None
+) -> tuple[ExpectedField, ...]:
     """Return the schema-expected parameter fields for a BPX section.
 
     ``path`` identifies the section using the same tuple convention as
     :mod:`core.tree_model`/:mod:`core.structure` (e.g.
     ``("Parameterisation", "Cell")``). ``model`` disambiguates
-    ``("Parameterisation",)`` itself, the one section whose definition
-    depends on the declared BPX model.
+    ``("Parameterisation",)`` itself and the electrode sections, whose
+    definition depends on the declared BPX model. ``value`` is the section's
+    live content; it is only consulted for the electrode sections (see
+    below) and is otherwise ignored.
 
     Each returned :class:`ExpectedField` carries the alias, its
     :class:`FieldMeta` (from :func:`_definition_index`, scoped to this
@@ -239,16 +243,30 @@ def expected_fields(path: tuple[str, ...], model: str | None = None) -> tuple[Ex
     list for that definition names it. Order matches the schema definition's
     declared property order (stable across calls).
 
-    Raises :class:`ValueError` if ``path`` has no single schema definition.
-    Notably, the electrode sections (``"Negative electrode"``/``"Positive
-    electrode"``) are **not** resolved here: the schema represents each as a
-    union of a single-particle and a blended-particle shape (``ElectrodeSingle``
-    vs ``ElectrodeBlended``), and picking between them requires the section's
-    actual content, not just its identifier. Resolving that union is left for
-    the container-aware work :mod:`core.structure` already defers ("lands
-    later when add-parameter is wired").
+    The electrode sections (``"Negative electrode"``/``"Positive
+    electrode"``) resolve via a discriminator on ``value``: the schema
+    represents each as a union of a single-particle shape (``ElectrodeSingle``)
+    and a blended-particle shape (``ElectrodeBlended``, whose particle fields
+    live under a nested ``"Particle"`` dict of named materials instead of
+    directly on the electrode). A ``"Particle"`` key in ``value`` picks the
+    blended shape; anything else -- including an empty/absent ``value`` --
+    picks the single shape, the common and default case: the discriminator
+    is a pure reflection of the document's own content, not a rule this
+    function enforces or an affordance it offers. ``model == "SPM"`` selects
+    the ``*SPM`` variants; every other model (``SPMe``/``DFN``/``Partial``/
+    undeclared) selects the full ``ElectrodeSingle``/``ElectrodeBlended``. A
+    blended particle instance (``("Parameterisation", <electrode>, "Particle",
+    <name>)``) resolves to ``Particle`` regardless of ``value``, and a
+    ``Validation`` run instance (``("Validation", <run name>)``) resolves to
+    ``Experiment`` regardless of ``value`` (the schema types ``Validation`` as
+    ``Dict[str, Experiment]`` -- a fixed shape under a user-chosen key, the
+    same shape as a ``Particle`` instance).
+
+    Raises :class:`ValueError` if ``path`` still has no single schema
+    definition (e.g. a ``Particle``/``Validation`` collection itself, whose
+    keys are user-chosen names rather than a fixed schema shape).
     """
-    definition_name = _resolve_definition(path, model)
+    definition_name = _resolve_definition(path, model, value)
     definition = _schema().get("$defs", {}).get(definition_name)
     if definition is None:
         raise ValueError(f"No schema definition found for section {path!r}")
@@ -260,11 +278,63 @@ def expected_fields(path: tuple[str, ...], model: str | None = None) -> tuple[Ex
     )
 
 
-def _resolve_definition(path: tuple[str, ...], model: str | None) -> str:
+#: The two electrode section names, in the position the schema fixes them
+#: at (``("Parameterisation", <name>, ...)``).
+_ELECTRODE_NAMES: tuple[str, ...] = ("Negative electrode", "Positive electrode")
+
+
+def _resolve_instance_definition(
+    path: tuple[str, ...], model: str | None, value: object
+) -> str | None:
+    """Resolve a user-named-key instance path to its schema definition, or
+    ``None`` if *path* is not one of these shapes.
+
+    Three shapes share this path family -- a fixed schema shape sitting under
+    a position/length match rather than a literal name (mirroring
+    :func:`_definitions_for`'s ``Dict[str, ...]`` handling):
+
+    * an electrode section itself (``("Parameterisation", <electrode>)``) --
+      not user-named, but *its definition* is a union that a discriminator on
+      ``value`` resolves (see :func:`expected_fields`);
+    * a blended electrode's named material
+      (``("Parameterisation", <electrode>, "Particle", <name>)``) -> always
+      ``Particle``, regardless of ``value``;
+    * a ``Validation`` run (``("Validation", <run name>)``) -> always
+      ``Experiment`` (the schema types ``Validation`` as
+      ``Dict[str, Experiment]``), regardless of ``value``.
+    """
+    is_electrode = (
+        len(path) == 2 and path[0] == "Parameterisation" and path[1] in _ELECTRODE_NAMES
+    )
+    if is_electrode:
+        is_blended = isinstance(value, dict) and "Particle" in value
+        if model == "SPM":
+            return "ElectrodeBlendedSPM" if is_blended else "ElectrodeSingleSPM"
+        return "ElectrodeBlended" if is_blended else "ElectrodeSingle"
+    is_particle_instance = (
+        len(path) == 4
+        and path[0] == "Parameterisation"
+        and path[1] in _ELECTRODE_NAMES
+        and path[2] == "Particle"
+    )
+    if is_particle_instance:
+        return "Particle"
+    is_validation_run = len(path) == 2 and path[0] == "Validation"
+    if is_validation_run:
+        return "Experiment"
+    return None
+
+
+def _resolve_definition(
+    path: tuple[str, ...], model: str | None, value: object = None
+) -> str:
     if path == ("Parameterisation",):
         return _PARAMETERISATION_DEFS.get(model, "ParameterisationPartial")
     if path in _SECTION_DEFS:
         return _SECTION_DEFS[path]
+    instance_definition = _resolve_instance_definition(path, model, value)
+    if instance_definition is not None:
+        return instance_definition
     raise ValueError(f"Unsupported or ambiguous section path: {path!r}")
 
 
@@ -289,10 +359,7 @@ def _definitions_for(path: tuple[str, ...]) -> tuple[str, ...]:
         return ()
     if path == ("Parameterisation",):
         return _PARAMETERISATION_FAMILY
-    if len(path) >= 2 and path[0] == "Parameterisation" and path[1] in (
-        "Negative electrode",
-        "Positive electrode",
-    ):
+    if len(path) >= 2 and path[0] == "Parameterisation" and path[1] in _ELECTRODE_NAMES:
         return _ELECTRODE_FAMILY
     if len(path) == 2 and path[0] == "Validation":
         return ("Experiment",)

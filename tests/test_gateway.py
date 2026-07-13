@@ -352,14 +352,110 @@ def test_expected_fields_parameterisation_varies_by_model():
     assert "Electrolyte" in dfn_aliases
 
 
-def test_expected_fields_unsupported_electrode_path_raises():
-    with pytest.raises(ValueError):
-        bpx_gateway.expected_fields(("Parameterisation", "Negative electrode"))
-
-
 def test_expected_fields_unknown_path_raises():
     with pytest.raises(ValueError):
         bpx_gateway.expected_fields(("Nonexistent",))
+
+
+# -- electrode single/blended discriminator ----------------------------------
+
+
+def test_expected_fields_electrode_single_shape_from_real_spm_example(valid_spm_dict):
+    """The SPM example's Negative electrode has no ``Particle`` key: single-
+    particle shape. The SPM variant excludes Porosity/Conductivity (those are
+    the electrode's own fields in the non-SPM shape, not the SPM one)."""
+    value = valid_spm_dict["Parameterisation"]["Negative electrode"]
+    aliases = {
+        field.alias
+        for field in bpx_gateway.expected_fields(
+            ("Parameterisation", "Negative electrode"), "SPM", value
+        )
+    }
+    assert "Particle" not in aliases
+    assert "Porosity" not in aliases
+    assert "Conductivity [S.m-1]" not in aliases
+    assert "Diffusivity [m2.s-1]" in aliases
+
+
+def test_expected_fields_electrode_blended_shape_from_real_spm_example(valid_spm_dict):
+    """The SPM example's Positive electrode has a ``Particle`` key: blended
+    shape, whose particle fields live under ``Particle/<name>`` rather than
+    directly on the electrode."""
+    value = valid_spm_dict["Parameterisation"]["Positive electrode"]
+    aliases = {
+        field.alias
+        for field in bpx_gateway.expected_fields(
+            ("Parameterisation", "Positive electrode"), "SPM", value
+        )
+    }
+    assert aliases == {"Thickness [m]", "Particle"}
+
+
+@pytest.mark.parametrize("empty_value", [{}, None, "oops", []])
+def test_expected_fields_electrode_empty_value_resolves_to_single(empty_value):
+    """An empty/absent electrode value has no ``Particle`` discriminator and
+    resolves to the single-particle shape -- the common case. A non-dict
+    value (``"oops"``, ``[]``) is just as discriminator-less as ``{}``/``None``
+    -- ``isinstance(value, dict)`` guards the ``"Particle" in value`` check, so
+    a non-dict value never raises. Using a non-SPM model here shows the *full*
+    single shape (Porosity/Conductivity included), contrasting with the SPM
+    variant's narrower set above."""
+    aliases = {
+        field.alias
+        for field in bpx_gateway.expected_fields(
+            ("Parameterisation", "Negative electrode"), "DFN", empty_value
+        )
+    }
+    assert "Particle" not in aliases
+    assert "Porosity" in aliases
+    assert "Conductivity [S.m-1]" in aliases
+
+
+@pytest.mark.parametrize("model", ["DFN", None])
+def test_expected_fields_electrode_blended_non_spm_model_includes_porosity(model):
+    """The non-SPM blended shape (unlike its SPM counterpart) still carries
+    Porosity/Conductivity directly on the electrode, alongside Particle. An
+    undeclared model (``None``) selects the same full shape as a named
+    non-SPM model -- only ``"SPM"`` narrows it."""
+    aliases = {
+        field.alias
+        for field in bpx_gateway.expected_fields(
+            ("Parameterisation", "Positive electrode"), model, {"Particle": {}}
+        )
+    }
+    assert aliases == {
+        "Conductivity [S.m-1]",
+        "Particle",
+        "Porosity",
+        "Thickness [m]",
+        "Transport efficiency",
+    }
+
+
+def test_expected_fields_particle_instance_resolves_to_particle_definition(valid_spm_dict):
+    """A named material under a blended electrode's ``Particle`` dict resolves
+    to the ``Particle`` definition, regardless of the instance's own content."""
+    positive = valid_spm_dict["Parameterisation"]["Positive electrode"]
+    name = next(iter(positive["Particle"]))
+    aliases = {
+        field.alias
+        for field in bpx_gateway.expected_fields(
+            ("Parameterisation", "Positive electrode", "Particle", name), "SPM"
+        )
+    }
+    assert "Diffusivity [m2.s-1]" in aliases
+    assert "Particle" not in aliases
+
+
+def test_expected_fields_validation_run_resolves_to_experiment_definition():
+    """A Validation run's path is a user-chosen key -- the schema types
+    ``Validation`` as ``Dict[str, Experiment]``, the same fixed-shape-under-a-
+    chosen-key pattern as a ``Particle`` instance -- so it resolves to the
+    ``Experiment`` definition regardless of the run name or content."""
+    aliases = {
+        field.alias for field in bpx_gateway.expected_fields(("Validation", "Test 1"))
+    }
+    assert aliases == {"Time [s]", "Current [A]", "Voltage [V]", "Temperature [K]"}
 
 
 # ---------------------------------------------------------------------------

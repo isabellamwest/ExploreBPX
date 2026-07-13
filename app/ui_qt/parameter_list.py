@@ -183,6 +183,7 @@ class ParameterListPanel(QWidget):
             existing,
             self._node.path,
             self._model,
+            self._node.value,
         )
 
     def _on_custom_parameter_requested(self, typed_alias: str) -> None:

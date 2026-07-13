@@ -1,5 +1,9 @@
 # PLAN — Input system, Phases 4a → 6
 
+> **Status: complete.** Every phase below (4a → 6) has landed. This file is kept as
+> the record of the verified facts and the locked decisions behind them — read it for
+> context, not as a work list. `PROJECT_STATUS.md` carries what is next.
+
 **Audience: a future working session.** Written to be executed without re-deriving
 anything. Read this top-to-bottom before touching code.
 
@@ -437,9 +441,11 @@ are the containers; keep creation of *parameters* in the `+ Add parameter` heade
   must cascade on rename — record that requirement when designing `RenameKey`, even
   though no sidecar exists yet.
 
-**Known blocker to check first:** `bpx_gateway.expected_fields()` raises `ValueError`
-for the electrode sections (the single/blended union needs live content). `Add section ▸`
-must degrade gracefully there — it already does in the add-parameter popup.
+**Known blocker (since resolved):** `bpx_gateway.expected_fields()` used to raise
+`ValueError` for the electrode sections. It now takes the section's live value and
+discriminates the union from it (a `Particle` key means blended; an empty electrode
+resolves to single-particle), so `Add section ▸` and the add-parameter popup both
+enumerate electrodes normally.
 
 ---
 
@@ -467,7 +473,6 @@ must degrade gracefully there — it already does in the add-parameter popup.
   still shows Modified.
 - **`_undo_stack` is unbounded** and stores whole `BPXDocument` snapshots. Memory grows
   per commit. Cap it if it bites.
-- **`expected_fields()` cannot enumerate electrode sections** (single/blended union).
 - **Educational parameter-metadata dataset** is an empty seam; 5 of 8 popover categories
   render empty.
 - **`SUPPORTED_BPX_EXTENSIONS` vs hardcoded dialog filters** can drift.

@@ -184,8 +184,8 @@ description and validation state.
 | Parameter selection drives the Inspector | Implemented |
 | Inspector shows value, unit and schema metadata | Implemented |
 | Parameters classified by kind (scalar, integer, enum, function, table, unknown) | Implemented |
-| Parameter information popover ( i ) surfacing rich BPX metadata | Planned |
-| Self-contained ParameterCard (title, validity badge, summary description in the card) | Planned |
+| Parameter information popover ( i ) surfacing rich BPX metadata | Implemented |
+| Self-contained ParameterCard (title, validity badge, summary description in the card) | Implemented |
 
 ### User Workflow
 
@@ -530,7 +530,7 @@ checking.
 | Best-effort mapping from validation paths to visible objects/parameters | Implemented |
 | Validation workspace listing all document issues | Implemented |
 | Parameter-scoped Issues tab in the Inspector secondary workspace | Implemented |
-| Keyboard navigation of issues (Enter-to-activate) in the Validation workspace and Issues tab | Planned |
+| Keyboard navigation of issues (Enter-to-activate) in the Validation workspace and Issues tab | Implemented |
 | `IssueKind` classification for actionable remediation | Planned |
 | Pure remediation functions (edit, move, choose model, map materials, add section) | Planned |
 | Restored field paths for root-landing warnings | Planned |
@@ -806,7 +806,7 @@ architecturally co-equal with editing.
 | Continuous validation that tolerates work-in-progress editing | Implemented |
 | Add a freeform custom parameter to a section (no synthesised metadata) | Implemented |
 | Add a known BPX parameter via search (section-expected + full-schema fallback) | Implemented |
-| New BPX from built-in model skeletons (SPM, SPMe, DFN, Partial) | Planned |
+| New BPX from built-in model skeletons (SPM, SPMe, DFN, Partial) | Implemented |
 | Completion status distinct from validation status | Planned |
 | Completion view for unfinished required authoring work | Planned |
 | Expected-but-missing parameter rows in the editing workflow | Planned |

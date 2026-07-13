@@ -17,10 +17,13 @@ the *whole* BPX standard for the target section up front -- no typing required
 -- under at most two headed groups:
 
 * **Suggested** -- the aliases the BPX schema expects for *this* section
-  (:func:`core.bpx_gateway.expected_fields`) that aren't already present. These
-  are highlighted in accent blue so the section's own standard fields stand
-  out. Sections whose schema is an unresolvable union (the electrode
-  single/blended case) simply have no suggested group -- not a dead end.
+  (:func:`core.bpx_gateway.expected_fields`) that aren't already present, with
+  container-link fields (which identify a child *section*, never an addable
+  parameter) filtered out. These are highlighted in accent blue so the
+  section's own standard fields stand out. A ``Particle``/``Validation``
+  *collection itself* (as opposed to one of its named instances -- a
+  material, a run -- which do resolve) still has no single schema definition
+  to resolve at all, and simply has no suggested group -- not a dead end.
 * **Other parameters** -- every remaining alias in the full BPX standard
   (:func:`core.bpx_gateway.searchable_parameters`) that this section doesn't
   expect and doesn't already have, in plain text.
@@ -325,26 +328,44 @@ class AddParameterPopup(QWidget):
         existing_aliases,
         section_path: tuple[str, ...] = (),
         model: str | None = None,
+        section_value: object = None,
     ) -> None:
         """Show the popup under *anchor*, scoped to *section_label*.
 
         *existing_aliases* is the set of parameter labels already present in
         the target section, so nothing ever offers to silently overwrite one.
-        *section_path*/*model* are used to look up the section's schema-expected
-        aliases via :func:`core.bpx_gateway.expected_fields`; sections the
-        schema cannot resolve without content (e.g. the electrode
-        single/blended union) raise :class:`ValueError`, which simply leaves
-        the *suggested* group empty. The full BPX standard (the "other" group)
-        is sourced from the schema index independently, so every section --
-        resolvable or not -- still lists all its addable parameters.
+        *section_path*/*model*/*section_value* are used to look up the
+        section's schema-expected aliases via
+        :func:`core.bpx_gateway.expected_fields` (*section_value* is the
+        section's live content, needed to discriminate the electrode
+        single/blended union); sections the schema still cannot resolve
+        (a ``Particle``/``Validation`` *collection itself*, as opposed to one
+        of its named instances -- a material, a run -- which do resolve)
+        raise :class:`ValueError`, which simply leaves the *suggested* group
+        empty. The full BPX standard (the "other" group) is sourced from the
+        schema index independently, so every section -- resolvable or not --
+        still lists all its addable parameters.
+
+        ``expected_fields`` returns *every* schema property of the resolved
+        definition, including container-link fields that merely name a child
+        *section* (e.g. a blended electrode's ``"Particle"``,
+        ``Parameterisation``'s ``"Cell"``) -- its own docstring says callers
+        must filter those out. This popup only ever offers *parameters*, so
+        fields with ``meta.is_container`` are dropped here before they ever
+        reach a row: offering ``"Particle"`` as an addable parameter would
+        route through :func:`core.commands.AddParameter` ->
+        :func:`core.editing.add_parameter`, an unconditional
+        ``parent[key] = value`` that would silently replace the whole child
+        section (every material, every parameter under it) with ``None``.
         """
         self._existing_aliases = frozenset(existing_aliases)
         try:
-            fields = expected_fields(tuple(section_path), model)
+            fields = expected_fields(tuple(section_path), model, section_value)
         except ValueError:
             self._expected_fields = ()
             self._expected_aliases = frozenset()
         else:
+            fields = tuple(field for field in fields if not field.meta.is_container)
             self._expected_aliases = frozenset(field.alias for field in fields)
             self._expected_fields = tuple(
                 field for field in fields if field.alias not in self._existing_aliases

@@ -6,10 +6,11 @@ lands on, offering only what is legal **there** (nothing disabled, nothing
 invented):
 
 - ``Add section ▸`` -- the schema-expected child sections absent from the
-  node (``structure.addable_child_sections``; the electrode single/blended
-  union offers nothing rather than guessing). Right-clicking empty space
-  addresses the invisible document root, which is how the optional top-level
-  sections (State, Validation) are added.
+  node (``structure.addable_child_sections``, which resolves the electrode
+  single/blended union from the electrode's own live content -- a
+  ``"Particle"`` key means blended, anything else means single). Right-clicking
+  empty space addresses the invisible document root, which is how the
+  optional top-level sections (State, Validation) are added.
 - ``Add material… / Add experiment…`` -- on the two dict-keyed containers
   whose children the user names (``structure.named_child_noun``), via an
   anchored one-field popup.
