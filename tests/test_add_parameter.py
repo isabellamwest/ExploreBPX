@@ -203,6 +203,26 @@ def test_suggested_rows_are_highlighted_distinctly_from_other_rows(popup, anchor
     assert suggested.font().bold() is True
 
 
+def test_required_row_carries_required_role_true(popup, anchor):
+    popup.open_for_section(anchor, "Cell", set(), _CELL, "SPM")
+    row = _row_item(popup, "Electrode area [m2]")
+    assert row.data(popup._TIER_ROLE) == "suggested"
+    assert row.data(popup._REQUIRED_ROLE) is True
+
+
+def test_non_required_suggested_row_carries_required_role_false(popup, anchor):
+    popup.open_for_section(anchor, "Cell", _CELL_PRESENT_ALIASES, _CELL, "SPM")
+    row = _row_item(popup, "Density [kg.m-3]")
+    assert row.data(popup._REQUIRED_ROLE) is False
+
+
+def test_other_tier_row_carries_required_role_false(popup, anchor):
+    popup.open_for_section(anchor, "Cell", _CELL_PRESENT_ALIASES, _CELL, "SPM")
+    row = _row_item(popup, "Porosity")
+    assert row.data(popup._TIER_ROLE) == "other"
+    assert row.data(popup._REQUIRED_ROLE) is False
+
+
 def test_typing_filters_both_groups_by_substring(popup, anchor):
     # Exclude "Reference temperature [K]" (Cell-expected) from the present set so
     # it surfaces as a suggested match; three other BPX aliases contain
@@ -606,6 +626,48 @@ def test_popup_suggests_blended_fields_for_electrode_node_with_particle_value(pa
     panel.show_node(node, model="SPM")
     panel._open_add_popup()
     assert set(_aliases(panel._popup, "suggested")) == {"Thickness [m]"}
+
+
+# ---------------------------------------------------------------------------
+# ParameterListPanel: required-parameter marking (rich-row rendering)
+# ---------------------------------------------------------------------------
+
+
+def _find_node(root: TreeNode, path: tuple[str, ...]) -> TreeNode | None:
+    if root.path == path:
+        return root
+    for child in root.children:
+        found = _find_node(child, path)
+        if found is not None:
+            return found
+    return None
+
+
+def test_parameter_list_rows_bold_the_name_and_mute_the_unit(panel, valid_spm_dict):
+    """A real document's row renders as rich text: bold bare name, muted
+    unit. Requiredness is deliberately *not* coloured here -- that tint is the
+    add-parameter popup's language, for choosing a field the section does not
+    have yet, and a row in this list is already present."""
+    from core.tree_model import build_tree
+
+    from ui_qt import parameter_row, style
+
+    root = build_tree(valid_spm_dict)
+    electrode = _find_node(root, _NEGATIVE_ELECTRODE)
+    assert electrode is not None
+    panel.show_node(electrode, model="SPM")
+
+    lst = panel._list
+    thickness = next(
+        lst.item(i) for i in range(lst.count()) if lst.item(i).text().startswith("Thickness")
+    )
+    html = thickness.data(parameter_row.HTML_ROLE)
+    assert "Thickness" in html
+    assert "[m]" in html
+    assert f"color:{style.MUTED}" in html  # the unit
+    # ``Thickness [m]`` *is* schema-required for this electrode, and is still
+    # not tinted: the list never speaks the popup's required language.
+    assert f"color:{style.REQUIRED}" not in html
 
 
 # ---------------------------------------------------------------------------

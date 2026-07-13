@@ -11,6 +11,11 @@ OK = "#2e7d32"
 ERROR = "#c62828"
 WARNING = "#ef6c00"
 ACCENT = "#1f6feb"
+#: A required-but-absent/required-parameter tint -- distinct from both
+#: ``ERROR`` (invalid) and ``ACCENT`` (a merely-suggested field), so a
+#: schema-required parameter reads as its own, readable, amber category in
+#: the add-parameter popup and the parameter list.
+REQUIRED = "#9a6700"
 BORDER = "#d0d7de"
 #: Wash behind a grid cell the validator blamed -- a background tint, so it
 #: reads distinctly from ``ERROR``, which is used as text/badge colour.
@@ -34,6 +39,10 @@ QListWidget::item:selected, QTreeView::item:selected { background: #ddeeff; colo
    only -- a descendant selector here would out-specify (and silently strip
    the border from) QListWidget#AddParameterList below. */
 QTreeView#StructureTree, QListWidget#ParameterListView { border: none; }
+/* Wider than the generic 3px/4px item padding above -- a wrapped, two-line
+   parameter row (name plus unit, or a validator marker) needs the extra
+   breathing room the same way the add-parameter popup's rows do. */
+QListWidget#ParameterListView::item { padding: 6px 8px; border-radius: 4px; }
 /* The editor page's tree/params/inspector splitter: a single 1px hairline
    per seam. Scoped by objectName so it does not affect the Inspector's own
    internal (top/bottom) splitter, whose handle stays at its default width. */
@@ -106,6 +115,7 @@ QLineEdit#AddParameterInput {
     border-radius: 6px;
     padding: 6px 8px;
     background: #ffffff;
+    font-size: 12px;
     selection-background-color: #ddeeff;
 }
 QLineEdit#AddParameterInput:focus { border: 1px solid #1f6feb; }
@@ -114,8 +124,9 @@ QListWidget#AddParameterList {
     border: none;
     background: transparent;
     outline: none;
+    font-size: 12px;
 }
-QListWidget#AddParameterList::item { padding: 6px 8px; border-radius: 6px; }
+QListWidget#AddParameterList::item { padding: 8px; border-radius: 6px; }
 QListWidget#AddParameterList::item:selected { background: #ddeeff; color: #1f2328; }
 QFrame#AddParameterDivider { background: #eaecef; border: none; }
 /* The pinned "Create custom parameter" action -- accent-tinted escape hatch,

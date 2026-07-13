@@ -28,7 +28,9 @@ from PySide6.QtWidgets import (
 
 from core.tree_model import TreeNode
 
+from . import parameter_row
 from .add_parameter_popup import AddParameterPopup
+from .parameter_row import ParameterRowDelegate
 
 
 class _ParameterListView(QListWidget):
@@ -83,6 +85,11 @@ class ParameterListPanel(QWidget):
 
         self._list = _ParameterListView()
         self._list.setObjectName("ParameterListView")
+        # A long label (name plus unit) wraps onto a second line rather than
+        # being cut off -- matching the add-parameter popup's rows, and
+        # rendered by the same shared delegate.
+        self._list.setWordWrap(True)
+        self._list.setItemDelegate(ParameterRowDelegate(self._list))
         self._list.itemClicked.connect(self._on_clicked)
         self._list.setContextMenuPolicy(Qt.CustomContextMenu)
         self._list.customContextMenuRequested.connect(self._on_context_menu_requested)
@@ -112,6 +119,12 @@ class ParameterListPanel(QWidget):
             marker = "  ⚠" if parameter.has_errors else ""
             item = QListWidgetItem(f"{parameter.label}{marker}")
             item.setData(256, parameter.path)
+            item.setData(
+                parameter_row.HTML_ROLE,
+                parameter_row.build_parameter_row_html(
+                    parameter.label, has_errors=parameter.has_errors
+                ),
+            )
             self._list.addItem(item)
 
     def reveal(

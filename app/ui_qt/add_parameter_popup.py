@@ -54,7 +54,6 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QPushButton,
-    QStyledItemDelegate,
     QStyleOptionViewItem,
     QVBoxLayout,
     QWidget,
@@ -62,8 +61,9 @@ from PySide6.QtWidgets import (
 
 from core.bpx_gateway import ExpectedField, FieldMeta, expected_fields, searchable_parameters
 from core.parameter_types import extract_unit
-from ui_qt import style
+from ui_qt import parameter_row, style
 from ui_qt.dismissal import OutsideDismissFilter
+from ui_qt.parameter_row import ParameterRowDelegate
 
 #: Visible-row cap before the list scrolls; keeps the popup within screen
 #: bounds however long the full standard gets. Counts every row (headers
@@ -130,6 +130,30 @@ def _suggestion_text(alias: str, meta, required: bool = False) -> str:
     return f"{alias}  ({' · '.join(hints)})"
 
 
+def _row_html(alias: str, meta, tier: str, required: bool) -> str:
+    """This row's rich-text fragment: the bare alias (its trailing unit
+    bracket split off) bolded and coloured by tier/requiredness, followed by
+    the same kind/unit/"Required" hints ``_suggestion_text`` renders as plain
+    text -- muted, except the "Required" tag itself, which repeats the
+    name's colour so a required row reads as one unit."""
+    name, unit = parameter_row.split_name_and_unit(alias)
+    if required:
+        name_color = style.REQUIRED
+    elif tier == "suggested":
+        name_color = style.ACCENT
+    else:
+        name_color = parameter_row.DEFAULT_TEXT
+    hints: list[tuple[str, str]] = []
+    kind = _kind_label(meta)
+    if kind:
+        hints.append((kind, style.MUTED))
+    if unit:
+        hints.append((unit, style.MUTED))
+    if required:
+        hints.append(("Required", style.REQUIRED))
+    return parameter_row.compose_row_html(name, hints, name_color=name_color)
+
+
 def _render_icon(size: int, paint) -> QIcon:
     """Draw a crisp (2x-supersampled) monochrome glyph via *paint(painter, px)*."""
     scale = 2
@@ -191,9 +215,10 @@ class _PopupInput(QLineEdit):
         super().keyPressEvent(event)
 
 
-class _SuggestionDelegate(QStyledItemDelegate):
+class _SuggestionDelegate(ParameterRowDelegate):
     """Paints a faint divider above group headers that follow another group,
-    so the "Other parameters" section reads as its own block."""
+    so the "Other parameters" section reads as its own block, on top of
+    :class:`ParameterRowDelegate`'s shared rich-text row rendering."""
 
     _GAP = 9  # extra top space carrying the divider, above a following header
 
@@ -238,6 +263,11 @@ class AddParameterPopup(QWidget):
     #: Marks a header that should carry a divider line above it (i.e. a group
     #: that follows another group).
     _TIER_TOP_ROLE = Qt.UserRole + 2
+    #: Whether the section's schema requires this alias -- only ever true for
+    #: a "suggested" row ("other" rows aren't scoped to this section's own
+    #: required list). Drives the required colour/tag; kept as structured
+    #: data so tests can assert it without depending on rendered colour.
+    _REQUIRED_ROLE = Qt.UserRole + 3
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -274,12 +304,14 @@ class AddParameterPopup(QWidget):
         self._list = QListWidget()
         self._list.setObjectName("AddParameterList")
         self._list.setFocusPolicy(Qt.NoFocus)
-        # Long aliases elide with "…" rather than scrolling sideways -- a stray
+        # Long aliases wrap onto a second line rather than eliding or
+        # scrolling sideways -- the whole hint must stay readable; a stray
         # horizontal scrollbar would otherwise steal height and trigger a
         # spurious vertical one under the content-hugging height.
         self._list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self._list.setTextElideMode(Qt.ElideRight)
-        self._list.setItemDelegate(_SuggestionDelegate(self._list))
+        self._list.setWordWrap(True)
+        self._list.setTextElideMode(Qt.ElideNone)
+        self._list.setItemDelegate(_SuggestionDelegate(self._list, h_pad=8, v_pad=8))
         self._list.itemClicked.connect(self._on_row_clicked)
 
         #: Thin rule separating the scrolling list from the pinned footer;
@@ -297,7 +329,7 @@ class AddParameterPopup(QWidget):
         self._create_button.clicked.connect(self._emit_custom)
         self._create_button.hide()
 
-        card = QFrame()
+        card = self._card = QFrame()
         card.setObjectName("AddParameterCard")
         card.setFixedWidth(_CARD_WIDTH)
         card_layout = QVBoxLayout(card)
@@ -442,11 +474,13 @@ class AddParameterPopup(QWidget):
         item = QListWidgetItem(_suggestion_text(alias, meta, required))
         item.setData(self._ALIAS_ROLE, alias)
         item.setData(self._TIER_ROLE, tier)
+        item.setData(self._REQUIRED_ROLE, required)
         if tier == "suggested":
-            item.setForeground(QColor(style.ACCENT))
+            item.setForeground(QColor(style.REQUIRED if required else style.ACCENT))
             font = QFont(self._list.font())
             font.setBold(True)
             item.setFont(font)
+        item.setData(parameter_row.HTML_ROLE, _row_html(alias, meta, tier, required))
         return item
 
     def _make_header(self, text: str, divider: bool) -> QListWidgetItem:
@@ -490,6 +524,23 @@ class AddParameterPopup(QWidget):
             self._list.setFixedHeight(sum(heights[:_MAX_VISIBLE_ROWS]) + frame)
         else:
             self._list.setFixedHeight(sum(heights) + frame)
+        # Shrink the popup back to its content, or filtering a long list down
+        # to one row would leave the card full of dead space. Two Qt details
+        # make this more than a bare ``adjustSize``: a top-level's layout sets
+        # the window's *minimum* size and only ever raises it (so the minimum
+        # from the unfiltered list would pin the height), and ``adjustSize``
+        # reads a cached hint, so the layout must be re-activated after the
+        # row height set above.
+        if self.isVisible():
+            self.setMinimumHeight(0)
+            self._list.updateGeometry()
+            # The card's own layout holds the list, so it is the one whose
+            # cached hint is stale; activating only the outer layout would
+            # resize the window against the pre-filter height.
+            self._card.layout().invalidate()
+            self._card.layout().activate()
+            self.layout().activate()
+            self.adjustSize()
 
     # -- selection / activation --------------------------------------
     def _selectable_rows(self) -> list[int]:
