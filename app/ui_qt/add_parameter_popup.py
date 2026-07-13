@@ -132,17 +132,15 @@ def _suggestion_text(alias: str, meta, required: bool = False) -> str:
 
 def _row_html(alias: str, meta, tier: str, required: bool) -> str:
     """This row's rich-text fragment: the bare alias (its trailing unit
-    bracket split off) bolded and coloured by tier/requiredness, followed by
-    the same kind/unit/"Required" hints ``_suggestion_text`` renders as plain
-    text -- muted, except the "Required" tag itself, which repeats the
-    name's colour so a required row reads as one unit."""
+    bracket split off) bolded and coloured by *tier*, followed by the same
+    kind/unit/"Required" hints ``_suggestion_text`` renders as plain text --
+    muted, except the "Required" tag itself.
+
+    Requiredness colours **only that tag**, never the name: a required field
+    is a suggested one, and recolouring its name would split the suggested
+    group into two visual tiers when it is one."""
     name, unit = parameter_row.split_name_and_unit(alias)
-    if required:
-        name_color = style.REQUIRED
-    elif tier == "suggested":
-        name_color = style.ACCENT
-    else:
-        name_color = parameter_row.DEFAULT_TEXT
+    name_color = style.ACCENT if tier == "suggested" else parameter_row.DEFAULT_TEXT
     hints: list[tuple[str, str]] = []
     kind = _kind_label(meta)
     if kind:
@@ -476,7 +474,7 @@ class AddParameterPopup(QWidget):
         item.setData(self._TIER_ROLE, tier)
         item.setData(self._REQUIRED_ROLE, required)
         if tier == "suggested":
-            item.setForeground(QColor(style.REQUIRED if required else style.ACCENT))
+            item.setForeground(QColor(style.ACCENT))
             font = QFont(self._list.font())
             font.setBold(True)
             item.setFont(font)

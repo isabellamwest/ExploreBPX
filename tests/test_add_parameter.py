@@ -210,6 +210,27 @@ def test_required_row_carries_required_role_true(popup, anchor):
     assert row.data(popup._REQUIRED_ROLE) is True
 
 
+def test_required_colours_only_the_tag_never_the_name(popup, anchor):
+    """A required field *is* a suggested one, so its name stays accent blue
+    like every other suggested row; only the "Required" tag carries the
+    required colour. Recolouring the name would split one group into two
+    visual tiers."""
+    from ui_qt import parameter_row
+
+    popup.open_for_section(anchor, "Cell", set(), _CELL, "SPM")
+    row = _row_item(popup, "Electrode area [m2]")
+    assert row.data(popup._REQUIRED_ROLE) is True
+
+    html = row.data(parameter_row.HTML_ROLE)
+    name_span, _, tail = html.partition("Electrode area")
+    assert f"color:{style.ACCENT}" in name_span  # the name: blue, like its peers
+    assert f"color:{style.REQUIRED}" not in name_span
+    assert f"color:{style.REQUIRED}" in tail  # the tag, and only the tag
+    assert "Required" in tail
+    # And the plain-text fallback foreground agrees.
+    assert row.foreground().color().name() == style.ACCENT
+
+
 def test_non_required_suggested_row_carries_required_role_false(popup, anchor):
     popup.open_for_section(anchor, "Cell", _CELL_PRESENT_ALIASES, _CELL, "SPM")
     row = _row_item(popup, "Density [kg.m-3]")
