@@ -106,20 +106,43 @@ product principle that the two are distinct (see
 the current data satisfies BPX/schema rules. Completion answers whether the
 document is finished for an authoring workflow.
 
+Completion is **not** a persisted layer or richer authoring state — it is a
+**pure, stateless projection over `(raw, model)`**, implemented in
+`core/completion.py` and shaped like `structure.py`'s own capability queries
+(`addable_child_sections`). It holds nothing between calls and is recomputed
+fresh from the committed raw dict on every refresh; drafts never feed it.
+`completion_for(path, value, model)` returns a section's Expected fields
+(present or missing, Required or not); `document_completion(raw)` aggregates
+that into the document's Required-only outstanding tasks; `partition_issues`
+is the one function in the module that reads validator diagnostics, and only
+to decide which are already accounted for by a task (never to silence them —
+see the Validation architecture below). Completion never judges legality: the
+`bpx` validator remains the sole authority on valid/invalid, at every altitude
+from a single field to the whole document.
+
+Completion cannot be derived by filtering validation diagnostics, which is
+why it is a separate query rather than a view over `ValidatorDiagnostic`s:
+`bpx`'s `mode="before"` validators short-circuit sibling checks (a
+section-level one can suppress that section's own required-field errors; the
+package root validator suppresses `State`/`Validation` diagnostics entirely,
+including the root-level demand for `State` itself, whenever
+`Parameterisation` has any problem), and an absent section or an
+undeclared/unrecognised model collapses to one diagnostic with its required
+leaves never enumerated. Completion instead reads the schema and the raw dict
+directly, so it can name what validation, in these suppressed states, cannot.
+
 The raw BPX dictionary remains the simulator-facing data source. Missing
-scientific values must never be represented by fake BPX values solely to satisfy
-the editor. If Explore_BPX needs richer states — draft values, template
-inheritance, review status, provenance or confidence — those belong in an
-authoring/completion layer, never conflated with exported BPX data.
+scientific values must never be represented by fake BPX values solely to
+satisfy the editor: a completion task may say a field is missing, but only
+committing a real value writes BPX data. Any future authoring state that
+genuinely needs to persist — draft values, template inheritance, review
+status, provenance or confidence — is a distinct, not-yet-built concept, and
+must likewise never be conflated with exported BPX data.
 
-Tree generation, completion views and editing surfaces may therefore expose
-expected or unfinished parameters that are not yet present in the raw BPX.
-Committing a real value writes BPX data; tracking authoring intent does not.
-
-**This is a foundational architectural commitment, not a future feature.** The
-authoring/completion layer is co-equal with editing in the domain model. Its
-feature-level behaviour is specified in the Authoring section of
-[03-features.md](03-features.md).
+Tree generation and editing surfaces may therefore expose expected or
+unfinished parameters that are not yet present in the raw BPX. Its
+feature-level behaviour is specified in the Authoring and Validation sections
+of [03-features.md](03-features.md).
 
 ### Document, TreeNode and ParameterItem
 
@@ -189,6 +212,7 @@ parameters, and none is needed under this model.
 | `commands.py` | Intent dataclasses and operation result types. |
 | `command_service.py` | Preview/execute orchestration over command intent, mutation primitives and structural checks. |
 | `structure.py` | Frontend-agnostic structural and capability queries. |
+| `completion.py` | Stateless completion projection over `(raw, model)`: per-section Expected-field queries, document-level Required-only outstanding tasks, and the Issues/Outstanding diagnostic-absorption split. |
 | `document_factory.py` | Incomplete BPX scaffolds without invented scientific values. |
 | `tree_model.py` | UI-neutral object tree, parameter rows and validation-path matching helpers. |
 | `parameter_types.py` | Value classification and parameter kind metadata. |
@@ -335,7 +359,7 @@ attach, without building the capabilities themselves ahead of need.
 | Editing and creation | Command intent, `command_service.py`, `editing.py`, `document_factory.py` and per-document undo in `DocumentSession`. |
 | Function/table visualisation | Analysis tab in the Inspector secondary workspace consuming the selected `ParameterItem`; a launcher of `Show` actions that open floating visualisations, with BPX functions exposed through `bpx_gateway.py` / `to_python_function()`. |
 | Issue presentation | Qt-owned Issues tab in the Inspector secondary workspace consuming derived `ValidationIssue` state; no core or state dependency on the tab widgets. |
-| Authoring, skeletons and templates | `document_factory.py` creates incomplete structures without scientific defaults; completion/template state stays separate from exported BPX data. |
+| Authoring, skeletons and templates | `document_factory.py` creates incomplete structures without scientific defaults; `completion.py` is the stateless completion query built on top. Any future template state (inheritance, review status) stays separate from exported BPX data. |
 | External database import | A new anti-corruption adapter, mirroring `bpx_gateway.py`, returning raw BPX dicts from third-party sources. |
 | Simulator hand-off | `export.py` generalising from serialisation to target-specific writers. |
 | Multi-document Workspace and comparison | A `Workspace` holding the Primary and an optional Reference `DocumentSession`; components render the workspace (one or two documents) rather than switching into a compare mode. Shared-tree rendering, ownership indicators and dual inspectors are future design, not built ahead of need. |
@@ -350,8 +374,9 @@ These constraints are enforceable and must hold at all times:
 
 - `core/` and `state/` must remain Qt-free (`tests/test_boundaries.py`).
 - The raw dict remains the editable source of truth.
-- Authoring/completion state must not force placeholders or draft intent into
-  exported BPX data.
+- Completion is a stateless projection recomputed from the committed raw dict;
+  it and any future authoring state must not force placeholders or draft
+  intent into exported BPX data.
 - BPX schema and validation semantics stay delegated to `bpx`.
 - Domain plausibility checks must be separate from schema validation and must
   never be added to `bpx_gateway.py`.

@@ -40,6 +40,16 @@ validator, not docs):
 - `Cell` has a `mode="before"` validator (deprecated moved-fields check); if it
   raises, pydantic never runs Cell's field validation — deleting a required field
   from `Cell` leaves validator output **byte-identical**.
+- The suppression is layered THREE deep (fully mapped 2026-07-14): bpx's root
+  dispatcher validates `Header` FIRST and uncaught — an invalid `Header` field
+  suppresses ALL of `Parameterisation`/`State`/`Validation` (a bad `Cell` field
+  alongside a bad `Header` field shows only the Header diagnostic). Then the root
+  `mode="before"` validator short-circuits on ANY `Parameterisation` problem, hiding
+  ALL `State`/`Validation` diagnostics — including the root-level demand for `State`
+  itself (corrected V1). Then per-section `mode="before"` validators (e.g. `Cell`)
+  hide their own fields. This is *why* completion cannot be read off diagnostics at
+  any layer. A skeleton
+  document therefore reveals nothing about the State subtree.
 - An absent section yields exactly one `missing` diagnostic; required leaves inside
   are never enumerated.
 - No `Header.Model` → the sole diagnostic is `missing ('Model',)`; `Parameterisation`
@@ -60,17 +70,19 @@ All probed at `d6f4d9d` by validating factory skeletons and mutations of them th
 
 | # | Fact | Evidence |
 |---|---|---|
-| V1 | **`State` is required by NO model.** `required_sections` listing `("State",)` for concrete models over-claims. | SPM/SPMe/DFN skeleton minus `State` → zero State-related diagnostics; SPM issue count identical (23) with and without `State`. `structure.py` even contradicts itself: line 27 lists `State` under `_OPTIONAL_TOP_LEVEL`. |
+| V1 | **CORRECTED 2026-07-14 (user: "follow validator precisely"): `State` IS validator-required for concrete models**, via bpx's root `mode="before"` validator — *"'State' section must be provided unless using a 'Partial' parameterisation"* — emitted as a root-level `value_error` at `loc=()`, NOT a `missing`. The original V1 ("required by no model") was an artifact: the root validator short-circuits on ANY `Parameterisation` problem, and every skeleton has one, so skeleton probes never saw it. **The suppression is broader than first recorded**: any Parameterisation issue hides ALL State/Validation diagnostics, not just Cell's. `State`'s own children `Initial conditions` and `Thermal environment` are schema-required once State exists. | Valid SPM fixture minus `State` → `value_error ()` with the message above; minus `State.Thermal environment` → `missing ('State','Thermal environment')`; empty `State` → both children `missing`. Skeleton probes show none of these. So `required_sections` keeps `("State",)` for concrete models — it was right all along. |
 | V2 | **SPMe requires `Separator`; the factory doesn't scaffold it.** `_SEPARATOR_MODELS = {"DFN"}` is wrong. | `create("SPMe")` validates with `missing ('Separator',)`. SPM and DFN skeletons demand no extra sections — the other constants are correct in both directions. |
 | V3 | **Union `missing` locs carry NO branch tags.** | Partial + electrode holding only `Thickness [m]` → exactly 8 diagnostics like `missing ('Negative electrode', 'Minimum stoichiometry')` — clean paths, pydantic settled the SPM branch. |
-| V4 | **Diagnostic locs are section-relative, not root-absolute.** | Absent `Cell` → `('Cell',)` not `('Parameterisation','Cell')`; absent model → `('Model',)`. The existing diagnostic-attachment pass already normalizes this — absorption must reuse it, never re-derive paths. |
+| V4 | **Diagnostic locs are section-relative, not root-absolute — and the convention is asymmetric** (fully mapped 2026-07-14): the validator DROPS a leading `Header` (`missing ('BPX',)` for absent `Header.BPX`) and a leading `Parameterisation` (`('Cell',)`), but KEEPS `State` and `Validation` prefixes in full (`('State','Thermal environment')`, `('Validation','C/20','Time [s]')`). The attachment pass passes unresolvable Header-relative locs through as-is (a missing-`BPX` diagnostic surfaces with nav_path `('BPX',)`). Absorption matching must therefore test the candidate prefixes (`loc`, `('Header',)+loc`, `('Parameterisation',)+loc`) — a strip that knows only `Parameterisation` leaves missing required Header fields double-surfaced (red Issue + Outstanding row), which was a real reviewed defect. Also noted: `Temperature [K]` is optional in `Experiment` (only Time/Current/Voltage are schema-required). |
 | V5 | **A committed-`null` `FloatInt` field yields TWO diagnostics**, one per union branch, with branch-suffixed locs. | `null` capacity → `float_type ('Cell','Nominal cell capacity [A.h]','float')` **and** `int_type (…,'int')`. Null-absorption must therefore absorb *all diagnostics attached to the parameter*, not match one loc. |
 | V6 | **Garbage `Header.Model` (`"banana"`) → one `literal_error` at `('Model',)`, nothing else validated.** | `literal_error ≠ missing` → it stays red in Issues (user-typed bad value), while completion additionally shows the declare-model task. Both statements are true; show both — the task's action is also the remedy for the error. |
 | V7 | **Adding an empty section immediately enumerates its inner fields.** | SPMe + empty `Separator` → the `('Separator',)` diagnostic is replaced by three field-level `missing` inside it. Decision M's cascade is real validator behaviour, not hope. |
 | V8 | **`expected_fields` resolves fine with `model=None`** (picks the full `ElectrodeSingle`/`ElectrodeBlended` variants — see its docstring). | Suppressing suggestions under an undeclared model (decision C) is a **product choice** (focus the user on declaring a model; don't suggest fields against a model they haven't picked), NOT a technical impossibility. Do not "fix" the suppression on the grounds that the query would work. |
 | V9 | Under Partial, a *present* sparse electrode draws real `missing` errors from whichever union branch pydantic settles on (V3's 8), while `expected_fields` resolves a different branch (`ElectrodeSingle`, 12 fields incl. `Porosity`, `Transport efficiency`). Obeying app "required" flags under Partial → `extra_forbidden` rejections. | Basis of decision C's Partial rule. |
 
-Reusable probe (adjust as needed):
+Reusable probe (adjust as needed). Note the `getattr`s: warning diagnostics
+(`PythonWarningDiagnostic`) have neither `.error_type` nor `.loc`, and the nmc fixture
+emits one — a bare `d.error_type` crashes on exactly the Phase-2 keystone document:
 
 ```bash
 cd app && python - <<'EOF'
@@ -78,7 +90,7 @@ import sys, copy; sys.path.insert(0, '.')
 from core import bpx_gateway, document_factory
 doc = document_factory.create("SPMe", title="probe")
 for d in bpx_gateway.validate(doc).issues:
-    print(d.error_type, d.loc)
+    print(getattr(d, "error_type", None), getattr(d, "loc", None), d.message)
 EOF
 ```
 
@@ -91,8 +103,8 @@ EOF
 | **A** | **Shape:** `core/completion.py` exposes a per-section pure function mirroring `addable_child_sections` — `completion_for(path, value, model) -> (missing_fields, missing_child_sections)` — plus a document-level aggregation for the Validation page. No global stateful task-list type. No Qt imports. |
 | **B** | **Terminology (exact words, everywhere):** *Expected* = schema names the field for this section. *Required* = schema requires it AND the model is concrete (SPM/SPMe/DFN). *Missing* = expected field with no entry in raw. *Outstanding* = Required and (absent OR committed `null`). "Valid/invalid" never appear in completion UI — those words belong to the validator's surfaces only. |
 | **C** | **Models.** No model, or a garbage/unknown `Header.Model` value: the only completion task is "declare a model", and the parameter-list "fields to add" group is suppressed (product choice — see V8; per V6 a garbage value *also* stays red in Issues, and both appear). An absent `Header` collapses to one "Header — section absent" row per M; the declare-model task appears once Header exists. `Partial` → suggest every expected field, flag **nothing** Required (V9). Concrete models → Required flags as-is (they match the validator). |
-| **D** | **Null rule:** a **Required** field holding committed `null` is **Outstanding ("added, no value yet"), not an Issue**. `null` is the app's own honest-empty sentinel — it means unfinished, not wrong. A user-typed bad value stays an Issue. The parameter's own inline badge still reports the validator verbatim. **Deliberately required-only** (edge-case review offered generalising to optional/custom null fields; the user chose no): an optional or custom parameter added-but-unfilled shows as a red Issue, as today. Do not "fix" this asymmetry — it is chosen. Only literal `null` qualifies — an empty list on a series is a committed (invalid) value and stays red. |
-| **E** | **Absorption:** a validator diagnostic with `error_type == "missing"` whose location corresponds to an Outstanding item is shown **only** in Outstanding; plus, per D and V5, **every diagnostic attached to a committed-null Required parameter** is absorbed (a null union field raises two). Matching happens at the attachment level — reuse the exact normalization the diagnostic-attachment pass computes (V4); never invent a second path-matching scheme. Safety net: a `missing` diagnostic NOT covered stays in Issues — the real remaining cases are Partial's union-branch demands (V9) and any path `expected_fields` cannot resolve. (Since the electrode-union fix, `expected_fields` DOES resolve `Validation/<run>` and `Particle/<material>`, so missing fields inside an *existing* user-named entry absorb normally.) The validator is never silenced, only re-seated. |
+| **D** | **Null rule (REVISED 2026-07-14, second user ruling — supersedes the earlier required-only choice, which was reversed after seeing it live):** any **schema-expected** field holding committed `null` is **Outstanding ("added, no value yet")**, REQUIRED tag only where required. `null` is the app's own honest-empty sentinel — creating an expected field never makes the document look worse. **Custom parameters stay red**: their `extra_forbidden` rejects the *name*, not the emptiness — filling a value fixes nothing, so absorbing it would lie. A user-typed bad value stays an Issue everywhere. Only literal `null` qualifies — an empty list is a committed (invalid) value and stays red. |
+| **E** | **Absorption:** a validator diagnostic with `error_type == "missing"` whose location corresponds to an Outstanding item is shown **only** in Outstanding; plus, per D and V5, **every diagnostic attached to a committed-null Required parameter** is absorbed (a null union field raises two). One deliberate exception to the missing-only rule (corrected V1): the **root `value_error` demanding `State`** (`loc=()`, message "'State' section must be provided unless using a 'Partial' parameterisation") absorbs into the State MISSING_SECTION task when that task exists — matched by its message, pinned by a regression test against the real validator so a bpx wording change fails loudly rather than silently un-absorbing. Matching happens at the attachment level — reuse the exact normalization the diagnostic-attachment pass computes (V4); never invent a second path-matching scheme. Safety net: a diagnostic NOT covered stays in Issues — the real remaining cases are Partial's union-branch demands (V9) and any path `expected_fields` cannot resolve. (Since the electrode-union fix, `expected_fields` DOES resolve `Validation/<run>` and `Particle/<material>`, so missing fields inside an *existing* user-named entry absorb normally.) The validator is never silenced, only re-seated. |
 | **F** | **Placement:** one Validation page, two sections — **Issues** (unchanged) above **Outstanding** (fed by `core.completion` only). No new rail entry. Missing whole sections appear **only** here, never as ghost tree nodes — the tree stays an honest view of what exists. |
 | **G** | **Rail badge = post-absorption Issues count**, derived from the same function that fills the Issues section so the two can never disagree. A fresh skeleton shows no red badge (Issues 0, Outstanding N). User explicitly accepted this change to the badge's meaning: red = "something is wrong", never "something is unstarted". |
 | **H** | **Parameter list:** one collapsed line at the end of the real rows — "▸ N fields to add" — closed by default; expands to compact name+`+` rows (absent expected fields only; committed-null fields are already real rows). `+` = `AddParameter(None)` then reveal/focus the new editor — the add-parameter popup's Suggested path verbatim, one undo step. Required tag reuses `style.REQUIRED`; under Partial no Required tags, suggestions still listed. **The group's expanded state survives rebuilds of the same section** (every `+` commits a command → rebuild; a stateless group would snap shut after each add) and resets on navigation to a different section. |
@@ -100,6 +112,10 @@ EOF
 | **J** | **Set-model action is in scope** (new, minimal): a chooser that commits `Header.Model` through the existing command spine — `apply_value` already routes `("Header","Model")` strings to `ChangeModel`, which also adds required-but-missing sections in the same undo step. Reuse it; build no new command. This makes the "declare a model" row actionable (no disabled placeholders). |
 | **K** | **Recompute on commit only.** Completion is a function of the committed raw dict; drafts never touch it. Do not wire into preview. |
 | **L** | **Activation contract** (Enter/double-click; selection alone never acts — the existing Issues keyboard contract, kept everywhere): Issue → navigate (unchanged). ○ missing field → navigate to the owning section, expand the fields-to-add group, highlight the row (no mutation; the `+` mutates). ◐ added-no-value → navigate to the parameter's editor. Section absent → `AddSection` then navigate into it (one undo step; there is nothing to navigate to first). Declare model → open the set-model chooser. Every Outstanding row displays its action text — nothing mutates without saying so. |
+| **O** | **No validator output is ever dropped (user, 2026-07-14: "never remove any validation ever"):** every diagnostic renders somewhere on the page — an absorbed diagnostic shows on its Outstanding row as muted secondary text (its real validator message), uncovered ones stay in Issues (the fallback). Absorption re-seats; it never swallows. |
+| **P** | **Empty-value row presentation:** a parameter whose committed value is `null` renders its parameter-list row in muted/grey (emptiness visible at a glance — covers both "never filled" and "value was removed", which raw cannot distinguish); the ⚠ marker means *page-visible* issues (the parameter list receives the partition's visible-issue paths from `_refresh_all`), so an expected-null field is grey without ⚠ while a custom-null field is grey **with** ⚠ (its `extra_forbidden` stays red on the page). The card *validity* badge and the Issues tab stay **validator-verbatim in message text and severity** — they are exempt from completion's calming/absorption (an inline surface always tells the truth about the selected parameter), but they DO apply Q's display de-dup (showing the validator's own words once, not twice). "Verbatim" = not calmed, not absorbed; it is not "un-deduplicated". |
+| **Q** | **Union-pair display merge:** the `float_type` + `int_type` pair a single null/bad `FloatInt` value draws (V5) merges to ONE displayed message ("Input should be a valid number") in the Issues tab, the page Issues section, and Outstanding secondary text. Display-only — the validator, `parameter.issues`, and absorption bookkeeping are untouched; page counts/badge count merged display rows. |
+| **R** | **Optional-null rows sit in a separate sub-group** (user, 2026-07-14): a section's required missing/null tasks stay under `<Section> — N of M remaining` (N and M both required-only, so the ratio always equals the counted rows beneath it — no "5 of 5" over 6 rows). Optional expected fields added-but-unfilled drop to a quiet sub-group header `<Section> · optional — K unfilled` beneath, clearly outside the completion target; they still carry their absorbed message (decision O). This keeps the completion ratio honest AND keeps optional validation visible. Ordering: within a section, required group then its optional sub-group, before the next section. |
 | **M** | **Absent section = one row.** Its fields enumerate only once it exists — mirrors the validator's own collapsing, and needs no cascade code because per-section recompute gives it free (V7 proves the validator does the same). |
 | **N** | **Deferred, recorded, not built:** "add at least one material/experiment" tasks for user-named collections (blended `Particle`, `Validation` runs — existing entries DO enumerate their fields; only the "collection is empty" prompt is deferred); save-as-template / new-from-template; compound rail badge; the live-preview Issues-count debt (unrelated, stays as recorded in PROJECT_STATUS). |
 
@@ -109,57 +125,104 @@ EOF
 |---|---|
 | Page section headers | `Issues` · `Outstanding` |
 | Outstanding group header | `<Section> — N of M remaining` / `<Section> — section absent` |
-| Missing-field row | alias, `REQUIRED` tag where applicable, action `Go to ›` |
-| Null-field row | `<alias> — added, no value yet`, action `Go to ›` |
+| Missing-field row | alias + `REQUIRED` tag, action `Go to ›`. Every Outstanding row is Required **by definition** (decision B) — `document_completion` returns required-only tasks; optional absences live solely in the per-section fields-to-add group (`completion_for`). The tag is kept anyway for vocabulary consistency with the add-parameter popup. |
+| Null-field row | `<alias> — added, no value yet`, `REQUIRED` tag **only when the field is required** (decision D revised — optional expected nulls are Outstanding but untagged), the absorbed validator message as muted secondary text (decision O), action `Go to ›` |
 | Absent-section row | section name, action `+ Add section` |
 | Declare-model row | `Declare a model`, action `Choose…` |
 | Empty states | `✓ No issues` · `✓ Nothing outstanding` · Partial: `Model is Partial — no completion target. Expected fields are still suggested in each section's parameter list.` |
-| Parameter-list group | `▸ N fields to add` (collapsed) / `▾ N fields to add` (expanded), compact rows with `+` |
+
+| Parameter-list group | `▸ N fields to add` (collapsed) / `▾ N fields to add` (expanded; singular "field" when N=1), compact rows with `+` |
+
+**Partial caveat (from V9, acknowledge, don't hide):** under Partial the fields-to-add
+group stays populated (decision H) but is *informational, not a safe authoring path* —
+an empty electrode suggests `ElectrodeSingle`'s 12 fields while pydantic settles the
+document on the SPM branch, so following the suggestions can draw `extra_forbidden`
+(red, in Issues, per E's safety net — correct and deliberate: the validator is never
+silenced). The implementer must not "fix" this by suppressing either surface; the
+Partial empty-state copy above is the user-facing acknowledgement.
 
 ---
 
 ## 4. Phases (dependency order; one commit each; STOP before each commit)
 
 ### Phase 1 — `structure.py` tells the validator's truth
-Two verified bugs, one bounded refactor, no UI:
-- `_SEPARATOR_MODELS` → `{"SPMe", "DFN"}` (V2).
-- `required_sections` drops `("State",)` (V1) — it must mean what its name says.
-- **Factory/ChangeModel behaviour is preserved deliberately**: `document_factory.create`
-  and `command_service`'s ChangeModel iterate `required_sections` today, and `State`
-  should stay in fresh/converted documents as UX scaffolding. Introduce an explicit
-  scaffold list (`required_sections(model)` + `("State",)` for concrete models) used by
-  those two callers, so the scaffolding choice is named instead of smuggled.
+One verified bug, no UI. (**Revised after V1's correction.** The original brief also
+removed `State` from `required_sections` and split out a `scaffold_sections`; both
+were implemented, then reverted when the root-validator probe proved State IS required
+for concrete models. Do not reintroduce the split — `required_sections` was right all
+along about State.)
+- `_SEPARATOR_MODELS` → `{"SPMe", "DFN"}` (V2). That is the whole code change.
+- `required_sections` keeps `("State",)` for concrete models; its docstring cites the
+  root-validator message ("'State' section must be provided unless using a 'Partial'
+  parameterisation") so nobody "fixes" it against a skeleton probe again.
 - Tests: `create("SPMe")` contains `Separator` and draws no section-level `missing`;
   `create(model)` still contains `State` for concrete models; `required_sections`
-  excludes `State` and includes `Separator` for SPMe/DFN; ChangeModel to SPMe adds
-  `Separator`. Check existing fixtures/tests asserting the old SPMe shape.
+  includes `Separator` for SPMe/DFN and `State` for concrete models; Partial/None
+  return only Header+Parameterisation; ChangeModel to SPMe adds `Separator`.
 
 ### Phase 2 — `core/completion.py`
 The pure query (decisions A–E, I, K, M). No Qt; unit tests only. The test that earns
 the layer's existence: nmc-with-deleted-Cell-field (fixture
 `tests/fixtures/nmc_pouch_cell_BPX.json`), where completion reports the task the
-validator cannot see. Also: the Partial case (zero Required, full Expected);
+validator cannot see. **That test's premise is fixture-dependent**: the byte-identical
+suppression holds because the nmc fixture already trips Cell's `mode="before"`
+validator at baseline (`value_error ('Cell',)`). State this in the test's docstring so
+a future fixture cleanup that makes nmc validate cleanly doesn't silently invert the
+premise. Also test: the Partial case (zero Required, full Expected);
 null-counts-as-outstanding (and `[]` does not); undeclared/garbage model → single
 declare-model task; absent section → one item, fields enumerated once present.
+
+Alongside `completion_for`, this phase also delivers the second Qt-free function
+Phase 5 needs:
+`partition_issues(document, completion_result) -> (visible_issues, outstanding, badge_counts)`
+— the absorption rule (E) as a pure function over the document's already-attached
+diagnostics plus the completion output. Decision A's `completion_for` stays a
+projection over `(raw, model)`; `partition_issues` is a separate pure function that
+*consumes* diagnostics, so core stays Qt-free and the panel/badge share one derivation.
 
 ### Phase 3 — Parameter-list "fields to add" group
 Decision H. Derived in the UI from `core.completion`; **never** injected into
 `TreeNode.parameters` — the tree and parameter model keep meaning "what is in the
-document". Drive the real app: add several fields in a row and verify the group stays
-expanded and focus lands in each new editor.
+document". **New seam this phase must build** (nothing like it exists): a
+parameter-list method to *reveal-and-highlight a missing alias* — expand the group and
+select the synthetic row. Today `parameter_list.reveal` (parameter_list.py:130)
+matches only real rows by role data, and `NavigationService.navigate`
+(navigation.py:48) resolves only nodes/parameters that exist in the document —
+neither can address a field that isn't there. Phase 5's "Go to ›" depends on this
+method, so build and test it here (headless driver test: activate → group expanded,
+synthetic row selected). Drive the real app: add several fields in a row and verify
+the group stays expanded and focus lands in each new editor.
 
 ### Phase 4 — Set-model action
-Decision J. Needed before Phase 5 so the declare-model row has an action. Placement:
-with the document-identity UI (top bar shows Title · Model · BPX version). Verify
-ChangeModel's section-scaffolding behaviour through the real app.
+Decision J. Needed before Phase 5 so the declare-model row has an action.
+**Affordance (user-decided 2026-07-14): a Model chip in the top bar** — the Model
+segment of the identity area becomes a small clickable chip opening a menu
+(SPM / SPMe / DFN / Partial, current one marked; "No model" label when undeclared).
+Selecting the current model is a no-op (no command, no dirty); selecting another
+commits via `apply_value(("Header","Model"), …)` → ChangeModel (adds missing required
+sections in the same undo step, removes nothing; fully undoable ⇒ no confirmation
+dialog). Greyed with no document or no `Header` (built-but-inapplicable convention).
+Expose a public `open_model_chooser()` seam on the window for Phase 5's declare-model
+row. Verify ChangeModel's section-scaffolding behaviour through the real app.
+**Precondition to enforce, not assume:** `ChangeModel` → `editing._navigate`
+(editing.py:23-36) raises `EditError` when `Header` is absent. Decision C already
+gates the declare-model row on Header's existence; the chooser itself must respect the
+same gate so no UI path reaches ChangeModel on a Header-less document.
 
 ### Phase 5 — Validation page: Outstanding section + absorption + badge
-Decisions E, F, G, L, and the pinned copy. Absorption matching reuses the
-diagnostic-attachment normalization (V4); union locs are clean (V3) so no
-branch-stripping is needed for `missing`; null absorption is attachment-level (V5).
-The badge and the Issues section derive from one function. Drive the real app through
-mockup states 1–4 (skeleton / working doc / Partial / complete) and compare against
-the mockup.
+Decisions E, F, G, L, and the pinned copy. Consumes Phase 2's `partition_issues` —
+`main_window._refresh_all` (main_window.py:769-786) switches both
+`self._validation.refresh(...)` and the rail `set_badge(...)` to its output instead of
+today's pre-absorption `document.error_count`/`warning_count`, so panel and badge are
+one derivation by construction. Absorption facts already verified: attachment-level
+matching (V4), clean union locs (V3), two-diagnostic null absorption (V5).
+**Outstanding activation is polymorphic** — decision L names four distinct actions,
+but `ValidationPanel.issue_activated` today is a single navigate-only
+`Signal(tuple)` (validation_panel.py:31). The Outstanding section needs an
+action-typed activation signal (navigate / reveal-missing-alias via Phase 3's seam /
+AddSection / open set-model chooser); do not force these through NavigationService,
+which cannot address non-existent targets. Drive the real app through mockup states
+1–4 (skeleton / working doc / Partial / complete) and compare against the mockup.
 
 Docs owed as phases land (code-first): `03-features.md` §5/§8 (completion architecture
 → stateless projection; Validation page two-section layout; absorption rule);
@@ -182,11 +245,16 @@ this track — it currently omits it entirely). `PROJECT_STATUS.md` after every 
 ## 6. Definition of done for the track
 
 - A user can author a complete document by filling in what the app shows, never by
-  hunting: every Required absence is visible either as a "fields to add" entry or an
-  Outstanding row, in every model state, including the states where the validator
-  itself goes blind (V1's Cell suppression, absent sections, undeclared model).
-- Red means wrong, never unstarted; nothing the app itself wrote (a scaffolded
-  section, a `null` from `+`) ever presents as an error on a Required field.
+  hunting: under a concrete model, every Required absence is visible either as a
+  "fields to add" entry or an Outstanding row — including the states where the
+  validator itself goes blind (V1's Cell suppression, absent sections). Under an
+  undeclared model the one visible task is "declare a model" (decision C suppresses
+  everything else, deliberately); under Partial, suggestions show but nothing is
+  Required.
+- Red means wrong, never unstarted — **in the Outstanding section and the rail
+  badge**: nothing the app itself wrote (a scaffolded section, a `null` from `+`)
+  ever counts as an error *there*. The parameter's own inline badge and row marker
+  still mirror the validator verbatim, per decision D — do not suppress them.
 - The validator is never silenced — every diagnostic is visible on the page, in
   exactly one of the two sections.
 - All five phases landed as separate commits; docs match the app; the full suite is

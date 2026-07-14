@@ -560,6 +560,10 @@ checking.
 | Validation workspace listing all document issues | Implemented |
 | Parameter-scoped Issues tab in the Inspector secondary workspace | Implemented |
 | Keyboard navigation of issues (Enter-to-activate) in the Validation workspace and Issues tab | Implemented |
+| Outstanding section on the Validation page (required + optional-null completion tasks, `core/completion.py`) | Implemented |
+| Absorption of validator diagnostics already accounted for by an Outstanding task, shown as muted secondary text on that row | Implemented |
+| Union-pair (`float_type`/`int_type`) display merge across Issues, Outstanding and the Issues tab | Implemented |
+| Rail badge reflects post-absorption, post-merge Issues count only | Implemented |
 | `IssueKind` classification for actionable remediation | Planned |
 | Pure remediation functions (edit, move, choose model, map materials, add section) | Planned |
 | Restored field paths for root-landing warnings | Planned |
@@ -586,6 +590,69 @@ Activating an issue in the Validation workspace — by selecting it and pressing
 Enter, or double-clicking — navigates to the affected location via
 `NavigationService`.
 
+#### Issues and Outstanding
+
+The Validation workspace page is itself split into two always-present
+sections, **Issues** above **Outstanding**:
+
+- **Issues** lists every validator diagnostic that is not accounted for by an
+  authoring task (see [Authoring](#8-authoring)) — exactly what the workspace
+  showed before completion existed. An empty section shows `✓ No issues`.
+- **Outstanding** lists the document's completion tasks
+  (`core.completion.document_completion`), grouped by owning section in
+  document order. Each section renders up to two subheaders: a **required**
+  group, `<Section> — N of M remaining` (or `<Section> — section absent`),
+  holding only Required tasks — so `N` always equals the row count beneath
+  it — followed by a quiet **optional** sub-group, `<Section> · optional —
+  K unfilled`, for Expected-but-optional fields committed `null`. Either may
+  be absent; a section with no optional nulls shows no optional sub-group.
+  Every row names its own action (`Go to ›`, `+ Add section`, `Choose…`). An
+  empty Outstanding section shows `✓ Nothing outstanding`; under a `Partial`
+  model, where nothing is ever Required, it shows a notice that suggestions
+  still live in each section's parameter list instead.
+
+A committed `null` is Outstanding whenever the field is schema-**Expected**,
+not only when it is Required: creating an expected field and leaving it
+unfilled never makes the document look worse, so the calm treatment applies
+regardless of requiredness (the REQUIRED tag itself still only renders for a
+Required field). A **custom** parameter — one with no schema entry at all —
+is the deliberate exception and stays a plain, uncalmed Issue: its
+`extra_forbidden` rejects the *name*, not the emptiness, so filling in a
+value would not fix it.
+
+A diagnostic is moved from Issues into Outstanding — **absorbed**, never
+dropped — exactly when an Outstanding task already accounts for it: a
+`missing` diagnostic whose location is a task's own missing field or section,
+or any diagnostic attached to a parameter with a task's own committed-`null`
+field (a null union field raises two diagnostics, both absorbed), or the
+root diagnostic demanding `State` when a `State`-absent task exists. No
+validator output is ever dropped: **every absorbed diagnostic still renders**
+— on its Outstanding row, as muted secondary text carrying its real,
+verbatim message — so absorption re-seats a diagnostic rather than hiding
+it. The validator is never silenced by this — every diagnostic still appears
+on the page, in exactly one of the two sections — and the rule only ever
+*moves* a diagnostic; it never changes what the validator itself judges to
+be wrong.
+
+A single `null`/bad `FloatInt` value raises two diagnostics, one per union
+branch (`float_type` and `int_type`, for the same underlying problem); this
+pair always **displays as one row** — in the Issues section, in an
+Outstanding row's secondary text, and in the parameter-scoped Issues tab
+below. This is a display merge only: the validator's own output and
+`parameter.issues` are untouched, and only the rendered rows (and the counts
+derived from them) are de-duplicated.
+
+The **rail badge** on the activity bar's Validation icon counts Issues only,
+post-absorption and post-merge: a fresh skeleton, or a document with only
+added-but-unfilled Expected fields, shows no red badge, because nothing
+there is wrong, only unstarted. **Parameter-scoped surfaces are unaffected
+by absorption** — the Issues tab (below) and a parameter's own validity
+badge keep reporting the validator verbatim in message text and severity,
+including diagnostics the Validation page has absorbed into Outstanding, so
+a parameter's own inline state is never silently downgraded to look clean;
+they do still apply the same float/int display merge, so the validator's own
+words show once, not twice.
+
 #### Issues tab (parameter-scoped)
 
 The Issues tab is strictly parameter-scoped and lives in the Inspector secondary
@@ -597,7 +664,12 @@ parameter:
   tab — is always visible so issues stay discoverable.
 - The Issues tab always shows the selected parameter's current issue count as a
   badge on the tab label (for example `Issues` or `Issues (2)`), updating live
-  during preview validation, whether or not the panel is open.
+  during preview validation, whether or not the panel is open. The list and
+  the badge count are validator-verbatim in message text and severity — never
+  calmed or absorbed, since an inline surface always tells the truth about
+  the selected parameter — but both apply the same float/int union-pair
+  display merge as the Validation page, so a single bad `FloatInt` value
+  counts and shows once, not twice.
 - Opening the tab shows that parameter's issue list. While the tab is open,
   changing the selected parameter simply refreshes the list for the new
   parameter; it does not close the workspace.
@@ -629,9 +701,21 @@ best-effort suffix matching. Actionable remediation is a future `IssueKind` plus
 pure remediation functions in `core/`. See the Validation architecture and the
 warning-path gap in [01-architecture.md](01-architecture.md).
 
+The Validation page's Outstanding section and the rail badge are both derived
+from a single `core.completion.partition_issues(document, tasks)` call, made
+once per refresh, so the two can never disagree about what counts as an
+Issue. `partition_issues` is the one function in `core/completion.py` that
+reads `ValidatorDiagnostic`s at all; it consumes the document's
+already-attached diagnostics plus `document_completion`'s task list and
+returns which diagnostics are absorbed versus still visible, and the
+post-absorption error/warning counts. See [Authoring](#8-authoring) for why
+completion cannot be derived from the diagnostics themselves.
+
 ### Dependencies
 
 - `core/bpx_gateway.py`, `core/validation.py`, `core/tree_model.py`.
+- `core/completion.py` — `document_completion` for the Outstanding tasks,
+  `partition_issues` for the Issues/Outstanding split and badge counts.
 - `NavigationService` for issue-to-location navigation.
 - The Inspector (for the parameter-scoped Issues tab) and the activity bar (for
   the Validation workspace).
@@ -814,8 +898,21 @@ completion state separate from validation state.
 
 Authoring is an accepted **core product capability and a major implementation
 priority**, designed alongside editing rather than deferred (see
-[00-project.md](00-project.md)). The whole feature is currently Planned, but it is
-architecturally co-equal with editing.
+[00-project.md](00-project.md)). Most of the feature is now Implemented (see the
+capability matrix below); only Upload/open skeleton workflows and Save as
+Template / New from Template remain Planned.
+
+Completion uses fixed terminology, distinct from validation's valid/invalid:
+**Expected** — the schema names the field for this section. **Required** —
+the schema requires it and the model is one of SPM/SPMe/DFN. **Missing** — a
+Required field with no entry in the raw document. **Outstanding** — a
+Required field that is Missing, or *any* schema-Expected field (Required or
+not) committed as literal `null` — creating an expected field and leaving it
+unfilled never makes a document look worse, so the calm Outstanding
+treatment does not depend on requiredness. A **custom** parameter (no schema
+entry at all) is never Outstanding: its problem is the name BPX rejects, not
+the emptiness, so it stays a plain Issue. "Valid"/"invalid" never describe
+completion state; those words belong to validation alone.
 
 ### Concepts
 
@@ -836,19 +933,30 @@ architecturally co-equal with editing.
 | Add a freeform custom parameter to a section (no synthesised metadata) | Implemented |
 | Add a known BPX parameter via search (section-expected + full-schema fallback) | Implemented |
 | New BPX from built-in model skeletons (SPM, SPMe, DFN, Partial) | Implemented |
-| Completion status distinct from validation status | Planned |
-| Completion view for unfinished required authoring work | Planned |
-| Expected-but-missing parameter rows in the editing workflow | Planned |
+| Completion status distinct from validation status | Implemented |
+| Completion view (Outstanding section) for unfinished required authoring work | Implemented |
+| Expected-but-missing parameter rows ("N fields to add") in the parameter list | Implemented |
 | Upload/open skeleton workflows | Planned |
 | Save as Template and New from Template workflows | Planned |
 
 ### User Workflow
 
-The user starts a new document from a model skeleton (or a template), then works
-through the completion view to fill required authoring work. Expected-but-missing
-parameters appear in the editing workflow so the user can supply real values.
-Completion tracks what remains to finish the document, separately from whether the
-current data is valid. The user may save a document as a template for reuse.
+The user starts a new document from a model skeleton, then fills what the app
+shows is missing rather than hunting for it. Two surfaces present the same
+underlying completion query: a collapsed "N fields to add" group at the foot
+of each section's parameter list, and an Outstanding section on the
+Validation page listing every Required absence, plus every Expected field
+committed `null`, document-wide, grouped by section (a section's Required
+tasks under one ratio-honest group, its optional added-but-empty fields under
+a separate, quieter one). Activating a row navigates to it and, where nothing
+exists yet to
+navigate to, performs the one enabling step first — a missing field's `+`
+adds it with an honest `null` and focuses its editor; an absent section's
+action adds the section; an undeclared model's action opens the Model chip —
+all in one undo step. Completion tracks what remains to finish the document,
+kept distinct from validation's Issues: a field the app itself added but the
+user has not yet filled is Outstanding, never a red Issue. The user may save
+a document as a template for reuse (Planned).
 
 ### UI Behaviour
 
@@ -866,24 +974,63 @@ a "Create custom parameter" fallback. Every add writes an empty value through th
 `AddParameter` command and reveals the new row via `NavigationService`; the validator
 judges legality and nothing is fabricated.
 
+The same "N fields to add" query feeds a collapsed group at the foot of each
+section's parameter list (see [02-ui.md](02-ui.md)), and the Validation page
+carries a second section, Outstanding, beneath Issues, listing every Required
+absence document-wide (see [Validation](#5-validation)). Both are driven by
+`core/completion.py`, never by validator diagnostics — see Architecture below
+for why the two cannot be conflated. An undeclared or unrecognised
+`Header.Model` collapses every one of these surfaces to a single "declare a
+model" task, whose action opens the top-bar Model chip
+([02-ui.md](02-ui.md)); a `Partial` model suggests every Expected field but
+marks nothing Required, since `Partial`'s own schema forbids most of what a
+concrete model would require.
+
 ### Architecture
 
-Authoring builds on the completion/authoring model in the domain layer
-([01-architecture.md](01-architecture.md)): the raw dict is the simulator-facing
-data source, and authoring/completion state (draft, template inheritance, review
-status) lives in a separate layer that never forces values into exported BPX.
-`document_factory.py` creates incomplete structures without scientific defaults.
-Authoring-created custom parameters do **not** synthesise or persist a
-`FieldMeta`: absence (`meta=None`) is a valid first-class state under the
-accepted decision in [01-architecture.md](01-architecture.md). `classify`
-stays metadata-authoritative wherever metadata exists and falls back to
-value-shape classification where it is genuinely absent; the BPX validator is
-the source of truth for whether such a parameter is legal.
+Authoring's completion is a **pure, stateless projection over `(raw, model)`**
+— `core/completion.py`, the same shape as `core/structure.py`'s
+`addable_child_sections`. It never persists state, never judges legality (the
+validator remains the sole authority on valid/invalid), and is recomputed
+fresh on every commit from the committed raw dict alone — never from drafts.
+Two functions matter: `completion_for(path, value, model)` returns a
+section's every Expected field (Required or not) plus its Required-but-null
+fields and missing required child sections — the parameter list's "fields to
+add" query; `document_completion(raw)` aggregates this across the whole
+document into Required-only tasks — the Validation page's Outstanding query.
+A third, `partition_issues(document, tasks)`, is the only function here that
+reads validator diagnostics: it splits them into the diagnostics an
+Outstanding task already accounts for ("absorbed") and everything else
+("visible"), so a diagnostic is re-seated under Outstanding, never silenced.
+
+Completion cannot be read off validator diagnostics, and is architected
+separately for that reason. The `bpx` schema's `mode="before"` validators
+short-circuit: a section-level one can raise before pydantic ever checks that
+section's own required fields, so deleting a required field can leave the
+validator's diagnostics byte-identical; the package's root `mode="before"`
+validator raises as soon as `Parameterisation` itself has a problem, which
+stops pydantic validating `State`/`Validation` at all, hiding even the
+root-level demand for `State` itself. An absent section always collapses to
+one `missing` diagnostic — its required leaves are never enumerated — and an
+absent/unrecognised `Header.Model` yields a single diagnostic with
+`Parameterisation` never validated at all. Completion instead reads the
+schema and the raw dict directly, so it sees what validation, in these
+states, cannot.
+
+`document_factory.py` creates incomplete structures without scientific
+defaults. Authoring-created custom parameters do **not** synthesise or
+persist a `FieldMeta`: absence (`meta=None`) is a valid first-class state
+under the accepted decision in [01-architecture.md](01-architecture.md).
+`classify` stays metadata-authoritative wherever metadata exists and falls
+back to value-shape classification where it is genuinely absent; the BPX
+validator is the source of truth for whether such a parameter is legal.
 
 ### Dependencies
 
 - `core/document_factory.py` for skeletons.
-- The completion/authoring layer (Planned) separate from exported BPX.
+- `core/completion.py` — the stateless completion projection and the
+  Issues/Outstanding absorption rule, consumed by both the parameter list and
+  the Validation page.
 - The `meta=None` contract for user-defined parameter metadata
   ([01-architecture.md](01-architecture.md)): no persistence mechanism is
   needed for authoring-created parameters to be classified reliably.

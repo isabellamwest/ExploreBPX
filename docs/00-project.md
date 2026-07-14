@@ -115,8 +115,9 @@ environment. Its accepted scope — spanning implemented and planned work — is
 - edit parameters by kind (scalar, integer, enum, function, table);
 - navigate to any object or parameter through search and validation;
 - save to the current file and export copies in JSON or YAML;
-- author documents from model skeletons and templates, with completion state
-  tracked separately from validation;
+- author documents from model skeletons and templates, with completion — a
+  stateless read of what the schema still expects, never a persisted status —
+  kept separate from validation;
 - visualise function and table parameters within the parameter workspace.
 
 The precise implemented/planned status of each capability is defined in

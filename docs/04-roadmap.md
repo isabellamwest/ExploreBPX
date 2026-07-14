@@ -17,7 +17,13 @@ invalid and incomplete files), the derived object tree and parameter inspection,
 editing across every parameter kind, command-based mutation with undo, structural
 tree editing (add/remove sections; add/rename/remove materials and experiments),
 continuous validation with a parameter-scoped Issues tab, search, authoring from
-model skeletons, and save/export. The capability matrices in
+model skeletons, and save/export. The authoring/completion track has also landed:
+a stateless completion query (`core/completion.py`) surfaces expected-but-missing
+fields as a collapsed "N fields to add" group in the parameter list and as an
+Outstanding section on the Validation page (alongside Issues, with validator
+diagnostics already covered by an Outstanding task absorbed rather than
+double-shown), and a top-bar Model chip lets a document declare or change its
+model in place. The capability matrices in
 [03-features.md](03-features.md) carry the authoritative per-feature status.
 
 The items below are the capabilities still marked Planned.
