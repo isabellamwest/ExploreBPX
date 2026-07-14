@@ -4,10 +4,9 @@ Covers Steps 2+3 of the top-bar/workspace redesign: the top bar's identity
 label composed from ``document.identity``, Save/Export enabled state, and the
 bottom status bar showing only file name + Saved/Modified (never the Title).
 
-Since the completion track's Phase 4, the Model segment lives in the
-top-bar Model chip rather than the identity label (see
-``test_main_window_model_chip.py``) -- the identity label carries only
-Title and BPX version.
+The identity label carries only Title and BPX version -- Model is omitted
+and is edited in the Editor instead, via the normal ``Header.Model`` enum
+card.
 """
 
 from __future__ import annotations
@@ -49,13 +48,21 @@ def test_identity_falls_back_to_filename_when_title_empty(
 def test_identity_unaffected_by_missing_model(
     app_driver, valid_spm_dict, tmp_path
 ):
-    """The identity label no longer carries Model at all (Phase 4's chip
-    does), so clearing ``Header.Model`` changes nothing about it."""
+    """The identity label carries no Model segment, so clearing
+    ``Header.Model`` changes nothing about it."""
     valid_spm_dict["Header"]["Model"] = ""
     work = tmp_path / "no_model_example.json"
     work.write_text(json.dumps(valid_spm_dict), encoding="utf-8")
 
     app_driver.open(work)
+
+    assert app_driver.identity_text() == "Minimal valid SPM example · BPX v1.0.0"
+
+
+def test_identity_label_omits_model(app_driver, valid_spm_path):
+    """Even with a declared Model, the identity label must not carry it --
+    Model is edited in the Editor instead."""
+    app_driver.open(valid_spm_path)
 
     assert app_driver.identity_text() == "Minimal valid SPM example · BPX v1.0.0"
 

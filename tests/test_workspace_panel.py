@@ -132,7 +132,7 @@ def test_opening_from_workspace_page_switches_to_editor_page(
     assert d.current_view_index() == 0
     assert d.activity_bar_selected_label() == "Editor"
     assert d.identity_text() == "Minimal valid SPM example · BPX v1.0.0"
-    assert d.model_chip_text() == "SPM"
+    assert d._w._state.active.document.identity.model == "SPM"
 
 
 def test_opening_from_workspace_page_goes_through_discard_guard(
@@ -211,7 +211,7 @@ def test_choosing_new_model_creates_document_and_switches_to_editor(app_driver, 
 
     assert d.current_view_index() == 0
     assert d.activity_bar_selected_label() == "Editor"
-    assert d.model_chip_text() == model
+    assert d._w._state.active.document.identity.model == model
     assert "State: Modified" in d.workspace_info_text()
     assert "File: untitled.json" in d.workspace_info_text()
 
@@ -252,7 +252,7 @@ def test_new_from_workspace_page_discard_guard_proceeds_on_discard(
 
     d.click_workspace_new("DFN")
 
-    assert d.model_chip_text() == "DFN"
+    assert d._w._state.active.document.identity.model == "DFN"
     assert d.current_view_index() == 0
 
 
@@ -361,7 +361,7 @@ def test_dropping_a_valid_file_opens_it_and_switches_to_editor(app_driver, valid
     assert d.current_view_index() == 0
     assert d.activity_bar_selected_label() == "Editor"
     assert d.identity_text() == "Minimal valid SPM example · BPX v1.0.0"
-    assert d.model_chip_text() == "SPM"
+    assert d._w._state.active.document.identity.model == "SPM"
 
 
 def test_dropping_a_file_goes_through_discard_guard_and_cancel_aborts(
@@ -401,7 +401,7 @@ def test_dropping_a_file_discard_guard_proceeds_on_discard(
     d.drop_file_on_workspace(valid_spm_path)
 
     assert d.identity_text() == "Minimal valid SPM example · BPX v1.0.0"
-    assert d.model_chip_text() == "SPM"
+    assert d._w._state.active.document.identity.model == "SPM"
     assert d.current_view_index() == 0
 
 

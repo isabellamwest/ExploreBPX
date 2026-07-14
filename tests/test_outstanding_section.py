@@ -244,19 +244,73 @@ def test_declare_model_task_renders_standalone_with_no_group_header(app_driver, 
     assert tasks[0].kind is TaskKind.DECLARE_MODEL
 
 
-def test_declare_model_activation_opens_the_model_chooser(app_driver, tmp_path, monkeypatch):
+def test_declare_model_activation_navigates_to_header_when_model_absent(app_driver, tmp_path):
+    """``Header.Model`` entirely absent: there is no committed parameter, but
+    Header's own "fields to add" suggestion row survives decision C's
+    model gate (Header's fields don't depend on the model -- see
+    ``_append_missing_fields_group``), so activation navigates to Header and
+    reveals/selects the Model suggestion row via ``reveal_missing_alias``."""
     d = app_driver
     d.open(_undeclared_model_path(tmp_path))
     tasks = d.outstanding_tasks()
     assert len(tasks) == 1  # exactly one task: declare a model
     assert tasks[0].kind is TaskKind.DECLARE_MODEL
 
-    called = []
-    monkeypatch.setattr(d._w._model_chip, "showMenu", lambda: called.append(True))
+    d.activate_outstanding_task(tasks[0])
+
+    assert d.tree_selection_label() == "Header"
+    assert d.fields_to_add_current_alias() == "Model"
+
+
+def test_declare_model_activation_reveals_fields_to_add_group_and_commits_a_model(
+    app_driver, tmp_path
+):
+    """End to end: ``Header`` present, ``Header.Model`` absent. Activating the
+    DECLARE_MODEL Outstanding row must not just navigate to Header -- it must
+    reveal a *usable* Header "fields to add" group (the regression this fix
+    covers), and the revealed Model suggestion row must be a real path into
+    the enum card that can commit a model."""
+    d = app_driver
+    d.open(_undeclared_model_path(tmp_path))
+    tasks = d.outstanding_tasks()
+    assert len(tasks) == 1
+    assert tasks[0].kind is TaskKind.DECLARE_MODEL
 
     d.activate_outstanding_task(tasks[0])
 
-    assert called == [True]
+    assert d.tree_selection_label() == "Header"
+    assert d.fields_to_add_header_text() is not None
+    assert d.fields_to_add_current_alias() == "Model"
+
+    d.click_fields_to_add_suggestion("Model")
+    assert d.inspector_title() == "Model"
+    assert d.editor_kind() == "EnumCard"
+    assert d.card_is_editable() is True
+
+    d.edit_field("SPM")
+    d.commit()
+
+    assert d.field_value() == "SPM"
+
+
+def test_declare_model_activation_navigates_to_the_parameter_when_model_unrecognised(
+    app_driver, tmp_path, valid_spm_dict
+):
+    """``Header.Model`` present but not one of SPM/SPMe/DFN/Partial: a real
+    committed parameter, so activation navigates straight to it like any
+    other parameter -- it is editable via the normal enum card from there."""
+    d = app_driver
+    raw = json.loads(json.dumps(valid_spm_dict))
+    raw["Header"]["Model"] = "Mystery"
+    d.open(_write(tmp_path, "garbage_model.json", raw))
+    tasks = d.outstanding_tasks()
+    assert len(tasks) == 1
+    assert tasks[0].kind is TaskKind.DECLARE_MODEL
+
+    d.activate_outstanding_task(tasks[0])
+
+    assert d.shown_parameter_path() == ("Header", "Model")
+    assert d.inspector_title() == "Model"
 
 
 # ---------------------------------------------------------------------------

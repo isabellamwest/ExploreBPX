@@ -40,6 +40,8 @@ from .parameter_row import ParameterRowDelegate
 #: deliberately excluded here even though ``completion_for`` would happily
 #: resolve one (V8) -- the one visible completion task there is "declare a
 #: model", not a list of suggestions against a model the user hasn't picked.
+#: Header's own group is exempt from this gate (see
+#: ``_append_missing_fields_group``): its fields don't depend on the model.
 _COMPLETION_GROUP_MODELS = completion.CONCRETE_MODELS | {"Partial"}
 
 
@@ -204,9 +206,12 @@ class ParameterListPanel(QWidget):
         undeclared/garbage model (decision C -- the sole completion task there
         is "declare a model", not a suggestion list against a model nobody
         picked) and whenever the section has no missing fields at all (no
-        disabled placeholders, no "0 fields to add").
+        disabled placeholders, no "0 fields to add"). Header's own group is
+        exempt from the model gate: Title/Model/BPX resolve identically
+        regardless of model, so Header is collateral of a gate aimed at other
+        sections, not a section this gate is meant to silence.
         """
-        if model not in _COMPLETION_GROUP_MODELS:
+        if model not in _COMPLETION_GROUP_MODELS and node.path != ("Header",):
             return
         missing = completion.completion_for(node.path, node.value, model).missing_fields
         if not missing:

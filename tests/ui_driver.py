@@ -528,22 +528,6 @@ class AppDriver:
             if button.objectName().startswith(prefix)
         ]
 
-    def select_model(self, model: str) -> "AppDriver":
-        """Trigger the top-bar Model chip's *model* menu entry directly.
-
-        Triggers the ``QAction`` rather than opening the menu via
-        ``QToolButton.showMenu``/``QMenu.exec`` -- the latter blocks
-        offscreen (see the plan's pitfall list).
-        """
-        action = self._w._model_chip_actions[model]
-        action.trigger()
-        return self
-
-    def open_model_chooser(self) -> "AppDriver":
-        """Call the public ``open_model_chooser`` seam (Phase 5's hook)."""
-        self._w.open_model_chooser()
-        return self
-
     # ------------------------------------------------------------------
     # Readers -- user-visible state only
     # ------------------------------------------------------------------
@@ -565,24 +549,6 @@ class AppDriver:
         unreliable off-screen, but the tooltip always holds the full string.
         """
         return self._w._identity_label.toolTip()
-
-    def model_chip_text(self) -> str:
-        return self._w._model_chip.text()
-
-    def model_chip_enabled(self) -> bool:
-        return self._w._model_chip.isEnabled()
-
-    def model_chip_options(self) -> list[str]:
-        """The menu's model names, in the fixed ``SUPPORTED_MODELS`` order."""
-        return list(self._w._model_chip_actions.keys())
-
-    def model_chip_checked(self) -> list[str]:
-        """Which menu entries are currently checked -- normally at most one."""
-        return [
-            model
-            for model, action in self._w._model_chip_actions.items()
-            if action.isChecked()
-        ]
 
     def save_enabled(self) -> bool:
         return self._w._save_action.isEnabled()

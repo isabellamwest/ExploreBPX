@@ -79,18 +79,6 @@ QLabel#IssuesPlaceholder { color: #57606a; font-size: 12px; padding: 16px; }
 QLabel#DocumentationPlaceholder { color: #57606a; font-size: 12px; padding: 16px; }
 QLabel#Hint { color: #57606a; font-size: 11px; }
 
-/* Top-bar Model chip: a small menu button beside the identity label that
-   commits Header.Model (completion track Phase 4). Muted chrome idiom
-   shared with ModeButton/SecondaryTab below; disabled (no document, or a
-   document with no Header section) reads as genuinely inert, not an error --
-   the built-but-inapplicable convention. */
-QToolButton#ModelChip {
-    background: #eef1f4; border: 1px solid #d0d7de; border-radius: 10px;
-    padding: 2px 10px; font-size: 11px; color: #57606a;
-}
-QToolButton#ModelChip:hover:!disabled { background: #e1e4e8; }
-QToolButton#ModelChip:disabled { color: #8c959f; background: #f6f8fa; border: 1px solid #e1e4e8; }
-
 /* Mode strip: segmented buttons naming each legal representation of a
    union-typed field, in verbatim bpx.schema vocabulary. */
 QToolButton#ModeButton {

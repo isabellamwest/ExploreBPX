@@ -952,8 +952,8 @@ a separate, quieter one). Activating a row navigates to it and, where nothing
 exists yet to
 navigate to, performs the one enabling step first — a missing field's `+`
 adds it with an honest `null` and focuses its editor; an absent section's
-action adds the section; an undeclared model's action opens the Model chip —
-all in one undo step. Completion tracks what remains to finish the document,
+action adds the section; an undeclared model's action reveals `Header`'s
+`Model` field, ready to pick from — all in one undo step. Completion tracks what remains to finish the document,
 kept distinct from validation's Issues: a field the app itself added but the
 user has not yet filled is Outstanding, never a red Issue. The user may save
 a document as a template for reuse (Planned).
@@ -981,7 +981,9 @@ absence document-wide (see [Validation](#5-validation)). Both are driven by
 `core/completion.py`, never by validator diagnostics — see Architecture below
 for why the two cannot be conflated. An undeclared or unrecognised
 `Header.Model` collapses every one of these surfaces to a single "declare a
-model" task, whose action opens the top-bar Model chip
+model" task, whose action reveals `Header`'s own `Model` field — the one
+"fields to add" group that survives an undeclared model, since Header's fields
+do not vary by model and this is where a model gets declared
 ([02-ui.md](02-ui.md)); a `Partial` model suggests every Expected field but
 marks nothing Required, since `Partial`'s own schema forbids most of what a
 concrete model would require.

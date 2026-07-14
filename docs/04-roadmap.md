@@ -22,8 +22,9 @@ a stateless completion query (`core/completion.py`) surfaces expected-but-missin
 fields as a collapsed "N fields to add" group in the parameter list and as an
 Outstanding section on the Validation page (alongside Issues, with validator
 diagnostics already covered by an Outstanding task absorbed rather than
-double-shown), and a top-bar Model chip lets a document declare or change its
-model in place. The capability matrices in
+double-shown). A document declares or changes its model by editing
+`Header.Model` in the Editor like any other field — the commit scaffolds the
+new model's required sections in the same undo step. The capability matrices in
 [03-features.md](03-features.md) carry the authoritative per-feature status.
 
 The items below are the capabilities still marked Planned.

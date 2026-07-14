@@ -102,7 +102,7 @@ EOF
 |---|---|
 | **A** | **Shape:** `core/completion.py` exposes a per-section pure function mirroring `addable_child_sections` — `completion_for(path, value, model) -> (missing_fields, missing_child_sections)` — plus a document-level aggregation for the Validation page. No global stateful task-list type. No Qt imports. |
 | **B** | **Terminology (exact words, everywhere):** *Expected* = schema names the field for this section. *Required* = schema requires it AND the model is concrete (SPM/SPMe/DFN). *Missing* = expected field with no entry in raw. *Outstanding* = Required and (absent OR committed `null`). "Valid/invalid" never appear in completion UI — those words belong to the validator's surfaces only. |
-| **C** | **Models.** No model, or a garbage/unknown `Header.Model` value: the only completion task is "declare a model", and the parameter-list "fields to add" group is suppressed (product choice — see V8; per V6 a garbage value *also* stays red in Issues, and both appear). An absent `Header` collapses to one "Header — section absent" row per M; the declare-model task appears once Header exists. `Partial` → suggest every expected field, flag **nothing** Required (V9). Concrete models → Required flags as-is (they match the validator). |
+| **C** | **Models.** No model, or a garbage/unknown `Header.Model` value: the only completion task is "declare a model", and the parameter-list "fields to add" group is suppressed (product choice — see V8; per V6 a garbage value *also* stays red in Issues, and both appear). **Caveat, added 2026-07-14 with the Model chip's removal (Phase 4, revised):** the suppression exempts `Header`'s own group. Its rationale — don't suggest fields against a model nobody picked — never applied to `Header`, whose fields (`Title`/`Model`/`BPX`) are not model-dependent; Header was collateral of a gate aimed at the other sections. With no chip, Header's suggestion row for `Model` is *the* place a model gets declared, so suppressing it would leave the declare-model task with nowhere to land. An absent `Header` collapses to one "Header — section absent" row per M; the declare-model task appears once Header exists. `Partial` → suggest every expected field, flag **nothing** Required (V9). Concrete models → Required flags as-is (they match the validator). |
 | **D** | **Null rule (REVISED 2026-07-14, second user ruling — supersedes the earlier required-only choice, which was reversed after seeing it live):** any **schema-expected** field holding committed `null` is **Outstanding ("added, no value yet")**, REQUIRED tag only where required. `null` is the app's own honest-empty sentinel — creating an expected field never makes the document look worse. **Custom parameters stay red**: their `extra_forbidden` rejects the *name*, not the emptiness — filling a value fixes nothing, so absorbing it would lie. A user-typed bad value stays an Issue everywhere. Only literal `null` qualifies — an empty list is a committed (invalid) value and stays red. |
 | **E** | **Absorption:** a validator diagnostic with `error_type == "missing"` whose location corresponds to an Outstanding item is shown **only** in Outstanding; plus, per D and V5, **every diagnostic attached to a committed-null Required parameter** is absorbed (a null union field raises two). One deliberate exception to the missing-only rule (corrected V1): the **root `value_error` demanding `State`** (`loc=()`, message "'State' section must be provided unless using a 'Partial' parameterisation") absorbs into the State MISSING_SECTION task when that task exists — matched by its message, pinned by a regression test against the real validator so a bpx wording change fails loudly rather than silently un-absorbing. Matching happens at the attachment level — reuse the exact normalization the diagnostic-attachment pass computes (V4); never invent a second path-matching scheme. Safety net: a diagnostic NOT covered stays in Issues — the real remaining cases are Partial's union-branch demands (V9) and any path `expected_fields` cannot resolve. (Since the electrode-union fix, `expected_fields` DOES resolve `Validation/<run>` and `Particle/<material>`, so missing fields inside an *existing* user-named entry absorb normally.) The validator is never silenced, only re-seated. |
 | **F** | **Placement:** one Validation page, two sections — **Issues** (unchanged) above **Outstanding** (fed by `core.completion` only). No new rail entry. Missing whole sections appear **only** here, never as ghost tree nodes — the tree stays an honest view of what exists. |
@@ -194,20 +194,28 @@ synthetic row selected). Drive the real app: add several fields in a row and ver
 the group stays expanded and focus lands in each new editor.
 
 ### Phase 4 — Set-model action
-Decision J. Needed before Phase 5 so the declare-model row has an action.
-**Affordance (user-decided 2026-07-14): a Model chip in the top bar** — the Model
-segment of the identity area becomes a small clickable chip opening a menu
-(SPM / SPMe / DFN / Partial, current one marked; "No model" label when undeclared).
-Selecting the current model is a no-op (no command, no dirty); selecting another
-commits via `apply_value(("Header","Model"), …)` → ChangeModel (adds missing required
-sections in the same undo step, removes nothing; fully undoable ⇒ no confirmation
-dialog). Greyed with no document or no `Header` (built-but-inapplicable convention).
-Expose a public `open_model_chooser()` seam on the window for Phase 5's declare-model
-row. Verify ChangeModel's section-scaffolding behaviour through the real app.
-**Precondition to enforce, not assume:** `ChangeModel` → `editing._navigate`
-(editing.py:23-36) raises `EditError` when `Header` is absent. Decision C already
-gates the declare-model row on Header's existence; the chooser itself must respect the
-same gate so no UI path reaches ChangeModel on a Header-less document.
+Decision J. **REVISED 2026-07-14 (user-decided): there is no set-model affordance of
+its own.** The Model chip this phase originally shipped — a menu button in the top bar,
+with an `open_model_chooser()` seam for Phase 5's declare-model row — has been removed.
+It was redundant: `Header.Model` is an ordinary enum field, and the Editor's normal
+commit path (`InspectorPanel` → `session.apply_value`) already routes
+`("Header","Model")` to `ChangeModel`, which adds the target model's missing required
+sections in the same undo step (removes nothing; fully undoable ⇒ no confirmation
+dialog). The chip was a second door onto the same command, and the top bar is the
+wrong place for a per-document field.
+
+Declaring a model is therefore just editing a field, and Phase 5's declare-model row
+needs no bespoke seam: it navigates to `Header` and reveals `Model` through the same
+`reveal-missing-alias` / `navigate` seams every other Outstanding row uses (see
+decision L). The `Header`-absent precondition that motivated the chip's own gate is
+handled upstream and unchanged: when `Header` is missing, `document_completion` emits
+`MISSING_SECTION ("Header",)` rather than `DECLARE_MODEL`, so no UI path reaches
+`ChangeModel` on a Header-less document and `editing._navigate`'s `EditError`
+(editing.py:23-36) stays unreachable from the UI.
+
+**Consequence for decision C (see its own caveat):** the declare-model row can only
+reveal Model's suggestion row if Header's "fields to add" group survives the
+undeclared-model suppression — hence C's Header exemption.
 
 ### Phase 5 — Validation page: Outstanding section + absorption + badge
 Decisions E, F, G, L, and the pinned copy. Consumes Phase 2's `partition_issues` —
@@ -249,7 +257,8 @@ this track — it currently omits it entirely). `PROJECT_STATUS.md` after every 
   "fields to add" entry or an Outstanding row — including the states where the
   validator itself goes blind (V1's Cell suppression, absent sections). Under an
   undeclared model the one visible task is "declare a model" (decision C suppresses
-  everything else, deliberately); under Partial, suggestions show but nothing is
+  every other section's suggestions, deliberately — but not `Header`'s own, which is
+  where that task is carried out); under Partial, suggestions show but nothing is
   Required.
 - Red means wrong, never unstarted — **in the Outstanding section and the rail
   badge**: nothing the app itself wrote (a scaffolded section, a `null` from `+`)
