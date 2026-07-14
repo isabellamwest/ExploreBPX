@@ -1,0 +1,516 @@
+"""Tests for the pure completion query (``core.completion``).
+
+Pure Python throughout -- no Qt. See ``PLAN-completion-track.md`` SS2/SS3 for
+the verified facts and locked decisions these tests hold implementation to.
+"""
+
+from __future__ import annotations
+
+import copy
+import json
+
+import pytest
+
+from core import bpx_gateway, completion, document_factory
+from core.completion import CompletionTask, TaskKind
+from core.document import BPXDocument
+
+
+def _diagnostic_tuples(issues):
+    return [(getattr(d, "error_type", None), getattr(d, "loc", None), d.message) for d in issues]
+
+
+def test_keystone_cell_field_deletion_invisible_to_validator(fixtures_dir):
+    """Deleting a required Cell field from the nmc fixture leaves the
+    validator's own issue list unchanged, while completion reports it.
+
+    This is the fact the whole layer exists to fix (V1/plan SS1): ``Cell``
+    has a ``mode="before"`` validator (a deprecated-fields check) that raises
+    before pydantic ever checks Cell's own required fields. This premise
+    depends on the nmc fixture already tripping that check at baseline
+    (``value_error ('Cell',)``, from its own pre-existing deprecated
+    ``'Initial temperature [K]'``/``'Ambient temperature [K]'`` fields) -- if
+    a future fixture cleanup makes this file validate cleanly, this test's
+    premise inverts and it must be revisited, not just kept green.
+    """
+    raw = json.loads((fixtures_dir / "nmc_pouch_cell_BPX.json").read_text("utf-8"))
+    baseline_issues = bpx_gateway.validate(raw).issues
+    assert any(
+        getattr(d, "error_type", None) == "value_error" and getattr(d, "loc", None) == ("Cell",)
+        for d in baseline_issues
+    ), "premise: the fixture must already trip Cell's mode='before' validator"
+
+    baseline_tasks = completion.document_completion(raw)
+
+    mutated = copy.deepcopy(raw)
+    del mutated["Parameterisation"]["Cell"]["Nominal cell capacity [A.h]"]
+    mutated_issues = bpx_gateway.validate(mutated).issues
+
+    assert _diagnostic_tuples(mutated_issues) == _diagnostic_tuples(baseline_issues)
+
+    mutated_tasks = completion.document_completion(mutated)
+    new_tasks = set(mutated_tasks) - set(baseline_tasks)
+    assert new_tasks == {
+        CompletionTask(
+            TaskKind.MISSING_FIELD,
+            ("Parameterisation", "Cell", "Nominal cell capacity [A.h]"),
+            "Nominal cell capacity [A.h]",
+            True,
+        )
+    }
+
+
+def test_partial_sparse_electrode_has_no_tasks_but_suggests_fields():
+    raw = document_factory.create("Partial", title="probe")
+    raw["Parameterisation"]["Negative electrode"] = {"Thickness [m]": 1e-4}
+
+    assert completion.document_completion(raw) == ()
+
+    section = completion.completion_for(
+        ("Parameterisation", "Negative electrode"),
+        raw["Parameterisation"]["Negative electrode"],
+        "Partial",
+    )
+    assert section.missing_fields
+    assert all(field.required is False for field in section.missing_fields)
+    assert section.null_fields == ()
+
+
+def test_null_required_field_is_outstanding_not_missing():
+    raw = document_factory.create("SPM", title="probe")
+    cell = raw["Parameterisation"]["Cell"]
+    cell["Electrode area [m2]"] = 1.0
+    cell["Number of electrode pairs connected in parallel to make a cell"] = 1
+    cell["Lower voltage cut-off [V]"] = 2.5
+    cell["Upper voltage cut-off [V]"] = 4.2
+    cell["Nominal cell capacity [A.h]"] = None
+
+    tasks = completion.document_completion(raw)
+    null_task = CompletionTask(
+        TaskKind.NULL_FIELD,
+        ("Parameterisation", "Cell", "Nominal cell capacity [A.h]"),
+        "Nominal cell capacity [A.h]",
+        True,
+    )
+    assert null_task in tasks
+    missing_task = CompletionTask(
+        TaskKind.MISSING_FIELD,
+        ("Parameterisation", "Cell", "Nominal cell capacity [A.h]"),
+        "Nominal cell capacity [A.h]",
+        True,
+    )
+    assert missing_task not in tasks
+
+
+def test_empty_list_is_a_committed_value_not_outstanding():
+    """A ``[]`` is a real, if invalid, value -- decision D restricts the
+    outstanding/null rule to literal ``None`` only."""
+    raw = document_factory.create("SPM", title="probe")
+    cell = raw["Parameterisation"]["Cell"]
+    cell["Electrode area [m2]"] = 1.0
+    cell["Number of electrode pairs connected in parallel to make a cell"] = 1
+    cell["Lower voltage cut-off [V]"] = 2.5
+    cell["Upper voltage cut-off [V]"] = 4.2
+    cell["Nominal cell capacity [A.h]"] = []
+
+    tasks = completion.document_completion(raw)
+    capacity_path = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
+    assert not any(task.path == capacity_path for task in tasks)
+
+
+def test_garbage_model_yields_only_declare_model_task():
+    raw = document_factory.create("SPM", title="probe")
+    raw["Header"]["Model"] = "banana"
+    assert completion.document_completion(raw) == (
+        CompletionTask(TaskKind.DECLARE_MODEL, ("Header", "Model"), "Model", True),
+    )
+
+
+def test_undeclared_model_yields_only_declare_model_task():
+    raw = document_factory.create("SPM", title="probe")
+    del raw["Header"]["Model"]
+    assert completion.document_completion(raw) == (
+        CompletionTask(TaskKind.DECLARE_MODEL, ("Header", "Model"), "Model", True),
+    )
+
+
+def test_absent_header_yields_only_missing_header_task():
+    raw = document_factory.create("SPM", title="probe")
+    del raw["Header"]
+    assert completion.document_completion(raw) == (
+        CompletionTask(TaskKind.MISSING_SECTION, ("Header",), None, True),
+    )
+
+
+def test_absent_required_section_then_cascade_on_readd():
+    """Deleting Electrolyte (SPMe/DFN) collapses to one section-absent task
+    with no field enumeration; re-adding it empty immediately enumerates its
+    fields (V7's cascade -- free from per-section recompute, no extra code)."""
+    raw = document_factory.create("SPMe", title="probe")
+    del raw["Parameterisation"]["Electrolyte"]
+
+    tasks = completion.document_completion(raw)
+    electrolyte_path = ("Parameterisation", "Electrolyte")
+    section_tasks = [t for t in tasks if t.path == electrolyte_path]
+    assert section_tasks == [CompletionTask(TaskKind.MISSING_SECTION, electrolyte_path, None, True)]
+    field_tasks = [t for t in tasks if t.path[:2] == electrolyte_path and len(t.path) > 2]
+    assert field_tasks == []
+
+    raw["Parameterisation"]["Electrolyte"] = {}
+    tasks_after = completion.document_completion(raw)
+    assert not any(t.path == electrolyte_path and t.kind is TaskKind.MISSING_SECTION for t in tasks_after)
+    field_tasks_after = [t for t in tasks_after if t.path[:2] == electrolyte_path and len(t.path) > 2]
+    assert field_tasks_after  # cascade: fields enumerate immediately
+
+
+# --- Corrected V1: State IS validator-required for concrete models -------
+#
+# The original V1 ("State required by no model") was a short-circuit
+# artifact: bpx's root `mode="after"` validator that demands State never ran
+# against a skeleton probe, because every skeleton also has a broken
+# Parameterisation, and the root `mode="before"` validator raises on that
+# first. These tests use `valid_spm_dict` (a genuinely clean document) so the
+# root validator actually reaches the State check.
+
+
+def test_valid_spm_minus_state_yields_one_required_state_task(valid_spm_dict):
+    raw = copy.deepcopy(valid_spm_dict)
+    del raw["State"]
+
+    tasks = completion.document_completion(raw)
+    state_tasks = [t for t in tasks if t.path == ("State",)]
+    assert state_tasks == [CompletionTask(TaskKind.MISSING_SECTION, ("State",), None, True)]
+
+    doc = BPXDocument.from_raw(raw, filename="probe", fmt="json")
+    result = completion.partition_issues(doc, tasks)
+    assert result.visible == ()
+    assert result.error_count == 0
+    assert any(
+        getattr(d, "error_type", None) == "value_error" and nav == () for d, nav in result.absorbed
+    )
+
+
+def test_state_required_message_is_pinned_against_the_real_validator(valid_spm_dict):
+    """Anchors ``completion.STATE_REQUIRED_MESSAGE_FRAGMENT`` against bpx's
+    own wording, read from the real validator (not restated/assumed). If a
+    future bpx release changes this message, THIS test must fail loudly --
+    otherwise ``partition_issues``'s State absorption would silently stop
+    matching and the root diagnostic would reappear as an unexplained
+    visible Issue on every concrete document with no signal pointing at why.
+    """
+    raw = copy.deepcopy(valid_spm_dict)
+    del raw["State"]
+    issues = bpx_gateway.validate(raw).issues
+    state_diagnostics = [
+        d
+        for d in issues
+        if getattr(d, "error_type", None) == "value_error" and getattr(d, "loc", None) == ()
+    ]
+    assert len(state_diagnostics) == 1
+    assert completion.STATE_REQUIRED_MESSAGE_FRAGMENT in state_diagnostics[0].message
+
+
+def test_empty_state_on_clean_document_absorbs_both_child_section_tasks(valid_spm_dict):
+    """State present-but-empty draws two real ``missing`` diagnostics for its
+    own required children (the recursive schema walk already finds these --
+    no special-casing needed beyond the top-level State-absent case)."""
+    raw = copy.deepcopy(valid_spm_dict)
+    raw["State"] = {}
+
+    tasks = completion.document_completion(raw)
+    assert not any(t.path == ("State",) for t in tasks)  # State itself IS present
+    expected_children = {
+        CompletionTask(TaskKind.MISSING_SECTION, ("State", "Initial conditions"), None, True),
+        CompletionTask(TaskKind.MISSING_SECTION, ("State", "Thermal environment"), None, True),
+    }
+    assert expected_children <= set(tasks)
+
+    doc = BPXDocument.from_raw(raw, filename="probe", fmt="json")
+    result = completion.partition_issues(doc, tasks)
+    assert result.visible == ()
+    absorbed_locs = {nav for _, nav in result.absorbed}
+    assert ("State", "Initial conditions") in absorbed_locs
+    assert ("State", "Thermal environment") in absorbed_locs
+
+
+def test_partial_has_no_state_task():
+    raw = document_factory.create("Partial", title="probe")
+    assert completion.document_completion(raw) == ()
+
+
+# --- Reviewed defect: asymmetric loc-prefix matching (plan V4) ------------
+
+
+def test_header_field_absorption_regression(valid_spm_dict):
+    """The reviewed defect: a missing ``Header.BPX`` diagnostic carries
+    nav_path ``('BPX',)`` -- the validator drops a leading ``Header``
+    component, exactly like it drops ``Parameterisation`` (V4, now fully
+    mapped). A matcher that only stripped ``Parameterisation`` left every
+    required Header field double-surfaced: a red Issue *and* an Outstanding
+    row for the same absence, inflating the badge (violates decisions E/G).
+    Must absorb cleanly now that both prefixes are tried.
+    """
+    raw = copy.deepcopy(valid_spm_dict)
+    del raw["Header"]["BPX"]
+
+    tasks = completion.document_completion(raw)
+    assert CompletionTask(TaskKind.MISSING_FIELD, ("Header", "BPX"), "BPX", True) in tasks
+
+    doc = BPXDocument.from_raw(raw, filename="probe", fmt="json")
+    result = completion.partition_issues(doc, tasks)
+    assert result.visible == ()
+    assert result.error_count == 0
+    absorbed_locs = {nav for _, nav in result.absorbed}
+    assert ("BPX",) in absorbed_locs
+
+
+def test_validation_run_field_absorption_keeps_full_prefix(valid_spm_dict):
+    """A Validation run's own required fields (``Time``/``Current``/
+    ``Voltage`` -- NOT ``Temperature``, which is optional in ``Experiment``)
+    absorb via nav_path ``('Validation', <run>, <field>)`` unchanged: unlike
+    Header/Parameterisation, the validator KEEPS the ``Validation`` prefix in
+    full (V4). This exercises the "no prefix to strip" branch of
+    ``_nav_path_candidates``, not just the two stripped ones.
+    """
+    raw = copy.deepcopy(valid_spm_dict)
+    raw["Validation"] = {
+        "C/20": {
+            "Current [A]": [-0.5, -0.5],
+            "Voltage [V]": [4.2, 4.0],
+            "Temperature [K]": [298.15, 298.15],
+        }
+    }
+
+    tasks = completion.document_completion(raw)
+    time_path = ("Validation", "C/20", "Time [s]")
+    assert CompletionTask(TaskKind.MISSING_FIELD, time_path, "Time [s]", True) in tasks
+    # Temperature is optional in Experiment -- must never become a task.
+    assert not any(t.path == ("Validation", "C/20", "Temperature [K]") for t in tasks)
+
+    doc = BPXDocument.from_raw(raw, filename="probe", fmt="json")
+    result = completion.partition_issues(doc, tasks)
+    absorbed_locs = {nav for _, nav in result.absorbed}
+    assert ("Validation", "C/20", "Time [s]") in absorbed_locs
+
+
+def test_partition_handles_warning_diagnostics_without_crashing(fixtures_dir):
+    """The nmc fixture carries a ``PythonWarningDiagnostic`` (no
+    ``error_type``/``loc`` attributes at all) alongside its two ``value_error``
+    diagnostics. ``partition_issues`` must not crash on it (the
+    ``getattr``-defensive path was previously untested); the warning stays
+    visible (nothing absorbs a diagnostic with no ``error_type``/``loc``) and
+    is counted in ``warning_count``.
+    """
+    raw = json.loads((fixtures_dir / "nmc_pouch_cell_BPX.json").read_text("utf-8"))
+    doc = BPXDocument.from_raw(raw, filename="probe", fmt="json")
+    tasks = completion.document_completion(raw)
+
+    result = completion.partition_issues(doc, tasks)  # must not raise
+
+    warning_diagnostics = [d for d, _ in result.visible if getattr(d, "error_type", None) is None]
+    assert warning_diagnostics
+    assert result.warning_count == len(warning_diagnostics)
+    assert result.warning_count >= 1
+
+
+# --- Fix 2: document_completion is Required-only (decision B) -------------
+
+
+def test_document_completion_missing_field_excludes_optional_fields():
+    """Decision B: an *absent* Expected-but-optional field is never a
+    MISSING_FIELD task -- those are suggestions only, reachable through
+    ``completion_for``. (Decision D's revision only changed NULL_FIELD's own
+    rule -- see ``test_optional_null_field_is_outstanding_without_required_tag``
+    below; MISSING_FIELD stays Required-only, unaffected.)"""
+    raw = document_factory.create("SPM", title="probe")
+    tasks = completion.document_completion(raw)
+    assert all(task.required for task in tasks if task.kind is TaskKind.MISSING_FIELD)
+    assert not any(task.path == ("Header", "Description") for task in tasks)
+    assert not any(task.path == ("Header", "References") for task in tasks)
+
+
+def test_optional_null_field_is_outstanding_without_required_tag():
+    """Decision D, REVISED 2026-07-14 (second user ruling, supersedes the
+    original required-only null rule): any schema-Expected field committed
+    null is Outstanding, Required or not. Header's ``Description`` is
+    schema-Expected but NOT schema-required -- committing it null must still
+    produce a NULL_FIELD task, with ``required=False`` so the Outstanding row
+    renders without the REQUIRED tag."""
+    raw = document_factory.create("SPM", title="probe")
+    raw["Header"]["Description"] = None
+    tasks = completion.document_completion(raw)
+    null_task = next((t for t in tasks if t.path == ("Header", "Description")), None)
+    assert null_task is not None
+    assert null_task.kind is TaskKind.NULL_FIELD
+    assert null_task.required is False
+
+
+def test_optional_null_field_absorbs_its_diagnostic_calm_page():
+    """The real validator does raise for a committed-null optional string
+    field (``Description`` is not schema-nullable, so ``None`` there is a
+    real ``string_type`` error) -- decision D says creating an expected field
+    never makes the document look worse, so this absorbs into the NULL_FIELD
+    task exactly like a Required null field does."""
+    raw = document_factory.create("SPM", title="probe")
+    raw["Header"]["Description"] = None
+    doc = BPXDocument.from_raw(raw, filename="probe", fmt="json")
+    tasks = completion.document_completion(raw)
+    null_task = next(t for t in tasks if t.path == ("Header", "Description"))
+
+    result = completion.partition_issues(doc, tasks)
+
+    assert any(
+        getattr(d, "error_type", None) == "string_type" and nav == ("Description",)
+        for d, nav in result.absorbed
+    )
+    assert not any(nav == ("Description",) for _, nav in result.visible)
+    assert result.absorbed_by_task.get(null_task)
+    assert result.absorbed_by_task[null_task][0][0].message == "Input should be a valid string"
+
+
+def test_custom_null_parameter_gets_no_task_and_stays_visible():
+    """Decision D: a custom parameter's ``extra_forbidden`` rejects the
+    *name*, not the emptiness -- filling a value fixes nothing, so it must
+    never absorb, unlike an expected field's null."""
+    raw = document_factory.create("SPM", title="probe")
+    raw["Header"]["NotARealField"] = None
+    doc = BPXDocument.from_raw(raw, filename="probe", fmt="json")
+
+    tasks = completion.document_completion(raw)
+    assert not any(t.path == ("Header", "NotARealField") for t in tasks)
+
+    result = completion.partition_issues(doc, tasks)
+    assert any(
+        getattr(d, "error_type", None) == "extra_forbidden" and nav == ("NotARealField",)
+        for d, nav in result.visible
+    )
+
+
+def test_partition_calm_badge_spm_skeleton_absorbs_everything():
+    raw = document_factory.create("SPM", title="probe")
+    doc = BPXDocument.from_raw(raw, filename="probe", fmt="json")
+    tasks = completion.document_completion(raw)
+
+    result = completion.partition_issues(doc, tasks)
+
+    assert result.visible == ()
+    assert result.error_count == 0
+    assert result.warning_count == 0
+    assert result.absorbed  # something real was absorbed, not a vacuous pass
+    assert len(result.absorbed) == len(doc.issues)
+
+
+def test_partition_partial_sparse_electrode_stays_fully_visible():
+    """V9's safety net: under Partial no tasks exist, so the validator's own
+    union-branch ``missing`` errors are never absorbed."""
+    raw = document_factory.create("Partial", title="probe")
+    raw["Parameterisation"]["Negative electrode"] = {"Thickness [m]": 1e-4}
+    doc = BPXDocument.from_raw(raw, filename="probe", fmt="json")
+    tasks = completion.document_completion(raw)
+    assert tasks == ()
+
+    result = completion.partition_issues(doc, tasks)
+
+    assert len(result.visible) == 8
+    assert result.absorbed == ()
+    assert all(getattr(d, "error_type", None) == "missing" for d, _ in result.visible)
+    assert result.error_count == 8
+
+
+def test_partition_null_field_absorbs_both_union_branch_diagnostics():
+    """V5: a committed-null ``FloatInt`` field raises two diagnostics (one
+    per union branch); both must absorb, not just one."""
+    raw = document_factory.create("SPM", title="probe")
+    cell = raw["Parameterisation"]["Cell"]
+    cell["Electrode area [m2]"] = 1.0
+    cell["Number of electrode pairs connected in parallel to make a cell"] = 1
+    cell["Lower voltage cut-off [V]"] = 2.5
+    cell["Upper voltage cut-off [V]"] = 4.2
+    cell["Nominal cell capacity [A.h]"] = None
+    doc = BPXDocument.from_raw(raw, filename="probe", fmt="json")
+    tasks = completion.document_completion(raw)
+
+    result = completion.partition_issues(doc, tasks)
+
+    capacity_diagnostics = [
+        (d, nav) for d, nav in doc.iter_issues() if nav == ("Cell", "Nominal cell capacity [A.h]")
+    ]
+    assert len(capacity_diagnostics) == 2  # float_type + int_type (V5)
+    # PydanticErrorDiagnostic wraps a raw error dict, so it is unhashable --
+    # compare by list membership (uses __eq__), not a set.
+    assert all(pair in result.absorbed for pair in capacity_diagnostics)
+    assert not any(pair in result.visible for pair in capacity_diagnostics)
+
+
+def test_partition_garbage_model_shows_both_error_and_task():
+    """V6: a garbage Model value stays a visible Issue (literal_error, a
+    user-typed bad value, never absorbed) *and* the declare-model task is
+    still reported -- both are shown, deliberately."""
+    raw = document_factory.create("SPM", title="probe")
+    raw["Header"]["Model"] = "banana"
+    doc = BPXDocument.from_raw(raw, filename="probe", fmt="json")
+    tasks = completion.document_completion(raw)
+
+    assert tasks == (CompletionTask(TaskKind.DECLARE_MODEL, ("Header", "Model"), "Model", True),)
+
+    result = completion.partition_issues(doc, tasks)
+    assert any(
+        getattr(d, "error_type", None) == "literal_error" and nav == ("Model",) for d, nav in result.visible
+    )
+
+
+def test_container_field_never_becomes_a_missing_field_suggestion():
+    """A blended electrode's ``Particle`` container must never show up as a
+    missing-field suggestion (the add-parameter popup learned this the hard
+    way -- a container "field" is not addable as a parameter)."""
+    value = {"Particle": {"Primary": {}}}
+    section = completion.completion_for(("Parameterisation", "Negative electrode"), value, "DFN")
+    assert all(field.alias != "Particle" for field in section.missing_fields)
+    assert all(field.alias != "Particle" for field in section.null_fields)
+
+
+# --- Phase 5: required_total (the Outstanding page's "M") -----------------
+
+
+def test_required_total_counts_schema_required_non_container_fields():
+    """Cell declares 5 schema-required leaf fields (Electrode area, electrode
+    pairs, both voltage cut-offs, Nominal cell capacity) -- containers never
+    count (there are none on Cell), and this must match regardless of which
+    of those fields are actually present."""
+    raw = document_factory.create("SPM", title="probe")
+    section = completion.completion_for(
+        ("Parameterisation", "Cell"), raw["Parameterisation"]["Cell"], "SPM"
+    )
+    assert section.required_total == 5
+
+
+def test_required_total_is_not_gated_by_model_concreteness():
+    """Unlike ``MissingField.required``, ``required_total`` is a pure schema
+    fact: Header's ``BPX``/``Model`` stay required-total==2 even with no
+    model declared at all -- otherwise the DECLARE_MODEL task's own
+    Outstanding group header would read "1 of 0 remaining"."""
+    raw = document_factory.create("SPM", title="probe")
+    section = completion.completion_for(("Header",), raw["Header"], None)
+    assert section.required_total == 2
+
+
+def test_ordering_is_deterministic_and_document_ordered():
+    raw = document_factory.create("SPMe", title="probe")
+    first = completion.document_completion(raw)
+    second = completion.document_completion(copy.deepcopy(raw))
+    assert first == second
+
+    # Header's own fields are all optional (decision B filters them out of
+    # document_completion entirely -- see the required-only regression test
+    # below), so Cell's required fields are the earliest document-ordered
+    # tasks; State is scaffolded (present-but-empty) here, so its required
+    # children surface as MISSING_SECTION tasks walked after Parameterisation
+    # (module docstring: the tree walk visits root's children in raw order).
+    cell_positions = [i for i, t in enumerate(first) if t.path[:2] == ("Parameterisation", "Cell")]
+    electrode_positions = [
+        i for i, t in enumerate(first) if t.path[:2] == ("Parameterisation", "Negative electrode")
+    ]
+    state_positions = [i for i, t in enumerate(first) if t.path[:1] == ("State",)]
+    assert cell_positions and electrode_positions and state_positions
+    assert max(cell_positions) < min(electrode_positions)
+    assert max(electrode_positions) < min(state_positions)

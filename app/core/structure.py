@@ -18,7 +18,7 @@ from . import bpx_gateway
 #: Models that require a full electrolyte section.
 _ELECTROLYTE_MODELS = frozenset({"SPMe", "DFN"})
 #: Models that require a separator section.
-_SEPARATOR_MODELS = frozenset({"DFN"})
+_SEPARATOR_MODELS = frozenset({"SPMe", "DFN"})
 
 #: Top-level sections that must always exist and can never be removed.
 _PROTECTED_TOP_LEVEL = frozenset({"Header", "Parameterisation"})
@@ -42,7 +42,21 @@ def model_requires_separator(model: str | None) -> bool:
 
 
 def required_sections(model: str | None) -> tuple[tuple[str, ...], ...]:
-    """Top-level/child sections expected for a model (excludes ``Partial``)."""
+    """Top-level/child sections the validator actually requires for a model
+    (excludes ``Partial``).
+
+    ``State`` IS required for every concrete model (corrected 2026-07-14,
+    plan V1): ``bpx.BPX``'s root ``mode="after"`` validator raises
+    *"'State' section must be provided unless using a 'Partial'
+    parameterisation"* — a root-level ``value_error`` at ``loc=()``, not a
+    ``missing``. It only runs once ``Parameterisation`` has already validated
+    cleanly (a *separate*, earlier ``mode="before"`` validator raises first
+    on any ``Parameterisation`` problem and short-circuits the whole model),
+    which is why a skeleton probe (which always also has a ``Parameterisation``
+    problem) never saw it. Do not remove ``State`` from this list against a
+    skeleton probe again — the demand is real, it is just invisible when
+    anything else is also wrong.
+    """
     if model == "Partial" or model is None:
         return (("Header",), ("Parameterisation",))
     sections: list[tuple[str, ...]] = [
@@ -51,12 +65,12 @@ def required_sections(model: str | None) -> tuple[tuple[str, ...], ...]:
         ("Parameterisation", "Cell"),
         ("Parameterisation", "Negative electrode"),
         ("Parameterisation", "Positive electrode"),
-        ("State",),
     ]
     if model_requires_electrolyte(model):
         sections.append(("Parameterisation", "Electrolyte"))
     if model_requires_separator(model):
         sections.append(("Parameterisation", "Separator"))
+    sections.append(("State",))
     return tuple(sections)
 
 

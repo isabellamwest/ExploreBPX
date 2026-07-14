@@ -15,10 +15,12 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtCore import Qt
 
+from core import completion
 from core.document import BPXDocument
 from core.parameter_types import ParameterKind
 from core.tree_model import ParameterItem
 from core.validation import PydanticErrorDiagnostic
+from ui_qt import validation_panel as vp
 from ui_qt.issues_tab import IssuesTab
 from ui_qt.validation_panel import ValidationPanel
 
@@ -28,12 +30,21 @@ def invalid_document(invalid_bpx_path) -> BPXDocument:
     return BPXDocument.from_bytes(invalid_bpx_path.read_bytes(), invalid_bpx_path.name)
 
 
+def _issue_rows(panel: ValidationPanel):
+    lst = panel._list
+    return [lst.item(i) for i in range(lst.count()) if lst.item(i).data(vp._KIND_ROLE) == "issue"]
+
+
 @pytest.fixture
 def validation_panel(qtbot, invalid_document) -> ValidationPanel:
     panel = ValidationPanel()
     qtbot.addWidget(panel)
-    panel.refresh(invalid_document)
-    assert panel._list.count() >= 1
+    raw = invalid_document.raw
+    model = None
+    tasks = completion.document_completion(raw)
+    partition = completion.partition_issues(invalid_document, tasks)
+    panel.refresh(raw, model, partition, tasks)
+    assert _issue_rows(panel), "fixture premise: the invalid fixture must draw at least one Issue"
     return panel
 
 
@@ -64,8 +75,9 @@ def test_validation_panel_enter_activates_selected_row(qtbot, validation_panel):
     received = []
     validation_panel.issue_activated.connect(received.append)
 
-    validation_panel._list.setCurrentRow(0)
-    expected_path = validation_panel._list.item(0).data(256)
+    first_issue = _issue_rows(validation_panel)[0]
+    validation_panel._list.setCurrentItem(first_issue)
+    expected_path = first_issue.data(256)
     _press_return(qtbot, validation_panel._list)
 
     assert received == [expected_path]
@@ -75,7 +87,7 @@ def test_validation_panel_selection_change_alone_does_not_activate(qtbot, valida
     received = []
     validation_panel.issue_activated.connect(received.append)
 
-    validation_panel._list.setCurrentRow(0)
+    validation_panel._list.setCurrentItem(_issue_rows(validation_panel)[0])
 
     assert received == []
 

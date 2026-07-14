@@ -11,6 +11,7 @@ only captures and exposes validator output.
 from __future__ import annotations
 
 import warnings as _warnings
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
@@ -111,3 +112,63 @@ def warnings_as_diagnostics(
 ) -> list[PythonWarningDiagnostic]:
     """Wrap captured Python warnings as diagnostics, preserving all information."""
     return [PythonWarningDiagnostic(raw_warning=w) for w in caught]
+
+
+# --- Display helpers (decision Q, PLAN-completion-track.md) ----------------
+#
+# A nullable ``FloatInt`` field holding a bad/``null`` value is a union of two
+# branches (``float`` and ``int``), so pydantic raises once per branch --
+# ``float_type`` *and* ``int_type`` for the exact same input (V5). Both are
+# real, and neither is dropped from ``parameter.issues``/absorption/the
+# validator's own output; these helpers only decide how many *rows* a UI
+# paints for that one underlying problem. Display-only: callers pass the
+# merged result to a widget, never back into ``core`` state.
+
+_UNION_PAIR_ERROR_TYPES = frozenset({"float_type", "int_type"})
+
+
+def merge_union_pair(diagnostics: Sequence[ValidatorDiagnostic]) -> tuple[ValidatorDiagnostic, ...]:
+    """Collapse a ``float_type``+``int_type`` pair to the single ``float_type``
+    diagnostic ("Input should be a valid number") for display.
+
+    *diagnostics* must already be scoped to one parameter (e.g.
+    ``parameter.issues``, or every diagnostic absorbed by one Outstanding
+    task) -- this never groups across parameters; see
+    :func:`merge_union_pairs_by_location` for a mixed, multi-parameter list.
+    Every diagnostic that isn't part of a complete pair passes through
+    unchanged, in its original order.
+    """
+    types = {getattr(d, "error_type", None) for d in diagnostics}
+    if not _UNION_PAIR_ERROR_TYPES <= types:
+        return tuple(diagnostics)
+    return tuple(d for d in diagnostics if getattr(d, "error_type", None) != "int_type")
+
+
+def merge_union_pairs_by_location(
+    items: Sequence[tuple[ValidatorDiagnostic, tuple[str, ...]]],
+) -> tuple[tuple[ValidatorDiagnostic, tuple[str, ...]], ...]:
+    """Apply :func:`merge_union_pair` across a list of ``(diagnostic,
+    nav_path)`` pairs spanning many parameters (e.g. the Validation page's
+    Issues section, or a document's full diagnostic list).
+
+    Groups by exact ``nav_path`` equality -- the float/int pair for one
+    field always shares one nav_path (the validator's own union-branch tag is
+    already stripped by the time a caller has a nav_path, see
+    ``core.document._derive_nav_path``) -- merges within each group, and
+    returns the result in original first-occurrence order.
+    """
+    groups: dict[tuple[str, ...], list[tuple[ValidatorDiagnostic, tuple[str, ...]]]] = {}
+    order: list[tuple[str, ...]] = []
+    for diagnostic, nav_path in items:
+        if nav_path not in groups:
+            groups[nav_path] = []
+            order.append(nav_path)
+        groups[nav_path].append((diagnostic, nav_path))
+
+    merged: list[tuple[ValidatorDiagnostic, tuple[str, ...]]] = []
+    for nav_path in order:
+        group = groups[nav_path]
+        kept = merge_union_pair(tuple(diagnostic for diagnostic, _ in group))
+        kept_ids = {id(diagnostic) for diagnostic in kept}
+        merged.extend(pair for pair in group if id(pair[0]) in kept_ids)
+    return tuple(merged)

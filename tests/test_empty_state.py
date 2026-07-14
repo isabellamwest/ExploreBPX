@@ -51,7 +51,12 @@ def test_validation_page_shows_no_issues_message_for_a_clean_document(
 ):
     app_driver.open(valid_spm_path)
 
-    assert app_driver.validation_message() == "✓ No issues"
+    # The full-page placeholder is gone (Phase 5): once a document is open,
+    # the Issues section always renders, with its own inline empty-state row
+    # when there is nothing to show.
+    assert app_driver.validation_message() is None
+    assert app_driver.validation_issue_count() == 0
+    assert app_driver.validation_issues_empty_text() == "✓ No issues"
 
 
 def test_validation_page_shows_the_list_once_an_issue_exists(app_driver, spm_workfile):

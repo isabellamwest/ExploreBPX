@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core import command_service, document_factory, editing, export, structure
+from core import bpx_gateway, command_service, document_factory, editing, export, structure
 from core.command_service import CommandError
 from core.commands import (
     AddParameter,
@@ -32,6 +32,32 @@ def test_factory_creates_incomplete_scaffold_no_fake_values():
 def test_factory_partial_has_minimal_structure():
     raw = document_factory.create("Partial")
     assert set(raw) == {"Header", "Parameterisation"}
+
+
+def test_factory_creates_spme_scaffold_with_separator_no_section_level_missing():
+    """Regression for V2: SPMe requires Separator, not just DFN. The scaffold
+    must include an empty Separator section so the validator draws its usual
+    field-level diagnostics inside it, never a bare ``missing ('Separator',)``."""
+    raw = document_factory.create("SPMe", "Demo")
+    assert raw["Parameterisation"]["Separator"] == {}
+    issues = bpx_gateway.validate(raw).issues
+    missing_locs = {
+        getattr(issue, "loc", None)
+        for issue in issues
+        if getattr(issue, "error_type", None) == "missing"
+    }
+    assert ("Separator",) not in missing_locs
+    assert ("Separator", "Thickness [m]") in missing_locs
+
+
+def test_factory_scaffolds_state_for_every_concrete_model_but_not_partial():
+    """State IS validator-required for every concrete model (corrected V1 --
+    bpx's root validator demands it unless the model is Partial), so it
+    appears in every concrete model's fresh scaffold; Partial (which has no
+    required sections) gets none."""
+    for model in ("SPM", "SPMe", "DFN"):
+        assert "State" in document_factory.create(model)
+    assert "State" not in document_factory.create("Partial")
 
 
 def test_protected_top_level_cannot_be_removed():
@@ -68,6 +94,20 @@ def test_change_model_adds_the_missing_required_sections_empty(valid_spm_dict):
     assert valid_spm_dict == original
     assert result.label == "Change model"
     assert result.select_parameter_path == ("Header", "Model")
+
+
+def test_change_model_to_spme_adds_electrolyte_and_separator(valid_spm_dict):
+    """Regression for V2: SPMe needs Separator too, mirroring the DFN case
+    above."""
+    import copy
+
+    original = copy.deepcopy(valid_spm_dict)
+    result = command_service.execute(valid_spm_dict, ChangeModel("SPMe"))
+    parameterisation = result.raw["Parameterisation"]
+    assert result.raw["Header"]["Model"] == "SPMe"
+    assert parameterisation["Electrolyte"] == {}
+    assert parameterisation["Separator"] == {}
+    assert parameterisation["Cell"] == original["Parameterisation"]["Cell"]
 
 
 def test_change_model_never_removes_sections(valid_spm_dict):
@@ -235,6 +275,27 @@ def test_named_child_noun_for_the_two_dict_keyed_containers():
         == "material"
     )
     assert structure.named_child_noun(("Parameterisation",)) is None
+
+
+def test_required_sections_includes_state_for_concrete_models_only():
+    """Corrected V1: State IS validator-required for every concrete model
+    (bpx's root validator raises unless the model is Partial), so
+    required_sections lists it there and only there."""
+    for model in ("SPM", "SPMe", "DFN"):
+        assert ("State",) in structure.required_sections(model)
+    for model in ("Partial", None):
+        assert ("State",) not in structure.required_sections(model)
+
+
+def test_required_sections_includes_separator_for_spme_and_dfn_only():
+    assert ("Parameterisation", "Separator") in structure.required_sections("SPMe")
+    assert ("Parameterisation", "Separator") in structure.required_sections("DFN")
+    assert ("Parameterisation", "Separator") not in structure.required_sections("SPM")
+
+
+def test_required_sections_partial_and_none_are_header_and_parameterisation_only():
+    assert structure.required_sections("Partial") == (("Header",), ("Parameterisation",))
+    assert structure.required_sections(None) == (("Header",), ("Parameterisation",))
 
 
 def test_addable_child_sections_come_from_the_schema():
