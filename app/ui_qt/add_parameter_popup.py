@@ -115,7 +115,7 @@ def _kind_label(meta) -> str | None:
     return "FloatInt"
 
 
-def _suggestion_text(alias: str, meta, required: bool = False) -> str:
+def suggestion_row_text(alias: str, meta, required: bool = False) -> str:
     hints = []
     kind = _kind_label(meta)
     if kind:
@@ -130,11 +130,15 @@ def _suggestion_text(alias: str, meta, required: bool = False) -> str:
     return f"{alias}  ({' · '.join(hints)})"
 
 
-def _row_html(alias: str, meta, tier: str, required: bool) -> str:
+def suggestion_row_html(alias: str, meta, tier: str, required: bool) -> str:
     """This row's rich-text fragment: the bare alias (its trailing unit
     bracket split off) bolded and coloured by *tier*, followed by the same
-    kind/unit/"Required" hints ``_suggestion_text`` renders as plain text --
+    kind/unit/"Required" hints ``suggestion_row_text`` renders as plain text --
     muted, except the "Required" tag itself.
+
+    Shared with :mod:`ui_qt.parameter_list`'s "fields to add" group (Phase 3
+    of the completion track) so the two "here is a field you could add"
+    surfaces speak one visual language, not two independently-drifting ones.
 
     Requiredness colours **only that tag**, never the name: a required field
     is a suggested one, and recolouring its name would split the suggested
@@ -469,7 +473,7 @@ class AddParameterPopup(QWidget):
         return matches
 
     def _make_row(self, alias: str, meta, tier: str, required: bool = False) -> QListWidgetItem:
-        item = QListWidgetItem(_suggestion_text(alias, meta, required))
+        item = QListWidgetItem(suggestion_row_text(alias, meta, required))
         item.setData(self._ALIAS_ROLE, alias)
         item.setData(self._TIER_ROLE, tier)
         item.setData(self._REQUIRED_ROLE, required)
@@ -478,7 +482,7 @@ class AddParameterPopup(QWidget):
             font = QFont(self._list.font())
             font.setBold(True)
             item.setFont(font)
-        item.setData(parameter_row.HTML_ROLE, _row_html(alias, meta, tier, required))
+        item.setData(parameter_row.HTML_ROLE, suggestion_row_html(alias, meta, tier, required))
         return item
 
     def _make_header(self, text: str, divider: bool) -> QListWidgetItem:

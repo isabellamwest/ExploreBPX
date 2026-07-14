@@ -99,16 +99,150 @@ class AppDriver:
         return self
 
     def activate_first_validation_issue(self) -> "AppDriver":
-        """Activate the first issue in the document-wide Validation view.
+        """Activate the first Issues-section row in the document-wide
+        Validation view (skipping the "Issues"/"Outstanding" page headers and
+        any Outstanding rows -- Phase 5 restructured the page into two
+        always-present sections sharing one QListWidget).
 
         Emits ``itemActivated`` -- the signal the panel actually connects
         (fired by a real double-click or Enter/Return) -- rather than
         ``itemDoubleClicked``, which is a distinct Qt signal the panel does
         not listen to.
         """
-        lst = self._w._validation._list
-        lst.itemActivated.emit(lst.item(0))
+        items = self._validation_rows("issue")
+        assert items, "No issue row in the Validation list."
+        self._w._validation._list.itemActivated.emit(items[0])
         return self
+
+    def activate_validation_row(self, item) -> "AppDriver":
+        """Emit ``itemActivated`` for one already-located ``QListWidgetItem``
+        (e.g. from :meth:`validation_rows`) -- the low-level primitive
+        :meth:`activate_first_validation_issue`/:meth:`activate_outstanding_task`
+        build on."""
+        self._w._validation._list.itemActivated.emit(item)
+        return self
+
+    def activate_outstanding_task(self, task) -> "AppDriver":
+        """Activate the Outstanding row for *task* (a ``CompletionTask``, as
+        returned by :meth:`outstanding_tasks`)."""
+        from ui_qt import validation_panel as vp
+
+        for item in self._validation_rows("task"):
+            if item.data(vp._TASK_ROLE) == task:
+                self._w._validation._list.itemActivated.emit(item)
+                return self
+        raise AssertionError(f"No Outstanding row for {task!r}")
+
+    def outstanding_tasks(self) -> list:
+        """Every ``CompletionTask`` currently rendered as an Outstanding row,
+        in on-screen order."""
+        from ui_qt import validation_panel as vp
+
+        return [item.data(vp._TASK_ROLE) for item in self._validation_rows("task")]
+
+    def outstanding_task_row_text(self, task) -> str:
+        """Plain text of the Outstanding row for *task* -- includes any
+        absorbed validator messages appended as secondary text (decision O)."""
+        from ui_qt import validation_panel as vp
+
+        for item in self._validation_rows("task"):
+            if item.data(vp._TASK_ROLE) == task:
+                return item.text()
+        raise AssertionError(f"No Outstanding row for {task!r}")
+
+    def validation_group_headers(self) -> list[str]:
+        """Text of every Outstanding group subheader, in order (e.g.
+        "Cell — 2 of 5 remaining", "Separator — section absent")."""
+        return [item.text() for item in self._validation_rows("group_header")]
+
+    def validation_task_row_count_under_header(self, header_text: str) -> int:
+        """Number of "task" rows directly beneath the group/page header whose
+        text is *header_text*, up to (not including) the next header row
+        (decision R's ratio-integrity check: a required group's stated N must
+        equal this count exactly, never an optional row sitting in between)."""
+        from ui_qt import validation_panel as vp
+
+        lst = self._w._validation._list
+        start = None
+        for i in range(lst.count()):
+            item = lst.item(i)
+            if item.data(vp._KIND_ROLE) in ("group_header", "page_header") and item.text() == header_text:
+                start = i
+                break
+        assert start is not None, f"No header row with text {header_text!r}."
+        count = 0
+        for i in range(start + 1, lst.count()):
+            item = lst.item(i)
+            kind = item.data(vp._KIND_ROLE)
+            if kind in ("group_header", "page_header"):
+                break
+            if kind == "task":
+                count += 1
+        return count
+
+    def validation_page_headers(self) -> list[str]:
+        """Text of the two always-present page-section headers ("Issues",
+        "Outstanding")."""
+        return [item.text() for item in self._validation_rows("page_header")]
+
+    def validation_issue_texts(self) -> list[str]:
+        """Text of every Issues-section row, in order."""
+        return [item.text() for item in self._validation_rows("issue")]
+
+    def activate_validation_group_header(self, index: int = 0) -> "AppDriver":
+        """Activate a group subheader row directly -- proves it is a
+        structural no-op (decision L: only issue/task rows act)."""
+        return self.activate_validation_row(self._validation_rows("group_header")[index])
+
+    def activate_validation_page_header(self, index: int = 0) -> "AppDriver":
+        """Activate a page-section header row directly ("Issues"/
+        "Outstanding") -- proves it is a structural no-op."""
+        return self.activate_validation_row(self._validation_rows("page_header")[index])
+
+    def fields_to_add_current_alias(self) -> str | None:
+        """The alias of the parameter list's currently-selected "fields to
+        add" suggestion row, or None if the current row isn't one (used to
+        assert a MISSING_FIELD Outstanding activation landed on the right
+        synthetic row via ``reveal_missing_alias``)."""
+        panel = self._w._params
+        item = panel._list.currentItem()
+        if item is None or item.data(panel._GROUP_ROW_KIND_ROLE) != "suggestion":
+            return None
+        return item.data(panel._GROUP_ROW_ALIAS_ROLE)
+
+    def validation_issues_empty_text(self) -> str | None:
+        """Text of the Issues section's own inline empty-state row (e.g.
+        "✓ No issues"), or None if the section holds real issue rows."""
+        return self._section_message_text("Issues")
+
+    def validation_outstanding_empty_text(self) -> str | None:
+        """Text of the Outstanding section's own inline empty-state row
+        (e.g. "✓ Nothing outstanding", or the Partial-model notice), or None
+        if the section holds real task rows."""
+        return self._section_message_text("Outstanding")
+
+    def _section_message_text(self, page_header_text: str) -> str | None:
+        from ui_qt import validation_panel as vp
+
+        lst = self._w._validation._list
+        for i in range(lst.count()):
+            item = lst.item(i)
+            if item.data(vp._KIND_ROLE) == "page_header" and item.text() == page_header_text:
+                nxt = lst.item(i + 1)
+                if nxt is not None and nxt.data(vp._KIND_ROLE) == "message":
+                    return nxt.text()
+                return None
+        return None
+
+    def _validation_rows(self, kind: str) -> list:
+        from ui_qt import validation_panel as vp
+
+        lst = self._w._validation._list
+        return [
+            lst.item(i)
+            for i in range(lst.count())
+            if lst.item(i).data(vp._KIND_ROLE) == kind
+        ]
 
     def activate_validation_issue(self, path: tuple[str, ...]) -> "AppDriver":
         """Emit the Validation view's own activation signal for *path*.
@@ -224,6 +358,56 @@ class AppDriver:
         QTimer.singleShot(0, _close_open_popup)
         panel._list.customContextMenuRequested.emit(pos)
         return self
+
+    def fields_to_add_header_text(self) -> str | None:
+        """Text of the parameter list's "fields to add" group header row
+        (e.g. "▸ 2 fields to add"), or None if the group isn't shown at all
+        (no missing fields, or the model doesn't qualify -- decision C)."""
+        panel = self._w._params
+        lst = panel._list
+        for i in range(lst.count()):
+            item = lst.item(i)
+            if item.data(panel._GROUP_ROW_KIND_ROLE) == "header":
+                return item.text()
+        return None
+
+    def toggle_fields_to_add_group(self) -> "AppDriver":
+        """Click the "fields to add" group's header row."""
+        panel = self._w._params
+        lst = panel._list
+        for i in range(lst.count()):
+            item = lst.item(i)
+            if item.data(panel._GROUP_ROW_KIND_ROLE) == "header":
+                lst.itemClicked.emit(item)
+                return self
+        raise AssertionError("No fields-to-add group header is currently shown.")
+
+    def fields_to_add_suggestion_aliases(self) -> list[str]:
+        """The aliases currently listed under the (expanded) "fields to add"
+        group, in list order."""
+        panel = self._w._params
+        lst = panel._list
+        return [
+            lst.item(i).data(panel._GROUP_ROW_ALIAS_ROLE)
+            for i in range(lst.count())
+            if lst.item(i).data(panel._GROUP_ROW_KIND_ROLE) == "suggestion"
+        ]
+
+    def click_fields_to_add_suggestion(self, alias: str) -> "AppDriver":
+        """Click one "fields to add" suggestion row -- the same
+        ``add_parameter_requested`` path the add-parameter popup's own
+        Suggested rows use."""
+        panel = self._w._params
+        lst = panel._list
+        for i in range(lst.count()):
+            item = lst.item(i)
+            if (
+                item.data(panel._GROUP_ROW_KIND_ROLE) == "suggestion"
+                and item.data(panel._GROUP_ROW_ALIAS_ROLE) == alias
+            ):
+                lst.itemClicked.emit(item)
+                return self
+        raise AssertionError(f"No fields-to-add suggestion row for {alias!r}.")
 
     def activate_remove_parameter_action(self) -> "AppDriver":
         """Activate the parameter list's "Remove parameter" context-menu
@@ -344,6 +528,22 @@ class AppDriver:
             if button.objectName().startswith(prefix)
         ]
 
+    def select_model(self, model: str) -> "AppDriver":
+        """Trigger the top-bar Model chip's *model* menu entry directly.
+
+        Triggers the ``QAction`` rather than opening the menu via
+        ``QToolButton.showMenu``/``QMenu.exec`` -- the latter blocks
+        offscreen (see the plan's pitfall list).
+        """
+        action = self._w._model_chip_actions[model]
+        action.trigger()
+        return self
+
+    def open_model_chooser(self) -> "AppDriver":
+        """Call the public ``open_model_chooser`` seam (Phase 5's hook)."""
+        self._w.open_model_chooser()
+        return self
+
     # ------------------------------------------------------------------
     # Readers -- user-visible state only
     # ------------------------------------------------------------------
@@ -365,6 +565,24 @@ class AppDriver:
         unreliable off-screen, but the tooltip always holds the full string.
         """
         return self._w._identity_label.toolTip()
+
+    def model_chip_text(self) -> str:
+        return self._w._model_chip.text()
+
+    def model_chip_enabled(self) -> bool:
+        return self._w._model_chip.isEnabled()
+
+    def model_chip_options(self) -> list[str]:
+        """The menu's model names, in the fixed ``SUPPORTED_MODELS`` order."""
+        return list(self._w._model_chip_actions.keys())
+
+    def model_chip_checked(self) -> list[str]:
+        """Which menu entries are currently checked -- normally at most one."""
+        return [
+            model
+            for model, action in self._w._model_chip_actions.items()
+            if action.isChecked()
+        ]
 
     def save_enabled(self) -> bool:
         return self._w._save_action.isEnabled()
@@ -416,6 +634,38 @@ class AppDriver:
         lst = self._w._params._list
         return [lst.item(i).text() for i in range(lst.count())]
 
+    def parameter_row_is_grey(self, label: str) -> bool:
+        """True when the real parameter row starting with *label*'s rich-text
+        (decision P: a committed-null value renders grey/muted) colours its
+        *name* span (the first, bold one) with the muted colour rather than
+        the normal one. Checking only the leading span matters: the unit
+        suffix is always muted regardless (``build_parameter_row_html``), so
+        a naive "is MUTED anywhere in the html" check is always true for any
+        row with a unit. Real rows only -- matched by role-256 path presence.
+        """
+        from ui_qt import parameter_row, style
+
+        lst = self._w._params._list
+        for i in range(lst.count()):
+            item = lst.item(i)
+            if item.data(256) is not None and item.text().startswith(label):
+                html = item.data(parameter_row.HTML_ROLE)
+                assert html is not None, f"Row {label!r} carries no rich-text data."
+                name_span_prefix = f'<span style="font-weight:600; color:{style.MUTED};">'
+                return html.startswith(name_span_prefix)
+        raise AssertionError(f"No real parameter row starting with {label!r}.")
+
+    def parameter_row_has_warning_marker(self, label: str) -> bool:
+        """True when the real parameter row starting with *label* shows the
+        ⚠ marker (decision P: page-visible issues only, not validator-
+        verbatim)."""
+        lst = self._w._params._list
+        for i in range(lst.count()):
+            item = lst.item(i)
+            if item.data(256) is not None and item.text().startswith(label):
+                return "⚠" in item.text()
+        raise AssertionError(f"No real parameter row starting with {label!r}.")
+
     def add_parameter_button_enabled(self) -> bool:
         return self._w._params._add_button.isEnabled()
 
@@ -452,8 +702,33 @@ class AppDriver:
     def issues_tab_label(self) -> str:
         return self._w._inspector._secondary._buttons["issues"].text()
 
+    def issues_tab_badge_count(self) -> int:
+        """The secondary Issues tab's badge NUMBER, parsed from its button
+        text (e.g. 'Issues (1)' -> 1; 'Issues' with no suffix -> 0).
+
+        Deliberately distinct from :meth:`issues_tab_count` (which reads the
+        tab's own row *list*) -- the two are set by different code paths
+        (``SecondaryWorkspace.set_count`` vs ``IssuesTab.show_parameter``'s
+        row-building) and must always agree. M1 (reviewed defect): two
+        Inspector call-sites (``_validate_draft``, ``_on_reset``) used to push
+        the *unmerged* diagnostic count into this badge while the list stayed
+        merged, so this reader exists specifically to catch that class of bug
+        -- a test using only ``issues_tab_count()`` cannot see it.
+        """
+        text = self._w._inspector._secondary._buttons["issues"].text()
+        if "(" not in text:
+            return 0
+        return int(text.rsplit("(", 1)[1].rstrip(")"))
+
     def issues_tab_count(self) -> int:
         return self._w._inspector._issues_tab._list.count()
+
+    def issues_tab_texts(self) -> list[str]:
+        """Text of every row currently listed in the Issues tab (decision Q:
+        a null/bad FloatInt value's float_type+int_type pair displays merged
+        to one row here)."""
+        lst = self._w._inspector._issues_tab._list
+        return [lst.item(i).text() for i in range(lst.count())]
 
     def issues_tab_message(self) -> str | None:
         """Visible placeholder text when the Issues tab shows one, else None."""
@@ -466,11 +741,18 @@ class AppDriver:
         return self._w._inspector._secondary.is_expanded
 
     def validation_issue_count(self) -> int:
-        return self._w._validation._list.count()
+        """Count of Issues-section rows only (the page also always renders
+        two section headers plus the Outstanding section -- Phase 5)."""
+        return len(self._validation_rows("issue"))
+
+    def validation_outstanding_count(self) -> int:
+        """Count of Outstanding-section task rows only."""
+        return len(self._validation_rows("task"))
 
     def validation_message(self) -> str | None:
-        """Visible placeholder text on the Validation page, else None when
-        the issue list itself is showing."""
+        """Visible full-page placeholder text ("No document open"), or None
+        once a document is open -- the page then always shows its list (the
+        two sections carry their own inline empty-state rows instead)."""
         panel = self._w._validation
         if panel._stack.currentWidget() is panel._placeholder:
             return panel._placeholder.text()

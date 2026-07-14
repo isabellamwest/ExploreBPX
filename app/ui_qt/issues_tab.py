@@ -21,12 +21,31 @@ from PySide6.QtWidgets import (
 )
 
 from core.tree_model import ParameterItem
-from core.validation import Severity
+from core.validation import Severity, merge_union_pair
 
 _PATH_ROLE = 256  # Qt.UserRole
 
 _MSG_NO_SELECTION = "Select a parameter to view its issues."
 _MSG_NO_ISSUES = "\u2713\u2002No validation issues for this parameter."
+
+
+def issue_count(issues) -> int:
+    """The number of rows :meth:`IssuesTab.show_parameter` would render for
+    *issues* -- i.e. the merged count (decision Q), after collapsing a
+    committed-null ``FloatInt``'s ``float_type``+``int_type`` pair (V5) to
+    one displayed row.
+
+    The single source of truth for "how many rows does this tab show": any
+    caller that sets the secondary-workspace tab badge for an issues list
+    that did *not* go through :meth:`show_parameter` itself (e.g. Inspector's
+    live-preview and Escape-revert paths) MUST route the count through this
+    function rather than ``len(issues)`` -- a real defect (M1, reviewed): two
+    call-sites in ``inspector.py`` pushed the unmerged length into the same
+    badge, so the badge and the list disagreed for a committed-null FloatInt
+    parameter. Keeping one function used by both the list-builder and every
+    badge-setter is what makes that drift impossible to reintroduce.
+    """
+    return len(merge_union_pair(issues))
 
 
 class IssuesTab(QWidget):
@@ -70,6 +89,9 @@ class IssuesTab(QWidget):
 
         Switches to the placeholder when *parameter* is None or has no issues,
         so the panel always explains its state rather than showing a blank area.
+        A committed-null ``FloatInt`` value's ``float_type``+``int_type`` pair
+        (V5) displays as one merged row (decision Q); the returned count
+        (used for the secondary-workspace tab badge) follows the same merge.
         """
         self._list.clear()
         if parameter is None:
@@ -77,13 +99,14 @@ class IssuesTab(QWidget):
             self._stack.setCurrentIndex(1)
             return 0
 
-        for issue in parameter.issues:
+        merged = merge_union_pair(parameter.issues)
+        for issue in merged:
             prefix = "ERROR" if issue.severity == Severity.ERROR else "WARN"
             item = QListWidgetItem(f"[{prefix}] {issue.message}")
             item.setData(_PATH_ROLE, parameter.path)
             self._list.addItem(item)
 
-        count = len(parameter.issues)
+        count = issue_count(parameter.issues)  # same function every badge-setter must use
         if count:
             self._stack.setCurrentIndex(0)
         else:

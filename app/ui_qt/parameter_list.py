@@ -16,7 +16,7 @@ docs/02-ui.md).
 from __future__ import annotations
 
 from PySide6.QtCore import QPoint, Qt, Signal
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QAction, QColor, QFont
 from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
@@ -26,11 +26,31 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from core import completion
+from core.completion import MissingField
 from core.tree_model import TreeNode
 
-from . import parameter_row
-from .add_parameter_popup import AddParameterPopup
+from . import parameter_row, style
+from .add_parameter_popup import AddParameterPopup, suggestion_row_html, suggestion_row_text
 from .parameter_row import ParameterRowDelegate
+
+#: Models under which the "fields to add" group may appear at all (decision
+#: C): Partial suggests every expected field (none Required, V9); a concrete
+#: model suggests with Required flags as-is. An undeclared/garbage model is
+#: deliberately excluded here even though ``completion_for`` would happily
+#: resolve one (V8) -- the one visible completion task there is "declare a
+#: model", not a list of suggestions against a model the user hasn't picked.
+_COMPLETION_GROUP_MODELS = completion.CONCRETE_MODELS | {"Partial"}
+
+
+def _missing_field_html(field: MissingField) -> str:
+    """One suggestion row's rich-text fragment: a leading "+" (this row's
+    action) followed by the add-parameter popup's own Suggested-row
+    rendering (:func:`suggestion_row_html`, "suggested" tier) -- reused
+    verbatim, REQUIRED tag included, so the popup and this group speak one
+    visual language rather than two independently drifting ones."""
+    plus = f'<span style="font-weight:600; color:{style.ACCENT};">+</span>&nbsp;'
+    return plus + suggestion_row_html(field.alias, field.meta, "suggested", field.required)
 
 
 class _ParameterListView(QListWidget):
@@ -47,10 +67,19 @@ class _ParameterListView(QListWidget):
     """
 
     delete_requested = Signal()
+    #: Return/Enter on whichever row is current. Only the "fields to add"
+    #: group's suggestion rows act on this (mirrors the add-parameter
+    #: popup's Enter-to-activate) -- the panel decides what, if anything, the
+    #: current row does; a real parameter row had no Enter behaviour before
+    #: this and still has none.
+    activate_current_requested = Signal()
 
     def keyPressEvent(self, event) -> None:
         if event.key() == Qt.Key_Delete:
             self.delete_requested.emit()
+            return
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+            self.activate_current_requested.emit()
             return
         super().keyPressEvent(event)
 
@@ -62,6 +91,15 @@ class ParameterListPanel(QWidget):
     add_parameter_requested = Signal(tuple, str)  # (section_path, typed_alias)
     remove_parameter_requested = Signal(tuple)  # parameter_path
 
+    #: Item-data roles marking a synthetic "fields to add" row -- a group
+    #: header or one field suggestion -- as distinct from a real parameter
+    #: row. Every synthetic row also sets role 256 (the parameter-path role
+    #: real rows carry) to ``None``, so the selection/removal/context-menu
+    #: handlers -- which all read role 256 -- treat a synthetic row as
+    #: "nothing to act on" instead of acting on a bogus path.
+    _GROUP_ROW_KIND_ROLE = Qt.UserRole + 300  # "header" | "suggestion"
+    _GROUP_ROW_ALIAS_ROLE = Qt.UserRole + 301  # suggestion rows only
+
     def __init__(self) -> None:
         super().__init__()
         layout = QVBoxLayout(self)
@@ -70,6 +108,20 @@ class ParameterListPanel(QWidget):
 
         self._node: TreeNode | None = None
         self._model: str | None = None
+        #: Whether the "fields to add" group is expanded, keyed by section
+        #: path (decision H): a rebuild of the *same* section (every "+"
+        #: commits a command, which rebuilds) preserves the flag, while
+        #: navigating to a different section reads a fresh (default-collapsed)
+        #: entry.
+        self._expanded: dict[tuple[str, ...], bool] = {}
+        #: Parameter paths with a *page-visible* issue (decision P), set by
+        #: ``MainWindow._refresh_all`` from ``core.completion.partition_issues``
+        #: alongside ``show_node``/``reveal`` -- never computed here. The ⚠
+        #: marker reads this instead of ``parameter.has_errors`` (validator-
+        #: verbatim), so an absorbed diagnostic's own parameter shows calm
+        #: (grey, no ⚠) here even though the card badge/Issues tab still
+        #: report it verbatim.
+        self._visible_issue_paths: frozenset[tuple[str, ...]] = frozenset()
 
         self._add_button = QPushButton("+ Add parameter")
         self._add_button.setObjectName("AddParameterButton")
@@ -94,6 +146,7 @@ class ParameterListPanel(QWidget):
         self._list.setContextMenuPolicy(Qt.CustomContextMenu)
         self._list.customContextMenuRequested.connect(self._on_context_menu_requested)
         self._list.delete_requested.connect(self._remove_current_parameter)
+        self._list.activate_current_requested.connect(self._on_activate_current)
         layout.addWidget(self._list)
 
         # The single action behind the context menu's "Remove parameter"
@@ -108,6 +161,18 @@ class ParameterListPanel(QWidget):
         self._popup = AddParameterPopup(self)
         self._popup.custom_parameter_requested.connect(self._on_custom_parameter_requested)
 
+    def set_visible_issue_paths(self, paths: frozenset[tuple[str, ...]]) -> None:
+        """Set the page-visible-issue parameter paths (decision P).
+
+        Call from ``_refresh_all`` before ``show_node``/``reveal`` render any
+        rows -- stored, not applied immediately, since the panel is usually
+        empty (``show_node(None)``) at refresh time and the real render
+        happens later via a navigation ``reveal``. A stateless setter (like
+        ``self._model``) rather than an extra ``show_node``/``reveal``
+        parameter every caller must thread through.
+        """
+        self._visible_issue_paths = paths
+
     def show_node(self, node: TreeNode | None, model: str | None = None) -> None:
         self._node = node
         self._model = model
@@ -116,16 +181,108 @@ class ParameterListPanel(QWidget):
         if node is None:
             return
         for parameter in node.parameters:
-            marker = "  ⚠" if parameter.has_errors else ""
+            is_visible_issue = parameter.path in self._visible_issue_paths
+            is_empty = parameter.value is None
+            marker = "  ⚠" if is_visible_issue else ""
             item = QListWidgetItem(f"{parameter.label}{marker}")
             item.setData(256, parameter.path)
             item.setData(
                 parameter_row.HTML_ROLE,
                 parameter_row.build_parameter_row_html(
-                    parameter.label, has_errors=parameter.has_errors
+                    parameter.label, has_errors=is_visible_issue, is_empty=is_empty
                 ),
             )
             self._list.addItem(item)
+        self._append_missing_fields_group(node, model)
+
+    def _append_missing_fields_group(self, node: TreeNode, model: str | None) -> None:
+        """Append the "fields to add" group after the real rows (decision H).
+
+        Purely derived at render time from :func:`core.completion.completion_for`
+        -- never written into ``TreeNode.parameters``, so the tree/parameter
+        model keeps meaning "what is in the document". Suppressed for an
+        undeclared/garbage model (decision C -- the sole completion task there
+        is "declare a model", not a suggestion list against a model nobody
+        picked) and whenever the section has no missing fields at all (no
+        disabled placeholders, no "0 fields to add").
+        """
+        if model not in _COMPLETION_GROUP_MODELS:
+            return
+        missing = completion.completion_for(node.path, node.value, model).missing_fields
+        if not missing:
+            return
+        expanded = self._expanded.get(node.path, False)
+        self._list.addItem(self._make_group_header_item(len(missing), expanded))
+        if expanded:
+            for field in missing:
+                self._list.addItem(self._make_suggestion_item(field))
+
+    def _make_group_header_item(self, count: int, expanded: bool) -> QListWidgetItem:
+        arrow = "▾" if expanded else "▸"
+        noun = "field" if count == 1 else "fields"
+        item = QListWidgetItem(f"{arrow} {count} {noun} to add")
+        item.setData(256, None)
+        item.setData(self._GROUP_ROW_KIND_ROLE, "header")
+        item.setForeground(QColor(style.MUTED))
+        font = QFont(self._list.font())
+        font.setBold(True)
+        item.setFont(font)
+        return item
+
+    def _make_suggestion_item(self, field: MissingField) -> QListWidgetItem:
+        item = QListWidgetItem(f"+ {suggestion_row_text(field.alias, field.meta, field.required)}")
+        item.setData(256, None)
+        item.setData(self._GROUP_ROW_KIND_ROLE, "suggestion")
+        item.setData(self._GROUP_ROW_ALIAS_ROLE, field.alias)
+        item.setData(parameter_row.HTML_ROLE, _missing_field_html(field))
+        return item
+
+    def reveal_missing_alias(self, alias: str) -> bool:
+        """Expand the "fields to add" group and select/scroll to *alias*'s
+        suggestion row; return False if the current section has no such
+        missing field (already added, suppressed model, or never expected).
+
+        The new seam this phase must build (Phase 3 brief): today's
+        :meth:`reveal` only ever addresses a real row that already exists in
+        the document; nothing can address a field that isn't there yet. This
+        is what Phase 5's Outstanding "Go to ›" action for a missing field
+        will call.
+        """
+        if self._node is None:
+            return False
+        self._expanded[self._node.path] = True
+        self.show_node(self._node, self._model)
+        for row in range(self._list.count()):
+            item = self._list.item(row)
+            if (
+                item.data(self._GROUP_ROW_KIND_ROLE) == "suggestion"
+                and item.data(self._GROUP_ROW_ALIAS_ROLE) == alias
+            ):
+                self._list.setCurrentRow(row)
+                self._list.scrollToItem(item)
+                return True
+        return False
+
+    def reset_expansion_state(self) -> None:
+        """Forget every "fields to add" group's expansion, across every
+        section path.
+
+        Call only from a document-REPLACE path (open/new/drop) -- never from
+        :meth:`show_node`/:meth:`reveal`/a same-document refresh, which must
+        keep the survive-same-section-rebuild behaviour (decision H). Without
+        this, opening a different document would inherit a previous
+        document's expanded sections wherever their paths happen to collide
+        (e.g. both have a "Cell"), and the dict would grow unboundedly across
+        a session of many opens.
+        """
+        self._expanded.clear()
+
+    def _toggle_missing_fields_group(self) -> None:
+        if self._node is None:
+            return
+        path = self._node.path
+        self._expanded[path] = not self._expanded.get(path, False)
+        self.show_node(self._node, self._model)
 
     def reveal(
         self,
@@ -153,6 +310,35 @@ class ParameterListPanel(QWidget):
                 return
 
     def _on_clicked(self, item: QListWidgetItem) -> None:
+        self._activate_item(item)
+
+    def _on_activate_current(self) -> None:
+        """Return/Enter on the current row: only a "fields to add" suggestion
+        row acts on this (mirrors the add-parameter popup's Enter-to-activate,
+        decision H). A real parameter row has no Enter behaviour, matching
+        today's app -- selection there is click-driven only."""
+        item = self._list.currentItem()
+        if item is None or item.data(self._GROUP_ROW_KIND_ROLE) != "suggestion":
+            return
+        self._activate_item(item)
+
+    def _activate_item(self, item: QListWidgetItem) -> None:
+        """Route one row's activation (click or Enter) by kind.
+
+        A real row (role 256 carries its parameter path) selects it,
+        unchanged. The group header toggles expansion. A suggestion row
+        requests the add through ``add_parameter_requested`` -- the exact
+        signal/path the add-parameter popup's own Suggested rows use, so both
+        surfaces share one undo step and one reveal/focus behaviour.
+        """
+        kind = item.data(self._GROUP_ROW_KIND_ROLE)
+        if kind == "header":
+            self._toggle_missing_fields_group()
+            return
+        if kind == "suggestion":
+            if self._node is not None:
+                self.add_parameter_requested.emit(self._node.path, item.data(self._GROUP_ROW_ALIAS_ROLE))
+            return
         self.parameter_selected.emit(item.data(256))
 
     def _on_context_menu_requested(self, pos: QPoint) -> None:
@@ -164,10 +350,12 @@ class ParameterListPanel(QWidget):
         space -- including an empty list, or no object/document loaded at
         all -- has no row under the cursor, so this opens no menu; a
         disabled menu is not shown either, matching the app's "no disabled
-        placeholders" convention.
+        placeholders" convention. A synthetic "fields to add" row (role 256
+        is ``None``) is not an existing parameter either, so it offers no
+        "Remove parameter" menu.
         """
         item = self._list.itemAt(pos)
-        if item is None:
+        if item is None or item.data(256) is None:
             return
         self._list.setCurrentItem(item)
         menu = QMenu(self)
@@ -179,12 +367,17 @@ class ParameterListPanel(QWidget):
 
         The context menu action and the Delete-key accelerator both land
         here; a no-op when nothing is current (e.g. Delete pressed with an
-        empty list).
+        empty list) or the current row is a synthetic "fields to add" row
+        (role 256 is ``None`` there -- it names no existing parameter to
+        remove).
         """
         item = self._list.currentItem()
         if item is None:
             return
-        self.remove_parameter_requested.emit(item.data(256))
+        path = item.data(256)
+        if path is None:
+            return
+        self.remove_parameter_requested.emit(path)
 
     def _open_add_popup(self) -> None:
         if self._node is None:

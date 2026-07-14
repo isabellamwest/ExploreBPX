@@ -16,17 +16,19 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QPlainTextEdit,
     QSizePolicy,
     QStackedWidget,
     QStatusBar,
     QTextEdit,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
-from core import export, structure
+from core import completion, export, structure
 from core.bpx_gateway import BPX_VERSION, LoadError
 from core.commands import (
     AddParameter,
@@ -35,6 +37,9 @@ from core.commands import (
     RemoveSection,
     RenameKey,
 )
+from core.completion import TaskKind
+from core.document_factory import SUPPORTED_MODELS
+from core.tree_model import build_parameter_path_map
 from state.app_state import AppState
 from state.document_session import DocumentSession
 
@@ -109,6 +114,7 @@ class MainWindow(QMainWindow):
         self._search = SearchBar()
         self._activity_bar = ActivityBar()
         self._identity_label = _IdentityLabel()
+        self._model_chip = self._build_model_chip()
         self._status_label = QLabel()
 
         self._build_toolbar()
@@ -117,15 +123,41 @@ class MainWindow(QMainWindow):
         self._connect()
         self._refresh_all()
 
+    def _build_model_chip(self) -> QToolButton:
+        """Build the top-bar Model chip: a small menu button beside the
+        identity label that commits ``Header.Model`` (completion track Phase
+        4, decision J).
+
+        The model list is fixed (``SUPPORTED_MODELS`` never changes at
+        runtime), so the menu's actions are built once here; only their
+        checked state and the chip's own label/enablement change on refresh
+        (:meth:`_update_model_chip`). Built with ``InstantPopup`` so a click
+        opens the menu directly, the same reflex as any other menu button.
+        """
+        chip = QToolButton()
+        chip.setObjectName("ModelChip")
+        chip.setToolTip("Change model")
+        chip.setPopupMode(QToolButton.InstantPopup)
+        menu = QMenu(chip)
+        self._model_chip_actions = {}
+        for model in SUPPORTED_MODELS:
+            action = menu.addAction(model)
+            action.setCheckable(True)
+            action.triggered.connect(lambda checked=False, m=model: self._change_model(m))
+            self._model_chip_actions[model] = action
+        chip.setMenu(menu)
+        return chip
+
     def _build_toolbar(self) -> None:
         """Build the fixed top bar: identity on the left, actions on the right.
 
         Opening a file lives on the Workspace page's "Open File" button now, so
-        the top bar carries no Open action -- only document identity, Save,
-        Export and search.
+        the top bar carries no Open action -- only document identity, the
+        Model chip, Save, Export and search.
         """
         bar = self.addToolBar("Main")
         bar.addWidget(self._identity_label)
+        bar.addWidget(self._model_chip)
 
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
@@ -258,6 +290,7 @@ class MainWindow(QMainWindow):
         self._params.add_parameter_requested.connect(self._on_add_parameter_requested)
         self._params.remove_parameter_requested.connect(self._on_remove_parameter_requested)
         self._validation.issue_activated.connect(self._navigation.navigate)
+        self._validation.task_activated.connect(self._on_task_activated)
         self._inspector.issue_activated.connect(self._navigation.navigate)
         self._search.navigation_requested.connect(self._navigation.navigate)
         self._search.dismissed.connect(self._tree.focus_tree)
@@ -308,6 +341,36 @@ class MainWindow(QMainWindow):
         model = structure.infer_model(document.raw) if document else None
         self._params.reveal(target.node, target.parameter_path, model)
         self._inspector.reveal(target.parameter)
+
+    def _on_task_activated(self, task) -> None:
+        """Dispatch one Outstanding row's activation by kind (decision L).
+
+        Polymorphic by design -- unlike an Issue, a task's target may not
+        exist yet, so this cannot route through ``NavigationService`` alone:
+
+        * ``MISSING_FIELD`` -- navigate to the *owning section* (the field
+          itself has no address to resolve), then reveal the synthetic
+          suggestion row via the parameter list's Phase 3 seam
+          (``reveal_missing_alias``). No mutation; the group's own "+" does
+          that.
+        * ``NULL_FIELD`` -- the parameter already exists (a committed null),
+          so it navigates like any other parameter.
+        * ``MISSING_SECTION`` -- there is nothing to navigate to first, so
+          this adds the section (one ``AddSection`` undo step) and navigates
+          into it in the same motion as every other structural add
+          (``_on_add_section_requested``).
+        * ``DECLARE_MODEL`` -- opens the Model chip's menu (Phase 4's
+          ``open_model_chooser`` seam).
+        """
+        if task.kind is TaskKind.MISSING_FIELD:
+            self._navigation.navigate(task.path[:-1])
+            self._params.reveal_missing_alias(task.alias)
+        elif task.kind is TaskKind.NULL_FIELD:
+            self._navigation.navigate(task.path)
+        elif task.kind is TaskKind.MISSING_SECTION:
+            self._on_add_section_requested(task.path[:-1], task.path[-1])
+        elif task.kind is TaskKind.DECLARE_MODEL:
+            self.open_model_chooser()
 
     def _on_add_parameter_requested(self, section_path: tuple, alias: str) -> None:
         """Add a custom parameter to *section_path* and reveal it.
@@ -559,6 +622,7 @@ class MainWindow(QMainWindow):
         a dialog surface these as a message box.
         """
         self._state.open(Path(path))
+        self._params.reset_expansion_state()
         self._refresh_all()
         self._show_page(_EDITOR_PAGE_INDEX)
 
@@ -630,6 +694,7 @@ class MainWindow(QMainWindow):
         if not self._confirm_discard_if_dirty():
             return
         self._state.new_document(model)
+        self._params.reset_expansion_state()
         self._refresh_all()
         self._show_page(_EDITOR_PAGE_INDEX)
 
@@ -714,13 +779,19 @@ class MainWindow(QMainWindow):
         return session.document.filename if session.document else ""
 
     def _compose_identity_text(self) -> str:
-        """Compose 'Title \u00b7 Model \u00b7 BPX vX.Y', omitting any empty field."""
+        """Compose 'Title \u00b7 BPX vX.Y', omitting any empty field.
+
+        The Model segment lives in the top-bar Model chip instead (completion
+        track Phase 4) -- see :meth:`_update_model_chip` -- so it is
+        deliberately absent here; showing it in both places would duplicate
+        the same fact.
+        """
         session = self._state.active
         if session is None or session.document is None:
             return _NO_DOCUMENT_TEXT
         identity = session.document.identity
         title = identity.title or self._fallback_filename(session)
-        segments = [segment for segment in (title, identity.model) if segment]
+        segments = [segment for segment in (title,) if segment]
         if identity.bpx_version:
             segments.append(f"BPX v{identity.bpx_version}")
         return " \u00b7 ".join(segments) if segments else _NO_DOCUMENT_TEXT
@@ -728,6 +799,58 @@ class MainWindow(QMainWindow):
     def _update_identity_label(self) -> None:
         """Sync the top-bar identity label with the active document."""
         self._identity_label.set_full_text(self._compose_identity_text())
+
+    def _update_model_chip(self) -> None:
+        """Sync the top-bar Model chip's label, checked entry and enablement.
+
+        Enabled only once the document has a ``Header`` dict -- the same
+        precondition ``ChangeModel`` enforces via ``editing._navigate``
+        (:class:`core.editing.EditError` if ``Header`` is absent), so no UI
+        path can reach the command on a Header-less document. The current
+        model is read straight off ``document.identity.model`` (already a
+        stringified, untranslated read of whatever raw holds); an unknown/
+        garbage value simply matches none of the menu's actions.
+        """
+        session = self._state.active
+        document = session.document if session else None
+        has_header = document is not None and isinstance(document.raw.get("Header"), dict)
+        self._model_chip.setEnabled(has_header)
+        current = document.identity.model if document is not None else ""
+        self._model_chip.setText(current or "No model")
+        for model, action in self._model_chip_actions.items():
+            action.setChecked(model == current)
+
+    def open_model_chooser(self) -> None:
+        """Show the Model chip's menu (the Phase 5 declare-model row's action).
+
+        A no-op while the chip is disabled (no document, or no ``Header``
+        section) -- the same guard the chip itself observes.
+        """
+        if not self._model_chip.isEnabled():
+            return
+        self._model_chip.showMenu()
+
+    def _change_model(self, model: str) -> None:
+        """Handle a Model-chip menu selection: commit ``Header.Model``.
+
+        ``apply_value`` already routes a string committed at
+        ``("Header", "Model")`` to ``ChangeModel``, which also scaffolds the
+        target model's required-but-missing sections in the same undo step
+        -- no new command. Selecting the currently-declared model is a
+        deliberate no-op (decision J): no command runs, so neither the undo
+        stack nor the dirty flag changes. Refresh-then-navigate mirrors
+        ``_on_committed``/``_undo_document``.
+        """
+        session = self._state.active
+        if session is None or session.document is None:
+            return
+        if model == session.document.identity.model:
+            return
+        session.apply_value(("Header", "Model"), model)
+        target = session.selected_parameter_path or session.selected_path
+        self._refresh_all()
+        if target:
+            self._navigation.navigate(target)
 
     def _update_workspace_info(self) -> None:
         """Sync the Workspace page's info panel with the active session."""
@@ -767,20 +890,64 @@ class MainWindow(QMainWindow):
         return "Validation — " + ", ".join(parts)
 
     def _refresh_all(self) -> None:
+        """Refresh every view from one document snapshot.
+
+        ``tasks``/``partition`` are computed exactly once here (decision G):
+        the Validation page's Outstanding section and the rail badge both
+        derive from this single ``PartitionedIssues``, so they can never
+        disagree about what counts as an error. Pre-absorption
+        ``document.error_count``/``warning_count`` is deliberately not used
+        for the badge any more -- see ``core.completion.partition_issues``.
+        """
         document = self._state.active.document if self._state.active else None
         self._editor_page.set_has_document(document is not None)
         if document is not None:
             self._tree.set_root(document.tree)
         self._params.show_node(None)
         self._inspector.reset()
-        self._validation.refresh(document)
+
+        raw = document.raw if document is not None else None
+        model = structure.infer_model(raw) if raw is not None else None
+        tasks = completion.document_completion(raw) if raw is not None else ()
+        partition = completion.partition_issues(document, tasks) if document is not None else None
+        # Decision P: stored before any subsequent show_node/reveal renders
+        # real rows (those happen later, via a navigation reveal -- show_node
+        # above is always called with None here) so the parameter list's ⚠
+        # marker reflects *page-visible* issues, not the validator verbatim.
+        self._params.set_visible_issue_paths(self._visible_issue_paths(document, partition))
+
+        self._validation.refresh(raw, model, partition, tasks)
         self._search.index_document(document)
-        errors = document.error_count if document else 0
-        warnings = document.warning_count if document else 0
+        errors = partition.error_count if partition is not None else 0
+        warnings = partition.warning_count if partition is not None else 0
         severity = "error" if errors else ("warning" if warnings else None)
         self._btn_validation.set_badge(errors + warnings, severity)
         self._btn_validation.setToolTip(self._validation_tooltip(errors, warnings))
         self._update_title()
         self._update_identity_label()
+        self._update_model_chip()
         self._update_workspace_info()
         self._update_actions_enabled()
+
+    @staticmethod
+    def _visible_issue_paths(document, partition) -> frozenset[tuple[str, ...]]:
+        """Parameter paths carrying at least one *page-visible* diagnostic
+        (decision P) -- i.e. one still in ``partition.visible`` after
+        absorption, not one merely present in ``parameter.issues``.
+
+        Built from ``parameter.issues`` (already correctly attached by
+        ``BPXDocument`` -- including the message-recovery fallback for
+        model-level checks, which a fresh nav_path-based lookup would miss)
+        matched against ``partition.visible`` by diagnostic identity, since a
+        ``PydanticErrorDiagnostic`` wraps a raw error dict and is therefore
+        unhashable (no set of diagnostics; ``id()`` stands in).
+        """
+        if document is None or partition is None:
+            return frozenset()
+        visible_ids = {id(diagnostic) for diagnostic, _ in partition.visible}
+        parameter_map = build_parameter_path_map(document.tree)
+        return frozenset(
+            path
+            for path, parameter in parameter_map.items()
+            if any(id(issue) in visible_ids for issue in parameter.issues)
+        )

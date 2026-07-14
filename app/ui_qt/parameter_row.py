@@ -75,10 +75,22 @@ def compose_row_html(name: str, hints: list[tuple[str, str]], *, name_color: str
     return fragment
 
 
-def build_parameter_row_html(label: str, *, has_errors: bool) -> str:
+def build_parameter_row_html(label: str, *, has_errors: bool, is_empty: bool = False) -> str:
     """Compose a parameter-list row's rich-text fragment: bold name, a muted
-    non-bold unit, and -- for a parameter the validator has flagged -- an
+    non-bold unit, and -- for a parameter with a *page-visible* issue -- an
     ``style.ERROR``-coloured "⚠" marker.
+
+    ``has_errors`` means *page-visible* (decision P), not validator-verbatim:
+    the caller passes whether this parameter has an issue that survived
+    absorption (``core.completion.partition_issues``'s ``visible``), not
+    ``parameter.has_errors``. The card's own inline badge and the Issues tab
+    still mirror the validator verbatim (decision D) -- only this row marker's
+    meaning changed.
+
+    ``is_empty`` (a committed ``null`` value) renders the name/unit muted
+    instead of the normal text colour -- emptiness visible at a glance,
+    covering both "never filled" and "value was removed" (indistinguishable
+    in a stateless projection over the raw dict).
 
     The list deliberately carries **no requiredness colouring**: the
     required/suggested tint is the *add-parameter popup's* language, for
@@ -86,7 +98,8 @@ def build_parameter_row_html(label: str, *, has_errors: bool) -> str:
     present, so colouring it by requiredness would tint most of a document
     amber for no actionable reason."""
     name, unit = split_name_and_unit(label)
-    fragment = _span(name, color=DEFAULT_TEXT, bold=True)
+    name_color = style.MUTED if is_empty else DEFAULT_TEXT
+    fragment = _span(name, color=name_color, bold=True)
     if unit:
         fragment += _span(f" [{unit}]", color=style.MUTED)
     if has_errors:

@@ -48,7 +48,7 @@ from state.app_state import AppState
 
 from .cards.parameter_card import ParameterCard
 from .documentation_tab import DocumentationTab
-from .issues_tab import IssuesTab
+from .issues_tab import IssuesTab, issue_count
 from .secondary_workspace import SecondaryWorkspace
 from .style import ERROR, OK, WARNING
 
@@ -229,7 +229,11 @@ class InspectorPanel(QWidget):
         errors = [i for i in issues if i.severity == Severity.ERROR]
         self._render_issues(issues, bool(errors))
         self._card.set_cell_issues(issues)
-        self._secondary.set_count("issues", len(issues))
+        # Decision Q (reviewed defect M1): the tab badge must count the same
+        # merged rows issues_tab.show_parameter renders, not raw diagnostics
+        # -- a committed-null FloatInt's float_type+int_type pair (V5) is one
+        # displayed row, so len(issues) here previously disagreed with it.
+        self._secondary.set_count("issues", issue_count(issues))
 
     def _on_reset(self) -> None:
         if self._card is None:
@@ -237,7 +241,7 @@ class InspectorPanel(QWidget):
         self._debounce.stop()
         self._render_issues(self._card.parameter.issues, self._card.parameter.has_errors)
         self._card.set_cell_issues(self._card.parameter.issues)
-        self._secondary.set_count("issues", len(self._card.parameter.issues))
+        self._secondary.set_count("issues", issue_count(self._card.parameter.issues))
 
     def _on_commit(self) -> None:
         if self._card is None or self._state.active is None:
