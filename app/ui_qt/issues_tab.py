@@ -113,9 +113,12 @@ class IssuesTab(QWidget):
             label = "ERROR" if is_error else "WARN"
             color = style.ERROR if is_error else style.WARNING
             item = QListWidgetItem(f"[{label}] {issue.message}")
+            # Same two-line treatment as the Validation page's issue rows
+            # (tag line over the muted verbatim message); the location slot
+            # stays empty -- this tab is already scoped to one parameter.
             item.setData(
                 parameter_row.HTML_ROLE,
-                parameter_row.compose_issue_html(label, color, issue.message),
+                parameter_row.compose_issue_row_html(label, color, "", issue.message),
             )
             item.setData(_PATH_ROLE, parameter.path)
             self._list.addItem(item)

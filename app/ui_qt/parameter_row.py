@@ -142,39 +142,21 @@ def value_tooltip(value: object) -> str:
     return text
 
 
-def compose_issue_html(
-    severity_label: str, severity_color: str, message: str, *, location: str | None = None
-) -> str:
-    """Compose a validation-issue row's rich-text fragment: a bold, coloured
-    severity tag (``ERROR`` red / ``WARN`` amber), an optional muted location
-    path, then the validator's verbatim message in the default text colour.
-
-    Shared by the Validation page's Issues section and the Inspector's Issues
-    tab so both surfaces read identically -- the same colour language the
-    Outstanding rows use (a coloured tag rather than a plain ``[ERROR]``
-    bracket), keeping the two halves of the Validation page visually one piece.
-    The message text is never recoloured, so an issue reads validator-verbatim
-    (decision O) whichever surface shows it."""
-    fragment = _span(severity_label, color=severity_color, bold=True)
-    if location:
-        fragment += _span("  " + location, color=style.MUTED)
-    fragment += _span("  " + message, color=DEFAULT_TEXT)
-    return fragment
-
-
 def compose_issue_row_html(
     severity_label: str, severity_color: str, location: str, message: str
 ) -> str:
-    """Compose a Validation-page issue row as **two lines**: a coloured
-    severity tag and the bold location on the first, the validator's verbatim
-    message (muted, smaller) on the second.
+    """Compose an issue row as **two lines**: a coloured severity tag and the
+    bold location on the first, the validator's verbatim message (muted,
+    smaller) on the second.
 
     Splitting where (location) from what (message) is Concept A's core move --
     a full-width run-on sentence per issue becomes a scannable header with its
-    detail beneath. *location* is expected already section-relative (the
-    owning section is the group header above the row), and its trailing unit
-    is muted like every other parameter label. An empty *location* (a
-    section-level or document-level diagnostic) drops to the message alone."""
+    detail beneath. Shared by the Validation page's Issues section and the
+    Inspector's Issues tab so the two issue surfaces read as one system; the
+    tab passes an empty *location* (it is already scoped to one parameter),
+    which drops the row to tag-over-message. *location* is expected already
+    section-relative (the owning section is the group header above the row),
+    and its trailing unit is muted like every other parameter label."""
     if location:
         name, unit = split_name_and_unit(location)
         head = _span(severity_label, color=severity_color, bold=True) + _span(

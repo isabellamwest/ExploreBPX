@@ -562,7 +562,7 @@ checking.
 | Keyboard navigation of issues (Enter-to-activate) in the Validation workspace and Issues tab | Implemented |
 | Outstanding section on the Validation page (required + optional-null completion tasks, `core/completion.py`) | Implemented |
 | Absorption of validator diagnostics already accounted for by an Outstanding task, shown as muted secondary text on that row | Implemented |
-| Union-pair (`float_type`/`int_type`) display merge across Issues, Outstanding and the Issues tab | Implemented |
+| Union-pair display merge (both the `float_type`/`int_type` and `float_parsing`/`int_parsing` variants) across Issues, Outstanding and the Issues tab | Implemented |
 | Rail badge reflects post-absorption, post-merge Issues count only | Implemented |
 | `IssueKind` classification for actionable remediation | Planned |
 | Pure remediation functions (edit, move, choose model, map materials, add section) | Planned |
