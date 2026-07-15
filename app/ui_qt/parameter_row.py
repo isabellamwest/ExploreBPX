@@ -17,9 +17,10 @@ carries no such data (a group header, in the popup) is left to
 from __future__ import annotations
 
 import html as _html
+import json
 
 from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QTextDocument
+from PySide6.QtGui import QColor, QFont, QFontDatabase, QFontMetrics, QTextDocument
 from PySide6.QtWidgets import (
     QApplication,
     QStyle,
@@ -27,21 +28,73 @@ from PySide6.QtWidgets import (
     QStyleOptionViewItem,
 )
 
-from core.parameter_types import extract_unit
+from core.parameter_types import ParameterKind, extract_unit, looks_like_table
 from ui_qt import style
 
 #: Item-data role carrying the HTML fragment :class:`ParameterRowDelegate`
 #: paints. A row without it (e.g. a group header) falls back to the base
 #: ``QStyledItemDelegate`` behaviour untouched.
 HTML_ROLE = Qt.UserRole + 100
+#: Item-data role carrying a row's right-aligned value-preview string; the
+#: delegate elides it with "…" against the space the name leaves free, so a
+#: 20-decimal float never wraps or pushes the name around. Absent on rows
+#: with no value column (group headers, suggestion rows, other lists).
+VALUE_ROLE = Qt.UserRole + 101
+#: Companion flag: True renders the preview ghosted (lighter, italic) --
+#: the "—" of a committed null and the derived summaries of Inspector-only
+#: kinds ("table · 3 points"), as opposed to a verbatim raw value.
+VALUE_GHOST_ROLE = Qt.UserRole + 102
 
 #: The app's default (untinted) text colour -- matches the base ``QWidget``
 #: rule in this module's stylesheet (``ui_qt/style.py``); named here so a
 #: "plain" row's name can be coloured explicitly, the same as every other
 #: tier, rather than left to whatever the delegate happens to inherit.
 DEFAULT_TEXT = "#1f2328"
+#: Ghosted value-preview text (matches the disabled-button foreground in
+#: the stylesheet): quieter than ``style.MUTED`` so a placeholder reads as
+#: "nothing here", not as a value.
+GHOST_TEXT = "#8c959f"
 
 _MIN_WIDTH = 40
+#: The value preview never claims more than this share of the row, however
+#: long the raw value is -- the name keeps priority, the value elides.
+_VALUE_MAX_SHARE = 0.45
+#: Gap between the (wrapped) name fragment and the value preview.
+_VALUE_GAP = 12
+
+
+def value_preview(value: object, kind: ParameterKind) -> tuple[str, bool]:
+    """Return ``(text, ghost)`` for a parameter row's value column.
+
+    Simple committed values render **verbatim from the raw document** (JSON
+    spelling for numbers and booleans, the bare string for text) -- never
+    reformatted, rounded or re-spelled, per validator fidelity. Committed
+    ``null`` renders as a ghosted "—" (the muted-emptiness language of
+    decision P). Inspector-only kinds render a ghosted summary *derived*
+    from the data (point/entry/value counts), never invented content.
+    Elision to the available width is the delegate's job, not this one's:
+    the full string is returned so tooltips can carry it.
+    """
+    if value is None:
+        return "—", True
+    if isinstance(value, bool):
+        return ("true" if value else "false"), False
+    if isinstance(value, (int, float)):
+        return json.dumps(value), False
+    if isinstance(value, str):
+        first, sep, _rest = value.partition("\n")
+        return (first + "…" if sep else first), False
+    if isinstance(value, dict):
+        if looks_like_table(value):
+            count = len(value["x"])
+            return f"table · {count} point{'s' if count != 1 else ''}", True
+        count = len(value)
+        return f"{count} entr{'ies' if count != 1 else 'y'}", True
+    if isinstance(value, list):
+        noun = "series" if kind is ParameterKind.SERIES else "list"
+        count = len(value)
+        return f"{noun} · {count} value{'s' if count != 1 else ''}", True
+    return str(value), False
 
 
 def split_name_and_unit(label: str) -> tuple[str, str]:
@@ -73,6 +126,20 @@ def compose_row_html(name: str, hints: list[tuple[str, str]], *, name_color: str
         joined = dot.join(_span(text, color=color) for text, color in hints)
         fragment += _span("  (", color=style.MUTED) + joined + _span(")", color=style.MUTED)
     return fragment
+
+
+#: Tooltip cap: enough to read a long mantissa or expression in full, short
+#: enough that a 1000-point table doesn't become a screen-filling tooltip.
+_TOOLTIP_MAX = 400
+
+
+def value_tooltip(value: object) -> str:
+    """The full committed value as compact JSON (strings verbatim), capped
+    at ``_TOOLTIP_MAX`` characters with an explicit ellipsis."""
+    text = value if isinstance(value, str) else json.dumps(value)
+    if len(text) > _TOOLTIP_MAX:
+        return text[: _TOOLTIP_MAX - 1] + "…"
+    return text
 
 
 def compose_issue_html(
@@ -168,16 +235,44 @@ class ParameterRowDelegate(QStyledItemDelegate):
         doc.setTextWidth(max(text_width, _MIN_WIDTH))
         return doc
 
+    def _value_font(self, option: QStyleOptionViewItem) -> QFont:
+        """The value preview's font: the system fixed-pitch face, one step
+        smaller than the row -- digits align across rows and a long mantissa
+        reads as data rather than prose. The app stylesheet sizes fonts in
+        pixels (``font-size: 13px``), which leaves ``pointSizeF()`` at -1,
+        so size must follow whichever unit the row font actually carries."""
+        font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
+        if option.font.pointSizeF() > 0:
+            font.setPointSizeF(max(option.font.pointSizeF() - 1.0, 9.0))
+        else:
+            font.setPixelSize(max(option.font.pixelSize() - 1, 11))
+        return font
+
+    def _value_reserved(self, option: QStyleOptionViewItem, index, row_width: float) -> int:
+        """Row width the value preview claims (including its gap), 0 when the
+        row carries none. Capped at ``_VALUE_MAX_SHARE`` of the row: the name
+        keeps priority and an overlong value elides rather than pushing it."""
+        text = index.data(VALUE_ROLE)
+        if not text:
+            return 0
+        metrics = QFontMetrics(self._value_font(option))
+        # +1: elidedText is conservative at exact-fit width and would turn
+        # "299.0" into "299…" inside space it actually fits.
+        needed = metrics.horizontalAdvance(text) + 1
+        return min(needed, int(row_width * _VALUE_MAX_SHARE)) + _VALUE_GAP
+
     def sizeHint(self, option, index):
         width = self._available_width(option)
-        doc = self._build_document(option, index, width - 2 * self._h_pad)
+        reserved = self._value_reserved(option, index, width)
+        doc = self._build_document(option, index, width - 2 * self._h_pad - reserved)
         if doc is None:
             return super().sizeHint(option, index)
         return QSize(int(width), int(doc.size().height()) + 2 * self._v_pad)
 
     def paint(self, painter, option, index) -> None:
         row_width = option.rect.width() if option.rect.width() > 0 else self._available_width(option)
-        doc = self._build_document(option, index, row_width - 2 * self._h_pad)
+        reserved = self._value_reserved(option, index, row_width)
+        doc = self._build_document(option, index, row_width - 2 * self._h_pad - reserved)
         if doc is None:
             super().paint(painter, option, index)
             return
@@ -192,4 +287,26 @@ class ParameterRowDelegate(QStyledItemDelegate):
         painter.save()
         painter.translate(option.rect.left() + self._h_pad, option.rect.top() + self._v_pad)
         doc.drawContents(painter)
+        painter.restore()
+
+        if reserved:
+            self._paint_value(painter, option, index, reserved)
+
+    def _paint_value(self, painter, option, index, reserved: int) -> None:
+        """Right-aligned, top-anchored value preview, elided with "…" to the
+        reserved width -- elision is visual only; the full string travels on
+        the item's tooltip."""
+        font = self._value_font(option)
+        ghost = bool(index.data(VALUE_GHOST_ROLE))
+        if ghost:
+            font.setItalic(True)
+        metrics = QFontMetrics(font)
+        elided = metrics.elidedText(
+            index.data(VALUE_ROLE), Qt.ElideRight, reserved - _VALUE_GAP
+        )
+        painter.save()
+        painter.setFont(font)
+        painter.setPen(QColor(GHOST_TEXT if ghost else style.MUTED))
+        rect = option.rect.adjusted(0, self._v_pad, -self._h_pad, -self._v_pad)
+        painter.drawText(rect, Qt.AlignRight | Qt.AlignTop, elided)
         painter.restore()

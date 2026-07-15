@@ -194,6 +194,14 @@ class ParameterListPanel(QWidget):
                     parameter.label, has_errors=is_visible_issue, is_empty=is_empty
                 ),
             )
+            # Right-aligned value preview (raw-verbatim, delegate-elided);
+            # the tooltip carries the full committed value so an elided
+            # 20-decimal mantissa is still one hover away.
+            preview, ghost = parameter_row.value_preview(parameter.value, parameter.kind)
+            item.setData(parameter_row.VALUE_ROLE, preview)
+            item.setData(parameter_row.VALUE_GHOST_ROLE, ghost)
+            if not is_empty:
+                item.setToolTip(parameter_row.value_tooltip(parameter.value))
             self._list.addItem(item)
         self._append_missing_fields_group(node, model)
 
