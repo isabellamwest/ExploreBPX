@@ -75,6 +75,26 @@ def compose_row_html(name: str, hints: list[tuple[str, str]], *, name_color: str
     return fragment
 
 
+def compose_issue_html(
+    severity_label: str, severity_color: str, message: str, *, location: str | None = None
+) -> str:
+    """Compose a validation-issue row's rich-text fragment: a bold, coloured
+    severity tag (``ERROR`` red / ``WARN`` amber), an optional muted location
+    path, then the validator's verbatim message in the default text colour.
+
+    Shared by the Validation page's Issues section and the Inspector's Issues
+    tab so both surfaces read identically -- the same colour language the
+    Outstanding rows use (a coloured tag rather than a plain ``[ERROR]``
+    bracket), keeping the two halves of the Validation page visually one piece.
+    The message text is never recoloured, so an issue reads validator-verbatim
+    (decision O) whichever surface shows it."""
+    fragment = _span(severity_label, color=severity_color, bold=True)
+    if location:
+        fragment += _span("  " + location, color=style.MUTED)
+    fragment += _span("  " + message, color=DEFAULT_TEXT)
+    return fragment
+
+
 def build_parameter_row_html(label: str, *, has_errors: bool, is_empty: bool = False) -> str:
     """Compose a parameter-list row's rich-text fragment: bold name, a muted
     non-bold unit, and -- for a parameter with a *page-visible* issue -- an

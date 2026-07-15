@@ -274,9 +274,17 @@ class ValidationPanel(QWidget):
             self._add_message_row(_MSG_NO_ISSUES)
             return
         for issue, nav_path in merged:
-            prefix = "ERROR" if issue.severity == Severity.ERROR else "WARN"
+            is_error = issue.severity == Severity.ERROR
+            label = "ERROR" if is_error else "WARN"
+            color = style.ERROR if is_error else style.WARNING
             loc_str = " → ".join(nav_path) if nav_path else "(document)"
-            item = QListWidgetItem(f"[{prefix}] {loc_str}: {issue.message}")
+            item = QListWidgetItem(f"[{label}] {loc_str}: {issue.message}")
+            item.setData(
+                parameter_row.HTML_ROLE,
+                parameter_row.compose_issue_html(
+                    label, color, issue.message, location=loc_str
+                ),
+            )
             item.setData(_NAV_PATH_ROLE, nav_path)
             item.setData(_KIND_ROLE, "issue")
             self._list.addItem(item)

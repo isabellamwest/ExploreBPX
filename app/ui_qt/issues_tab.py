@@ -23,6 +23,9 @@ from PySide6.QtWidgets import (
 from core.tree_model import ParameterItem
 from core.validation import Severity, merge_union_pair
 
+from . import parameter_row, style
+from .parameter_row import ParameterRowDelegate
+
 _PATH_ROLE = 256  # Qt.UserRole
 
 _MSG_NO_SELECTION = "Select a parameter to view its issues."
@@ -69,6 +72,11 @@ class IssuesTab(QWidget):
 
         self._list = QListWidget()
         self._list.setObjectName("IssuesList")
+        self._list.setWordWrap(True)
+        # Paint each row's HTML_ROLE fragment (a coloured severity tag + the
+        # verbatim message) so this tab reads identically to the Validation
+        # page's Issues section.
+        self._list.setItemDelegate(ParameterRowDelegate(self._list))
         # itemActivated fires on Enter/Return and double-click, so a single
         # connection covers keyboard and mouse activation without duplicate
         # emits. Selection changes alone (arrow keys) do not trigger it.
@@ -101,8 +109,14 @@ class IssuesTab(QWidget):
 
         merged = merge_union_pair(parameter.issues)
         for issue in merged:
-            prefix = "ERROR" if issue.severity == Severity.ERROR else "WARN"
-            item = QListWidgetItem(f"[{prefix}] {issue.message}")
+            is_error = issue.severity == Severity.ERROR
+            label = "ERROR" if is_error else "WARN"
+            color = style.ERROR if is_error else style.WARNING
+            item = QListWidgetItem(f"[{label}] {issue.message}")
+            item.setData(
+                parameter_row.HTML_ROLE,
+                parameter_row.compose_issue_html(label, color, issue.message),
+            )
             item.setData(_PATH_ROLE, parameter.path)
             self._list.addItem(item)
 
