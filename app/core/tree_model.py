@@ -16,7 +16,6 @@ from .parameter_types import (
     ParameterKind,
     classify,
     extract_unit,
-    icon_for,
     looks_like_table,
 )
 from .validation import Severity, ValidatorDiagnostic
@@ -71,10 +70,6 @@ class ParameterItem:
     sibling_series: tuple[SiblingSeries, ...] = ()
 
     @property
-    def icon(self) -> str:
-        return icon_for(self.kind)
-
-    @property
     def has_errors(self) -> bool:
         return any(issue.severity == Severity.ERROR for issue in self.issues)
 
@@ -91,10 +86,6 @@ class TreeNode:
     children: list["TreeNode"] = field(default_factory=list)
     parameters: list[ParameterItem] = field(default_factory=list)
     issues: list[ValidatorDiagnostic] = field(default_factory=list)
-
-    @property
-    def icon(self) -> str:
-        return icon_for(ParameterKind.SECTION)
 
     @property
     def is_section(self) -> bool:

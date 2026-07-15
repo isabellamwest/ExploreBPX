@@ -58,25 +58,6 @@ class ParameterKind(str, Enum):
     UNKNOWN = "unknown"
 
 
-_ICONS = {
-    ParameterKind.SECTION: "📁",
-    ParameterKind.SCALAR: "🔢",
-    ParameterKind.INTEGER: "#️⃣",
-    ParameterKind.TEXT: "📝",
-    ParameterKind.BOOLEAN: "☑️",
-    ParameterKind.ENUM: "🔽",
-    ParameterKind.FUNCTION: "📈",
-    ParameterKind.MAP: "🗂️",
-    ParameterKind.SERIES: "📶",
-    ParameterKind.TABLE: "📊",
-    ParameterKind.UNKNOWN: "❔",
-}
-
-
-def icon_for(kind: ParameterKind) -> str:
-    return _ICONS.get(kind, "❔")
-
-
 def extract_unit(label: str) -> str:
     """Return the unit embedded in an alias, e.g. ``"... [K]"`` -> ``"K"``."""
     match = _UNIT_RE.search(label or "")

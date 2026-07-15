@@ -10,7 +10,9 @@ logic of our own.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QByteArray, QSize, Qt
+import base64
+
+from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QSize, Qt
 from PySide6.QtGui import QGuiApplication, QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 
@@ -59,6 +61,32 @@ VALIDATION = """
 """.strip()
 
 
+#: Folder outline -- a section/object row in the search results (same
+#: container metaphor as the Workspace rail icon, drawn as its own constant
+#: so the rail identity can evolve without silently restyling result rows).
+SECTION = """
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+     stroke="{color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M4.5 7a1 1 0 0 1 1-1h4l2 2h7a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1z"/>
+</svg>
+""".strip()
+
+#: Two slider rails with offset knobs ("tune") -- a parameter row in the
+#: search results: an adjustable value, deliberately kind-agnostic (kind
+#: vocabulary belongs to the editor's cards, not a navigation list).
+PARAMETER = """
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+     stroke="{color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M4.5 8.5h3"/>
+  <circle cx="9.5" cy="8.5" r="2"/>
+  <path d="M11.5 8.5h8"/>
+  <path d="M4.5 15.5h8"/>
+  <circle cx="14.5" cy="15.5" r="2"/>
+  <path d="M16.5 15.5h3"/>
+</svg>
+""".strip()
+
+
 def _device_pixel_ratio() -> float:
     """The primary screen's device-pixel-ratio, or 1.0 with no QApplication."""
     app = QGuiApplication.instance()
@@ -87,6 +115,36 @@ def _render_pixmap(svg: str, color: str, size: int) -> QPixmap:
 def tinted_icon(svg: str, color: str, size: int = 20) -> QIcon:
     """Render *svg* in a single flat *color* as a standalone QIcon."""
     return QIcon(_render_pixmap(svg, color, size))
+
+
+_HTML_IMG_CACHE: dict[tuple[str, str, int], str] = {}
+
+
+def html_img(svg: str, *, color: str = _MUTED, size: int = 13) -> str:
+    """An ``<img>`` rich-text fragment embedding *svg* as a data-URI PNG.
+
+    For rows painted through ``QTextDocument`` (``ParameterRowDelegate``),
+    which cannot draw QIcons: the pixmap is rendered at the screen's
+    device-pixel-ratio and scaled back to *size* by explicit width/height
+    attributes, so glyphs stay crisp on HiDPI displays. Cached per
+    (svg, color, size) because callers rebuild rows on every keystroke;
+    a DPR change mid-session (rare) keeps serving the first rendering.
+    """
+    key = (svg, color, size)
+    cached = _HTML_IMG_CACHE.get(key)
+    if cached is not None:
+        return cached
+    pixmap = _render_pixmap(svg, color, size)
+    buffer = QBuffer()
+    buffer.open(QIODevice.WriteOnly)
+    pixmap.save(buffer, "PNG")
+    encoded = base64.b64encode(bytes(buffer.data())).decode("ascii")
+    fragment = (
+        f'<img src="data:image/png;base64,{encoded}" '
+        f'width="{size}" height="{size}" style="vertical-align: middle;">'
+    )
+    _HTML_IMG_CACHE[key] = fragment
+    return fragment
 
 
 def activity_icon(svg: str) -> QIcon:

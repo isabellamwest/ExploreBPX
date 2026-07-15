@@ -13,34 +13,51 @@ import html as _html
 from dataclasses import dataclass
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QLineEdit, QListWidget, QListWidgetItem
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import (
+    QFrame,
+    QGraphicsDropShadowEffect,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
 
 from core.document import BPXDocument
 from core.tree_model import ParameterItem, TreeNode
 
-from . import parameter_row, style
+from . import icons, parameter_row, style
 from .dismissal import OutsideDismissFilter
 from .parameter_row import ParameterRowDelegate
 
 _PATH_ROLE = Qt.UserRole
 _MAX_RESULTS = 50
 _MAX_VISIBLE_ROWS = 8
+#: Transparent margin around the card, giving the drop shadow room to render
+#: without being clipped by the top-level's bounds (same treatment as
+#: ``add_parameter_popup._SHADOW_MARGIN``).
+_SHADOW_MARGIN = 16
 
 
 def _entry_html(entry: "_Entry") -> str:
-    """A result row's rich-text fragment: bold name over its muted full path
-    -- the same name-over-secondary language the Validation page's rows use,
-    so search results read as part of the same system rather than a bare
-    default-styled list."""
+    """A result row's rich-text fragment: a muted monochrome glyph (folder =
+    object, sliders = parameter -- the activity bar's outline family, not
+    emoji), the bold name, then the muted full path beneath -- the same
+    name-over-secondary language the Validation page's rows use, so search
+    results read as part of the same system."""
+    glyph = icons.html_img(
+        icons.SECTION if entry.kind == "object" else icons.PARAMETER
+    )
     name = (
         f'<span style="font-weight:600; color:{parameter_row.DEFAULT_TEXT};">'
-        f"{_html.escape(f'{entry.icon}  {entry.name}')}</span>"
+        f"{_html.escape(entry.name)}</span>"
     )
     path = (
         f'<span style="color:{style.MUTED}; font-size:90%;">'
         f"{_html.escape(entry.path_text)}</span>"
     )
-    return name + "<br>" + path
+    return f"{glyph}&nbsp;&nbsp;{name}<br>{path}"
 
 
 @dataclass(frozen=True)
@@ -49,7 +66,6 @@ class _Entry:
 
     name: str
     path: tuple[str, ...]
-    icon: str
     kind: str  # "object" or "parameter"
 
     @property
@@ -60,42 +76,96 @@ class _Entry:
         return needle in self.name.lower() or needle in self.path_text.lower()
 
 
-class SearchPopup(QListWidget):
-    """A borderless, non-activating result list shown under the search box.
+class SearchPopup(QWidget):
+    """A floating, non-activating results card shown under the search box:
+    a rounded, shadowed card over a translucent top-level -- the same visual
+    treatment as :class:`~ui_qt.add_parameter_popup.AddParameterPopup`, so
+    the app's two floating palettes read as one family.
 
-    The popup is display and mouse-selection only; all keyboard handling stays
-    in :class:`SearchBar`, which keeps focus while the popup is visible.
+    The popup is display and mouse-selection only; all keyboard handling
+    stays in :class:`SearchBar`, which keeps focus while the popup is
+    visible. The list's small query surface (``count``/``item``/
+    ``currentItem``/``currentRow``/``setCurrentRow`` and the ``itemClicked``
+    signal) is forwarded so :class:`SearchBar` and the tests need not know a
+    card wrapper exists.
     """
 
     def __init__(self, parent: QLineEdit) -> None:
         super().__init__(parent)
-        self.setObjectName("SearchPopup")
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Tool)
         self.setAttribute(Qt.WA_ShowWithoutActivating)
+        self.setAttribute(Qt.WA_TranslucentBackground)
         self.setFocusPolicy(Qt.NoFocus)
-        self.setUniformItemSizes(False)
-        self.setWordWrap(True)
-        # Rich rows (bold name over muted path) via the shared delegate; the
-        # plain two-line string stays as each item's .text() fallback.
-        self.setItemDelegate(ParameterRowDelegate(self))
 
+        self._list = QListWidget()
+        self._list.setObjectName("SearchPopupList")
+        self._list.setFocusPolicy(Qt.NoFocus)
+        self._list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._list.setWordWrap(True)
+        self._list.setTextElideMode(Qt.ElideNone)
+        self._list.setUniformItemSizes(False)
+        # Rich rows (glyph + bold name over muted path) via the shared
+        # delegate; a plain two-line string stays as each item's .text()
+        # fallback.
+        self._list.setItemDelegate(ParameterRowDelegate(self._list))
+        self.itemClicked = self._list.itemClicked
+
+        card = QFrame()
+        card.setObjectName("SearchPopupCard")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(8, 8, 8, 8)
+        card_layout.addWidget(self._list)
+
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(24)
+        shadow.setColor(QColor(15, 23, 42, 60))
+        shadow.setOffset(0, 5)
+        card.setGraphicsEffect(shadow)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(
+            _SHADOW_MARGIN, _SHADOW_MARGIN, _SHADOW_MARGIN, _SHADOW_MARGIN
+        )
+        outer.addWidget(card)
+
+    # -- forwarded list surface ---------------------------------------
+    def count(self) -> int:
+        return self._list.count()
+
+    def item(self, row: int) -> QListWidgetItem:
+        return self._list.item(row)
+
+    def currentItem(self) -> QListWidgetItem | None:
+        return self._list.currentItem()
+
+    def currentRow(self) -> int:
+        return self._list.currentRow()
+
+    def setCurrentRow(self, row: int) -> None:
+        self._list.setCurrentRow(row)
+
+    # -- content -------------------------------------------------------
     def populate(self, entries: list["_Entry"]) -> None:
-        self.clear()
+        self._list.clear()
         for entry in entries:
-            item = QListWidgetItem(f"{entry.icon}  {entry.name}\n{entry.path_text}")
+            item = QListWidgetItem(f"{entry.name}\n{entry.path_text}")
             item.setData(_PATH_ROLE, entry.path)
             item.setData(parameter_row.HTML_ROLE, _entry_html(entry))
-            self.addItem(item)
-        if self.count():
-            self.setCurrentRow(0)
+            self._list.addItem(item)
+        if self._list.count():
+            self._list.setCurrentRow(0)
 
     def sized_height(self) -> int:
-        rows = min(self.count(), _MAX_VISIBLE_ROWS)
+        rows = min(self._list.count(), _MAX_VISIBLE_ROWS)
         if rows == 0:
             return 0
         # Sum the visible rows' own hints: delegate-painted rows wrap, so
-        # heights vary and row 0 is not representative of the rest.
-        return sum(self.sizeHintForRow(i) for i in range(rows)) + 2 * self.frameWidth()
+        # heights vary and row 0 is not representative of the rest. The
+        # card's layout margins and the shadow's transparent margins sit on
+        # top of the list's own height.
+        list_height = sum(self._list.sizeHintForRow(i) for i in range(rows))
+        list_height += 2 * self._list.frameWidth()
+        return list_height + 2 * 8 + 2 * _SHADOW_MARGIN
 
 
 class SearchBar(QLineEdit):
@@ -130,7 +200,7 @@ class SearchBar(QLineEdit):
     def _collect(self, node: TreeNode) -> None:
         if node.path:
             self._entries.append(
-                _Entry(node.label, tuple(node.path), node.icon, "object")
+                _Entry(node.label, tuple(node.path), "object")
             )
         for parameter in node.parameters:
             self._entries.append(self._parameter_entry(parameter))
@@ -139,7 +209,7 @@ class SearchBar(QLineEdit):
 
     @staticmethod
     def _parameter_entry(parameter: ParameterItem) -> "_Entry":
-        return _Entry(parameter.label, tuple(parameter.path), parameter.icon, "parameter")
+        return _Entry(parameter.label, tuple(parameter.path), "parameter")
 
     # -- result flow -----------------------------------------------------
     def _on_text_changed(self, text: str) -> None:
@@ -155,11 +225,15 @@ class SearchBar(QLineEdit):
         self._show_popup()
 
     def _show_popup(self) -> None:
-        self._popup.move(self.mapToGlobal(self.rect().bottomLeft()))
-        self._popup.setFixedWidth(max(self.width(), 320))
+        self._popup.setFixedWidth(max(self.width(), 320) + 2 * _SHADOW_MARGIN)
         height = self._popup.sized_height()
         if height:
             self._popup.setFixedHeight(height)
+        # Offset by the shadow margin so the visible card -- not its
+        # transparent shadow bed -- aligns with the search box's left edge,
+        # a small gap below it.
+        anchor = self.mapToGlobal(self.rect().bottomLeft())
+        self._popup.move(anchor.x() - _SHADOW_MARGIN, anchor.y() - _SHADOW_MARGIN + 4)
         self._popup.show()
         self._dismiss_filter.install()
 
