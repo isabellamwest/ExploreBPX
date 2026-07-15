@@ -124,12 +124,22 @@ def warnings_as_diagnostics(
 # paints for that one underlying problem. Display-only: callers pass the
 # merged result to a widget, never back into ``core`` state.
 
-_UNION_PAIR_ERROR_TYPES = frozenset({"float_type", "int_type"})
+#: The FloatInt union raises one error per branch, so a single bad value
+#: draws a matched (float, int) pair. There are two variants, by *how* the
+#: value is wrong: ``float_type``/``int_type`` for an empty or wrong-typed
+#: value (V5, e.g. committed ``null`` or a list), and
+#: ``float_parsing``/``int_parsing`` for a value of the right shape that
+#: won't parse (a bad string typed into the field). Each is one underlying
+#: problem; both collapse to their float branch's message ("Input should be
+#: a valid number ..."). Keyed float→int so the merge always drops the int
+#: branch, keeping the "number" wording.
+_UNION_PAIRS = (("float_type", "int_type"), ("float_parsing", "int_parsing"))
 
 
 def merge_union_pair(diagnostics: Sequence[ValidatorDiagnostic]) -> tuple[ValidatorDiagnostic, ...]:
-    """Collapse a ``float_type``+``int_type`` pair to the single ``float_type``
-    diagnostic ("Input should be a valid number") for display.
+    """Collapse each matched FloatInt union pair (:data:`_UNION_PAIRS`) to its
+    single float-branch diagnostic ("Input should be a valid number") for
+    display.
 
     *diagnostics* must already be scoped to one parameter (e.g.
     ``parameter.issues``, or every diagnostic absorbed by one Outstanding
@@ -139,9 +149,14 @@ def merge_union_pair(diagnostics: Sequence[ValidatorDiagnostic]) -> tuple[Valida
     unchanged, in its original order.
     """
     types = {getattr(d, "error_type", None) for d in diagnostics}
-    if not _UNION_PAIR_ERROR_TYPES <= types:
+    drop = {
+        int_type
+        for float_type, int_type in _UNION_PAIRS
+        if float_type in types and int_type in types
+    }
+    if not drop:
         return tuple(diagnostics)
-    return tuple(d for d in diagnostics if getattr(d, "error_type", None) != "int_type")
+    return tuple(d for d in diagnostics if getattr(d, "error_type", None) not in drop)
 
 
 def merge_union_pairs_by_location(

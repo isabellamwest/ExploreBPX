@@ -28,6 +28,27 @@ def test_merge_union_pair_collapses_float_and_int_type():
     assert merged[0].message == "Input should be a valid number"
 
 
+def test_merge_union_pair_collapses_float_and_int_parsing():
+    """A bad *string* in a FloatInt field raises float_parsing+int_parsing
+    (not float_type+int_type) -- the same one problem, so it collapses the
+    same way, to the "valid number" wording."""
+    float_d = _diag("float_parsing", "Input should be a valid number, unable to parse string as a number")
+    int_d = _diag("int_parsing", "Input should be a valid integer, unable to parse string as an integer")
+
+    merged = merge_union_pair((float_d, int_d))
+
+    assert merged == (float_d,)
+    assert merged[0].message.startswith("Input should be a valid number")
+
+
+def test_merge_union_pair_does_not_cross_variants():
+    """A float_type paired with an int_parsing (never emitted together by
+    the validator, but a guard against over-eager merging) is left alone --
+    only a matched same-variant pair collapses."""
+    mixed = (_diag("float_type"), _diag("int_parsing"))
+    assert merge_union_pair(mixed) == mixed
+
+
 def test_merge_union_pair_passes_through_when_incomplete():
     """Only a *complete* float_type+int_type pair merges -- a lone float_type
     (or int_type), or an unrelated error_type, is never touched."""
