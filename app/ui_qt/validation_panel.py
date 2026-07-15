@@ -45,12 +45,14 @@ from __future__ import annotations
 import html as _html
 
 from PySide6.QtCore import QSize, Qt, Signal
-from PySide6.QtGui import QColor, QFont
+from PySide6.QtGui import QColor, QPen
 from PySide6.QtWidgets import (
     QLabel,
     QListWidget,
     QListWidgetItem,
     QStackedWidget,
+    QStyle,
+    QStyleOptionViewItem,
     QVBoxLayout,
     QWidget,
 )
@@ -78,9 +80,10 @@ _ACTION_CHOOSE = "Choose…"
 #: (kept unchanged so nothing downstream that reads it needs to know this
 #: file changed). The rest are new, Phase 5 roles.
 _NAV_PATH_ROLE = 256
-_KIND_ROLE = Qt.UserRole + 300  # "page_header" | "group_header" | "section_group" | "issue" | "task" | "message"
+_KIND_ROLE = Qt.UserRole + 300  # "page_header" | "group_header" | "section_group" | "issue" | "task" | "message" | "spacer"
 _TASK_ROLE = Qt.UserRole + 301  # CompletionTask, "task" rows only
 _SECTION_ROLE = Qt.UserRole + 302  # section name a "section_group" header toggles
+_GROUP_KEY_ROLE = Qt.UserRole + 303  # fold key an Outstanding "group_header" toggles
 
 #: The group an issue clusters under (Concept A): its top-level section --
 #: nav paths are already section-relative (V4 strips Header/Parameterisation),
@@ -206,6 +209,68 @@ def _task_row_content(task: CompletionTask, absorbed_messages: tuple[str, ...] =
     )
 
 
+class _ValidationRowDelegate(ParameterRowDelegate):
+    """Validation-page painting on top of the shared row delegate.
+
+    Two page-specific behaviours:
+
+    - a ``page_header`` row paints as a **labelled divider** -- a short
+      leading rule, the bold title (with its muted count), then a hairline
+      rule to the row's right edge -- so the two page sections read as ruled
+      bands rather than floating bold lines;
+    - only actionable rows (``issue``/``task``) show hover or selection.
+      Headers, group rows, messages and spacers paint flat whatever the
+      mouse does -- a highlight promises interaction, and activating them is
+      a structural no-op. The fold-toggling section/group headers stay
+      clickable; their chevron is the affordance, not a highlight.
+    """
+
+    _INTERACTIVE_KINDS = frozenset({"issue", "task"})
+    _DIVIDER_LEAD = 10  # rule length before the label
+    _DIVIDER_GAP = 8  # breathing room between rule and label text
+
+    def paint(self, painter, option, index) -> None:
+        kind = index.data(_KIND_ROLE)
+        if kind == "page_header":
+            self._paint_divider(painter, option, index)
+            return
+        if kind is not None and kind not in self._INTERACTIVE_KINDS:
+            option = QStyleOptionViewItem(option)
+            option.state &= ~(QStyle.State_MouseOver | QStyle.State_Selected)
+        super().paint(painter, option, index)
+
+    def sizeHint(self, option, index):
+        if index.data(_KIND_ROLE) == "page_header":
+            return QSize(int(self._available_width(option)), 34)
+        return super().sizeHint(option, index)
+
+    def _paint_divider(self, painter, option, index) -> None:
+        doc = self._build_document(option, index, self._available_width(option))
+        if doc is None:  # defensive: a header without HTML falls back plain
+            super().paint(painter, option, index)
+            return
+        doc.setTextWidth(-1)  # natural width -- the label never wraps
+        rect = option.rect.adjusted(self._h_pad, 0, -self._h_pad, 0)
+        text_width = doc.idealWidth()
+        text_height = doc.size().height()
+        y_mid = rect.top() + rect.height() / 2.0
+        text_x = rect.left() + self._DIVIDER_LEAD + self._DIVIDER_GAP
+
+        painter.save()
+        painter.translate(text_x, y_mid - text_height / 2.0)
+        doc.drawContents(painter)
+        painter.restore()
+
+        painter.save()
+        painter.setPen(QPen(QColor(style.BORDER), 1))
+        y = round(y_mid)
+        painter.drawLine(rect.left(), y, rect.left() + self._DIVIDER_LEAD, y)
+        rule_start = round(text_x + text_width + self._DIVIDER_GAP)
+        if rule_start < rect.right():
+            painter.drawLine(rule_start, y, rect.right(), y)
+        painter.restore()
+
+
 class ValidationPanel(QWidget):
     """Renders the Validation page's Issues + Outstanding sections; emits a
     parameter path (Issues) or a :class:`CompletionTask` (Outstanding) on
@@ -237,10 +302,10 @@ class ValidationPanel(QWidget):
         self._list = QListWidget()
         self._list.setObjectName("ValidationList")
         self._list.setWordWrap(True)
-        # A row with no HTML_ROLE data (page/group headers, plain Issues rows,
-        # message rows) falls through to the base QStyledItemDelegate
-        # untouched -- only "task" rows carry rich text.
-        self._list.setItemDelegate(ParameterRowDelegate(self._list))
+        # Page-specific delegate: divider page headers, and hover/selection
+        # painted only on actionable (issue/task) rows. Rows without
+        # HTML_ROLE data still fall through to the base delegate untouched.
+        self._list.setItemDelegate(_ValidationRowDelegate(self._list))
         # itemActivated fires on Enter/Return and double-click, so a single
         # connection covers keyboard and mouse activation without duplicate
         # emits. Selection changes alone (arrow keys) do not trigger it, and
@@ -258,6 +323,11 @@ class ValidationPanel(QWidget):
         #: doesn't snap open on the next edit; a stale name for a section that
         #: no longer exists simply matches nothing.
         self._collapsed_issue_sections: set[str] = set()
+        #: Outstanding groups the user has collapsed, keyed by
+        #: ``(tier, *section_path)`` where tier is "required"/"optional" --
+        #: the two sub-groups of one section fold independently. Same
+        #: survives-refresh behaviour as the Issues folds.
+        self._collapsed_outstanding_groups: set[tuple[str, ...]] = set()
         #: The last ``refresh`` arguments, replayed when a group is toggled so
         #: the toggle needs no access to ``main_window``'s derivation.
         self._last_refresh: tuple | None = None
@@ -270,6 +340,18 @@ class ValidationPanel(QWidget):
 
         layout.addWidget(self._stack)
         self._stack.setCurrentIndex(1)  # start on the placeholder
+
+    def reset_view_state(self) -> None:
+        """Forget per-document view state (folded groups).
+
+        Folds are keyed by section *name*, so without this a section folded
+        in one file would open pre-folded in the next file that happens to
+        share the name. Called when a different document replaces the
+        session (open/new) -- never on ordinary refreshes, where surviving
+        is the point.
+        """
+        self._collapsed_issue_sections.clear()
+        self._collapsed_outstanding_groups.clear()
 
     def refresh(
         self,
@@ -445,13 +527,19 @@ class ValidationPanel(QWidget):
             required_tasks = [task for task in group_tasks if task.required]
             optional_tasks = [task for task in group_tasks if not task.required]
             if required_tasks:
-                self._add_required_group_header(raw, model, section_path, required_tasks)
-                for task in required_tasks:
-                    self._add_task_row(task, partition)
+                required_key = ("required", *section_path)
+                self._add_required_group_header(
+                    raw, model, section_path, required_tasks, required_key
+                )
+                if required_key not in self._collapsed_outstanding_groups:
+                    for task in required_tasks:
+                        self._add_task_row(task, partition)
             if optional_tasks:
-                self._add_optional_group_header(section_path, optional_tasks)
-                for task in optional_tasks:
-                    self._add_task_row(task, partition)
+                optional_key = ("optional", *section_path)
+                self._add_optional_group_header(section_path, optional_tasks, optional_key)
+                if optional_key not in self._collapsed_outstanding_groups:
+                    for task in optional_tasks:
+                        self._add_task_row(task, partition)
 
     def _add_required_group_header(
         self,
@@ -459,6 +547,7 @@ class ValidationPanel(QWidget):
         model: str | None,
         section_path: tuple[str, ...],
         required_tasks: list[CompletionTask],
+        fold_key: tuple[str, ...],
     ) -> None:
         """``<Section> -- N of M remaining`` (decision R): *required_tasks*
         is already filtered to Required-only, so N is always its own length
@@ -485,10 +574,13 @@ class ValidationPanel(QWidget):
             value = _value_at(raw, section_path)
             required_total = completion.completion_for(section_path, value, model).required_total
             text = f"{section_label} — {len(required_tasks)} of {required_total} remaining"
-        self._add_muted_header_row(text)
+        self._add_muted_header_row(text, fold_key)
 
     def _add_optional_group_header(
-        self, section_path: tuple[str, ...], optional_tasks: list[CompletionTask]
+        self,
+        section_path: tuple[str, ...],
+        optional_tasks: list[CompletionTask],
+        fold_key: tuple[str, ...],
     ) -> None:
         """``<Section> · optional -- K unfilled`` (decision R): a quiet
         sub-group directly beneath the required group, for Expected-but-
@@ -497,16 +589,24 @@ class ValidationPanel(QWidget):
         rows (:func:`_task_row_content` already reads ``task.required``)."""
         section_label = section_path[-1]
         text = f"{section_label} · optional — {len(optional_tasks)} unfilled"
-        self._add_muted_header_row(text)
+        self._add_muted_header_row(text, fold_key)
 
-    def _add_muted_header_row(self, text: str) -> None:
+    def _add_muted_header_row(self, text: str, fold_key: tuple[str, ...]) -> None:
+        """An Outstanding group header: muted, bold, foldable by a single
+        click like the Issues section groups. ``item.text()`` stays the bare
+        header text (the driver and tests match on it); the chevron lives
+        only in the painted HTML."""
+        chevron = "▸" if fold_key in self._collapsed_outstanding_groups else "▾"
         item = QListWidgetItem(text)
-        item.setFlags(Qt.ItemIsEnabled)  # visible, never selectable/activatable
+        item.setFlags(Qt.ItemIsEnabled)  # visible + clickable, never selectable
         item.setData(_KIND_ROLE, "group_header")
-        item.setForeground(QColor(style.MUTED))
-        font = QFont(self._list.font())
-        font.setBold(True)
-        item.setFont(font)
+        item.setData(_GROUP_KEY_ROLE, fold_key)
+        item.setData(
+            parameter_row.HTML_ROLE,
+            parameter_row.compose_row_html(
+                f"{chevron}  {text}", [], name_color=style.MUTED
+            ),
+        )
         self._list.addItem(item)
 
     def _add_task_row(self, task: CompletionTask, partition: PartitionedIssues | None) -> None:
@@ -568,16 +668,21 @@ class ValidationPanel(QWidget):
             self.task_activated.emit(item.data(_TASK_ROLE))
 
     def _on_clicked(self, item: QListWidgetItem) -> None:
-        """A single click on a section group folds or unfolds it; every other
-        row ignores the click (navigation stays Enter/double-click). The
-        toggle replays the last ``refresh`` so the rebuild reuses one code
-        path and needs no document access of its own."""
-        if item.data(_KIND_ROLE) != "section_group":
-            return
-        section = item.data(_SECTION_ROLE)
-        if section in self._collapsed_issue_sections:
-            self._collapsed_issue_sections.discard(section)
+        """A single click on a foldable header (an Issues section group or an
+        Outstanding group header) folds or unfolds it; every other row
+        ignores the click (navigation stays Enter/double-click). The toggle
+        replays the last ``refresh`` so the rebuild reuses one code path and
+        needs no document access of its own."""
+        kind = item.data(_KIND_ROLE)
+        if kind == "section_group":
+            section = item.data(_SECTION_ROLE)
+            self._collapsed_issue_sections.symmetric_difference_update({section})
+        elif kind == "group_header":
+            fold_key = item.data(_GROUP_KEY_ROLE)
+            if fold_key is None:
+                return
+            self._collapsed_outstanding_groups.symmetric_difference_update({fold_key})
         else:
-            self._collapsed_issue_sections.add(section)
+            return
         if self._last_refresh is not None:
             self.refresh(*self._last_refresh)

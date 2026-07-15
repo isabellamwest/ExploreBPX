@@ -600,6 +600,7 @@ class MainWindow(QMainWindow):
         """
         self._state.open(Path(path))
         self._params.reset_expansion_state()
+        self._validation.reset_view_state()
         self._refresh_all()
         self._show_page(_EDITOR_PAGE_INDEX)
 
@@ -672,6 +673,7 @@ class MainWindow(QMainWindow):
             return
         self._state.new_document(model)
         self._params.reset_expansion_state()
+        self._validation.reset_view_state()
         self._refresh_all()
         self._show_page(_EDITOR_PAGE_INDEX)
 

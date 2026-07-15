@@ -132,6 +132,101 @@ def test_collapse_survives_a_refresh(app_driver, many_issues_path, tmp_path, val
     assert dict(d.validation_section_groups())["Cell"] is True
 
 
+# --- flat rows and divider headers (2026-07-15 follow-up round) ----------
+
+
+def test_only_issue_and_task_rows_are_interactive():
+    """Headers, group rows, messages and spacers paint flat -- the delegate
+    strips hover/selection for every kind outside this set. A highlight
+    promises interaction; activating those rows is a structural no-op."""
+    from ui_qt.validation_panel import _ValidationRowDelegate
+
+    assert _ValidationRowDelegate._INTERACTIVE_KINDS == {"issue", "task"}
+
+
+def test_page_header_paints_as_fixed_height_divider(app_driver, valid_spm_path):
+    """Page headers get the divider treatment: a fixed 34px row (the delegate
+    overrides sizeHint for them) whose text stays the bare title."""
+    from PySide6.QtWidgets import QStyleOptionViewItem
+
+    d = app_driver
+    d.open(valid_spm_path)
+    lst = d._w._validation._list
+    delegate = lst.itemDelegate()
+    header = d._validation_rows("page_header")[0]
+    index = lst.indexFromItem(header)
+    option = QStyleOptionViewItem()
+    option.font = lst.font()
+    assert delegate.sizeHint(option, index).height() == 34
+
+
+# --- Outstanding folds ----------------------------------------------------
+
+
+def test_outstanding_group_folds_and_unfolds(app_driver):
+    d = app_driver
+    d._w._new("SPM")
+    header = "Cell — 5 of 5 remaining"
+    assert (header, False) in d.outstanding_group_headers()
+    tasks_before = len(d.validation_task_texts())
+
+    d.toggle_outstanding_group(header)
+    assert (header, True) in d.outstanding_group_headers()
+    assert len(d.validation_task_texts()) == tasks_before - 5
+
+    d.toggle_outstanding_group(header)
+    assert (header, False) in d.outstanding_group_headers()
+    assert len(d.validation_task_texts()) == tasks_before
+
+
+def test_outstanding_fold_survives_a_refresh(app_driver):
+    d = app_driver
+    d._w._new("SPM")
+    header = "Cell — 5 of 5 remaining"
+    d.toggle_outstanding_group(header)
+
+    d._w._state.active.apply_value(("Header", "Title"), "still folded")
+    d._w._refresh_all()
+
+    assert (header, True) in d.outstanding_group_headers()
+
+
+# --- fold state is per-document (the leak fix) ----------------------------
+
+
+def test_issue_fold_does_not_leak_into_the_next_document(
+    app_driver, many_issues_path, tmp_path, valid_spm_dict
+):
+    """Folds are keyed by section name; opening a different document must
+    start fully expanded even when it has issues in a same-named section."""
+    raw = json.loads(json.dumps(valid_spm_dict))
+    raw["Parameterisation"]["Cell"]["Electrode area [m2]"] = "wide"
+    other = _write(tmp_path, "other_issues.json", raw)
+
+    d = app_driver
+    d.open(many_issues_path)
+    d.toggle_validation_section("Cell")
+    assert dict(d.validation_section_groups())["Cell"] is True
+
+    d.open(other)
+    assert dict(d.validation_section_groups())["Cell"] is False
+
+
+def test_outstanding_fold_does_not_leak_into_a_new_document(app_driver):
+    d = app_driver
+    d._w._new("SPM")
+    header = "Cell — 5 of 5 remaining"
+    d.toggle_outstanding_group(header)
+    assert (header, True) in d.outstanding_group_headers()
+
+    # A fresh scaffold is dirty; mark it saved so the second _new doesn't
+    # raise the (offscreen-blocking) discard dialog -- the guard is not what
+    # this test exercises.
+    d._w._state.active.dirty = False
+    d._w._new("SPM")
+    assert (header, False) in d.outstanding_group_headers()
+
+
 # --- clean document ------------------------------------------------------
 
 

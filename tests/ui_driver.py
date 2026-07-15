@@ -265,6 +265,30 @@ class AppDriver:
                 return self
         raise AssertionError(f"No Issues section group named {section!r}.")
 
+    def outstanding_group_headers(self) -> list[tuple[str, bool]]:
+        """The Outstanding group headers as ``(text, collapsed)`` pairs, in
+        display order. ``item.text()`` is the bare header (no chevron); the
+        fold state is read from the painted HTML's chevron."""
+        from ui_qt import parameter_row
+
+        return [
+            (item.text(), "▸" in (item.data(parameter_row.HTML_ROLE) or ""))
+            for item in self._validation_rows("group_header")
+        ]
+
+    def toggle_outstanding_group(self, header_text: str) -> "AppDriver":
+        """Fold/unfold the named Outstanding group, as a single click on its
+        header does."""
+        for item in self._validation_rows("group_header"):
+            if item.text() == header_text:
+                self._w._validation._on_clicked(item)
+                return self
+        raise AssertionError(f"No Outstanding group header with text {header_text!r}.")
+
+    def validation_task_texts(self) -> list[str]:
+        """Text of every Outstanding task row, in order."""
+        return [item.text() for item in self._validation_rows("task")]
+
     def validation_issue_html(self) -> list[str]:
         """The painted HTML of every Issues-section row, in order -- lets a
         test assert the two-line location/message split without pixel-reading."""
