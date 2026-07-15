@@ -139,4 +139,9 @@ class DocumentationTab(QWidget):
             item = self._content_layout.takeAt(0)
             widget = item.widget()
             if widget is not None:
+                # Reparent out *now*: deleteLater only reaps when the event
+                # loop unwinds, and a widget merely taken from the layout
+                # stays a visible child painting over its replacement (the
+                # Inspector ghost-placeholder bug, same class).
+                widget.setParent(None)
                 widget.deleteLater()
