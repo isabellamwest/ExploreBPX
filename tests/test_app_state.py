@@ -89,14 +89,40 @@ def test_execute_command_marks_dirty(valid_spm_bytes):
     assert session.dirty
 
 
-def test_undo_marks_dirty(valid_spm_bytes):
-    """Undo marks the session dirty regardless of the resulting state."""
+def test_undo_away_from_save_point_marks_dirty(valid_spm_bytes):
+    """Undoing PAST the save point is dirty: the document on screen (the
+    pre-edit state) is no longer what was saved (the post-edit state)."""
     from core.commands import SetValue
     session = _loaded_session(valid_spm_bytes)
     session.execute_command(SetValue(("Header", "Model"), "DFN"))
     session.dirty = False  # simulate a save at this point
     session.undo()
     assert session.dirty
+
+
+def test_undo_back_to_save_point_is_clean(valid_spm_bytes):
+    """Undoing back to the state that was opened (or last saved) reads clean:
+    dirty means "differs from disk", never "an edit happened at some point".
+    Works by identity -- undo restores the exact document object the
+    transition recorded, which is the saved one."""
+    from core.commands import SetValue
+    session = _loaded_session(valid_spm_bytes)
+    session.execute_command(SetValue(("Header", "Model"), "DFN"))
+    assert session.dirty
+    session.undo()
+    assert not session.dirty
+
+
+def test_redo_back_to_save_point_is_clean(valid_spm_bytes):
+    """Save mid-history, undo past it (dirty), redo back onto it (clean)."""
+    from core.commands import SetValue
+    session = _loaded_session(valid_spm_bytes)
+    session.execute_command(SetValue(("Header", "Model"), "DFN"))
+    session.dirty = False  # simulate a save at this point
+    session.undo()
+    assert session.dirty
+    session.redo()
+    assert not session.dirty
 
 
 def test_save_clears_dirty(valid_spm_bytes, tmp_path):

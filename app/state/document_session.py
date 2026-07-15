@@ -59,9 +59,12 @@ class DocumentSession:
     document will be produced by an initial command such as ``CreateDocument``.
     In normal use, sessions are created by ``AppState.open``.
 
-    ``dirty`` is set by any mutation (``execute_command``, ``apply_value``,
-    ``undo``, ``redo``) and cleared by ``save``. ``backing_file`` is the path
-    from which the document was opened and to which ``save`` writes.
+    ``dirty`` is derived, not stored: it compares the current document against
+    the one last saved (or opened), so any mutation (``execute_command``,
+    ``apply_value``) makes the session dirty and ``save`` cleans it -- and
+    undoing back to the save point cleans it too, because undo/redo restore
+    the *same* document object a transition recorded. ``backing_file`` is the
+    path from which the document was opened and to which ``save`` writes.
     """
 
     def __init__(self, document: BPXDocument | None = None) -> None:
@@ -70,8 +73,28 @@ class DocumentSession:
         self.selected_parameter_path: tuple[str, ...] | None = None
         self._undo_stack: list[_Transition] = []
         self._redo_stack: list[_Transition] = []
-        self.dirty: bool = False
+        self._saved_document: BPXDocument | None = document
         self.backing_file: Path | None = None
+
+    @property
+    def dirty(self) -> bool:
+        """True when the in-memory document is not the one on disk.
+
+        Identity, not equality: every command produces a fresh
+        ``BPXDocument``, while undo/redo restore the exact object a
+        transition recorded -- so walking history back to the save point
+        yields the saved object itself and the session reads clean again.
+        "Modified" always means "what you see is not what is saved", never
+        "an edit happened at some point".
+        """
+        return self.document is not self._saved_document
+
+    @dirty.setter
+    def dirty(self, value: bool) -> None:
+        """Compatibility setter: ``False`` marks the current document as the
+        saved one (what ``save`` means); ``True`` forgets the save marker
+        entirely (a never-saved session, e.g. a fresh scaffold)."""
+        self._saved_document = None if value else self.document
 
     @property
     def has_document(self) -> bool:
@@ -126,7 +149,6 @@ class DocumentSession:
             filename, fmt = "untitled.json", "json"
         self._redo_stack.clear()
         self.document = BPXDocument.from_raw(result.raw, filename=filename, fmt=fmt)
-        self.dirty = True
         if result.select_path is not None:
             self.selected_path = result.select_path
         self.selected_parameter_path = result.select_parameter_path
@@ -158,7 +180,6 @@ class DocumentSession:
             self.selected_path = transition.before_selection.path
             self.selected_parameter_path = transition.before_selection.parameter_path
             self._redo_stack.append(transition)
-            self.dirty = True
 
     def redo(self) -> None:
         """Reapply the most recently undone command and land on its own target.
@@ -176,7 +197,6 @@ class DocumentSession:
             self.selected_path = transition.after_selection.path
             self.selected_parameter_path = transition.after_selection.parameter_path
             self._undo_stack.append(transition)
-            self.dirty = True
 
     def select(self, path: tuple[str, ...]) -> None:
         """Select an object node and show its parameter list."""
