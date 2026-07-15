@@ -291,5 +291,11 @@ class InspectorPanel(QWidget):
             item = self._content_layout.takeAt(0)
             widget = item.widget()
             if widget is not None:
+                # Reparent out of the content widget *now*: deleteLater only
+                # reaps when the event loop unwinds to its top level, so a
+                # widget merely taken from the layout stays a visible child of
+                # _content until then -- successive clears stack ghost labels
+                # over the live card. setParent(None) removes it immediately.
+                widget.setParent(None)
                 widget.deleteLater()
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)

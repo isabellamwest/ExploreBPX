@@ -199,6 +199,29 @@ def test_real_edit_still_commits_and_emits(qtbot, spm_workfile):
     assert session.document.find_parameter(_CAPACITY).value == 7.0
 
 
+def test_switching_content_leaves_no_ghost_placeholder(qtbot, spm_workfile):
+    """``_clear_content`` must reparent old widgets out of the content pane
+    immediately, not merely take them from the layout: ``deleteLater`` only
+    reaps when the event loop unwinds, so a widget still parented to
+    ``_content`` keeps painting a ghost over the live card. Regression for the
+    tripled "Select an object..." placeholder stacked behind the card."""
+    from PySide6.QtWidgets import QLabel
+
+    state, panel = _panel_on(qtbot, spm_workfile, _CAPACITY)
+
+    # Placeholder -> card -> placeholder -> card: every switch must clear.
+    panel.show_placeholder()
+    panel.show_parameter(state.active.selected_parameter())
+    panel.show_placeholder()
+
+    stale = [
+        label
+        for label in panel._content.findChildren(QLabel)
+        if "Select an object" in label.text()
+    ]
+    assert len(stale) == 1, f"expected one placeholder, found {len(stale)}"
+
+
 def test_issues_tab_count_updates_live_during_preview(qtbot, spm_workfile):
     """03-features §5: the Issues tab's count badge updates live while
     typing an invalid draft, not only on commit."""
