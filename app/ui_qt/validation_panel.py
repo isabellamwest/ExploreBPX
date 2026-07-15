@@ -16,13 +16,28 @@ optional fields committed null (decision D, revised). Either may be absent
 (a section with no optional nulls shows no optional sub-group; one with only
 optional nulls shows no required header at all).
 
+Layout (Concept A, 2026-07-15 design pass -- "make it scannable, not a block
+of text"): each page-section header carries a muted count suffix ("Issues ·
+7 errors · 1 warning") so the page's scale reads before any detail. Issues
+then cluster into **collapsible groups by section**; a single click on a
+``▾ Section  N`` header folds it away (the count is coloured by the group's
+worst severity). Every issue row is **two lines** -- a coloured severity tag
+and the bold, section-relative location on the first, the validator's
+verbatim message (muted) on the second (``parameter_row.compose_issue_row_html``)
+-- so where and what stop competing for one line. Outstanding keeps its
+decision-R grouping unchanged.
+
 Single ``QListWidget``, role-typed rows (mirrors ``parameter_list.py``'s group
-idiom): a page-section header, a group subheader, an issue row, a task row, or
-a plain message row. Only issue/task rows are selectable, so keyboard
-navigation skips every header/message row and Enter on one of them is a
-structural no-op rather than a special-cased guard. ``itemActivated`` (Enter/
-double-click) is the sole activation path; arrow-key selection alone never
-acts -- the same contract ``IssuesTab`` uses.
+idiom): a page-section header, a collapsible issue section_group, a group
+subheader, an issue row, a task row, a spacer, or a plain message row. Only
+issue/task rows are selectable, so keyboard navigation skips every
+header/message row and Enter on one of them is a structural no-op rather than
+a special-cased guard. ``itemActivated`` (Enter/double-click) navigates
+(issue/task rows only); ``itemClicked`` folds a section group and nothing
+else -- navigation stays Enter/double-click, the same contract ``IssuesTab``
+uses. A collapse persists across ``refresh`` (kept in
+``_collapsed_issue_sections``) so an edit elsewhere doesn't snap folded
+sections open.
 """
 
 from __future__ import annotations
@@ -63,8 +78,15 @@ _ACTION_CHOOSE = "Choose…"
 #: (kept unchanged so nothing downstream that reads it needs to know this
 #: file changed). The rest are new, Phase 5 roles.
 _NAV_PATH_ROLE = 256
-_KIND_ROLE = Qt.UserRole + 300  # "page_header" | "group_header" | "issue" | "task" | "message"
+_KIND_ROLE = Qt.UserRole + 300  # "page_header" | "group_header" | "section_group" | "issue" | "task" | "message"
 _TASK_ROLE = Qt.UserRole + 301  # CompletionTask, "task" rows only
+_SECTION_ROLE = Qt.UserRole + 302  # section name a "section_group" header toggles
+
+#: The group an issue clusters under (Concept A): its top-level section --
+#: nav paths are already section-relative (V4 strips Header/Parameterisation),
+#: so the first segment is the section. A diagnostic with no location (a
+#: document-level warning) clusters under this label instead.
+_DOCUMENT_GROUP = "Document"
 
 
 def _value_at(raw: dict, path: tuple[str, ...]) -> dict:
@@ -225,7 +247,20 @@ class ValidationPanel(QWidget):
         # header/message rows are never selectable at all, so they cannot
         # become "current" for Enter to target.
         self._list.itemActivated.connect(self._on_activated)
+        # A single click toggles a collapsible section group; it never
+        # navigates (navigation stays Enter/double-click, the Issues
+        # contract). Issue/task rows ignore the click here.
+        self._list.itemClicked.connect(self._on_clicked)
         self._stack.addWidget(self._list)  # index 0 -- issue list
+
+        #: Issues-section groups the user has collapsed, by section name.
+        #: Survives ``refresh`` (every commit rebuilds the list) so a collapse
+        #: doesn't snap open on the next edit; a stale name for a section that
+        #: no longer exists simply matches nothing.
+        self._collapsed_issue_sections: set[str] = set()
+        #: The last ``refresh`` arguments, replayed when a group is toggled so
+        #: the toggle needs no access to ``main_window``'s derivation.
+        self._last_refresh: tuple | None = None
 
         self._placeholder = QLabel(_MSG_NO_DOCUMENT)
         self._placeholder.setObjectName("IssuesPlaceholder")
@@ -254,43 +289,124 @@ class ValidationPanel(QWidget):
         remaining") via ``core.completion.completion_for`` -- no other
         document-wide logic lives here.
         """
+        self._last_refresh = (raw, model, partition, tasks)
         self._list.clear()
         if raw is None:
             self._placeholder.setText(_MSG_NO_DOCUMENT)
             self._stack.setCurrentIndex(1)
             return
-        self._add_page_header("Issues")
+        self._add_page_header("Issues", self._issues_count_suffix(partition))
         self._add_issues_rows(partition)
-        self._add_page_header("Outstanding")
+        self._add_section_spacer()
+        self._add_page_header("Outstanding", self._outstanding_count_suffix(tasks))
         self._add_outstanding_rows(raw, model, tasks, partition)
         self._stack.setCurrentIndex(0)
+
+    # -- counts ------------------------------------------------------
+    @staticmethod
+    def _issues_count_suffix(partition: PartitionedIssues | None) -> str:
+        """`` · 7 errors · 1 warning`` for the Issues header, from the merged
+        counts the badge also uses (decision G/Q). Empty when the document is
+        clean, so a valid document's header reads just ``Issues``."""
+        if partition is None:
+            return ""
+        parts = []
+        if partition.error_count:
+            parts.append(f"{partition.error_count} error{'s' if partition.error_count != 1 else ''}")
+        if partition.warning_count:
+            parts.append(f"{partition.warning_count} warning{'s' if partition.warning_count != 1 else ''}")
+        return "  ·  " + " · ".join(parts) if parts else ""
+
+    @staticmethod
+    def _outstanding_count_suffix(tasks: tuple[CompletionTask, ...]) -> str:
+        """`` · 4 remaining`` for the Outstanding header. Every task is a
+        thing left to do, so the raw task count is the honest total."""
+        return f"  ·  {len(tasks)} remaining" if tasks else ""
 
     # -- Issues ------------------------------------------------------
     def _add_issues_rows(self, partition: PartitionedIssues | None) -> None:
         visible = partition.visible if partition is not None else ()
-        # Decision Q: a null/bad FloatInt value's float_type+int_type pair
-        # (V5) displays as one row here, matching the merged badge/page count
-        # (core.completion.partition_issues already computes error_count/
-        # warning_count the same way).
+        # Decision Q: a null/bad FloatInt value's float/int pair (V5) displays
+        # as one row here, matching the merged badge/page count (partition's
+        # error_count/warning_count are computed the same way).
         merged = merge_union_pairs_by_location(visible)
         if not merged:
             self._add_message_row(_MSG_NO_ISSUES)
             return
+        for section, issues in self._group_issues_by_section(merged):
+            collapsed = section in self._collapsed_issue_sections
+            self._add_issue_section_group(section, issues, collapsed)
+            if collapsed:
+                continue
+            for issue, nav_path in issues:
+                self._add_issue_row(issue, nav_path, section)
+
+    @staticmethod
+    def _group_issues_by_section(
+        merged: tuple[tuple[object, tuple[str, ...]], ...],
+    ) -> list[tuple[str, list[tuple[object, tuple[str, ...]]]]]:
+        """Cluster merged issues by top-level section, first-appearance order
+        (already document order -- ``iter_issues`` walks the tree in raw dict
+        order). A diagnostic with no nav path clusters under ``Document``."""
+        groups: dict[str, list] = {}
+        order: list[str] = []
         for issue, nav_path in merged:
-            is_error = issue.severity == Severity.ERROR
-            label = "ERROR" if is_error else "WARN"
-            color = style.ERROR if is_error else style.WARNING
-            loc_str = " → ".join(nav_path) if nav_path else "(document)"
-            item = QListWidgetItem(f"[{label}] {loc_str}: {issue.message}")
-            item.setData(
-                parameter_row.HTML_ROLE,
-                parameter_row.compose_issue_html(
-                    label, color, issue.message, location=loc_str
-                ),
-            )
-            item.setData(_NAV_PATH_ROLE, nav_path)
-            item.setData(_KIND_ROLE, "issue")
-            self._list.addItem(item)
+            section = nav_path[0] if nav_path else _DOCUMENT_GROUP
+            if section not in groups:
+                groups[section] = []
+                order.append(section)
+            groups[section].append((issue, nav_path))
+        return [(section, groups[section]) for section in order]
+
+    def _add_issue_section_group(
+        self, section: str, issues: list, collapsed: bool
+    ) -> None:
+        """A collapsible ``▾ Section  N`` header clustering one section's
+        issues. Clickable (``_on_clicked``) to fold the section away -- the
+        core navigation aid for a document with many issues."""
+        chevron = "▸" if collapsed else "▾"
+        count = len(issues)
+        # Colour the count by the worst severity the section holds -- red when
+        # any error, amber for a warning-only section -- so a folded group
+        # still signals how bad it is.
+        has_error = any(issue.severity == Severity.ERROR for issue, _ in issues)
+        count_color = style.ERROR if has_error else style.WARNING
+        html = parameter_row.compose_row_html(
+            f"{chevron}  {section}",
+            [(str(count), count_color)],
+            name_color=style.MUTED,
+        )
+        item = QListWidgetItem(f"{chevron} {section}  ({count})")
+        item.setFlags(Qt.ItemIsEnabled)  # visible + clickable, never selectable
+        item.setData(_KIND_ROLE, "section_group")
+        item.setData(_SECTION_ROLE, section)
+        item.setData(parameter_row.HTML_ROLE, html)
+        self._list.addItem(item)
+
+    @staticmethod
+    def _relative_location(section: str, nav_path: tuple[str, ...]) -> str:
+        """The issue's location *within* its section group -- the section
+        prefix is the group header above it, so it's dropped. A section-level
+        or document-level diagnostic (nav path is just the section, or empty)
+        has no in-section location and returns ``""`` (message-only row)."""
+        if len(nav_path) <= 1:
+            return ""
+        return " → ".join(nav_path[1:])
+
+    def _add_issue_row(self, issue, nav_path: tuple[str, ...], section: str) -> None:
+        is_error = issue.severity == Severity.ERROR
+        label = "ERROR" if is_error else "WARN"
+        color = style.ERROR if is_error else style.WARNING
+        location = self._relative_location(section, nav_path)
+        plain_loc = " → ".join(nav_path) if nav_path else "(document)"
+        item = QListWidgetItem(f"[{label}] {plain_loc}: {issue.message}")
+        item.setData(
+            parameter_row.HTML_ROLE,
+            parameter_row.compose_issue_row_html(label, color, location, issue.message),
+        )
+        item.setData(_NAV_PATH_ROLE, nav_path)
+        item.setData(_KIND_ROLE, "issue")
+        self._list.addItem(item)
 
     # -- Outstanding ---------------------------------------------------
     def _add_outstanding_rows(
@@ -408,18 +524,33 @@ class ValidationPanel(QWidget):
         self._list.addItem(item)
 
     # -- shared --------------------------------------------------------
-    def _add_page_header(self, text: str) -> None:
+    def _add_page_header(self, text: str, count_suffix: str = "") -> None:
+        # item.text() stays the bare title ("Issues"/"Outstanding") -- the
+        # driver and section-message lookup match on it; the count lives only
+        # in the painted HTML.
         item = QListWidgetItem(text)
         item.setFlags(Qt.ItemIsEnabled)  # visible, never selectable/activatable
         item.setData(_KIND_ROLE, "page_header")
-        font = QFont(self._list.font())
-        font.setBold(True)
-        item.setFont(font)
-        # A taller row separates the two page sections; the base delegate
-        # honours SizeHintRole for rows without HTML_ROLE data and centres
-        # the text, so the extra height reads as breathing room around the
-        # header rather than a stretched row.
-        item.setSizeHint(QSize(0, 36))
+        # The bold section title carries an optional muted count suffix
+        # (" · 7 errors · 1 warning") so the page's scale reads before any
+        # row detail; rendered as HTML so only the suffix is de-emphasised.
+        head = (
+            f'<span style="font-weight:700; color:{parameter_row.DEFAULT_TEXT};">'
+            f"{_html.escape(text)}</span>"
+        )
+        if count_suffix:
+            head += f'<span style="color:{style.MUTED};">{_html.escape(count_suffix)}</span>'
+        item.setData(parameter_row.HTML_ROLE, head)
+        self._list.addItem(item)
+
+    def _add_section_spacer(self) -> None:
+        """A thin, empty, non-interactive row that separates the two page
+        sections -- breathing room the delegate's per-row padding can't give
+        on its own."""
+        item = QListWidgetItem("")
+        item.setFlags(Qt.NoItemFlags)
+        item.setData(_KIND_ROLE, "spacer")
+        item.setSizeHint(QSize(0, 10))
         self._list.addItem(item)
 
     def _add_message_row(self, text: str) -> None:
@@ -435,3 +566,18 @@ class ValidationPanel(QWidget):
             self.issue_activated.emit(item.data(_NAV_PATH_ROLE))
         elif kind == "task":
             self.task_activated.emit(item.data(_TASK_ROLE))
+
+    def _on_clicked(self, item: QListWidgetItem) -> None:
+        """A single click on a section group folds or unfolds it; every other
+        row ignores the click (navigation stays Enter/double-click). The
+        toggle replays the last ``refresh`` so the rebuild reuses one code
+        path and needs no document access of its own."""
+        if item.data(_KIND_ROLE) != "section_group":
+            return
+        section = item.data(_SECTION_ROLE)
+        if section in self._collapsed_issue_sections:
+            self._collapsed_issue_sections.discard(section)
+        else:
+            self._collapsed_issue_sections.add(section)
+        if self._last_refresh is not None:
+            self.refresh(*self._last_refresh)

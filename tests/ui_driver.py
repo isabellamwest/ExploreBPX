@@ -244,6 +244,36 @@ class AppDriver:
             if lst.item(i).data(vp._KIND_ROLE) == kind
         ]
 
+    def validation_section_groups(self) -> list[tuple[str, bool]]:
+        """The Issues-section group headers as ``(section, collapsed)`` pairs,
+        in display order -- Concept A clusters issues by section."""
+        from ui_qt import validation_panel as vp
+
+        return [
+            (item.data(vp._SECTION_ROLE), item.text().startswith("▸"))
+            for item in self._validation_rows("section_group")
+        ]
+
+    def toggle_validation_section(self, section: str) -> "AppDriver":
+        """Fold/unfold the named Issues section group, as a single click on
+        its header does."""
+        from ui_qt import validation_panel as vp
+
+        for item in self._validation_rows("section_group"):
+            if item.data(vp._SECTION_ROLE) == section:
+                self._w._validation._on_clicked(item)
+                return self
+        raise AssertionError(f"No Issues section group named {section!r}.")
+
+    def validation_issue_html(self) -> list[str]:
+        """The painted HTML of every Issues-section row, in order -- lets a
+        test assert the two-line location/message split without pixel-reading."""
+        from ui_qt import parameter_row
+
+        return [
+            item.data(parameter_row.HTML_ROLE) for item in self._validation_rows("issue")
+        ]
+
     def activate_validation_issue(self, path: tuple[str, ...]) -> "AppDriver":
         """Emit the Validation view's own activation signal for *path*.
 

@@ -162,6 +162,35 @@ def compose_issue_html(
     return fragment
 
 
+def compose_issue_row_html(
+    severity_label: str, severity_color: str, location: str, message: str
+) -> str:
+    """Compose a Validation-page issue row as **two lines**: a coloured
+    severity tag and the bold location on the first, the validator's verbatim
+    message (muted, smaller) on the second.
+
+    Splitting where (location) from what (message) is Concept A's core move --
+    a full-width run-on sentence per issue becomes a scannable header with its
+    detail beneath. *location* is expected already section-relative (the
+    owning section is the group header above the row), and its trailing unit
+    is muted like every other parameter label. An empty *location* (a
+    section-level or document-level diagnostic) drops to the message alone."""
+    if location:
+        name, unit = split_name_and_unit(location)
+        head = _span(severity_label, color=severity_color, bold=True) + _span(
+            "  " + name, color=DEFAULT_TEXT, bold=True
+        )
+        if unit:
+            head += _span(f" [{unit}]", color=style.MUTED)
+    else:
+        head = _span(severity_label, color=severity_color, bold=True)
+    detail = (
+        f'<span style="color:{style.MUTED}; font-size:92%;">'
+        f"{_html.escape(message)}</span>"
+    )
+    return head + "<br>" + detail
+
+
 def build_parameter_row_html(label: str, *, has_errors: bool, is_empty: bool = False) -> str:
     """Compose a parameter-list row's rich-text fragment: bold name, a muted
     non-bold unit, and -- for a parameter with a *page-visible* issue -- an

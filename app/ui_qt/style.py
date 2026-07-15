@@ -96,6 +96,8 @@ QListWidget#SearchPopupList::item:selected { background: #ddeeff; color: #1f2328
    surfaces read as one system. */
 QListWidget#ValidationList { border: none; }
 QListWidget#ValidationList::item { padding: 6px 8px; border-radius: 4px; }
+QListWidget#ValidationList::item:hover { background: #f0f2f4; }
+QListWidget#ValidationList::item:selected { background: #ddeeff; color: #1f2328; }
 QLabel#IssuesPlaceholder { color: #57606a; font-size: 12px; padding: 16px; }
 QLabel#DocumentationPlaceholder { color: #57606a; font-size: 12px; padding: 16px; }
 QLabel#Hint { color: #57606a; font-size: 11px; }
