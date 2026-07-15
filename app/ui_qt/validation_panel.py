@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import html as _html
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (
     QLabel,
@@ -205,12 +205,15 @@ class ValidationPanel(QWidget):
     def __init__(self) -> None:
         super().__init__()
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        # 8px page margin + the 8px ::item padding lands row text at 16px,
+        # aligned with the page header title's own 16px inset.
+        layout.setContentsMargins(8, 4, 8, 8)
         layout.setSpacing(0)
 
         self._stack = QStackedWidget()
 
         self._list = QListWidget()
+        self._list.setObjectName("ValidationList")
         self._list.setWordWrap(True)
         # A row with no HTML_ROLE data (page/group headers, plain Issues rows,
         # message rows) falls through to the base QStyledItemDelegate
@@ -412,6 +415,11 @@ class ValidationPanel(QWidget):
         font = QFont(self._list.font())
         font.setBold(True)
         item.setFont(font)
+        # A taller row separates the two page sections; the base delegate
+        # honours SizeHintRole for rows without HTML_ROLE data and centres
+        # the text, so the extra height reads as breathing room around the
+        # header rather than a stretched row.
+        item.setSizeHint(QSize(0, 36))
         self._list.addItem(item)
 
     def _add_message_row(self, text: str) -> None:

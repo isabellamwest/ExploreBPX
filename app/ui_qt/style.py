@@ -75,6 +75,12 @@ QToolButton#SecondaryTab:checked {
     color: #1f2328; font-weight: 600; border-top: 2px solid #1f6feb;
 }
 QListWidget#IssuesList { border: none; background: #ffffff; font-size: 12px; }
+/* The Validation page's single list. Borderless like the editor's flush
+   panes (the activity bar and page header already draw the seams) and the
+   same row rhythm as QListWidget#ParameterListView, so the two primary
+   surfaces read as one system. */
+QListWidget#ValidationList { border: none; }
+QListWidget#ValidationList::item { padding: 6px 8px; border-radius: 4px; }
 QLabel#IssuesPlaceholder { color: #57606a; font-size: 12px; padding: 16px; }
 QLabel#DocumentationPlaceholder { color: #57606a; font-size: 12px; padding: 16px; }
 QLabel#Hint { color: #57606a; font-size: 11px; }
