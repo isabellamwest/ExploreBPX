@@ -9,6 +9,7 @@ over its full path, and activate exclusively through the shared
 
 from __future__ import annotations
 
+import html as _html
 from dataclasses import dataclass
 
 from PySide6.QtCore import Qt, Signal
@@ -17,11 +18,29 @@ from PySide6.QtWidgets import QLineEdit, QListWidget, QListWidgetItem
 from core.document import BPXDocument
 from core.tree_model import ParameterItem, TreeNode
 
+from . import parameter_row, style
 from .dismissal import OutsideDismissFilter
+from .parameter_row import ParameterRowDelegate
 
 _PATH_ROLE = Qt.UserRole
 _MAX_RESULTS = 50
 _MAX_VISIBLE_ROWS = 8
+
+
+def _entry_html(entry: "_Entry") -> str:
+    """A result row's rich-text fragment: bold name over its muted full path
+    -- the same name-over-secondary language the Validation page's rows use,
+    so search results read as part of the same system rather than a bare
+    default-styled list."""
+    name = (
+        f'<span style="font-weight:600; color:{parameter_row.DEFAULT_TEXT};">'
+        f"{_html.escape(f'{entry.icon}  {entry.name}')}</span>"
+    )
+    path = (
+        f'<span style="color:{style.MUTED}; font-size:90%;">'
+        f"{_html.escape(entry.path_text)}</span>"
+    )
+    return name + "<br>" + path
 
 
 @dataclass(frozen=True)
@@ -50,16 +69,22 @@ class SearchPopup(QListWidget):
 
     def __init__(self, parent: QLineEdit) -> None:
         super().__init__(parent)
+        self.setObjectName("SearchPopup")
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Tool)
         self.setAttribute(Qt.WA_ShowWithoutActivating)
         self.setFocusPolicy(Qt.NoFocus)
         self.setUniformItemSizes(False)
+        self.setWordWrap(True)
+        # Rich rows (bold name over muted path) via the shared delegate; the
+        # plain two-line string stays as each item's .text() fallback.
+        self.setItemDelegate(ParameterRowDelegate(self))
 
     def populate(self, entries: list["_Entry"]) -> None:
         self.clear()
         for entry in entries:
             item = QListWidgetItem(f"{entry.icon}  {entry.name}\n{entry.path_text}")
             item.setData(_PATH_ROLE, entry.path)
+            item.setData(parameter_row.HTML_ROLE, _entry_html(entry))
             self.addItem(item)
         if self.count():
             self.setCurrentRow(0)
@@ -68,7 +93,9 @@ class SearchPopup(QListWidget):
         rows = min(self.count(), _MAX_VISIBLE_ROWS)
         if rows == 0:
             return 0
-        return self.sizeHintForRow(0) * rows + 2 * self.frameWidth()
+        # Sum the visible rows' own hints: delegate-painted rows wrap, so
+        # heights vary and row 0 is not representative of the rest.
+        return sum(self.sizeHintForRow(i) for i in range(rows)) + 2 * self.frameWidth()
 
 
 class SearchBar(QLineEdit):

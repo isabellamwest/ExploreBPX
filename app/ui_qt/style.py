@@ -75,6 +75,12 @@ QToolButton#SecondaryTab:checked {
     color: #1f2328; font-weight: 600; border-top: 2px solid #1f6feb;
 }
 QListWidget#IssuesList { border: none; background: #ffffff; font-size: 12px; }
+/* The toolbar search's floating result list: a crisp bordered card with the
+   shared row rhythm, so it reads as kin to the add-parameter popup rather
+   than a bare default-styled window. (No radius/shadow: it is its own
+   opaque top-level window, where rounded QSS corners leave artifacts.) */
+QListWidget#SearchPopup { border: 1px solid #d0d7de; background: #ffffff; }
+QListWidget#SearchPopup::item { padding: 6px 8px; }
 /* The Validation page's single list. Borderless like the editor's flush
    panes (the activity bar and page header already draw the seams) and the
    same row rhythm as QListWidget#ParameterListView, so the two primary
