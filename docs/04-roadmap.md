@@ -37,13 +37,6 @@ The items below are the capabilities still marked Planned.
 - **Acceptance criteria:** syntax highlighting and expression validation for
   function fields. See [Editing](03-features.md#4-editing).
 
-### Compact quick inputs in the parameter list
-
-- **Depends on:** the parameter list and per-kind editors (built).
-- **Acceptance criteria:** simple scalar/enum values are editable inline in the
-  parameter list without opening the Inspector card. See
-  [Parameter Inspection](03-features.md#3-parameter-inspection).
-
 ## Actionable validation
 
 ### `IssueKind` and remediation functions

@@ -287,7 +287,7 @@ repaired in place.
 | Tree editing (add/remove sections via context menu; add/rename/remove materials and experiments; confirm before removing populated content) | Implemented |
 | Enhanced function-expression editor (syntax highlighting, validation) | Planned |
 | Model switch completes structure (adds the target model's required sections empty; removes nothing; one undo step) | Implemented |
-| Compact quick inputs in the parameter list | Planned |
+| Value preview in the parameter list (raw-verbatim, elided, full value on hover) | Implemented |
 
 ### User Workflow
 
