@@ -1,44 +1,16 @@
 # Explore_BPX — Architecture
 
-This document is the authoritative home for how Explore_BPX is built: its
-architectural principles, layered structure, domain model, state model, module
-responsibilities, extension seams and constraints. Product vision and principles
-live in [00-project.md](00-project.md); application-wide UI structure lives in
-[02-ui.md](02-ui.md); feature behaviour lives in [03-features.md](03-features.md).
-
-Design rationale is embedded inline with the decision it explains, rather than
-kept as a separate register.
-
-## Architectural Principles
-
-Dependencies flow one way, and BPX semantics stay delegated. Concretely:
-
-- **Delegate BPX semantics.** Schema parsing and validation use the official
-  `bpx` package. Explore_BPX does not reimplement or vendor BPX rules.
-- **Keep business logic frontend-agnostic.** `core/` and `state/` must not import
-  Qt or any UI framework. `tests/test_boundaries.py` enforces this.
-- **Use the raw document as editable state.** Invalid and partially edited BPX
-  files must remain fully representable.
-- **Derive views and validation from state.** Tree nodes, parameter items and
-  validation issues are all derived from the raw working document.
-- **Separate intent, mutation and orchestration.** Command intent, raw-dict edits
-  and command execution are distinct layers.
-- **Prefer extension seams over speculative features.** The architecture defines
-  stable places for future capabilities without building unused abstractions.
-
-These principles are also hard constraints; they are restated as enforceable
-rules in [Architectural Constraints](#architectural-constraints).
+Layered structure, domain model, state model, module responsibilities,
+extension seams and constraints. Product vision lives in
+[00-project.md](00-project.md); UI structure in [02-ui.md](02-ui.md); feature
+behaviour in [03-features.md](03-features.md). Rationale is inline with the
+decision it explains.
 
 ## Layered Architecture
 
-Dependencies flow in one direction only:
-
-```mermaid
-graph TD
-    UI[ui_qt<br/>PySide6 frontend] --> State[state<br/>AppState and DocumentSession]
-    State --> Core[core<br/>Document, validation, commands, tree]
-    Core --> BPX[bpx<br/>official package]
-```
+Dependencies flow in one direction only: `ui_qt` → `state` → `core` → `bpx`.
+`tests/test_boundaries.py` enforces this; a change that needs to break it
+should move code inward instead.
 
 | Layer | Responsibility |
 |---|---|
@@ -49,26 +21,10 @@ graph TD
 
 ## State Model
 
-State is split by ownership so that per-document concerns and app-global concerns
-are cleanly separated.
-
-```mermaid
-graph TD
-    AppState --> Active[active: DocumentSession]
-    AppState --> ViewState[app-global view state]
-    Active --> Document[BPXDocument]
-    Active --> SelectedObject[selected_path]
-    Active --> SelectedParameter[selected_parameter_path]
-    Active --> Undo[undo_stack]
-    Active --> Dirty[dirty / backing_file]
-```
-
-`DocumentSession` owns per-document state: the current `BPXDocument`, the selected
-object path, the selected parameter path, undo history, and dirty state with its
-backing-file path.
-
-`AppState` owns app-global state and exposes a single active `DocumentSession`
-via `state.active`.
+`DocumentSession` owns per-document state: the current `BPXDocument`, the
+selected object path, the selected parameter path, undo history, and dirty
+state with its backing-file path. `AppState` owns app-global state and exposes
+a single active `DocumentSession` via `state.active`.
 
 **Rationale.** Undo, selection and dirty state are inherently per-document, so
 they belong to a session rather than to the application. Conceptually the
@@ -89,12 +45,10 @@ address state through `active`.
 
 ### Raw dict as source of truth
 
-A parsed Pydantic `BPX` object cannot represent invalid or partially edited data.
-Explore_BPX therefore stores the **raw dictionary** as the editable source of
+A parsed Pydantic `BPX` object cannot represent invalid or partially edited
+data, so Explore_BPX stores the **raw dictionary** as the editable source of
 truth. The parsed BPX model and validation issues are derived by calling
-`bpx.parse_bpx_obj` on a deep copy.
-
-This separation is not incidental: `parse_bpx_obj` mutates the object it
+`bpx.parse_bpx_obj` on a deep copy — `parse_bpx_obj` mutates the object it
 receives, so validation must run against a copy and must never mutate the raw
 working document.
 
@@ -156,16 +110,15 @@ ParameterItem = direct parameter owned by a TreeNode
 ```
 
 Tree nodes are produced by walking the actual raw data rather than only the
-schema. This handles BPX polymorphism naturally: SPM/SPMe/DFN/Partial and
+schema, which handles BPX polymorphism naturally: SPM/SPMe/DFN/Partial and
 single/blended electrode structures are already expressed in the data shape.
 
 Parameters are classified into `ParameterKind` values (scalar, integer, text,
-boolean, enum, function, map, series, table, section, unknown). Classification is
+boolean, enum, function, map, series, table, section, unknown),
 **declared-type first, universally**: when schema metadata is available the
 declared field type alone fixes the kind, and the stored value's runtime type
-never changes which editor opens. This ensures an invalid stored value — for
-example a string committed to a float field — never causes the editor to switch
-kind or become read-only.
+never changes which editor opens or makes it read-only — an invalid stored
+value (e.g. a string in a float field) never flips the kind.
 
 Union-typed fields (`FloatFunctionTable`, `FloatInt | dict[str, FloatInt]`) are
 one kind, not several: the kind identifies the declared union, and the card for
@@ -174,11 +127,11 @@ that kind carries a **mode strip** naming each legal representation in verbatim
 only; the user may switch mode freely.
 
 Value shape still classifies in exactly two places: metadata-absent parameters
-(the honest fallback below), and undeclared dicts/lists, whose topology no
-schema field describes. A field the schema declares as a value is always a
-`ParameterItem`, never a `TreeNode`, whatever it currently holds — so a
-per-material map (for example a dict-valued `LAM: Positive electrode`) stays an
-editable parameter instead of turning into a tree section.
+(below), and undeclared dicts/lists, whose topology no schema field describes.
+A field the schema declares as a value is always a `ParameterItem`, never a
+`TreeNode`, whatever it currently holds — so a per-material map (e.g. a
+dict-valued `LAM: Positive electrode`) stays an editable parameter instead of
+turning into a tree section.
 
 ### User-defined parameter metadata — accepted decision
 
@@ -216,138 +169,89 @@ parameters, and none is needed under this model.
 | `document_factory.py` | Incomplete BPX scaffolds without invented scientific values. |
 | `tree_model.py` | UI-neutral object tree, parameter rows and validation-path matching helpers. |
 | `parameter_types.py` | Value classification and parameter kind metadata. |
+| `parameter_metadata.py` | Unified parameter-metadata provider: combines `bpx_gateway`'s `FieldMeta` with `parameter_descriptions.py`'s dataset, keyed by parameter path, invents no scientific content. |
+| `parameter_descriptions.py` | Loads the technical-descriptions dataset (`app/data/parameter_descriptions.yaml`, transcribed from the Faraday Institution's BPX Parameter technical descriptions document) as replaceable data, not code. |
 | `validation.py` | `ValidationIssue` model and normalisers for Pydantic errors and warnings. |
 | `export.py` | Serialises the raw dict to JSON/YAML and can later generalise to target writers. |
 
 ## BPX Integration Strategy
 
-Explore_BPX consumes `bpx` as a pinned PyPI dependency (`bpx==1.1.0`). Coupling is
-isolated in `core/bpx_gateway.py`, which uses public APIs only: `parse_bpx_obj`,
-`BPX`, and `model_json_schema()`.
-
-Alternatives were rejected for the main dependency path:
-
-- a local editable BPX checkout: not reproducible and prone to drift;
-- a Git/commit dependency: heavier, and kept only as a fallback for unreleased
-  fixes;
-- a vendored schema: duplicates the very logic Explore_BPX intentionally
-  delegates.
-
-## Document Lifecycle
-
-```mermaid
-flowchart LR
-    Load[Load bytes] --> Raw[Raw dict]
-    Raw --> Validate[Validate copy with bpx]
-    Validate --> Issues[Validation issues]
-    Raw --> Tree[Derived object tree]
-    Raw --> Edit[Raw-dict edit]
-    Edit --> Validate
-    Raw --> Export[Export JSON/YAML]
-```
-
-Loading produces a `BPXDocument` from bytes. Editing produces a new raw dict, then
-rebuilds and revalidates the document. Export serialises the raw working document,
-which may still contain invalid work-in-progress data.
+Explore_BPX consumes `bpx` as a pinned PyPI dependency (`bpx==1.1.0`), coupling
+isolated in `core/bpx_gateway.py` via public APIs only (`parse_bpx_obj`, `BPX`,
+`model_json_schema()`). Rejected alternatives: a local editable BPX checkout
+(not reproducible, drifts), a Git/commit dependency (heavier, kept only as a
+fallback for unreleased fixes), a vendored schema (duplicates the logic
+Explore_BPX intentionally delegates).
 
 ## Navigation Architecture
 
-Navigation has a single owner in the Qt layer: `NavigationService`. It coordinates
-navigation without owning concrete widgets:
-
-1. resolve the target path;
-2. update `state.active.selected_path` and `state.active.selected_parameter_path`;
-3. emit one notification containing the target identity.
-
-Views subscribe to that notification and reveal their own part of the target — the
-tree expands ancestors, the parameter list selects a row, the Inspector loads the
-parameter and the context bar updates its location display. The UI-side
-subscription and reveal behaviour is specified in [02-ui.md](02-ui.md).
-
-`NavigationService` lives in `ui_qt/` because it is frontend orchestration;
-`state/` only stores the selected paths.
+`NavigationService`, in `ui_qt/`, is the single owner of navigation: it resolves
+a target path, updates `state.active.selected_path` /
+`selected_parameter_path`, and emits one notification. Views subscribe and
+reveal their own part of the target (tree, parameter list, Inspector, context
+bar) — see [02-ui.md](02-ui.md) for the reveal behaviour. `state/` only stores
+the selected paths; navigation logic itself is frontend orchestration and does
+not belong in `state/`.
 
 **Rationale.** A single owner prevents duplicated, competing navigation logic
-while avoiding a service tightly coupled to concrete widgets. The service
-coordinates and notifies rather than imperatively driving each widget, so panels
-are plug-in subscribers and the frontend boundary stays intact. The alternatives —
-each consumer implementing its own navigation, or one service imperatively driving
-every widget — either duplicate logic or create brittle coupling. The cost is a
-small notification contract. Every current and future consumer (search, validation
-review, comparison, Inspector documentation links, Inspector analysis tabs,
-database references) navigates through this one service.
+while avoiding a service tightly coupled to concrete widgets: panels are
+plug-in subscribers to one notification rather than driven imperatively. The
+alternatives — each consumer implementing its own navigation, or one service
+driving every widget directly — either duplicate logic or create brittle
+coupling. Every current and future consumer (search, validation review,
+comparison, Inspector documentation links, analysis tabs, database references)
+navigates through this one service.
 
 ## Validation Architecture
 
-Validation runs from the raw working dict via `bpx_gateway.validate`, using a copy
-of the raw dict. Errors and warnings are normalised into `ValidationIssue` objects
-keyed by alias paths, carrying a path, a message and a severity.
-
-Pydantic locations are not always identical to visible BPX paths: they may be
-relative to a section or include union type tags such as `float` or `int`.
-`tree_model.py` therefore performs best-effort suffix matching to map validation
-issues to the nearest visible `TreeNode` and, where possible, a `ParameterItem`.
-
-A future `IssueKind` classification can describe the remediation implied by an
-issue rather than exposing the underlying exception source to the UI. Remediation
-logic belongs in pure core functions that take an issue and a raw dict and return
-a proposed fixed dict. This is the architectural seam for actionable validation;
-its feature behaviour is specified in the Validation section of
-[03-features.md](03-features.md).
-
-**Known architectural gap.** Warnings currently lose their field path in some
-cases and can land at the document root. Warning-location logic (for example an
-`IssueKind.REVIEW_WARNING`) should close that gap when actionable validation is
-implemented.
+Validation runs from the raw working dict via `bpx_gateway.validate`, using a
+copy. Errors and warnings are normalised into `ValidationIssue` objects keyed
+by alias paths. Pydantic locations are not always identical to visible BPX
+paths (they may be relative to a section, or carry union type tags such as
+`float`/`int`), so `tree_model.py` performs best-effort suffix matching to map
+issues to the nearest visible `TreeNode` and, where possible, a
+`ParameterItem`. Actionable-validation and warning-location gaps are tracked
+in the Extension Seams table below.
 
 ## Editing Architecture
 
-Editing is built around command intent and raw-dict mutation:
+Editing is built around command intent and raw-dict mutation: `commands.py`
+describes operation intent, `editing.py` performs pure raw-dict mutations,
+`command_service.py` previews/executes commands with structural guardrails,
+and `DocumentSession` records undo history and dirty/backing-file state.
 
-- `commands.py` describes operation intent;
-- `editing.py` performs pure raw-dict mutations;
-- `command_service.py` previews and executes commands with structural guardrails;
-- `DocumentSession` records undo history and dirty/backing-file state.
+Every mutation travels this spine, value edits included:
+`DocumentSession.apply_value` is a thin wrapper over
+`execute_command(SetValue(...))` rather than a second, history-less mutation
+path — committing a card is undoable exactly as adding or removing a
+parameter is.
 
-Every mutation travels this spine, value edits included: `DocumentSession.apply_value`
-is a thin wrapper over `execute_command(SetValue(...))` rather than a second,
-history-less mutation path. Committing a card is therefore undoable exactly as
-adding or removing a parameter is.
+An undo entry is a `(document, selected_path, selected_parameter_path)`
+triple, not a bare document: selection is part of the state a command
+changes, so undo restores both and lands on the change it reverted. Because
+the selection was valid in the document it is stored beside, it is always
+valid again once that document is restored — no existence check is needed at
+the navigation seam.
 
-An undo entry is a `(document, selected_path, selected_parameter_path)` triple, not
-a bare document: selection is part of the state a command changes, so undo restores
-both and lands on the change it reverted. Because the selection was valid in the
-document it is stored beside, it is always valid again once that document is
-restored — no existence check is needed at the navigation seam.
-
-The raw dict remains the editing state. User input can be committed even when
-invalid; the derived validated model rejects that state visibly by producing
-validation issues. This preserves the ability to open, edit and repair invalid
-BPX files.
+The raw dict remains the editing state: user input can be committed even when
+invalid, and the derived validated model surfaces that visibly as validation
+issues rather than blocking the commit — preserving the ability to open, edit
+and repair invalid BPX files.
 
 Per-kind editor widgets are a UI concern, but their architectural contract is
 stable: a card edits one `ParameterItem`, emits raw input, and does not decide
-whether the value is valid. Validation remains a derived concern. The
-user-facing commit model and per-kind card behaviour are specified in the Editing
-section of [03-features.md](03-features.md).
-
-The card's editing contract is already independent of document count. A later
-self-contained-card refactor — moving the parameter title, validity badge and
-summary description into the card so it can host a parameter information popover
-(( i )) — changes composition only, not this contract. That refactor is justified
-by the parameter information popover ([03-features.md](03-features.md)); future
-Workspace portability (rendering two cards side by side) emerges naturally from it
-rather than motivating it.
+whether the value is valid. Validation remains a derived concern. Per-kind
+card behaviour is specified in the Editing section of
+[03-features.md](03-features.md).
 
 ## Command Architecture
 
 Command execution is document-centric. Operation intent is represented as a
 command object, previewed or executed by `command_service.py`, and applied via
-pure editing primitives. This separation keeps UI interactions, structural rules,
-mutation and validation independently testable.
-
-The command layer is the natural home for future operations such as model
-switching, section insertion/removal and remediation actions.
+pure editing primitives. This separation keeps UI interactions, structural
+rules, mutation and validation independently testable, and is the natural home
+for future operations such as model switching, section insertion/removal and
+remediation actions.
 
 ## Extension Seams
 
@@ -357,13 +261,13 @@ attach, without building the capabilities themselves ahead of need.
 | Capability | Architectural seam |
 |---|---|
 | Editing and creation | Command intent, `command_service.py`, `editing.py`, `document_factory.py` and per-document undo in `DocumentSession`. |
-| Function/table visualisation | Analysis tab in the Inspector secondary workspace consuming the selected `ParameterItem`; a launcher of `Show` actions that open floating visualisations, with BPX functions exposed through `bpx_gateway.py` / `to_python_function()`. |
+| Function/table visualisation | Analysis tab in the Inspector secondary workspace consuming the selected `ParameterItem`; a launcher of `Show` actions that open floating visualisations, with BPX functions exposed through `bpx_gateway.py` and converted to callables via `bpx.function.Function.to_python_function()` upstream. |
 | Issue presentation | Qt-owned Issues tab in the Inspector secondary workspace consuming derived `ValidationIssue` state; no core or state dependency on the tab widgets. |
 | Authoring, skeletons and templates | `document_factory.py` creates incomplete structures without scientific defaults; `completion.py` is the stateless completion query built on top. Any future template state (inheritance, review status) stays separate from exported BPX data. |
 | External database import | A new anti-corruption adapter, mirroring `bpx_gateway.py`, returning raw BPX dicts from third-party sources. |
 | Simulator hand-off | `export.py` generalising from serialisation to target-specific writers. |
 | Multi-document Workspace and comparison | A `Workspace` holding the Primary and an optional Reference `DocumentSession`; components render the workspace (one or two documents) rather than switching into a compare mode. Shared-tree rendering, ownership indicators and dual inspectors are future design, not built ahead of need. |
-| Rich parameter documentation | A parameter-metadata provider layered over `bpx_gateway.py`, combining `FieldMeta` with a separate, versioned educational-metadata dataset (physical meaning, measurement methods, specification links, symbols); sourced and tested independently and never contaminating the BPX gateway, mirroring the plausibility-dataset discipline. |
+| Rich parameter documentation | **Implemented.** `core/parameter_metadata.py` combines `bpx_gateway.py`'s `FieldMeta` with the versioned dataset in `core/parameter_descriptions.py` (`app/data/parameter_descriptions.yaml`); surfaced in the UI by `ui_qt/documentation_tab.py`. |
 | Cross-feature navigation | `NavigationService` as the single frontend navigation coordinator. |
 | Actionable validation | Future `IssueKind` plus pure remediation functions in `core/`. |
 | Plausibility validation | An independent layer (for example `core/sanity.py`) plus a versioned reference dataset, sourced and tested separately from schema validation. |

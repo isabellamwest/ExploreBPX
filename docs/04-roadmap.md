@@ -68,8 +68,6 @@ The items below are the capabilities still marked Planned.
 
 Recent documents, external database import, simulator hand-off, the
 multi-document **Workspace** (Primary plus optional Reference) and comparison as
-an Editor capability, the Workspace page, the contextual toolbar, contextual
-launch, the educational parameter-metadata dataset, session change review,
-plausibility validation and richer authoring metadata are not scheduled here.
-They remain in [05-future.md](05-future.md) until promoted into the
-specification.
+an Editor capability, the contextual toolbar, contextual launch, session change
+review, plausibility validation and richer authoring metadata are not scheduled
+here. See [05-future.md](05-future.md).

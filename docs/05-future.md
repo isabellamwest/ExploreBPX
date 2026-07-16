@@ -11,10 +11,8 @@ specification document, with any implementation sequencing added to
 
 ## Data sources and import
 
-- LIIONDB import.
-- Other BPX database sources.
-- Additional source adapters implemented as anti-corruption layers that return raw
-  BPX dictionaries, mirroring `bpx_gateway.py`.
+LIIONDB import and other BPX database sources, each as a source adapter
+(anti-corruption layer returning raw BPX dictionaries, mirroring `bpx_gateway.py`).
 
 ### Bundled PyBaMM parameter sets as a reference library
 
@@ -46,50 +44,33 @@ is browsed and chosen, and agreement on which sets to include.
 
 ## Export and simulator integration
 
-- Simulator hand-off targets such as PyBOP and PyProBE.
-- Target-specific writers behind the export layer.
-- Simulator compatibility checks where appropriate.
+Simulator hand-off (e.g. PyBOP, PyProBE) via target-specific writers behind the
+export layer, plus simulator compatibility checks where appropriate.
 
 ## Workspace and multi-document support
 
-The accepted **Workspace** philosophy — the application edits a Workspace of one
-Primary and optionally one Reference document, and comparison is a capability of
-the Editor rather than a separate mode — lives in [00-project.md](00-project.md)
-and [01-architecture.md](01-architecture.md). The items below are the **future
-design work** that follows from it. They are intentionally unresolved and must not
-influence implementation until the multi-document phase becomes an active
-milestone.
+The accepted **Workspace** philosophy — one Primary and optionally one Reference
+document, comparison as a capability of the Editor rather than a separate mode —
+lives in [00-project.md](00-project.md) and [01-architecture.md](01-architecture.md).
+Unresolved future design work, not to influence implementation until the
+multi-document phase becomes an active milestone:
 
-- A `Workspace` state object holding the Primary and an optional Reference
+- A `Workspace` state object holding Primary and optional Reference
   `DocumentSession`, introduced only when multi-document work begins — never as a
   speculative container before a consumer exists.
 - The **Workspace page** (activity-bar sibling to Editor and Validation):
-  document- and workspace-level information and management — title, description,
-  references, BPX version, model, Primary/Reference details, recent documents and
-  new-document actions.
-- **Contextual launch:** opening onto the Workspace page on a cold start (no
-  document, recent or file argument) and straight into the Editor when opening or
-  resuming a file.
-- The **contextual toolbar:** exposing the current activity-bar page's actions
-  rather than a fixed global set, with Open becoming a Workspace action. Its
-  design must reconcile its relationship with the top context bar and the friction
-  of opening a second file from the Editor.
-
-## File comparison
-
-Comparison is rendered by the Editor when a Reference document is present —
-components render the Workspace (one or two documents) rather than switching into
-a compare mode. The following are future design items, each requiring dedicated
-UX work:
-
-- Shared/merged tree rendering with ownership **indicators** (never ownership
-  filtering of the structure; see the filtering rule in [02-ui.md](02-ui.md)).
-- Dual parameter inspectors showing both documents' cards side by side.
-- Copying values and structures between documents.
-- Grouped issues and grouped or overlaid analysis across both documents.
-- Difference highlighting.
-- Old/new value display and review before save or export.
-- Template comparison and last-export comparison.
+  document/workspace-level info and management (title, description, references,
+  BPX version, model, Primary/Reference details, recent documents, new-document
+  actions).
+- **Contextual launch:** Workspace page on cold start, straight into the Editor
+  when opening or resuming a file.
+- The **contextual toolbar:** current activity-bar page's actions rather than a
+  fixed global set, with Open becoming a Workspace action; must reconcile with
+  the top context bar and the friction of opening a second file from the Editor.
+- Comparison rendering (shared/merged tree with ownership indicators — never
+  filtering, see [02-ui.md](02-ui.md)), dual parameter inspectors, copying values
+  between documents, grouped/overlaid issues and analysis, difference
+  highlighting, old/new value review, template and last-export comparison.
 
 ### Open design questions (multi-document phase)
 
@@ -103,33 +84,15 @@ solved now:
 - Validation behaviour during comparison.
 - Behaviour when one document contains nodes the other does not.
 
-## Parameter documentation — educational metadata source
-
-The scheduled parameter information popover ([04-roadmap.md](04-roadmap.md)) starts
-from `FieldMeta`. Richer educational metadata — physical meaning, measurement
-methods, BPX specification links, symbols and equations — is not exposed by the
-`bpx` package and would come from a separate, versioned reference dataset layered
-over `bpx_gateway.py`, sourced and tested independently and never contaminating
-the BPX gateway (mirroring the plausibility-dataset discipline). The dataset
-itself is future work; the popover ships first against available `FieldMeta`.
-
 ## Authoring — speculative extensions
 
-These extend the accepted Authoring feature ([03-features.md](03-features.md)) but
-are not yet designed:
-
-- Organisation-, lab-, chemistry- or workflow-specific templates.
-- Session change awareness derived from comparison with the last loaded or saved
-  baseline — answering what differs from the baseline rather than what actions the
-  user performed.
-- Subtle modified indicators in the existing editing UI (Tree, Parameter list,
-  Inspector) that do not compete with validation colours.
-- A dedicated Changes workspace summarising Modified, Added and Deleted items and
-  navigating to affected locations through `NavigationService`.
-- Parameter authoring states beyond present/missing values.
-- Provenance and confidence tracking.
-- Review/confirmation workflows for template-derived values.
-- Reusable parameter packs.
+Extend the accepted Authoring feature ([03-features.md](03-features.md)), not yet
+designed: organisation/lab/chemistry/workflow-specific templates; session change
+awareness (diff against last loaded/saved baseline, not user actions) with subtle
+modified indicators in Tree/Parameter list/Inspector and a dedicated Changes
+workspace navigating via `NavigationService`; parameter authoring states beyond
+present/missing; provenance and confidence tracking; review/confirmation
+workflows for template-derived values; reusable parameter packs.
 
 ## Validation — plausibility layer
 
@@ -145,17 +108,14 @@ independently sourced and independently testable.
 
 ## Search — richer results
 
-- Ranking.
-- Icons or type markers.
-- Recent searches.
-- Searching validation issues, comparison results or database references through
-  the same navigation surface.
+Ranking, icons/type markers, recent searches, and searching validation issues,
+comparison results or database references through the same navigation surface.
 
 ## Analysis and visualisation — extensions
 
-- Parameter-centric plausibility displays using reference datasets.
-- Docking or maximising floating visualisations if plots need more space.
-- Comparison overlays for related files or known cells.
+Parameter-centric plausibility displays using reference datasets; docking or
+maximising floating visualisations if plots need more space; comparison overlays
+for related files or known cells.
 
 ## Inspector secondary workspace — ParameterTool protocol
 

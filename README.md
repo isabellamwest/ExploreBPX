@@ -6,40 +6,19 @@ share — for both experimentalists and modellers.
 
 BPX files are designed to be machine-readable, but they can be difficult to inspect and navigate by hand, especially as they grow in size and complexity. Explore_BPX connects parameter *sources* to *simulators*, supports easier create/edit/visualise workflows, and validates beyond syntax.
 
-The project builds on the official bpx package and provides a graphical interface for working with BPX files without needing to manually inspect JSON or YAML.
+The project builds on the official bpx package and provides a graphical interface
+for working with BPX files without needing to manually inspect JSON or YAML. It
+does not implement the BPX specification itself — parsing, validation and schema
+definitions are provided entirely by the official `bpx` package.
 
-Explore_BPX does not implement the BPX specification itself. Parsing, validation and schema definitions are provided entirely by the official bpx package.
+## Status
 
-The long-term vision is a **standalone, dashboard-like application at the centre
-of the BPX ecosystem**, that simplifies BPX usage and increases adoption.
-
-**Version 1 is the current PySide6 desktop application**: a BPX explorer with
-continuous validation and the first editing foundation in place. Later versions
-build on the same backend layers without restarting the app architecture
-([docs/04-roadmap.md](docs/04-roadmap.md) and
-[docs/01-architecture.md](docs/01-architecture.md)).
-
-## Status — Version 1
-
-V1 is intentionally small but useful: a desktop app for opening, inspecting,
-validating and beginning to edit BPX files.
-
-- **Open** JSON or YAML BPX files — including invalid ones, so you can see what
-  is wrong.
-- **Navigate** the structure: Tree → object's parameter list → parameter detail.
-- **Inspect** a parameter in its own detail view with value, unit, schema
-  description and full validation, typed by kind (scalar, integer, enum,
-  function, table, unknown); a clickable breadcrumb navigates back up.
-- **Validate** continuously: a marker flags affected parameters in the list, the
-  full message shows in the parameter detail, and a Validation tab links straight
-  to the offending parameter.
-- **Export** the file as JSON or YAML (a faithful round-trip and format
-  converter).
-- **Edit** scalar, integer and enum values through the Qt editing cards, backed
-  by command-based state and live validation.
-
-Creation workflows, function/table editors, visualisation and comparison remain
-ahead on the roadmap.
+Explore_BPX is a PySide6 desktop app: open, navigate, inspect and validate BPX
+files continuously, edit every declared parameter kind (scalar, integer, enum,
+text, boolean, function, table, map, series) through dedicated editing cards with
+command-based undo/redo, author new documents from a model scaffold, add/remove/
+rename structure, and export as JSON or YAML. See
+[docs/04-roadmap.md](docs/04-roadmap.md) for open items and direction.
 
 ## Quick start
 
@@ -89,9 +68,6 @@ pip install -r app/requirements.txt
 python app/main_qt.py
 ```
 
-The PySide6 desktop app is the Version 1 frontend. Further editing, creation and
-visualisation workflows will be added here.
-
 Then open your own BPX file (JSON or YAML) to explore it, or use **New** on
 the workspace page to start a fresh scaffold for a chosen model (SPM, SPMe,
 DFN or Partial).
@@ -117,111 +93,38 @@ rm -rf .venv
 
 ## Working on this project from any machine (laptop + desktop)
 
-You can work on Explore_BPX from both your macOS laptop and your Windows desktop.
 GitHub holds the single source of truth; each machine keeps its own local copy
-that you sync with `git pull` (download changes) and `git push` (upload changes).
+synced with `git pull` / `git push`.
 
-### 1. One-time setup on each machine
-
-Clone the repo once per machine, then move into the project folder. The commands
-are the same on both:
-
-**Windows (PowerShell)**
-
-```powershell
-git clone https://github.com/isabellamwest/Explore_BPX.git
-cd Explore_BPX
-```
-
-**macOS / Linux (zsh or bash)**
+**One-time setup on each machine:**
 
 ```bash
 git clone https://github.com/isabellamwest/Explore_BPX.git
 cd Explore_BPX
 ```
 
-### 2. Run it
+Then set up the venv as in [Quick start](#quick-start) and run with
+`python app/main_qt.py`.
 
-Use the venv setup from [Quick start](#quick-start), then launch from the
-project root with `python app/main_qt.py`.
+**Everyday loop:**
 
-### 3. Everyday edit-and-commit loop (new to git? start here)
+1. `git pull` first, to bring in anything pushed from the other machine.
+2. Make your edits.
+3. `git add -A && git commit -m "Describe what you changed"`.
+4. Push: `git push origin main` (simplest, solo work), or push a branch and open
+   a PR (`git switch -c my-branch-name && git push -u origin my-branch-name`,
+   then **Compare & pull request** on GitHub).
 
-Whenever you sit down to work, follow this loop. The git commands are identical
-on Windows and macOS — only the terminal differs (PowerShell vs zsh/bash).
-
-**Step 1 — Always pull the latest first.** This pulls in anything you (or others)
-pushed from the other machine, so you don't end up with conflicting copies:
-
-```text
-git pull
-```
-
-**Step 2 — Make your edits** in your editor and save.
-
-**Step 3 — Stage and commit your changes.** `git add -A` stages everything you
-changed; the commit records a snapshot with a short message describing it:
-
-```text
-git add -A
-git commit -m "Describe what you changed"
-```
-
-**Step 4 — Push your work back to GitHub.** You have two options:
-
-*Option A — commit straight to `main`* (simplest; fine when you're the only one
-working on it):
-
-```text
-git push origin main
-```
-
-*Option B — put your work on a new branch and open a Pull Request* (safer; lets
-you review changes before they land on `main`):
-
-```text
-git switch -c my-branch-name
-git push -u origin my-branch-name
-```
-
-Then go to the repo on GitHub and click **Compare & pull request** to open a PR.
-
-### 4. Keep both machines in sync
-
-The golden rule: **`git pull` before you start, `git push` when you finish.** If
-you always push from the machine you just worked on and always pull on the
-machine you move to next, both copies stay up to date and you avoid conflicts.
+Golden rule: **pull before you start, push when you finish** — on whichever
+machine you used last.
 
 ## Project structure
 
-```
-app/
-  main_qt.py         PySide6 entry point (Version 1 desktop app)
-  core/              Frontend-agnostic business logic (never imports UI code)
-    bpx_gateway.py   The only module that imports `bpx` (anti-corruption layer)
-    document.py      BPXDocument — the raw dict is the source of truth
-    editing.py       Low-level immutable raw-dict mutation primitives
-    commands.py      Operation intents and result contracts
-    command_service.py  Command orchestration (preview/execute)
-    structure.py     Structural capability queries (required/removable sections)
-    document_factory.py  Incomplete document scaffolds (SPM/SPMe/DFN/Partial)
-    tree_model.py    Builds the UI-neutral BPX object tree and parameter rows
-    parameter_types.py  Classifies parameters by kind
-    validation.py    Normalises BPX/Pydantic errors into ValidationIssues
-    export.py        Serialises back to JSON/YAML
-  state/
-    app_state.py     AppState — document session + selection + command undo
-  ui_qt/             PySide6 desktop frontend
-tests/               Headless tests
-docs/                Architecture and roadmap
-```
-
-## Architecture
-
-Strict layering — `frontend → state → core → bpx` — so the frontend can evolve
-without touching business logic. See
-[docs/01-architecture.md](docs/01-architecture.md) for the architecture and its
-design rationale.
+Strict layering — `frontend (ui_qt) → state → core → bpx` — so the frontend can
+evolve without touching business logic; `core/` and `state/` never import a UI
+framework, and `core/bpx_gateway.py` is the sole module that imports `bpx`. See
+[docs/01-architecture.md](docs/01-architecture.md) for the module map and design
+rationale.
 
 ## BPX dependency
 
