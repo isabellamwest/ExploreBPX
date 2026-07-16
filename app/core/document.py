@@ -178,6 +178,20 @@ class BPXDocument:
                 if recovered is not None:
                     parameter, nav_path = recovered, recovered.path
 
+            # Once a parameter has resolved (directly above, or via message
+            # recovery), its own canonical `.path` IS the nav_path -- not
+            # whatever `_derive_nav_path` produced. `_derive_nav_path`'s
+            # `_NAV_STRIP_TAGS` denylist is exact-match and incomplete (it
+            # misses pydantic's parameterised tags, e.g.
+            # `function-after[validate(), str]`, and bare model-name tags,
+            # e.g. `InterpolatedTable`), so a raw derived path can retain a
+            # bogus trailing component. That incompleteness no longer matters
+            # once identity is known: canonicalizing here fixes every
+            # downstream consumer (absorption, badge, breadcrumb) at the
+            # source instead of patching each one.
+            if parameter is not None:
+                nav_path = parameter.path
+
             self._issue_nav_paths.append(nav_path)
 
             if parameter is not None:

@@ -360,7 +360,7 @@ def test_optional_null_field_absorbs_its_diagnostic_calm_page():
     result = completion.partition_issues(doc, tasks)
 
     assert any(
-        getattr(d, "error_type", None) == "string_type" and nav == ("Description",)
+        getattr(d, "error_type", None) == "string_type" and nav == ("Header", "Description")
         for d, nav in result.absorbed
     )
     assert not any(nav == ("Description",) for _, nav in result.visible)
@@ -381,7 +381,7 @@ def test_custom_null_parameter_gets_no_task_and_stays_visible():
 
     result = completion.partition_issues(doc, tasks)
     assert any(
-        getattr(d, "error_type", None) == "extra_forbidden" and nav == ("NotARealField",)
+        getattr(d, "error_type", None) == "extra_forbidden" and nav == ("Header", "NotARealField")
         for d, nav in result.visible
     )
 
@@ -433,7 +433,9 @@ def test_partition_null_field_absorbs_both_union_branch_diagnostics():
     result = completion.partition_issues(doc, tasks)
 
     capacity_diagnostics = [
-        (d, nav) for d, nav in doc.iter_issues() if nav == ("Cell", "Nominal cell capacity [A.h]")
+        (d, nav)
+        for d, nav in doc.iter_issues()
+        if nav == ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
     ]
     assert len(capacity_diagnostics) == 2  # float_type + int_type (V5)
     # PydanticErrorDiagnostic wraps a raw error dict, so it is unhashable --
@@ -455,7 +457,8 @@ def test_partition_garbage_model_shows_both_error_and_task():
 
     result = completion.partition_issues(doc, tasks)
     assert any(
-        getattr(d, "error_type", None) == "literal_error" and nav == ("Model",) for d, nav in result.visible
+        getattr(d, "error_type", None) == "literal_error" and nav == ("Header", "Model")
+        for d, nav in result.visible
     )
 
 

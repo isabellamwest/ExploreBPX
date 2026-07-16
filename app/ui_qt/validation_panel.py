@@ -86,10 +86,38 @@ _SECTION_ROLE = Qt.UserRole + 302  # section name a "section_group" header toggl
 _GROUP_KEY_ROLE = Qt.UserRole + 303  # fold key an Outstanding "group_header" toggles
 
 #: The group an issue clusters under (Concept A): its top-level section --
-#: nav paths are already section-relative (V4 strips Header/Parameterisation),
-#: so the first segment is the section. A diagnostic with no location (a
-#: document-level warning) clusters under this label instead.
+#: the first segment of its *display* path (:func:`_display_path`), so a
+#: Parameterisation issue's structural wrapper is dropped but a Header/
+#: State/Validation issue's own section name is not. A diagnostic with no
+#: location (a document-level warning) clusters under this label instead.
 _DOCUMENT_GROUP = "Document"
+
+
+def _display_path(nav_path: tuple[str, ...]) -> tuple[str, ...]:
+    """*nav_path*, stripped of a leading ``"Parameterisation"`` -- the
+    section heading this page groups/shows an issue under.
+
+    ``nav_path`` is a parameter's canonical ``.path`` (matches
+    ``parameter.path``/``task.path`` exactly); its first component is
+    whichever top-level document key owns it: ``"Parameterisation"``,
+    ``"Header"``, ``"State"``, or ``"Validation"``. Only
+    ``"Parameterisation"`` is a structural wrapper -- its *children*
+    ("Cell", "Negative electrode", ...) are the meaningful sections a reader
+    recognises, so it alone is dropped here. ``"Header"`` (and ``"State"``/
+    ``"Validation"``) is itself a meaningful section heading and must
+    survive: a bad ``Header.Model`` groups under "Header", not under
+    whatever its second component happens to be.
+
+    This is deliberately narrower than ``core.completion``'s
+    ``_STRIPPED_LOC_PREFIXES``/``_nav_path_candidates``, which strip *both*
+    ``Header`` and ``Parameterisation``. That pair answers a different
+    question -- matching a validator's raw, asymmetrically-prefixed ``loc``
+    against a task's path -- not "what section heading should a human read
+    for this row." Do not merge the two.
+    """
+    if nav_path[:1] == ("Parameterisation",):
+        return nav_path[1:]
+    return nav_path
 
 
 def _value_at(raw: dict, path: tuple[str, ...]) -> dict:
@@ -433,7 +461,8 @@ class ValidationPanel(QWidget):
         groups: dict[str, list] = {}
         order: list[str] = []
         for issue, nav_path in merged:
-            section = nav_path[0] if nav_path else _DOCUMENT_GROUP
+            display_path = _display_path(nav_path)
+            section = display_path[0] if display_path else _DOCUMENT_GROUP
             if section not in groups:
                 groups[section] = []
                 order.append(section)
@@ -471,16 +500,18 @@ class ValidationPanel(QWidget):
         prefix is the group header above it, so it's dropped. A section-level
         or document-level diagnostic (nav path is just the section, or empty)
         has no in-section location and returns ``""`` (message-only row)."""
-        if len(nav_path) <= 1:
+        display_path = _display_path(nav_path)
+        if len(display_path) <= 1:
             return ""
-        return " → ".join(nav_path[1:])
+        return " → ".join(display_path[1:])
 
     def _add_issue_row(self, issue, nav_path: tuple[str, ...], section: str) -> None:
         is_error = issue.severity == Severity.ERROR
         label = "ERROR" if is_error else "WARN"
         color = style.ERROR if is_error else style.WARNING
         location = self._relative_location(section, nav_path)
-        plain_loc = " → ".join(nav_path) if nav_path else "(document)"
+        display_path = _display_path(nav_path)
+        plain_loc = " → ".join(display_path) if display_path else "(document)"
         item = QListWidgetItem(f"[{label}] {plain_loc}: {issue.message}")
         item.setData(
             parameter_row.HTML_ROLE,

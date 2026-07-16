@@ -71,6 +71,20 @@ def test_issues_are_grouped_by_section(app_driver, many_issues_path):
     assert all(not collapsed for _name, collapsed in groups)
 
 
+def test_header_owned_issue_groups_under_header(app_driver, tmp_path, valid_spm_dict):
+    """``Parameterisation`` is a structural wrapper stripped for display, but
+    ``Header`` is itself a meaningful section heading and must not be: a bad
+    ``Header.Model`` groups under "Header", not collapse away."""
+    raw = json.loads(json.dumps(valid_spm_dict))
+    raw["Header"]["Model"] = "banana"
+    path = _write(tmp_path, "bad_header.json", raw)
+
+    d = app_driver
+    d.open(path)
+    sections = [name for name, _collapsed in d.validation_section_groups()]
+    assert sections == ["Header"]
+
+
 def test_bad_string_floatint_shows_one_row_not_two(app_driver, many_issues_path):
     """The float_parsing+int_parsing merge (companion fix): one problem, one
     row, and the badge counts it once."""
