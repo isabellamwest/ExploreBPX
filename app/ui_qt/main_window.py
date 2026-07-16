@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from core import completion, export, structure
+from core import completion, export, page_buckets, structure
 from core.bpx_gateway import BPX_VERSION, LoadError
 from core.commands import (
     AddParameter,
@@ -50,12 +50,12 @@ from .parameter_list import ParameterListPanel
 from .search import SearchBar
 from .style import STYLESHEET
 from .tree_panel import TreePanel
-from .validation_panel import ValidationPanel
+from .diagnostics_panel import DiagnosticsPanel
 from .workspace_panel import WorkspacePanel
 
 _NO_DOCUMENT_TEXT = "No document"
 _EDITOR_PAGE_INDEX = 0  # QStackedWidget page hosting the tree/params/inspector
-_VALIDATION_PAGE_INDEX = 1
+_DIAGNOSTICS_PAGE_INDEX = 1
 _WORKSPACE_PAGE_INDEX = 2
 
 
@@ -106,7 +106,7 @@ class MainWindow(QMainWindow):
         self._tree = TreePanel()
         self._params = ParameterListPanel()
         self._inspector = InspectorPanel(self._state)
-        self._validation = ValidationPanel()
+        self._diagnostics = DiagnosticsPanel()
         self._workspace = WorkspacePanel()
         self._search = SearchBar()
         self._activity_bar = ActivityBar()
@@ -195,13 +195,13 @@ class MainWindow(QMainWindow):
         self._editor_page = EditorPage(self._tree, self._params, self._inspector)
 
         # Workspace stack pages. Page indices are fixed by add order (Editor
-        # then Validation then Workspace) so _EDITOR_PAGE_INDEX stays valid;
+        # then Diagnostics then Workspace) so _EDITOR_PAGE_INDEX stays valid;
         # the activity bar's add_view order below controls only the VISUAL
         # order of the left-rail entries, which is Workspace, Editor,
-        # Validation.
+        # Diagnostics.
         self._stack = QStackedWidget()
         self._stack.addWidget(self._editor_page)  # _EDITOR_PAGE_INDEX
-        self._stack.addWidget(self._validation)  # _VALIDATION_PAGE_INDEX
+        self._stack.addWidget(self._diagnostics)  # _DIAGNOSTICS_PAGE_INDEX
         self._stack.addWidget(self._workspace)   # _WORKSPACE_PAGE_INDEX
 
         self._btn_workspace = self._activity_bar.add_view(
@@ -210,8 +210,8 @@ class MainWindow(QMainWindow):
         self._btn_editor = self._activity_bar.add_view(
             "Editor", page_index=_EDITOR_PAGE_INDEX, icon=icons.activity_icon(icons.EDITOR)
         )
-        self._btn_validation = self._activity_bar.add_view(
-            "Validation", page_index=_VALIDATION_PAGE_INDEX, icon=icons.activity_icon(icons.VALIDATION)
+        self._btn_diagnostics = self._activity_bar.add_view(
+            "Diagnostics", page_index=_DIAGNOSTICS_PAGE_INDEX, icon=icons.activity_icon(icons.DIAGNOSTICS)
         )
 
         # Page header + stack form the content column; it sits beside the
@@ -259,8 +259,8 @@ class MainWindow(QMainWindow):
         self._params.parameter_selected.connect(self._navigation.navigate)
         self._params.add_parameter_requested.connect(self._on_add_parameter_requested)
         self._params.remove_parameter_requested.connect(self._on_remove_parameter_requested)
-        self._validation.issue_activated.connect(self._navigation.navigate)
-        self._validation.task_activated.connect(self._on_task_activated)
+        self._diagnostics.issue_activated.connect(self._navigation.navigate)
+        self._diagnostics.task_activated.connect(self._on_task_activated)
         self._inspector.issue_activated.connect(self._navigation.navigate)
         self._search.navigation_requested.connect(self._navigation.navigate)
         self._search.dismissed.connect(self._tree.focus_tree)
@@ -600,7 +600,7 @@ class MainWindow(QMainWindow):
         """
         self._state.open(Path(path))
         self._params.reset_expansion_state()
-        self._validation.reset_view_state()
+        self._diagnostics.reset_view_state()
         self._refresh_all()
         self._show_page(_EDITOR_PAGE_INDEX)
 
@@ -673,7 +673,7 @@ class MainWindow(QMainWindow):
             return
         self._state.new_document(model)
         self._params.reset_expansion_state()
-        self._validation.reset_view_state()
+        self._diagnostics.reset_view_state()
         self._refresh_all()
         self._show_page(_EDITOR_PAGE_INDEX)
 
@@ -801,24 +801,24 @@ class MainWindow(QMainWindow):
         self._redo_action.setEnabled(has_document and session.can_redo)
 
     @staticmethod
-    def _validation_tooltip(errors: int, warnings: int) -> str:
-        """Compose the Validation button's tooltip from honest error/warning
-        counts, e.g. 'Validation — 2 errors, 1 warning'. A zero side is
+    def _diagnostics_tooltip(errors: int, warnings: int) -> str:
+        """Compose the Diagnostics button's tooltip from honest error/warning
+        counts, e.g. 'Diagnostics — 2 errors, 1 warning'. A zero side is
         omitted; singular/plural is handled per side."""
         if not errors and not warnings:
-            return "Validation"
+            return "Diagnostics"
         parts = []
         if errors:
             parts.append(f"{errors} error" + ("" if errors == 1 else "s"))
         if warnings:
             parts.append(f"{warnings} warning" + ("" if warnings == 1 else "s"))
-        return "Validation — " + ", ".join(parts)
+        return "Diagnostics — " + ", ".join(parts)
 
     def _refresh_all(self) -> None:
         """Refresh every view from one document snapshot.
 
         ``tasks``/``partition`` are computed exactly once here (decision G):
-        the Validation page's Outstanding section and the rail badge both
+        the Diagnostics page's Outstanding section and the rail badge both
         derive from this single ``PartitionedIssues``, so they can never
         disagree about what counts as an error. Pre-absorption
         ``document.error_count``/``warning_count`` is deliberately not used
@@ -841,13 +841,14 @@ class MainWindow(QMainWindow):
         # marker reflects *page-visible* issues, not the validator verbatim.
         self._params.set_visible_issue_paths(self._visible_issue_paths(document, partition))
 
-        self._validation.refresh(raw, model, partition, tasks)
+        buckets = page_buckets.bucket_page_content(raw, model, partition, tasks) if document is not None else None
+        self._diagnostics.refresh(buckets, partition, model)
         self._search.index_document(document)
         errors = partition.error_count if partition is not None else 0
         warnings = partition.warning_count if partition is not None else 0
         severity = "error" if errors else ("warning" if warnings else None)
-        self._btn_validation.set_badge(errors + warnings, severity)
-        self._btn_validation.setToolTip(self._validation_tooltip(errors, warnings))
+        self._btn_diagnostics.set_badge(errors + warnings, severity)
+        self._btn_diagnostics.setToolTip(self._diagnostics_tooltip(errors, warnings))
         self._update_title()
         self._update_identity_label()
         self._update_workspace_info()

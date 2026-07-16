@@ -4,7 +4,7 @@ empty-state placeholder when no document is open.
 A thin wrapper (not a redesign of the three-pane layout): it hosts the
 existing splitter unchanged and composes a private ``QStackedWidget`` to
 swap in a placeholder page -- the same list/placeholder pattern already
-used by ``IssuesTab``/``ValidationPanel`` for their own empty states, a
+used by ``IssuesTab``/``DiagnosticsPanel`` for their own empty states, a
 ``QWidget`` wrapping a private stack rather than a stack subclass, so it
 exposes only ``set_has_document`` and not the full ``QStackedWidget`` API.
 """

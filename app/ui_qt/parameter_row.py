@@ -19,8 +19,8 @@ from __future__ import annotations
 import html as _html
 import json
 
-from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QColor, QFont, QFontDatabase, QFontMetrics, QTextDocument
+from PySide6.QtCore import QRect, QSize, Qt
+from PySide6.QtGui import QColor, QFont, QFontDatabase, QFontMetrics, QPainter, QTextDocument
 from PySide6.QtWidgets import (
     QApplication,
     QStyle,
@@ -44,6 +44,24 @@ VALUE_ROLE = Qt.UserRole + 101
 #: the "—" of a committed null and the derived summaries of Inspector-only
 #: kinds ("table · 3 points"), as opposed to a verbatim raw value.
 VALUE_GHOST_ROLE = Qt.UserRole + 102
+#: Item-data role carrying ``"error"``/``"warning"`` for an issue row; when
+#: present the delegate paints a small filled-circle severity icon in the
+#: row's left gutter (F5, Validation-page rail redesign: replaces the old
+#: bracketed ``[ERROR]``/``[WARN]`` text tag baked into the HTML). Shared by
+#: :mod:`ui_qt.diagnostics_panel` and :mod:`ui_qt.issues_tab` so both issue
+#: surfaces read identically -- this lives on the base delegate, not a
+#: page-specific subclass, precisely so the two never diverge.
+SEVERITY_ROLE = Qt.UserRole + 103
+#: Item-data role carrying a row's right-aligned call-to-action string
+#: (e.g. a Diagnostics Outstanding row's "Go to ›"), painted in
+#: ``style.ACCENT`` -- decision L: every actionable row displays its own
+#: action, always visible, never folded inline with the name (unlike
+#: :data:`VALUE_ROLE`, a muted monospace value preview, this is normal-
+#: weight coloured text and is never elided -- keep the string short).
+#: Lives on the base delegate, not a page-specific subclass, so any future
+#: right-aligned-action row reuses the same reserved-width machinery
+#: :data:`VALUE_ROLE` already established for a row's right edge.
+ACTION_ROLE = Qt.UserRole + 104
 
 #: The app's default (untinted) text colour -- matches the base ``QWidget``
 #: rule in this module's stylesheet (``ui_qt/style.py``); named here so a
@@ -142,34 +160,35 @@ def value_tooltip(value: object) -> str:
     return text
 
 
-def compose_issue_row_html(
-    severity_label: str, severity_color: str, location: str, message: str
-) -> str:
-    """Compose an issue row as **two lines**: a coloured severity tag and the
-    bold location on the first, the validator's verbatim message (muted,
-    smaller) on the second.
+def compose_issue_row_html(location: str, message: str) -> str:
+    """Compose an issue row's rich-text fragment: the bold location on the
+    first line, the validator's verbatim message (muted, smaller) on the
+    second -- or the message alone when there is no location to show.
 
     Splitting where (location) from what (message) is Concept A's core move --
     a full-width run-on sentence per issue becomes a scannable header with its
-    detail beneath. Shared by the Validation page's Issues section and the
+    detail beneath. Severity used to be a bracketed ``[ERROR]``/``[WARN]``
+    text tag on the first line; F5 (Diagnostics-page rail redesign) replaced it
+    with a delegate-painted icon (see :data:`SEVERITY_ROLE`) that reads
+    clearly at a glance without competing with the location text for space --
+    callers set that role alongside this HTML, they no longer pass severity
+    in here. Shared by the Diagnostics page's Issues section and the
     Inspector's Issues tab so the two issue surfaces read as one system; the
     tab passes an empty *location* (it is already scoped to one parameter),
-    which drops the row to tag-over-message. *location* is expected already
-    section-relative (the owning section is the group header above the row),
-    and its trailing unit is muted like every other parameter label."""
-    if location:
-        name, unit = split_name_and_unit(location)
-        head = _span(severity_label, color=severity_color, bold=True) + _span(
-            "  " + name, color=DEFAULT_TEXT, bold=True
-        )
-        if unit:
-            head += _span(f" [{unit}]", color=style.MUTED)
-    else:
-        head = _span(severity_label, color=severity_color, bold=True)
+    which drops the row to a single message line rather than an empty first
+    line. *location* is expected already section-relative (the owning
+    section is the group header/rail entry above the row), and its trailing
+    unit is muted like every other parameter label."""
     detail = (
         f'<span style="color:{style.MUTED}; font-size:92%;">'
         f"{_html.escape(message)}</span>"
     )
+    if not location:
+        return detail
+    name, unit = split_name_and_unit(location)
+    head = _span(name, color=DEFAULT_TEXT, bold=True)
+    if unit:
+        head += _span(f" [{unit}]", color=style.MUTED)
     return head + "<br>" + detail
 
 
@@ -217,6 +236,11 @@ class ParameterRowDelegate(QStyledItemDelegate):
     since the item rect (not the ``::item``-adjusted sub-rect) is what
     ``sizeHint`` can reliably reason about before the row exists on screen.
     """
+
+    #: Diameter of the delegate-painted severity icon (:data:`SEVERITY_ROLE`),
+    #: plus the gap before the row's own text starts.
+    _ICON_SIZE = 14
+    _ICON_GUTTER = _ICON_SIZE + 8
 
     def __init__(self, parent=None, *, h_pad: int = 8, v_pad: int = 6) -> None:
         super().__init__(parent)
@@ -272,9 +296,36 @@ class ParameterRowDelegate(QStyledItemDelegate):
         needed = metrics.horizontalAdvance(text) + 1
         return min(needed, int(row_width * _VALUE_MAX_SHARE)) + _VALUE_GAP
 
+    def _icon_reserved(self, index) -> int:
+        """Row width the severity icon claims (including its gap), 0 for a
+        row with no :data:`SEVERITY_ROLE`."""
+        return self._ICON_GUTTER if index.data(SEVERITY_ROLE) else 0
+
+    def _action_font(self, option: QStyleOptionViewItem) -> QFont:
+        """Normal weight, matching the row's own font -- ``style.ACCENT``
+        alone (not bold) carries the emphasis, same as the old inline
+        action hint's own styling (:func:`compose_row_html`)."""
+        return QFont(option.font)
+
+    def _action_reserved(self, option: QStyleOptionViewItem, index) -> int:
+        """Row width the right-aligned call-to-action (:data:`ACTION_ROLE`)
+        claims (including its gap), 0 for a row with none. Never elided --
+        action strings are short by convention ("Go to ›", "+ Add section",
+        "Choose…"), so unlike :data:`VALUE_ROLE` this reserves its full
+        natural width rather than capping/eliding against the row."""
+        text = index.data(ACTION_ROLE)
+        if not text:
+            return 0
+        metrics = QFontMetrics(self._action_font(option))
+        return metrics.horizontalAdvance(text) + _VALUE_GAP
+
     def sizeHint(self, option, index):
         width = self._available_width(option)
-        reserved = self._value_reserved(option, index, width)
+        reserved = (
+            self._value_reserved(option, index, width)
+            + self._icon_reserved(index)
+            + self._action_reserved(option, index)
+        )
         doc = self._build_document(option, index, width - 2 * self._h_pad - reserved)
         if doc is None:
             return super().sizeHint(option, index)
@@ -282,8 +333,11 @@ class ParameterRowDelegate(QStyledItemDelegate):
 
     def paint(self, painter, option, index) -> None:
         row_width = option.rect.width() if option.rect.width() > 0 else self._available_width(option)
-        reserved = self._value_reserved(option, index, row_width)
-        doc = self._build_document(option, index, row_width - 2 * self._h_pad - reserved)
+        icon_reserved = self._icon_reserved(index)
+        action_reserved = self._action_reserved(option, index)
+        value_reserved = self._value_reserved(option, index, row_width)
+        text_width = row_width - 2 * self._h_pad - icon_reserved - action_reserved - value_reserved
+        doc = self._build_document(option, index, text_width)
         if doc is None:
             super().paint(painter, option, index)
             return
@@ -295,13 +349,57 @@ class ParameterRowDelegate(QStyledItemDelegate):
         style_obj = widget.style() if widget is not None else QApplication.style()
         style_obj.drawControl(QStyle.CE_ItemViewItem, opt, painter, widget)
 
+        if icon_reserved:
+            self._paint_severity_icon(painter, option, index)
+
         painter.save()
-        painter.translate(option.rect.left() + self._h_pad, option.rect.top() + self._v_pad)
+        painter.translate(
+            option.rect.left() + self._h_pad + icon_reserved, option.rect.top() + self._v_pad
+        )
         doc.drawContents(painter)
         painter.restore()
 
-        if reserved:
-            self._paint_value(painter, option, index, reserved)
+        if action_reserved:
+            self._paint_action(painter, option, index, action_reserved)
+        if value_reserved:
+            self._paint_value(painter, option, index, value_reserved)
+
+    def _paint_action(self, painter, option, index, reserved: int) -> None:
+        """Right-aligned, top-anchored call-to-action text in accent
+        colour -- always fully visible, never folded inline with the name
+        (decision L)."""
+        painter.save()
+        painter.setFont(self._action_font(option))
+        painter.setPen(QColor(style.ACCENT))
+        rect = option.rect.adjusted(0, self._v_pad, -self._h_pad, -self._v_pad)
+        painter.drawText(rect, Qt.AlignRight | Qt.AlignTop, index.data(ACTION_ROLE))
+        painter.restore()
+
+    def _paint_severity_icon(self, painter, option: QStyleOptionViewItem, index) -> None:
+        """Paint a small filled-circle severity icon in the row's left
+        gutter (F5): a red circle with ``✕`` for an error, amber with ``!``
+        for a warning -- replaces the old bracketed ``[ERROR]``/``[WARN]``
+        text tag baked into the HTML (:func:`compose_issue_row_html`)."""
+        severity = index.data(SEVERITY_ROLE)
+        is_error = severity == "error"
+        rect = QRect(
+            option.rect.left() + self._h_pad,
+            option.rect.top() + self._v_pad,
+            self._ICON_SIZE,
+            self._ICON_SIZE,
+        )
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(style.ERROR if is_error else style.WARNING))
+        painter.drawEllipse(rect)
+        font = QFont(painter.font())
+        font.setPixelSize(9)
+        font.setBold(True)
+        painter.setFont(font)
+        painter.setPen(QColor(style.BADGE_TEXT))
+        painter.drawText(rect, Qt.AlignCenter, "✕" if is_error else "!")
+        painter.restore()
 
     def _paint_value(self, painter, option, index, reserved: int) -> None:
         """Right-aligned, top-anchored value preview, elided with "…" to the

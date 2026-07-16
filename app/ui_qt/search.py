@@ -44,7 +44,7 @@ def _entry_html(entry: "_Entry") -> str:
     """A result row's rich-text fragment: a muted monochrome glyph (folder =
     object, sliders = parameter -- the activity bar's outline family, not
     emoji), the bold name, then the muted full path beneath -- the same
-    name-over-secondary language the Validation page's rows use, so search
+    name-over-secondary language the Diagnostics page's rows use, so search
     results read as part of the same system."""
     glyph = icons.html_img(
         icons.SECTION if entry.kind == "object" else icons.PARAMETER

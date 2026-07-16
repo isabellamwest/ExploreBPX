@@ -1,6 +1,6 @@
 """Workspace page: workspace-level actions and the current-document info panel.
 
-Peer of ``TreePanel``/``ValidationPanel``: a self-contained widget that owns
+Peer of ``TreePanel``/``DiagnosticsPanel``: a self-contained widget that owns
 its own layout and rendering. MainWindow only constructs it, wires its
 ``open_requested``/``new_requested``/``file_dropped`` signals to the existing
 guarded open/new flows, and calls ``refresh`` wherever it refreshes the

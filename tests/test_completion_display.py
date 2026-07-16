@@ -41,6 +41,7 @@ def test_required_expected_null_is_grey_without_warning(app_driver, tmp_path, va
     d = app_driver
     d.open(_write(tmp_path, "required_null.json", raw))
     d.select_object(_CELL)
+    d.diagnostics_select_rail("Cell")
 
     assert d.parameter_row_is_grey("Lower voltage cut-off [V]")
     assert not d.parameter_row_has_warning_marker("Lower voltage cut-off [V]")
@@ -58,6 +59,7 @@ def test_optional_expected_null_is_grey_without_warning(app_driver, tmp_path, va
     d = app_driver
     d.open(_write(tmp_path, "optional_null.json", raw))
     d.select_object(("Header",))
+    d.diagnostics_select_rail("Header")
 
     assert d.parameter_row_is_grey("Description")
     assert not d.parameter_row_has_warning_marker("Description")
@@ -248,6 +250,7 @@ def test_value_removed_flow_turns_the_row_grey_and_calms_the_page(app_driver, va
     d = app_driver
     d.open(valid_spm_path)
     d.select_object(_CELL)
+    d.diagnostics_select_rail("Cell")
     assert not d.parameter_row_is_grey("Lower voltage cut-off [V]")
     assert d.validation_issues_empty_text() == "✓ No issues"
     assert not any(t.path == _LOWER_CUTOFF for t in d.outstanding_tasks())

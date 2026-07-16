@@ -1,8 +1,8 @@
 """No-document empty-state polish (Step 10 of the top-bar/workspace redesign).
 
 Covers three surfaces:
-  - the Validation activity-bar badge (no badge/count at zero issues)
-  - the Validation page's own empty-state message
+  - the Diagnostics activity-bar badge (no badge/count at zero issues)
+  - the Diagnostics page's own empty-state message
   - the Editor page's empty-state hint, shown only with no document
 """
 
@@ -15,7 +15,7 @@ pytest.importorskip("PySide6")
 _CAPACITY = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
 
 
-# --- Validation activity-bar badge --------------------------------------
+# --- Diagnostics activity-bar badge --------------------------------------
 
 
 def test_validation_badge_shows_no_count_with_no_document(app_driver):
@@ -38,7 +38,7 @@ def test_validation_badge_shows_count_once_an_issue_exists(app_driver, spm_workf
     assert d.validation_badge_severity() == "error"
 
 
-# --- Validation page empty state ----------------------------------------
+# --- Diagnostics page empty state ----------------------------------------
 
 
 def test_validation_page_shows_no_document_message(app_driver):
@@ -49,14 +49,20 @@ def test_validation_page_shows_no_document_message(app_driver):
 def test_validation_page_shows_no_issues_message_for_a_clean_document(
     app_driver, valid_spm_path
 ):
-    app_driver.open(valid_spm_path)
+    """The full-page placeholder is gone (Phase 5); the rail redesign (Stage
+    B) moved the pinned "no issues" empty state from one page-wide banner to
+    each section's own Issues box -- proved here by selecting a section --
+    while the document-wide claim itself (nothing anywhere) shows in the
+    summary strip's totals."""
+    d = app_driver
+    d.open(valid_spm_path)
 
-    # The full-page placeholder is gone (Phase 5): once a document is open,
-    # the Issues section always renders, with its own inline empty-state row
-    # when there is nothing to show.
-    assert app_driver.validation_message() is None
-    assert app_driver.validation_issue_count() == 0
-    assert app_driver.validation_issues_empty_text() == "✓ No issues"
+    assert d.validation_message() is None
+    assert d.validation_issue_count() == 0
+    assert d.diagnostics_strip_counts() == (0, 0, 0)
+
+    d.diagnostics_select_rail("Header")
+    assert d.diagnostics_section_issues_empty_text() == "✓ No issues"
 
 
 def test_validation_page_shows_the_list_once_an_issue_exists(app_driver, spm_workfile):

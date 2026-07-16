@@ -18,7 +18,7 @@ from PySide6.QtSvg import QSvgRenderer
 
 #: Unselected / selected stroke colours. The icon glyph never changes --
 #: only its colour -- so severity/emphasis is always carried by tone, never
-#: by shape (see the Validation icon: no tick, no warning triangle).
+#: by shape (see the Diagnostics icon: no tick, no warning triangle).
 _MUTED = "#57606a"
 _STRONG = "#1f2328"
 
@@ -45,11 +45,11 @@ EDITOR = """
 </svg>
 """.strip()
 
-#: Clipboard with ruled lines -- Validation. Deliberately carries no tick,
+#: Clipboard with ruled lines -- Diagnostics. Deliberately carries no tick,
 #: cross or warning triangle: the glyph must assert neither pass nor fail,
 #: only the badge (a plain, honest count) speaks to document state. Ink
 #: centred on (12, 12).
-VALIDATION = """
+DIAGNOSTICS = """
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
      stroke="{color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
   <rect x="5" y="6.25" width="14" height="13.5" rx="2"/>

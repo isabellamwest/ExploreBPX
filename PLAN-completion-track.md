@@ -239,6 +239,29 @@ this track — it currently omits it entirely). `PROJECT_STATUS.md` after every 
 
 ---
 
+## 4b. Amendment 2026-07-16 — Validation page rail redesign (user-approved)
+
+The user reviewed the shipped two-section page and reopened **decision F only**
+(design workflow: three concepts → section-rail chosen → refined wireframe signed
+off, incl. v2 revisions). Every other locked decision (B, C, D, E, G, H–R, pinned
+copy) stands. New locked decisions:
+
+> **Naming note (2026-07-16, separate task):** the page was renamed **Diagnostics**
+> across the app (working tree). "Validation page" in this plan = the Diagnostics
+> page. The BPX data *section* named `Validation` keeps its name everywhere.
+
+| # | Decision |
+|---|---|
+| **F2** | **Page shape:** summary strip (error/warning/outstanding totals) + left section rail + single-section detail pane replaces the stacked Issues/Outstanding page. The pane shows the selected section's Issues box above its Outstanding box (banded group boxes). **"All sections"** rail entry = the unified whole-document view — each section exactly once, issues then outstanding under a foldable header (pinned copy verbatim there) — and is the **default on open**. In-pane box headers adapt: `Outstanding · N of M remaining` / `· section absent` (section name implicit). |
+| **F3** | **Nothing is lost (test-enforced):** every diagnostic/task lands in exactly one rail bucket — display section when the path resolves, else nearest existing ancestor (existing orphan rule), else a **Document** bucket (rail entry that exists only while occupied). Rail entries derive from schema sections ∪ raw top-level keys ∪ diagnostic-bearing buckets, so unknown top-level sections get entries. All-sections renders the entire partition unfiltered (the backup view). Regression test: strip totals = Σ rail badges = All-sections rows = app-rail badge, post-absorption. |
+| **F4** | **Quiet rail:** badges only where something needs attention (red = post-absorption issues, grey = outstanding; absent section = italic name + grey badge). **No ✓ / no zero** — quiet ≠ "complete" (a valid section may still have optional fields to add; that offer stays in the parameter list). Pane empty states keep the pinned ✓ wording. |
+| **F5** | **Severity icons** (red ✕ circle / amber !) replace the `[ERROR]`/`[WARN]` text tags on issue rows; task glyphs stay ○ missing / ◐ added-no-value. Row anatomy otherwise unchanged (bold location + muted unit; verbatim message muted on line 2; REQUIRED tag; action text always visible, right-aligned). Activation contract L unchanged; rail click/arrows switch the pane (selection never mutates); rail selection + fold state persist per session. Document-bucket rows navigate to their attachment point; no attachment → no-op. |
+| **F6** | **Multi-document (user ruling, 2026-07-16): the Validation page exists only for the main/primary document.** The panel still binds to one DocumentSession with per-session view state and no module-level view globals, but no per-document validation views, switchers, or cross-document comparison are ever owed. Nothing speculative built. |
+| **F7** | **Phasing:** phase A = strip + rail + pane + All-sections + F3 reconciliation test (this amendment); later phases (separately approved): chips-as-filters, text filter. Verification per design workflow: headless AppDriver tests + real-app screenshot against the signed-off wireframe. |
+
+Docs owed when this lands: `02-ui.md` + `03-features.md` §5 page-layout text
+(two-section description → rail design).
+
 ## 5. Pitfalls carried forward
 
 - `QMenu.exec()` truly blocks offscreen; dismiss popups via zero-delay

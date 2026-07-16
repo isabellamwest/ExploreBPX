@@ -98,11 +98,20 @@ class AppDriver:
         self._qtbot.mouseClick(button, Qt.LeftButton)
         return self
 
+    # -- Diagnostics page (rail redesign: strip + rail + detail pane) ---
+    #
+    # The default surface for driver reads that don't care which rail entry
+    # is selected is the "All sections" view (``_all_view``) -- it is both
+    # the default selection on a freshly opened document (matching most
+    # existing call sites, which never touch the rail first) and the F3
+    # backup view that always contains every issue/task row, so scanning it
+    # preserves the old single-list driver semantics almost exactly.
+    # ``_validation_rows``/``validation_issue_texts``/``outstanding_tasks``/
+    # etc. below all read it. Rail- and section-pane-specific behaviour gets
+    # its own ``diagnostics_*``-prefixed methods further down.
+
     def activate_first_validation_issue(self) -> "AppDriver":
-        """Activate the first Issues-section row in the document-wide
-        Validation view (skipping the "Issues"/"Outstanding" page headers and
-        any Outstanding rows -- Phase 5 restructured the page into two
-        always-present sections sharing one QListWidget).
+        """Activate the first issue row in the All-sections view.
 
         Emits ``itemActivated`` -- the signal the panel actually connects
         (fired by a real double-click or Enter/Return) -- rather than
@@ -110,94 +119,293 @@ class AppDriver:
         not listen to.
         """
         items = self._validation_rows("issue")
-        assert items, "No issue row in the Validation list."
-        self._w._validation._list.itemActivated.emit(items[0])
+        assert items, "No issue row in the Diagnostics list."
+        self._w._diagnostics._all_view._list.itemActivated.emit(items[0])
         return self
 
     def activate_validation_row(self, item) -> "AppDriver":
         """Emit ``itemActivated`` for one already-located ``QListWidgetItem``
-        (e.g. from :meth:`validation_rows`) -- the low-level primitive
-        :meth:`activate_first_validation_issue`/:meth:`activate_outstanding_task`
-        build on."""
-        self._w._validation._list.itemActivated.emit(item)
+        from the All-sections view (e.g. from :meth:`_validation_rows`) --
+        the low-level primitive :meth:`activate_first_validation_issue`/
+        :meth:`activate_outstanding_task` build on."""
+        self._w._diagnostics._all_view._list.itemActivated.emit(item)
         return self
 
     def activate_outstanding_task(self, task) -> "AppDriver":
         """Activate the Outstanding row for *task* (a ``CompletionTask``, as
-        returned by :meth:`outstanding_tasks`)."""
-        from ui_qt import validation_panel as vp
+        returned by :meth:`outstanding_tasks`) in the All-sections view."""
+        from ui_qt import diagnostics_panel as dp
 
         for item in self._validation_rows("task"):
-            if item.data(vp._TASK_ROLE) == task:
-                self._w._validation._list.itemActivated.emit(item)
+            if item.data(dp._TASK_ROLE) == task:
+                self._w._diagnostics._all_view._list.itemActivated.emit(item)
                 return self
         raise AssertionError(f"No Outstanding row for {task!r}")
 
     def outstanding_tasks(self) -> list:
-        """Every ``CompletionTask`` currently rendered as an Outstanding row,
-        in on-screen order."""
-        from ui_qt import validation_panel as vp
+        """Every ``CompletionTask`` currently rendered as an Outstanding row
+        in the All-sections view, in on-screen order."""
+        from ui_qt import diagnostics_panel as dp
 
-        return [item.data(vp._TASK_ROLE) for item in self._validation_rows("task")]
+        return [item.data(dp._TASK_ROLE) for item in self._validation_rows("task")]
 
     def outstanding_task_row_text(self, task) -> str:
         """Plain text of the Outstanding row for *task* -- includes any
         absorbed validator messages appended as secondary text (decision O)."""
-        from ui_qt import validation_panel as vp
+        from ui_qt import diagnostics_panel as dp
 
         for item in self._validation_rows("task"):
-            if item.data(vp._TASK_ROLE) == task:
+            if item.data(dp._TASK_ROLE) == task:
                 return item.text()
         raise AssertionError(f"No Outstanding row for {task!r}")
 
     def validation_group_headers(self) -> list[str]:
-        """Text of every Outstanding group subheader, in order (e.g.
-        "Cell — 2 of 5 remaining", "Separator — section absent")."""
-        return [item.text() for item in self._validation_rows("group_header")]
+        """Text of every All-sections sub-head row, in order (e.g.
+        "Cell — 2 of 5 remaining", "Separator — section absent",
+        "Cell · optional — 1 unfilled") -- the pinned copy from S3."""
+        return [item.text() for item in self._validation_rows("subhead")]
 
     def validation_task_row_count_under_header(self, header_text: str) -> int:
-        """Number of "task" rows directly beneath the group/page header whose
-        text is *header_text*, up to (not including) the next header row
-        (decision R's ratio-integrity check: a required group's stated N must
-        equal this count exactly, never an optional row sitting in between)."""
-        from ui_qt import validation_panel as vp
+        """Number of "task" rows directly beneath the sub-head/fold-header
+        row whose text is *header_text*, up to (not including) the next such
+        row (decision R's ratio-integrity check: a required group's stated N
+        must equal this count exactly, never an optional row sitting in
+        between)."""
+        from ui_qt import diagnostics_panel as dp
 
-        lst = self._w._validation._list
+        lst = self._w._diagnostics._all_view._list
         start = None
         for i in range(lst.count()):
             item = lst.item(i)
-            if item.data(vp._KIND_ROLE) in ("group_header", "page_header") and item.text() == header_text:
+            if item.data(dp._KIND_ROLE) in ("subhead", "fold_header") and item.text() == header_text:
                 start = i
                 break
         assert start is not None, f"No header row with text {header_text!r}."
         count = 0
         for i in range(start + 1, lst.count()):
             item = lst.item(i)
-            kind = item.data(vp._KIND_ROLE)
-            if kind in ("group_header", "page_header"):
+            kind = item.data(dp._KIND_ROLE)
+            if kind in ("subhead", "fold_header"):
                 break
             if kind == "task":
                 count += 1
         return count
 
-    def validation_page_headers(self) -> list[str]:
-        """Text of the two always-present page-section headers ("Issues",
-        "Outstanding")."""
-        return [item.text() for item in self._validation_rows("page_header")]
-
     def validation_issue_texts(self) -> list[str]:
-        """Text of every Issues-section row, in order."""
+        """Text of every issue row in the All-sections view, in order."""
         return [item.text() for item in self._validation_rows("issue")]
 
     def activate_validation_group_header(self, index: int = 0) -> "AppDriver":
-        """Activate a group subheader row directly -- proves it is a
-        structural no-op (decision L: only issue/task rows act)."""
-        return self.activate_validation_row(self._validation_rows("group_header")[index])
+        """Activate a sub-head row directly -- proves it is a structural
+        no-op (decision L: only issue/task rows act)."""
+        return self.activate_validation_row(self._validation_rows("subhead")[index])
 
-    def activate_validation_page_header(self, index: int = 0) -> "AppDriver":
-        """Activate a page-section header row directly ("Issues"/
-        "Outstanding") -- proves it is a structural no-op."""
-        return self.activate_validation_row(self._validation_rows("page_header")[index])
+    def activate_fold_header(self, index: int = 0) -> "AppDriver":
+        """Activate (Enter/double-click) an All-sections fold-header row
+        directly -- proves it is a structural no-op; folding is single-click
+        only (:meth:`toggle_all_sections_fold`)."""
+        return self.activate_validation_row(self._validation_rows("fold_header")[index])
+
+    def all_sections_fold_headers(self) -> list[tuple[str, bool]]:
+        """``(section_label, collapsed)`` for every All-sections fold
+        header, in display order."""
+        from ui_qt import diagnostics_panel as dp
+
+        return [
+            (item.data(dp._FOLD_BUCKET_ROLE).label, bool(item.data(dp._FOLD_COLLAPSED_ROLE)))
+            for item in self._validation_rows("fold_header")
+        ]
+
+    def toggle_all_sections_fold(self, section_label: str) -> "AppDriver":
+        """Fold/unfold the named bucket in the All-sections view, as a
+        single click on its header does."""
+        from ui_qt import diagnostics_panel as dp
+
+        for item in self._validation_rows("fold_header"):
+            if item.data(dp._FOLD_BUCKET_ROLE).label == section_label:
+                self._w._diagnostics._all_view._on_clicked(item)
+                return self
+        raise AssertionError(f"No All-sections fold header for {section_label!r}.")
+
+    def validation_task_texts(self) -> list[str]:
+        """Text of every Outstanding task row in the All-sections view, in order."""
+        return [item.text() for item in self._validation_rows("task")]
+
+    def validation_issue_html(self) -> list[str]:
+        """The painted HTML of every issue row in the All-sections view, in
+        order -- lets a test assert the two-line location/message split
+        without pixel-reading."""
+        from ui_qt import parameter_row
+
+        return [
+            item.data(parameter_row.HTML_ROLE) for item in self._validation_rows("issue")
+        ]
+
+    def _validation_rows(self, kind: str) -> list:
+        from ui_qt import diagnostics_panel as dp
+
+        lst = self._w._diagnostics._all_view._list
+        return [
+            lst.item(i)
+            for i in range(lst.count())
+            if lst.item(i).data(dp._KIND_ROLE) == kind
+        ]
+
+    def activate_validation_issue(self, path: tuple[str, ...]) -> "AppDriver":
+        """Emit the Diagnostics panel's own activation signal for *path*.
+
+        Drives through the panel's public ``issue_activated`` signal directly
+        (the same entry point a real double-click or Enter/Return uses
+        internally, from either detail-pane view -- the panel forwards both
+        unmodified), bypassing ``QListWidget``'s ``itemDoubleClicked`` --
+        which is a distinct Qt signal from ``itemActivated`` and, unlike a
+        genuine mouse event, does not trigger it when emitted manually.
+        """
+        self._w._diagnostics.issue_activated.emit(tuple(path))
+        return self
+
+    # -- Diagnostics rail --------------------------------------------------
+
+    def diagnostics_strip_counts(self) -> tuple[int, int, int]:
+        """``(errors, warnings, outstanding)`` -- the summary strip's own
+        totals, straight from the ``PageBuckets`` the rail/pane also render
+        from (F3's reconciliation invariant: these can never disagree)."""
+        buckets = self._w._diagnostics._buckets
+        if buckets is None:
+            return (0, 0, 0)
+        return (buckets.error_count, buckets.warning_count, buckets.outstanding_count)
+
+    def diagnostics_rail_labels(self) -> list[str]:
+        """Every rail entry's label, in display order ("All sections" first,
+        then a separator -- omitted here -- then one per bucket)."""
+        from ui_qt import diagnostics_panel as dp
+
+        rail = self._w._diagnostics._rail
+        return [
+            rail.item(i).text()
+            for i in range(rail.count())
+            if rail.item(i).data(dp._RAIL_KIND_ROLE) in ("all", "section")
+        ]
+
+    def diagnostics_rail_absent(self, label: str) -> bool:
+        """True when rail entry *label* renders italic (an absent section)."""
+        from ui_qt import diagnostics_panel as dp
+
+        return bool(self._diagnostics_rail_item(label).data(dp._RAIL_ABSENT_ROLE))
+
+    def diagnostics_rail_has_badge(self, label: str) -> bool:
+        """True when rail entry *label* carries at least one painted count
+        badge (F4: a clean bucket carries none at all)."""
+        from ui_qt import diagnostics_panel as dp
+
+        return bool(self._diagnostics_rail_item(label).data(dp._RAIL_BADGE_ROLE))
+
+    def diagnostics_bucket(self, label: str):
+        """The ``SectionBucket`` currently backing rail entry *label* --
+        ``None`` for "All sections" (which has no single bucket) or an
+        unknown label."""
+        buckets = self._w._diagnostics._buckets
+        if buckets is None or label == "All sections":
+            return None
+        return next((b for b in buckets.buckets if b.label == label), None)
+
+    def diagnostics_select_rail(self, label: str) -> "AppDriver":
+        """Select rail entry *label*, as a click would -- switches the pane
+        immediately via the rail's own ``selection_changed`` signal."""
+        self._w._diagnostics._rail.setCurrentItem(self._diagnostics_rail_item(label))
+        return self
+
+    def diagnostics_selected_rail_label(self) -> str | None:
+        item = self._w._diagnostics._rail.currentItem()
+        return item.text() if item is not None else None
+
+    def diagnostics_rail_press_down(self) -> "AppDriver":
+        """Give the rail keyboard focus and press Down -- proves arrow keys
+        move rail selection (and so switch the pane) without a click."""
+        rail = self._w._diagnostics._rail
+        rail.setFocus()
+        self._qtbot.keyClick(rail, Qt.Key_Down)
+        return self
+
+    def _diagnostics_rail_item(self, label: str):
+        rail = self._w._diagnostics._rail
+        for i in range(rail.count()):
+            item = rail.item(i)
+            if item.text() == label:
+                return item
+        raise AssertionError(f"No rail entry named {label!r}.")
+
+    # -- Diagnostics detail pane ------------------------------------------
+
+    def diagnostics_pane_mode(self) -> str:
+        """"section" or "all" -- which detail-pane view is currently showing."""
+        panel = self._w._diagnostics
+        return "section" if panel._pane_stack.currentWidget() is panel._section_view else "all"
+
+    def diagnostics_section_header_text(self) -> str:
+        """The selected section pane's own header label (rich text; callers
+        match on substrings)."""
+        return self._w._diagnostics._section_view._header.text()
+
+    def diagnostics_section_issue_texts(self) -> list[str]:
+        return [
+            item.text()
+            for item in self._diagnostics_kind_rows(
+                self._w._diagnostics._section_view._issues_box.list, "issue"
+            )
+        ]
+
+    def diagnostics_section_issues_badge_texts(self) -> list[str]:
+        """Text of every badge currently shown in the selected section's
+        Issues box header, left to right (0, 1 or 2: red error / amber
+        warning -- :func:`ui_qt.diagnostics_panel._issue_badge_specs`)."""
+        layout = self._w._diagnostics._section_view._issues_box._badge_layout
+        return [layout.itemAt(i).widget().text() for i in range(layout.count())]
+
+    def diagnostics_section_outstanding_title(self) -> str:
+        return self._w._diagnostics._section_view._outstanding_box._title_label.text()
+
+    def diagnostics_section_task_texts(self) -> list[str]:
+        return [
+            item.text()
+            for item in self._diagnostics_kind_rows(
+                self._w._diagnostics._section_view._outstanding_box.list, "task"
+            )
+        ]
+
+    def diagnostics_section_optional_subhead_texts(self) -> list[str]:
+        return [
+            item.text()
+            for item in self._diagnostics_kind_rows(
+                self._w._diagnostics._section_view._outstanding_box.list, "subhead"
+            )
+        ]
+
+    def diagnostics_section_issues_empty_text(self) -> str | None:
+        """Pinned empty-state text of the selected section's Issues box
+        (e.g. "✓ No issues"), or None if it holds real rows."""
+        return self._first_message_text(self._w._diagnostics._section_view._issues_box.list)
+
+    def diagnostics_section_outstanding_empty_text(self) -> str | None:
+        """Pinned empty-state text of the selected section's Outstanding box
+        (e.g. "✓ Nothing outstanding"), or None if it holds real rows."""
+        return self._first_message_text(self._w._diagnostics._section_view._outstanding_box.list)
+
+    def _first_message_text(self, list_widget) -> str | None:
+        from ui_qt import diagnostics_panel as dp
+
+        if list_widget.count() == 1 and list_widget.item(0).data(dp._KIND_ROLE) == "message":
+            return list_widget.item(0).text()
+        return None
+
+    def _diagnostics_kind_rows(self, list_widget, kind: str) -> list:
+        from ui_qt import diagnostics_panel as dp
+
+        return [
+            list_widget.item(i)
+            for i in range(list_widget.count())
+            if list_widget.item(i).data(dp._KIND_ROLE) == kind
+        ]
 
     def fields_to_add_current_alias(self) -> str | None:
         """The alias of the parameter list's currently-selected "fields to
@@ -211,104 +419,25 @@ class AppDriver:
         return item.data(panel._GROUP_ROW_ALIAS_ROLE)
 
     def validation_issues_empty_text(self) -> str | None:
-        """Text of the Issues section's own inline empty-state row (e.g.
-        "✓ No issues"), or None if the section holds real issue rows."""
-        return self._section_message_text("Issues")
+        """Pinned empty-state text of the currently selected SECTION pane's
+        Issues box (e.g. "✓ No issues"), or None if it holds real rows, or
+        the All-sections view is showing -- that view is the quiet F3 backup
+        (no pinned empty-state copy of its own; see
+        :meth:`diagnostics_section_issues_empty_text` for the direct form of
+        this same read)."""
+        panel = self._w._diagnostics
+        if panel._pane_stack.currentWidget() is not panel._section_view:
+            return None
+        return self.diagnostics_section_issues_empty_text()
 
     def validation_outstanding_empty_text(self) -> str | None:
-        """Text of the Outstanding section's own inline empty-state row
-        (e.g. "✓ Nothing outstanding", or the Partial-model notice), or None
-        if the section holds real task rows."""
-        return self._section_message_text("Outstanding")
-
-    def _section_message_text(self, page_header_text: str) -> str | None:
-        from ui_qt import validation_panel as vp
-
-        lst = self._w._validation._list
-        for i in range(lst.count()):
-            item = lst.item(i)
-            if item.data(vp._KIND_ROLE) == "page_header" and item.text() == page_header_text:
-                nxt = lst.item(i + 1)
-                if nxt is not None and nxt.data(vp._KIND_ROLE) == "message":
-                    return nxt.text()
-                return None
-        return None
-
-    def _validation_rows(self, kind: str) -> list:
-        from ui_qt import validation_panel as vp
-
-        lst = self._w._validation._list
-        return [
-            lst.item(i)
-            for i in range(lst.count())
-            if lst.item(i).data(vp._KIND_ROLE) == kind
-        ]
-
-    def validation_section_groups(self) -> list[tuple[str, bool]]:
-        """The Issues-section group headers as ``(section, collapsed)`` pairs,
-        in display order -- Concept A clusters issues by section."""
-        from ui_qt import validation_panel as vp
-
-        return [
-            (item.data(vp._SECTION_ROLE), item.text().startswith("▸"))
-            for item in self._validation_rows("section_group")
-        ]
-
-    def toggle_validation_section(self, section: str) -> "AppDriver":
-        """Fold/unfold the named Issues section group, as a single click on
-        its header does."""
-        from ui_qt import validation_panel as vp
-
-        for item in self._validation_rows("section_group"):
-            if item.data(vp._SECTION_ROLE) == section:
-                self._w._validation._on_clicked(item)
-                return self
-        raise AssertionError(f"No Issues section group named {section!r}.")
-
-    def outstanding_group_headers(self) -> list[tuple[str, bool]]:
-        """The Outstanding group headers as ``(text, collapsed)`` pairs, in
-        display order. ``item.text()`` is the bare header (no chevron); the
-        fold state is read from the painted HTML's chevron."""
-        from ui_qt import parameter_row
-
-        return [
-            (item.text(), "▸" in (item.data(parameter_row.HTML_ROLE) or ""))
-            for item in self._validation_rows("group_header")
-        ]
-
-    def toggle_outstanding_group(self, header_text: str) -> "AppDriver":
-        """Fold/unfold the named Outstanding group, as a single click on its
-        header does."""
-        for item in self._validation_rows("group_header"):
-            if item.text() == header_text:
-                self._w._validation._on_clicked(item)
-                return self
-        raise AssertionError(f"No Outstanding group header with text {header_text!r}.")
-
-    def validation_task_texts(self) -> list[str]:
-        """Text of every Outstanding task row, in order."""
-        return [item.text() for item in self._validation_rows("task")]
-
-    def validation_issue_html(self) -> list[str]:
-        """The painted HTML of every Issues-section row, in order -- lets a
-        test assert the two-line location/message split without pixel-reading."""
-        from ui_qt import parameter_row
-
-        return [
-            item.data(parameter_row.HTML_ROLE) for item in self._validation_rows("issue")
-        ]
-
-    def activate_validation_issue(self, path: tuple[str, ...]) -> "AppDriver":
-        """Emit the Validation view's own activation signal for *path*.
-
-        Drives through the panel's public ``issue_activated`` signal directly
-        (the same entry point a real double-click or Enter/Return uses
-        internally), bypassing ``QListWidget``'s ``itemDoubleClicked`` --
-        which is a distinct Qt signal from ``itemActivated`` and, unlike a
-        genuine mouse event, does not trigger it when emitted manually.
-        """
-        self._w._validation.issue_activated.emit(tuple(path))
-        return self
+        """Pinned empty-state text of the currently selected SECTION pane's
+        Outstanding box (e.g. "✓ Nothing outstanding"), or None if it holds
+        real rows or the All-sections view is showing."""
+        panel = self._w._diagnostics
+        if panel._pane_stack.currentWidget() is not panel._section_view:
+            return None
+        return self.diagnostics_section_outstanding_empty_text()
 
     def activate_first_parameter_issue(self) -> "AppDriver":
         """Activate the first issue in the Inspector's Issues tab.
@@ -339,8 +468,8 @@ class AppDriver:
         raise AssertionError(f"No search result for {path!r}")
 
     def show_view(self, name: str) -> "AppDriver":
-        """Switch the workspace via the activity bar ("Workspace"/"Editor"/"Validation")."""
-        index = {"Editor": 0, "Validation": 1, "Workspace": 2}[name]
+        """Switch the workspace via the activity bar ("Workspace"/"Editor"/"Diagnostics")."""
+        index = {"Editor": 0, "Diagnostics": 1, "Workspace": 2}[name]
         self._w._activity_bar.view_requested.emit(index)
         return self
 
@@ -773,7 +902,7 @@ class AppDriver:
         """Visible full-page placeholder text ("No document open"), or None
         once a document is open -- the page then always shows its list (the
         two sections carry their own inline empty-state rows instead)."""
-        panel = self._w._validation
+        panel = self._w._diagnostics
         if panel._stack.currentWidget() is panel._placeholder:
             return panel._placeholder.text()
         return None
@@ -791,16 +920,16 @@ class AppDriver:
         return self._w._stack.currentIndex()
 
     def validation_badge_count(self) -> int:
-        """The Validation activity-bar entry's badge count (0 = no badge)."""
-        return self._w._btn_validation.badge_count
+        """The Diagnostics activity-bar entry's badge count (0 = no badge)."""
+        return self._w._btn_diagnostics.badge_count
 
     def validation_badge_severity(self) -> str | None:
-        """The Validation entry's badge severity: 'error', 'warning' or None."""
-        return self._w._btn_validation.badge_severity
+        """The Diagnostics entry's badge severity: 'error', 'warning' or None."""
+        return self._w._btn_diagnostics.badge_severity
 
     def validation_tooltip(self) -> str:
-        """The Validation activity-bar entry's tooltip text."""
-        return self._w._btn_validation.toolTip()
+        """The Diagnostics activity-bar entry's tooltip text."""
+        return self._w._btn_diagnostics.toolTip()
 
     def page_header_title(self) -> str:
         """The page header's current (raw, non-upper-cased) title."""
@@ -984,6 +1113,136 @@ class AppDriver:
             f"Card {type(editor).__name__} is not a ModalCard."
         )
         return editor
+
+    # ------------------------------------------------------------------
+    # ExperimentCard (a Validation run's unified multi-column editor)
+    # ------------------------------------------------------------------
+
+    def experiment_card(self):
+        """The active :class:`~ui_qt.cards.experiment.ExperimentCard`.
+
+        Asserts loudly (naming the actual card type) rather than returning
+        ``None``, since every caller below assumes it exists.
+        """
+        from ui_qt.cards.experiment import ExperimentCard
+
+        card = self._w._inspector._card
+        assert isinstance(card, ExperimentCard), (
+            "Inspector is not showing an ExperimentCard "
+            f"({type(card).__name__ if card is not None else None})."
+        )
+        return card
+
+    def experiment_columns(self) -> tuple[str, ...]:
+        """The aliases of every column the card currently shows, in order."""
+        return tuple(p.label for p in self.experiment_card()._columns)
+
+    def experiment_focused_column(self) -> str | None:
+        """The alias of the column holding the grid's current-cell ring, or
+        ``None`` if nothing is focused (a bare run-node reveal)."""
+        card = self.experiment_card()
+        index = card._grid._view.currentIndex()
+        if not index.isValid():
+            return None
+        return card._columns[index.column()].label
+
+    def _experiment_column_index(self, alias: str) -> int:
+        return [p.label for p in self.experiment_card()._columns].index(alias)
+
+    def experiment_column_values(self, alias: str) -> list:
+        card = self.experiment_card()
+        return card._grid.column_values(self._experiment_column_index(alias))
+
+    def set_experiment_cell(self, alias: str, row: int, text) -> "AppDriver":
+        """Type *text* into one cell of column *alias* (the model's
+        ``setData``, exactly like :meth:`set_grid_cell`)."""
+        card = self.experiment_card()
+        grid = card._grid
+        column = self._experiment_column_index(alias)
+        grid._model.setData(grid._model.index(row, column), str(text), Qt.EditRole)
+        return self
+
+    def experiment_cell_tooltip(self, alias: str, row: int) -> str | None:
+        card = self.experiment_card()
+        grid = card._grid
+        column = self._experiment_column_index(alias)
+        return grid._model.data(grid._model.index(row, column), Qt.ToolTipRole)
+
+    def commit_experiment(self) -> "AppDriver":
+        """Press Enter on the card's grid: commits every changed column as
+        one ``SetValues``."""
+        card = self.experiment_card()
+        self._qtbot.keyClick(card._grid.focus_widget(), Qt.Key_Return)
+        return self
+
+    def revert_experiment(self) -> "AppDriver":
+        """Press Escape on the card's grid: discards every column's draft."""
+        card = self.experiment_card()
+        self._qtbot.keyClick(card._grid.focus_widget(), Qt.Key_Escape)
+        return self
+
+    def experiment_card_is_dirty(self) -> bool:
+        return self.experiment_card().is_dirty
+
+    def experiment_title(self) -> str:
+        return self.experiment_card()._title.text()
+
+    def experiment_add_temperature_button(self):
+        """The "+ Temperature [K]" button, or ``None`` when hidden (the
+        column already exists, or the card is read-only)."""
+        return self.experiment_card()._add_temperature_button
+
+    def click_experiment_add_temperature(self) -> "AppDriver":
+        button = self.experiment_add_temperature_button()
+        assert button is not None, "No '+ Temperature [K]' button is currently shown."
+        self._qtbot.mouseClick(button, Qt.LeftButton)
+        return self
+
+    def experiment_chip_text(self) -> str | None:
+        card = self.experiment_card()
+        return card._chip.text() if card._chip is not None else None
+
+    def experiment_import_csv(self, data, mapping) -> "AppDriver":
+        """Apply a confirmed CSV mapping directly (the dialog itself is
+        modal and tested separately; see ``test_csv_import.py``)."""
+        self.experiment_card()._apply_csv_import(data, mapping)
+        return self
+
+    def open_experiment_cell_editor(self, alias: str, row: int) -> "AppDriver":
+        """Open the real per-cell editor widget for one cell of column
+        *alias* -- mirrors :meth:`open_grid_cell_editor` for the multi-column
+        grid, to exercise the same cell-level-vs-grid-level keyboard layering."""
+        card = self.experiment_card()
+        grid = card._grid
+        column = self._experiment_column_index(alias)
+        view = grid.focus_widget()
+        self._w.show()
+        view.setFocus()
+        view.setCurrentIndex(grid._model.index(row, column))
+        self._qtbot.keyClick(view, Qt.Key_1)
+        return self
+
+    def experiment_cell_editor_open(self) -> bool:
+        from PySide6.QtWidgets import QAbstractItemView
+
+        return (
+            self.experiment_card()._grid.focus_widget().state()
+            == QAbstractItemView.State.EditingState
+        )
+
+    def press_in_experiment_cell_editor(self, key) -> "AppDriver":
+        from PySide6.QtWidgets import QLineEdit
+
+        editor = self.experiment_card()._grid.focus_widget().findChild(QLineEdit)
+        assert editor is not None, "No cell editor is open."
+        self._qtbot.keyClick(editor, key)
+        self._qtbot.wait(10)
+        return self
+
+    def rename_node(self, path: tuple[str, ...], new_name: str) -> "AppDriver":
+        """Rename the user-named key at *path*, as the tree's rename UI does."""
+        self._w._tree.rename_requested.emit(tuple(path), new_name)
+        return self
 
     # ------------------------------------------------------------------
     # Internals -- the one place that knows card widget structure

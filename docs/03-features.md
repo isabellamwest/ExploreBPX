@@ -327,10 +327,10 @@ checking.
 | Continuous BPX schema validation via the `bpx` package | Implemented |
 | Normalised `ValidationIssue` records (path, message, severity) | Implemented |
 | Best-effort mapping from validation paths to visible objects/parameters | Implemented |
-| Validation workspace listing all document issues | Implemented |
+| Diagnostics workspace listing all document issues | Implemented |
 | Parameter-scoped Issues tab in the Inspector secondary workspace | Implemented |
-| Keyboard navigation of issues (Enter-to-activate) in the Validation workspace and Issues tab | Implemented |
-| Outstanding section on the Validation page (required + optional-null completion tasks, `core/completion.py`) | Implemented |
+| Keyboard navigation of issues (Enter-to-activate) in the Diagnostics workspace and Issues tab | Implemented |
+| Outstanding section on the Diagnostics page (required + optional-null completion tasks, `core/completion.py`) | Implemented |
 | Absorption of validator diagnostics already accounted for by an Outstanding task, shown as muted secondary text on that row | Implemented |
 | Union-pair display merge (both the `float_type`/`int_type` and `float_parsing`/`int_parsing` variants) across Issues, Outstanding and the Issues tab | Implemented |
 | Rail badge reflects post-absorption, post-merge Issues count only | Implemented |
@@ -342,7 +342,7 @@ checking.
 ### Behaviour
 
 Validation runs continuously. Issues are visible in two places: the
-**Validation workspace** (activity bar) lists **all** issues, including
+**Diagnostics workspace** (activity bar) lists **all** issues, including
 document-/object-level ones; the **Issues tab** (Inspector secondary
 workspace) shows issues for the **currently selected parameter only** and
 never document/object-level ones. Both are keyboard-drivable (arrow to
@@ -355,19 +355,32 @@ starts collapsed, tab strip always visible, badge (`Issues`/`Issues (2)`)
 updates live whether or not the panel is open; changing selection while open
 refreshes without closing; only the user collapses it.
 
-#### Issues and Outstanding (Validation page)
+#### Issues and Outstanding (Diagnostics page)
 
-The Validation page is split into two always-present sections, **Issues**
-above **Outstanding**:
+`core/page_buckets.py` buckets the document's post-absorption diagnostics and
+completion tasks (`core.completion.document_completion`) by owning section —
+one `SectionBucket` per rail entry, in document order, a Document bucket
+first when occupied — so the Diagnostics page's strip/rail/pane and the
+activity-bar badge all read from one shared grouping instead of re-deriving
+it. Selecting a rail entry shows that bucket's own Issues and Outstanding as
+two group boxes:
 
-- **Issues** lists every validator diagnostic not accounted for by an
-  authoring task (see [Authoring](#8-authoring)).
-- **Outstanding** lists the document's completion tasks
-  (`core.completion.document_completion`), grouped by owning section: a
-  required subheader (`N of M remaining`) holding only Required tasks,
-  followed by a quieter optional sub-group for Expected-but-optional fields
-  committed `null`. Either may be absent; under `Partial` (nothing ever
-  Required) it points to per-section parameter-list suggestions instead.
+- **Issues** lists every validator diagnostic bucketed there, not accounted
+  for by an authoring task (see [Authoring](#8-authoring)); its box-header
+  badge shows red/amber counts, matching the rail.
+- **Outstanding** lists the bucket's completion tasks: a header ratio
+  (`Outstanding · N of M remaining`, `· section absent`, or one or more
+  required child sections still absent reported as `N sections absent`
+  instead of a misleading `0 of 0`) covering Required tasks, followed by a
+  quieter optional sub-head for Expected-but-optional fields committed
+  `null`. Either may be absent; under `Partial` (nothing ever Required) it
+  shows the fixed notice pointing to per-section parameter-list suggestions
+  instead.
+
+Selecting **"All sections"** (the default) instead shows every bucket at
+once, unfiltered — the reconciliation backup view: one foldable header per
+bucket (same badges as the rail) over its issue rows then its outstanding
+rows, so nothing on the page can ever go missing between the two views.
 
 A committed `null` is Outstanding whenever the field is schema-**Expected**,
 not only Required (creating an expected field and leaving it unfilled never
@@ -383,21 +396,21 @@ a parameter with a task's committed-`null` field, including both diagnostics
 of a null union field; the root `State`-demand diagnostic when a `State`-absent
 task exists). **Every absorbed diagnostic still renders**, on its Outstanding
 row as muted secondary text carrying its real, verbatim message — the
-validator is never silenced, every diagnostic appears in exactly one of the
-two sections, and the rule only ever *moves* a diagnostic, never changes what
-the validator judges wrong.
+validator is never silenced, every diagnostic appears in exactly one of
+Issues or Outstanding, and the rule only ever *moves* a diagnostic, never
+changes what the validator judges wrong.
 
 A single bad `FloatInt` raises two diagnostics (`float_type`/`int_type`, or
 `float_parsing`/`int_parsing`); this pair always **displays as one row**
 across Issues, Outstanding's secondary text, and the Issues tab — a display
 merge only, the validator's own output and `parameter.issues` are untouched.
 
-The **rail badge** (activity bar Validation icon) counts Issues only,
+The **rail badge** (activity bar Diagnostics icon) counts Issues only,
 **post-absorption and post-merge**: a fresh skeleton or a document with only
 added-but-unfilled Expected fields shows no red badge. **Parameter-scoped
 surfaces are unaffected by absorption** — the Issues tab and a parameter's own
 validity badge report the validator verbatim (message, severity) even for
-diagnostics the Validation page has absorbed, so a parameter's inline state is
+diagnostics the Diagnostics page has absorbed, so a parameter's inline state is
 never silently downgraded; they still apply the same float/int merge.
 
 ### Architecture
@@ -550,7 +563,7 @@ completion state; those words belong to validation alone.
 The user starts from a model skeleton, then fills what the app shows is
 missing. Two surfaces share the same completion query: a collapsed "N fields
 to add" group at the foot of each section's parameter list, and the
-Validation page's Outstanding section (§5, Issues and Outstanding), grouped
+Diagnostics page's Outstanding section (§5, Issues and Outstanding), grouped
 by section into a required and a quieter optional sub-group. Activating a
 row navigates to it and, where nothing exists yet, performs the one enabling
 step first — a missing field's `+` adds it with `null` and focuses its

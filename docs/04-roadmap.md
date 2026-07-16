@@ -20,7 +20,7 @@ continuous validation with a parameter-scoped Issues tab, search, authoring from
 model skeletons, and save/export. The authoring/completion track has also landed:
 a stateless completion query (`core/completion.py`) surfaces expected-but-missing
 fields as a collapsed "N fields to add" group in the parameter list and as an
-Outstanding section on the Validation page (alongside Issues, with validator
+Outstanding section on the Diagnostics page (alongside Issues, with validator
 diagnostics already covered by an Outstanding task absorbed rather than
 double-shown). A document declares or changes its model by editing
 `Header.Model` in the Editor like any other field — the commit scaffolds the
@@ -41,7 +41,7 @@ The items below are the capabilities still marked Planned.
 
 ### `IssueKind` and remediation functions
 
-- **Depends on:** the Validation workspace and issue mapping (built).
+- **Depends on:** the Diagnostics workspace and issue mapping (built).
 - **Acceptance criteria:**
   - issues carry an `IssueKind` describing implied remediation;
   - pure remediation functions in `core/` take an issue and raw dict and return a

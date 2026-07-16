@@ -2,7 +2,7 @@
 
 Covers Step 4 of the top-bar/workspace redesign: the tree, parameter list and
 Inspector only live on the Editor page of the workspace stack. Since Search is
-always live in the top bar, a navigation request while on the Validation page
+always live in the top bar, a navigation request while on the Diagnostics page
 (from Search, a validation issue, or the Issues tab) must first switch the
 workspace back to Editor -- both the ``QStackedWidget`` page and the activity
 bar's selected entry -- before revealing the target, otherwise the reveal
@@ -22,9 +22,9 @@ _MODEL = ("Header", "Model")
 def test_navigate_to_switches_from_validation_to_editor_page(app_driver, valid_spm_path):
     d = app_driver
     d.open(valid_spm_path)
-    d.show_view("Validation")
+    d.show_view("Diagnostics")
     assert d.current_view_index() == 1
-    assert d.activity_bar_selected_label() == "Validation"
+    assert d.activity_bar_selected_label() == "Diagnostics"
 
     d.go_to(_CAPACITY)
 
@@ -71,7 +71,7 @@ def test_activating_validation_issue_switches_back_to_editor_page(app_driver, sp
     # explained by the issue activation below, not a stale reveal.
     d.go_to(_MODEL)
     assert d.inspector_title() == "Model"
-    d.show_view("Validation")
+    d.show_view("Diagnostics")
     assert d.current_view_index() == 1
 
     d.activate_validation_issue(_CAPACITY)

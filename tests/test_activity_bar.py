@@ -1,8 +1,8 @@
-"""Activity bar icon rail, page header and Validation severity badge.
+"""Activity bar icon rail, page header and Diagnostics severity badge.
 
 Covers the activity bar's move from text buttons to icon-only buttons with
 tooltip identity, the page header that names the active view, and the
-Validation badge's honesty about severity: a warnings-only document must
+Diagnostics badge's honesty about severity: a warnings-only document must
 never show the error colour, and vice versa.
 """
 
@@ -21,15 +21,15 @@ def test_activity_buttons_are_icon_only_with_tooltip_identity(app_driver):
     for label, btn in (
         ("Workspace", d._w._btn_workspace),
         ("Editor", d._w._btn_editor),
-        ("Validation", d._w._btn_validation),
+        ("Diagnostics", d._w._btn_diagnostics),
     ):
         assert btn.text() == ""
         assert not btn.icon().isNull()
         assert btn.accessibleName() == label
-        # The Validation tooltip carries severity detail beyond the bare
+        # The Diagnostics tooltip carries severity detail beyond the bare
         # label once issues exist, so only assert equality for the two
         # buttons whose tooltip never changes.
-        if label != "Validation":
+        if label != "Diagnostics":
             assert btn.toolTip() == label
 
 
@@ -47,8 +47,8 @@ def test_page_header_title_tracks_the_active_view(app_driver, valid_spm_path):
     d.show_view("Editor")
     assert d.page_header_title() == "Editor"
 
-    d.show_view("Validation")
-    assert d.page_header_title() == "Validation"
+    d.show_view("Diagnostics")
+    assert d.page_header_title() == "Diagnostics"
 
     d.show_view("Workspace")
     assert d.page_header_title() == "Workspace"
@@ -62,7 +62,7 @@ def test_badge_is_clear_with_no_issues(app_driver, valid_spm_path):
 
     assert app_driver.validation_badge_count() == 0
     assert app_driver.validation_badge_severity() is None
-    assert app_driver.validation_tooltip() == "Validation"
+    assert app_driver.validation_tooltip() == "Diagnostics"
 
 
 def test_badge_is_warning_only_for_a_warnings_only_document(app_driver, warning_only_bpx_path):
@@ -71,7 +71,7 @@ def test_badge_is_warning_only_for_a_warnings_only_document(app_driver, warning_
 
     assert d.validation_badge_count() == 1
     assert d.validation_badge_severity() == "warning"
-    assert d.validation_tooltip() == "Validation — 1 warning"
+    assert d.validation_tooltip() == "Diagnostics — 1 warning"
 
 
 def test_badge_is_error_when_any_error_exists(app_driver, invalid_bpx_path):
@@ -83,7 +83,7 @@ def test_badge_is_error_when_any_error_exists(app_driver, invalid_bpx_path):
 
 
 def test_badge_count_caps_display_at_99_plus(app_driver):
-    btn = app_driver._w._btn_validation
+    btn = app_driver._w._btn_diagnostics
     btn.set_badge(150, "error")
 
     assert btn.badge_count == 150
@@ -92,7 +92,7 @@ def test_badge_count_caps_display_at_99_plus(app_driver):
 
 
 def test_badge_text_reflects_count(app_driver):
-    btn = app_driver._w._btn_validation
+    btn = app_driver._w._btn_diagnostics
 
     btn.set_badge(0, None)
     assert btn.badge_text() == ""

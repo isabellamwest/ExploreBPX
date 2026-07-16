@@ -40,7 +40,7 @@ questions:
   optional fields too.
 * :func:`document_completion` -- aggregates :func:`completion_for` across the
   whole document into an ordered list of :class:`CompletionTask` for the
-  Validation page's Outstanding section. ``MISSING_FIELD`` tasks are
+  Diagnostics page's Outstanding section. ``MISSING_FIELD`` tasks are
   **Required-only** (decision B: an *absent* Expected-but-optional field is
   never a document-level task; it only ever shows up as a suggestion via
   :func:`completion_for`). ``NULL_FIELD`` tasks are the opposite (decision D,
@@ -108,7 +108,7 @@ class SectionCompletion:
     #: ``value``, as full paths.
     missing_child_sections: tuple[tuple[str, ...], ...]
     #: Count of schema-required, non-container fields this section's
-    #: definition declares -- the "M" in the Validation page's Outstanding
+    #: definition declares -- the "M" in the Diagnostics page's Outstanding
     #: group header ("<Section> -- N of M remaining", Phase 5). A pure schema
     #: fact: unlike ``MissingField.required``, it is **not** gated by
     #: ``model in CONCRETE_MODELS`` -- the one place this matters is the
@@ -324,7 +324,7 @@ class PartitionedIssues:
     finds, for one Outstanding row, exactly which real validator messages it
     is standing in for -- keyed by the owning :class:`CompletionTask` itself
     (hashable: a frozen dataclass of hashable fields), so a renderer with a
-    task in hand (``validation_panel`` already has one per row) can look its
+    task in hand (``diagnostics_panel`` already has one per row) can look its
     absorbed diagnostics up directly. ``absorbed`` (the flat list) is kept
     too, unchanged, for callers that only need counts/membership.
     """

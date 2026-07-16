@@ -1,6 +1,6 @@
 """Optical normalisation of the activity-bar icon set.
 
-The three rail icons (Workspace, Editor, Validation) are meant to read as
+The three rail icons (Workspace, Editor, Diagnostics) are meant to read as
 one family: each glyph's drawn ink should sit inside, and be centred on, a
 common optical box. These tests measure the actual rendered alpha bounding
 box of each icon's ink -- not the SVG source coordinates -- so a future
@@ -39,7 +39,7 @@ def _ink_bbox(svg: str, size: int = _ICON_SIZE) -> tuple[int, int, int, int]:
     return min(xs), max(xs), min(ys), max(ys)
 
 
-@pytest.mark.parametrize("name, svg", [("WORKSPACE", icons.WORKSPACE), ("EDITOR", icons.EDITOR), ("VALIDATION", icons.VALIDATION)])
+@pytest.mark.parametrize("name, svg", [("WORKSPACE", icons.WORKSPACE), ("EDITOR", icons.EDITOR), ("DIAGNOSTICS", icons.DIAGNOSTICS)])
 def test_icon_ink_is_optically_centred_and_sized(name, svg):
     x_min, x_max, y_min, y_max = _ink_bbox(svg)
     width = x_max - x_min

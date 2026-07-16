@@ -23,7 +23,7 @@ class ActivityButton(QToolButton):
 
     The label is never drawn as text -- it is the tooltip and accessible
     name, which is how the user learns the button's identity. A count badge
-    (currently only used by Validation) is painted directly in
+    (currently only used by Diagnostics) is painted directly in
     ``paintEvent`` rather than via QSS, since it needs per-instance state
     (count, severity) a stylesheet cannot express.
     """

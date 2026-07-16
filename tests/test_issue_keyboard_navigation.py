@@ -1,6 +1,6 @@
 """Keyboard navigation of validation issues (roadmap 2.3).
 
-Both issue lists (the document-wide ``ValidationPanel`` and the
+Both issue lists (the document-wide ``DiagnosticsPanel`` and the
 parameter-scoped ``IssuesTab``) must let Enter/Return activate the selected
 row and emit ``issue_activated``, matching the existing double-click
 behaviour. Arrow-key selection alone (i.e. simply moving the current row)
@@ -15,14 +15,14 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtCore import Qt
 
-from core import completion
+from core import completion, page_buckets
 from core.document import BPXDocument
 from core.parameter_types import ParameterKind
 from core.tree_model import ParameterItem
 from core.validation import PydanticErrorDiagnostic
-from ui_qt import validation_panel as vp
+from ui_qt import diagnostics_panel as vp
 from ui_qt.issues_tab import IssuesTab
-from ui_qt.validation_panel import ValidationPanel
+from ui_qt.diagnostics_panel import DiagnosticsPanel
 
 
 @pytest.fixture
@@ -30,20 +30,23 @@ def invalid_document(invalid_bpx_path) -> BPXDocument:
     return BPXDocument.from_bytes(invalid_bpx_path.read_bytes(), invalid_bpx_path.name)
 
 
-def _issue_rows(panel: ValidationPanel):
-    lst = panel._list
+def _issue_rows(panel: DiagnosticsPanel):
+    """Issue rows in the All-sections view -- the backup view that always
+    contains every issue, so it is the right default surface here."""
+    lst = panel._all_view._list
     return [lst.item(i) for i in range(lst.count()) if lst.item(i).data(vp._KIND_ROLE) == "issue"]
 
 
 @pytest.fixture
-def validation_panel(qtbot, invalid_document) -> ValidationPanel:
-    panel = ValidationPanel()
+def validation_panel(qtbot, invalid_document) -> DiagnosticsPanel:
+    panel = DiagnosticsPanel()
     qtbot.addWidget(panel)
     raw = invalid_document.raw
     model = None
     tasks = completion.document_completion(raw)
     partition = completion.partition_issues(invalid_document, tasks)
-    panel.refresh(raw, model, partition, tasks)
+    buckets = page_buckets.bucket_page_content(raw, model, partition, tasks)
+    panel.refresh(buckets, partition, model)
     assert _issue_rows(panel), "fixture premise: the invalid fixture must draw at least one Issue"
     return panel
 
@@ -76,9 +79,9 @@ def test_validation_panel_enter_activates_selected_row(qtbot, validation_panel):
     validation_panel.issue_activated.connect(received.append)
 
     first_issue = _issue_rows(validation_panel)[0]
-    validation_panel._list.setCurrentItem(first_issue)
+    validation_panel._all_view._list.setCurrentItem(first_issue)
     expected_path = first_issue.data(256)
-    _press_return(qtbot, validation_panel._list)
+    _press_return(qtbot, validation_panel._all_view._list)
 
     assert received == [expected_path]
 
@@ -87,7 +90,7 @@ def test_validation_panel_selection_change_alone_does_not_activate(qtbot, valida
     received = []
     validation_panel.issue_activated.connect(received.append)
 
-    validation_panel._list.setCurrentItem(_issue_rows(validation_panel)[0])
+    validation_panel._all_view._list.setCurrentItem(_issue_rows(validation_panel)[0])
 
     assert received == []
 

@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 from core.tree_model import ParameterItem
 from core.validation import Severity, merge_union_pair
 
-from . import parameter_row, style
+from . import parameter_row
 from .parameter_row import ParameterRowDelegate
 
 _PATH_ROLE = 256  # Qt.UserRole
@@ -111,15 +111,16 @@ class IssuesTab(QWidget):
         for issue in merged:
             is_error = issue.severity == Severity.ERROR
             label = "ERROR" if is_error else "WARN"
-            color = style.ERROR if is_error else style.WARNING
             item = QListWidgetItem(f"[{label}] {issue.message}")
-            # Same two-line treatment as the Validation page's issue rows
-            # (tag line over the muted verbatim message); the location slot
-            # stays empty -- this tab is already scoped to one parameter.
+            # Same treatment as the Diagnostics page's issue rows (F5): a
+            # delegate-painted severity icon (SEVERITY_ROLE) plus the muted
+            # verbatim message; the location slot stays empty -- this tab is
+            # already scoped to one parameter.
             item.setData(
                 parameter_row.HTML_ROLE,
-                parameter_row.compose_issue_row_html(label, color, "", issue.message),
+                parameter_row.compose_issue_row_html("", issue.message),
             )
+            item.setData(parameter_row.SEVERITY_ROLE, "error" if is_error else "warning")
             item.setData(_PATH_ROLE, parameter.path)
             self._list.addItem(item)
 

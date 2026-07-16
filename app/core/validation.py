@@ -163,7 +163,7 @@ def merge_union_pairs_by_location(
     items: Sequence[tuple[ValidatorDiagnostic, tuple[str, ...]]],
 ) -> tuple[tuple[ValidatorDiagnostic, tuple[str, ...]], ...]:
     """Apply :func:`merge_union_pair` across a list of ``(diagnostic,
-    nav_path)`` pairs spanning many parameters (e.g. the Validation page's
+    nav_path)`` pairs spanning many parameters (e.g. the Diagnostics page's
     Issues section, or a document's full diagnostic list).
 
     Groups by exact ``nav_path`` equality -- the float/int pair for one

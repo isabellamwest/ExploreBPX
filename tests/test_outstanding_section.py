@@ -1,4 +1,4 @@
-"""Validation page Outstanding section: absorption, the rail badge, and
+"""Diagnostics page Outstanding section: absorption, the rail badge, and
 Outstanding row activation dispatch (completion track Phase 5 -- decisions
 E/F/G/L; PLAN-completion-track.md SS4 Phase 5).
 
@@ -72,8 +72,8 @@ def test_state1_fresh_skeleton(app_driver, tmp_path):
     d = app_driver
     d.open(_skeleton_path(tmp_path))
 
-    assert d.validation_issues_empty_text() == "✓ No issues"
     assert d.validation_issue_count() == 0
+    assert d.diagnostics_strip_counts() == (0, 0, 5 + 9 + 9 + 2)
     assert d.validation_badge_count() == 0
     assert d.validation_badge_severity() is None
 
@@ -81,11 +81,21 @@ def test_state1_fresh_skeleton(app_driver, tmp_path):
     assert "Cell — 5 of 5 remaining" in headers
     assert "Negative electrode — 9 of 9 remaining" in headers
     assert "Positive electrode — 9 of 9 remaining" in headers
-    # The State group itself has no own leaf fields on a fresh skeleton --
-    # only its two required children, each an absent-section row of its own.
-    assert "Initial conditions — section absent" in headers
-    assert "Thermal environment — section absent" in headers
+    # The State bucket itself has no own leaf fields on a fresh skeleton --
+    # only its two required children, both absent (core.page_buckets groups
+    # a present section's absent children into its own bucket, so this reads
+    # as one State sub-head naming both, not two standalone headers).
+    assert "State — 2 sections absent" in headers
     assert d.validation_outstanding_count() == 5 + 9 + 9 + 2
+    tasks = d.outstanding_tasks()
+    assert any(
+        t.kind is TaskKind.MISSING_SECTION and t.path == ("State", "Initial conditions")
+        for t in tasks
+    )
+    assert any(
+        t.kind is TaskKind.MISSING_SECTION and t.path == ("State", "Thermal environment")
+        for t in tasks
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -126,14 +136,19 @@ def test_state3_partial_sparse_electrode(app_driver, tmp_path):
     assert d.validation_badge_count() == 8
     assert d.validation_badge_severity() == "error"
     assert d.outstanding_tasks() == []
-    assert d.validation_outstanding_empty_text() == (
+
+    # The Partial notice is section-scoped now (a bucket alone can't tell
+    # "Partial" from "fully complete" -- see diagnostics_panel._MSG_PARTIAL_
+    # NO_TARGET); select the sparse electrode itself and read its box.
+    d.diagnostics_select_rail("Negative electrode")
+    notice = d.diagnostics_section_outstanding_empty_text()
+    assert notice == (
         "Model is Partial — no completion target. Expected fields are "
         "still suggested in each section's parameter list."
     )
     # Terminology discipline (decision B): "valid"/"invalid" never appear in
     # the Outstanding notice.
-    notice = d.validation_outstanding_empty_text().lower()
-    assert "valid" not in notice and "invalid" not in notice
+    assert "valid" not in notice.lower() and "invalid" not in notice.lower()
 
 
 # ---------------------------------------------------------------------------
@@ -146,8 +161,10 @@ def test_state4_done(app_driver, valid_spm_path):
     d = app_driver
     d.open(valid_spm_path)
 
-    assert d.validation_issues_empty_text() == "✓ No issues"
-    assert d.validation_outstanding_empty_text() == "✓ Nothing outstanding"
+    assert d.diagnostics_strip_counts() == (0, 0, 0)
+    d.diagnostics_select_rail("Header")
+    assert d.diagnostics_section_issues_empty_text() == "✓ No issues"
+    assert d.diagnostics_section_outstanding_empty_text() == "✓ Nothing outstanding"
     assert d.validation_badge_count() == 0
     assert d.validation_badge_severity() is None
 
@@ -370,17 +387,21 @@ def test_section_with_only_optional_nulls_shows_no_required_header(
     assert not any(h.startswith("Header —") for h in headers)
 
 
-def test_page_headers_are_non_activatable(app_driver, tmp_path):
+def test_fold_headers_are_non_activatable(app_driver, tmp_path):
+    """The rail redesign (Stage B) replaced the page-level "Issues"/
+    "Outstanding" headers with one foldable header per bucket in the
+    All-sections view; the same non-activatable contract applies to it --
+    a single click folds/unfolds (covered elsewhere), Enter/double-click is
+    a structural no-op."""
     d = app_driver
     d.open(_skeleton_path(tmp_path))
-    assert d.validation_page_headers() == ["Issues", "Outstanding"]
+    assert d.all_sections_fold_headers()  # premise: at least one bucket renders
 
     received = []
-    d._w._validation.issue_activated.connect(received.append)
-    d._w._validation.task_activated.connect(received.append)
+    d._w._diagnostics.issue_activated.connect(received.append)
+    d._w._diagnostics.task_activated.connect(received.append)
 
-    d.activate_validation_page_header(0)
-    d.activate_validation_page_header(1)
+    d.activate_fold_header(0)
 
     assert received == []
 
@@ -391,8 +412,8 @@ def test_group_subheaders_are_non_activatable(app_driver, tmp_path):
     assert d.validation_group_headers()  # premise: at least one group exists
 
     received = []
-    d._w._validation.issue_activated.connect(received.append)
-    d._w._validation.task_activated.connect(received.append)
+    d._w._diagnostics.issue_activated.connect(received.append)
+    d._w._diagnostics.task_activated.connect(received.append)
 
     d.activate_validation_group_header(0)
 

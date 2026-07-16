@@ -20,11 +20,30 @@ BORDER = "#d0d7de"
 #: Wash behind a grid cell the validator blamed -- a background tint, so it
 #: reads distinctly from ``ERROR``, which is used as text/badge colour.
 ERROR_TINT = "#ffebe9"
+#: Warning-badge background (Diagnostics page rail redesign, F5) -- the
+#: ``WARNING`` counterpart to ``ERROR_TINT``.
+WARNING_TINT = "#fff1e0"
+#: Neutral grey badge background: the "All sections" rail entry's total
+#: badge and every "outstanding" count badge (rail/pane), which are never
+#: red/amber -- decision B's "outstanding is not an error" kept visible in
+#: the colour itself.
+NEUTRAL_TINT = "#eef0f2"
 #: Muted/de-emphasised text. Used for secondary labels (e.g. QLabel#Heading)
 #: and reused as the foreground for the add-parameter popup's "other BPX
 #: alias" suggestion tier (aliases the section doesn't expect), so grey rows
 #: draw from the same palette rather than a one-off colour.
 MUTED = "#57606a"
+#: Diagnostics page rail (F2): background distinct from the white detail
+#: pane, and the selected entry's accent-tinted background/hover wash.
+RAIL_BG = "#f3f4f6"
+RAIL_SELECTED_BG = "#e3edfd"
+RAIL_HOVER_BG = "#e8eaed"
+#: Glyph colour painted on top of a solid, saturated fill -- the severity
+#: icon's ✕/! (:meth:`ui_qt.parameter_row.ParameterRowDelegate.
+#: _paint_severity_icon`) and, potentially, any other delegate-drawn badge
+#: glyph on a coloured circle/pill. Named so a future one reuses it rather
+#: than re-hardcoding white.
+BADGE_TEXT = "#ffffff"
 
 STYLESHEET = """
 QWidget { font-size: 13px; color: #1f2328; }
@@ -90,14 +109,38 @@ QListWidget#SearchPopupList {
 }
 QListWidget#SearchPopupList::item { padding: 6px 8px; border-radius: 6px; }
 QListWidget#SearchPopupList::item:selected { background: #ddeeff; color: #1f2328; }
-/* The Validation page's single list. Borderless like the editor's flush
-   panes (the activity bar and page header already draw the seams) and the
-   same row rhythm as QListWidget#ParameterListView, so the two primary
-   surfaces read as one system. */
-QListWidget#ValidationList { border: none; }
-QListWidget#ValidationList::item { padding: 6px 8px; border-radius: 4px; }
-QListWidget#ValidationList::item:hover { background: #f0f2f4; }
-QListWidget#ValidationList::item:selected { background: #ddeeff; color: #1f2328; }
+/* The Diagnostics page (rail redesign, F2): a summary strip over a
+   fixed-width rail beside a detail pane. The rail's own background is
+   distinct from the white pane so the two read as separate surfaces, like
+   the activity bar beside the editor. */
+QWidget#DiagnosticsSummaryStrip { background: #f9fafb; border-bottom: 1px solid #d0d7de; }
+/* One strip chip (F2 wireframe: "boxes/shading to make regions
+   distinguishable") -- a small bordered, rounded card on the shaded strip
+   band, distinct from the flat text it replaced. */
+QLabel#DiagnosticsChip {
+    background: #ffffff; border: 1px solid #d0d7de; border-radius: 6px; padding: 4px 10px;
+}
+QListWidget#DiagnosticsRail { background: #f3f4f6; border: none; border-right: 1px solid #d0d7de; outline: none; }
+QListWidget#DiagnosticsRail::item { padding: 0; border: none; }
+QLabel#DiagnosticsPaneHeader { font-size: 14px; padding-bottom: 2px; }
+/* One F2 group box: a bordered, rounded card with a shaded, banded header
+   row -- the same "IDE panel" language as QFrame#Card elsewhere. */
+QFrame#DiagnosticsGroupBox { background: #ffffff; border: 1px solid #d9dee5; border-radius: 6px; }
+QWidget#DiagnosticsGroupBoxHeader {
+    background: #f6f8fa; border-bottom: 1px solid #d9dee5;
+    border-top-left-radius: 6px; border-top-right-radius: 6px;
+}
+QLabel#DiagnosticsGroupBoxTitle { font-weight: 600; }
+QListWidget#DiagnosticsGroupBoxList { border: none; background: transparent; }
+QListWidget#DiagnosticsGroupBoxList::item { padding: 6px 8px; border-radius: 4px; }
+QListWidget#DiagnosticsGroupBoxList::item:hover { background: #f0f2f4; }
+QListWidget#DiagnosticsGroupBoxList::item:selected { background: #ddeeff; color: #1f2328; }
+/* "All sections", the F3 backup view: one continuous list, same row rhythm
+   as everywhere else in the app. */
+QListWidget#DiagnosticsAllSectionsList { border: none; }
+QListWidget#DiagnosticsAllSectionsList::item { padding: 6px 8px; border-radius: 4px; }
+QListWidget#DiagnosticsAllSectionsList::item:hover { background: #f0f2f4; }
+QListWidget#DiagnosticsAllSectionsList::item:selected { background: #ddeeff; color: #1f2328; }
 QLabel#IssuesPlaceholder { color: #57606a; font-size: 12px; padding: 16px; }
 QLabel#DocumentationPlaceholder { color: #57606a; font-size: 12px; padding: 16px; }
 QLabel#Hint { color: #57606a; font-size: 11px; }
