@@ -614,3 +614,426 @@ class NumericGrid(QWidget):
         at = min(index.row(), self.row_count - 1) if index.isValid() else self.row_count - 1
         self._model.remove_row(at)
         self.changed.emit()
+
+
+class _MultiColumnGridModel(QAbstractTableModel):
+    """N independently-lengthed columns, every one of them editable.
+
+    Each column maps to one BPX array, so a length mismatch between columns
+    is the ordinary case -- bpx alone judges whether it's an error -- and the
+    model never pads a shorter column or truncates a longer one.
+    ``rowCount`` is simply the longest column. A cell past its own column's
+    end is a blank "no value here" placeholder, muted the same way
+    ``_GridModel`` mutes its read-only context columns -- except the cell
+    immediately past the end, which is where typing appends a new item to
+    that column (see :meth:`setData`). A cell further beyond that (a longer
+    sibling column's reach) is display only, exactly like ``_GridModel``'s
+    phantom rows.
+    """
+
+    def __init__(
+        self,
+        headers: tuple[str, ...],
+        read_only: bool = False,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._headers = tuple(headers)
+        #: Gates ``setData``/``flags`` only, for a future card that renders
+        #: the whole grid read-only (e.g. a diagnostics view of a run's
+        #: arrays); seeding through :meth:`set_column_values` still works.
+        self._read_only = read_only
+        #: One independent list per column -- each maps to one BPX array, so
+        #: a length mismatch between columns is the normal case (see the
+        #: class docstring), never padded or equalised.
+        self._columns: list[list[object]] = [[] for _ in self._headers]
+        #: ``{(row, column): validator message}`` -- see ``_GridModel``.
+        self._issues: dict[tuple[int, int], str] = {}
+
+    # --- Qt model interface -------------------------------------------
+    def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:  # noqa: N802
+        if parent.isValid():
+            return 0
+        return max((len(column) for column in self._columns), default=0)
+
+    def columnCount(self, parent: QModelIndex = QModelIndex()) -> int:  # noqa: N802
+        return 0 if parent.isValid() else len(self._headers)
+
+    def data(self, index: QModelIndex, role: int = Qt.DisplayRole):
+        if not index.isValid():
+            return None
+        row, column = index.row(), index.column()
+        cells = self._columns[column]
+        if role in (Qt.DisplayRole, Qt.EditRole):
+            return format_value(cells[row]) if row < len(cells) else ""
+        if role == Qt.ForegroundRole and row >= len(cells):
+            # Past this column's own data: "no value here", not a value
+            # under edit.
+            return QBrush(QColor(MUTED))
+        cell = (row, column)
+        if role == Qt.BackgroundRole and cell in self._issues:
+            return QBrush(QColor(ERROR_TINT))
+        if role == Qt.ToolTipRole and cell in self._issues:
+            return self._issues[cell]
+        if role == Qt.TextAlignmentRole:
+            return int(Qt.AlignRight | Qt.AlignVCenter)
+        return None
+
+    def setData(self, index: QModelIndex, value, role: int = Qt.EditRole) -> bool:  # noqa: N802
+        """Write an existing cell, or append past that column's own end.
+
+        A valid *index* is only ever handed out for ``row < rowCount()``
+        (Qt's own bounds check in :meth:`index`), so a column can only ever
+        be caught up to a *longer sibling*'s reach by typing -- becoming the
+        outright longest column still needs the "+" button (see
+        ``MultiColumnGrid.insert_cell``), exactly as growing ``NumericGrid``'s
+        sole editable column always has. A cell strictly beyond the append
+        position is a deeper phantom cell and is never writable. Typing
+        nothing at the append position invents nothing -- exactly like a
+        no-op re-type of an existing cell, it is simply not a change.
+        """
+        if not index.isValid() or role != Qt.EditRole or self._read_only:
+            return False
+        row, column = index.row(), index.column()
+        cells = self._columns[column]
+        if row > len(cells):
+            return False  # deeper phantom cell: never writable
+        parsed = parse_value(str(value))
+        if row == len(cells):
+            if parsed is None:
+                return False  # nothing typed: no cell invented
+            cells.append(parsed)
+            self.dataChanged.emit(index, index, [Qt.DisplayRole, Qt.EditRole])
+            self.set_issues({})  # stale tints would misattribute (see set_issues)
+            return True
+        current = cells[row]
+        if values_equal(parsed, current):
+            return False  # a no-op re-type is not a change
+        cells[row] = parsed
+        self.dataChanged.emit(index, index, [Qt.DisplayRole, Qt.EditRole])
+        return True
+
+    def flags(self, index: QModelIndex) -> Qt.ItemFlags:
+        if not index.isValid():
+            return Qt.NoItemFlags
+        if self._read_only:
+            # Read-only whole grid: selectable (so it can be inspected/
+            # copied) but never editable -- same as _GridModel's context
+            # columns.
+            return Qt.ItemIsEnabled | Qt.ItemIsSelectable
+        row, column = index.row(), index.column()
+        if row > len(self._columns[column]):
+            return Qt.ItemIsEnabled  # deeper phantom cell
+        return Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable
+
+    def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.DisplayRole):  # noqa: N802
+        if role != Qt.DisplayRole:
+            return None
+        if orientation == Qt.Horizontal:
+            return self._headers[section]
+        return str(section + 1)  # 1-based row-number gutter
+
+    # --- content ------------------------------------------------------
+    @property
+    def headers(self) -> tuple[str, ...]:
+        return self._headers
+
+    @property
+    def column_count(self) -> int:
+        return len(self._headers)
+
+    def column_length(self, column: int) -> int:
+        """How many real cells *column* holds -- not the display row count,
+        which is the longest sibling column."""
+        return len(self._columns[column])
+
+    def column_values(self, column: int) -> list[object]:
+        return list(self._columns[column])
+
+    def set_column_values(self, column: int, values) -> None:
+        self.beginResetModel()
+        self._columns[column] = list(values)
+        self.endResetModel()
+        self.set_issues({})  # stale tints would misattribute (see set_issues)
+
+    def issues(self) -> dict[tuple[int, int], str]:
+        return dict(self._issues)
+
+    def set_issues(self, issues: dict[tuple[int, int], str]) -> None:
+        """Re-tint from the validator's own diagnostics -- see
+        ``_GridModel.set_issues``: the no-op-when-unchanged check and the
+        post-structural-edit clear both matter here for the same reasons.
+        """
+        if issues == self._issues:
+            return
+        self._issues = dict(issues)
+        row_count = self.rowCount()
+        if not row_count:
+            return
+        top_left = self.index(0, 0)
+        bottom_right = self.index(row_count - 1, len(self._headers) - 1)
+        self.dataChanged.emit(top_left, bottom_right, [Qt.BackgroundRole, Qt.ToolTipRole])
+
+    def insert_cell(self, column: int, at: int) -> None:
+        """Insert a blank cell into *column* alone, at row *at*.
+
+        Always a reset: this column's own rows shift below *at*, but its
+        siblings don't, and the display row count is a max() over
+        independent lengths -- exactly what ``_GridModel`` documents for its
+        context columns, so a reset is the one notification that's correct
+        here too.
+        """
+        if self._read_only:
+            return
+        self.beginResetModel()
+        self._columns[column].insert(at, None)
+        self.endResetModel()
+        self.set_issues({})  # stale tints would misattribute (see set_issues)
+
+    def remove_cell(self, column: int, at: int) -> None:
+        """Remove the cell at row *at* from *column* alone."""
+        if self._read_only:
+            return
+        self.beginResetModel()
+        del self._columns[column][at]
+        self.endResetModel()
+        self.set_issues({})  # stale tints would misattribute (see set_issues)
+
+
+class MultiColumnGrid(QWidget):
+    """Multiple independently-lengthed columns, every one of them editable.
+
+    Unlike ``NumericGrid`` -- one edited column, optionally flanked by
+    read-only context columns -- every column here is a value in its own
+    right, each mapping to one BPX array. A length mismatch between columns
+    is the ordinary case, so the grid never pads a shorter column or
+    truncates a longer one; ``rowCount`` is simply the longest column (see
+    ``_MultiColumnGridModel``).
+
+    Add/remove act on the column of the current cell only: there is no
+    single shared row to insert or remove across every column, because the
+    columns do not share a length.
+    """
+
+    #: Emitted on a user edit: a cell changed, or a cell was inserted,
+    #: removed, or appended (by typing past a column's own end) in some
+    #: column. Not emitted by :meth:`set_column_values`, which seeds or
+    #: restores one column -- see ``NumericGrid.changed``.
+    changed = Signal()
+
+    def __init__(
+        self,
+        headers: tuple[str, ...],
+        read_only: bool = False,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._model = _MultiColumnGridModel(headers, read_only, self)
+        self._read_only = read_only
+
+        self._view = QTableView()
+        self._view.setModel(self._model)
+        self._view.setSelectionMode(QAbstractItemView.SingleSelection)
+        self._view.setSelectionBehavior(QAbstractItemView.SelectItems)
+        self._view.setEditTriggers(
+            QAbstractItemView.DoubleClicked
+            | QAbstractItemView.SelectedClicked
+            | QAbstractItemView.AnyKeyPressed
+        )
+        self._view.setCornerButtonEnabled(False)
+        self._view.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self._view.setFixedHeight(self._compact_height())
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._view)
+
+        # A read-only grid (a future card's display-only view) has nothing to
+        # add or remove, so the button row simply doesn't exist for it --
+        # the same absent-not-disabled convention as NumericGrid's
+        # ``_import_button``/``_expand_button``. Kept as ``self._buttons`` (not
+        # a local) so a caller (``ExperimentCard``'s "+ Temperature [K]"
+        # button, its length-mismatch chip) can append into the same row via
+        # :meth:`add_toolbar_widget`, exactly like ``NumericGrid``.
+        self._add_button = None
+        self._remove_button = None
+        self._buttons = None
+        if not read_only:
+            self._add_button = self._row_button("+", "Add cell", self.insert_cell)
+            self._remove_button = self._row_button("−", "Remove cell", self.remove_cell)
+            self._buttons = QHBoxLayout()
+            self._buttons.setContentsMargins(0, 0, 0, 0)
+            self._buttons.addWidget(self._add_button)
+            self._buttons.addWidget(self._remove_button)
+            self._buttons.addStretch(1)
+            layout.addLayout(self._buttons)
+            self._install_context_menu()
+
+        # A cell edit -- including an in-place append past a column's own
+        # end -- arrives via ``dataChanged`` (see the model's setData).
+        # insert_cell/remove_cell go through a reset instead, deliberately
+        # silent so set_column_values can seed through it, so those two
+        # methods emit ``changed`` themselves.
+        self._model.dataChanged.connect(self._on_data_changed)
+
+    def _on_data_changed(self, _top_left, _bottom_right, roles=()) -> None:
+        """A cell edit marks the card dirty; a validator re-tint does not --
+        see ``NumericGrid._on_data_changed``."""
+        if roles and Qt.EditRole not in roles and Qt.DisplayRole not in roles:
+            return
+        self.changed.emit()
+
+    def _row_button(self, text: str, tooltip: str, slot) -> QToolButton:
+        button = QToolButton()
+        button.setText(text)
+        button.setToolTip(tooltip)
+        button.setAccessibleName(tooltip)
+        button.setAutoRaise(True)
+        button.clicked.connect(slot)
+        return button
+
+    def _compact_height(self) -> int:
+        header = self._view.horizontalHeader().sizeHint().height()
+        row = self._view.verticalHeader().defaultSectionSize()
+        return header + row * VISIBLE_ROWS + 2 * self._view.frameWidth()
+
+    # --- bulk affordance: per-column clipboard paste --------------------
+    def _install_context_menu(self) -> None:
+        """Right-click offers Paste plus the row actions -- see
+        ``NumericGrid._install_context_menu`` for why a real ``QAction`` (not
+        a hand-rolled ``QMenu.exec()``) is what makes both the menu entry and
+        the live ``Ctrl+V`` shortcut work from one binding."""
+        from PySide6.QtGui import QAction
+
+        self._paste_action = QAction("Paste", self._view)
+        self._paste_action.setShortcut(QKeySequence.Paste)
+        self._paste_action.setShortcutContext(Qt.WidgetShortcut)
+        self._paste_action.triggered.connect(self.paste)
+        add = QAction("Add cell", self._view)
+        add.triggered.connect(self.insert_cell)
+        remove = QAction("Remove cell", self._view)
+        remove.triggered.connect(self.remove_cell)
+        self._view.addActions([self._paste_action, add, remove])
+        self._view.setContextMenuPolicy(Qt.ActionsContextMenu)
+
+    def paste(self) -> None:
+        """Parse the clipboard into the focused column and preview it.
+
+        Unlike ``NumericGrid`` -- one editable column, so a paste always
+        targets it -- every column here is independently editable, so a paste
+        must name which one: the focused column (the current cell), mirroring
+        ``insert_cell``/``remove_cell``. Always parsed as a single column
+        (``parse_clipboard(text, 1)``): a Validation run's arrays are pasted
+        one at a time, matching ``SeriesCard``'s existing per-column
+        convention -- pasting several columns at once is what CSV import is
+        for.
+        """
+        if self._read_only:
+            return
+        text = QApplication.clipboard().text()
+        if not text.strip():
+            return
+        parsed = parse_clipboard(text, 1)
+        if parsed.row_count == 0:
+            return
+        column = self._focused_column()
+        dialog = PastePreviewDialog(parsed, (self._model.headers[column],), self)
+        dialog.exec()
+        if dialog.choice is not None:
+            self.apply_paste(column, [row[0] for row in parsed.rows], dialog.choice)
+
+    def apply_paste(self, column: int, values, mode: str) -> None:
+        """Write parsed *values* into *column* alone; a paste is a real edit.
+
+        ``set_column_values`` is silent by design (it seeds), so this emits
+        ``changed`` itself -- see ``NumericGrid.apply_paste``.
+        """
+        existing = self._model.column_values(column) if mode == PastePreviewResult.APPEND else []
+        self._model.set_column_values(column, existing + list(values))
+        self.changed.emit()
+
+    # --- API ------------------------------------------------------------
+    @property
+    def column_count(self) -> int:
+        return self._model.column_count
+
+    def focus_widget(self) -> QWidget:
+        """The widget that takes keyboard focus, for the card's key handler."""
+        return self._view
+
+    def column_length(self, column: int) -> int:
+        """How many real cells *column* holds -- see ``_MultiColumnGridModel``."""
+        return self._model.column_length(column)
+
+    def column_values(self, column: int) -> list[object]:
+        """*column*'s cells verbatim: ``int``, ``float``, ``str`` or ``None``."""
+        return self._model.column_values(column)
+
+    def set_column_values(self, column: int, values) -> None:
+        """Replace one column's contents. Does not emit ``changed`` (seeding)."""
+        self._model.set_column_values(column, values)
+
+    def set_cell_issues(self, issues: dict[tuple[int, int], str]) -> None:
+        """Tint the cells the validator blamed -- see ``NumericGrid.set_cell_issues``."""
+        self._model.set_issues(issues)
+
+    def focus_column(self, column: int) -> None:
+        """Give the view's current-cell ring to *column*'s first cell.
+
+        Used when a card opens with one column already resolved by navigation
+        (e.g. ``ExperimentCard`` revealed on one array), so the initial focus
+        ring -- and hence +/-'s and paste's target -- lands there rather than
+        column 0. A no-op for an out-of-range column or an empty grid (there
+        is no cell to land on yet).
+        """
+        if not 0 <= column < self.column_count:
+            return
+        if self._model.rowCount() == 0:
+            return
+        self._view.setCurrentIndex(self._model.index(0, column))
+
+    def add_toolbar_widget(self, widget: QWidget) -> None:
+        """Place *widget* in the +/− button row, before the trailing stretch.
+
+        Mirrors ``NumericGrid.add_toolbar_widget``; absent (not disabled) when
+        the grid is read-only, since that row is never built at all then (see
+        the constructor).
+        """
+        if self._buttons is None:
+            return
+        self._buttons.insertWidget(self._buttons.count() - 1, widget)
+
+    def _focused_column(self) -> int:
+        index = self._view.currentIndex()
+        return index.column() if index.isValid() else 0
+
+    def insert_cell(self) -> None:
+        """Add a blank cell below the current row, in the focused column only.
+
+        Clamped to that column's own length, mirroring
+        ``NumericGrid.insert_row``: a current cell sitting in that column's
+        own "no value here" region must never create a cell beyond its end.
+        """
+        if self._read_only:
+            return
+        column = self._focused_column()
+        length = self._model.column_length(column)
+        index = self._view.currentIndex()
+        at = min(index.row() + 1, length) if index.isValid() else length
+        self._model.insert_cell(column, at)
+        self._view.setCurrentIndex(self._model.index(at, column))
+        self.changed.emit()
+
+    def remove_cell(self) -> None:
+        """Remove a cell from the focused column: the current row, or the
+        last one when nothing in that column is selected."""
+        if self._read_only:
+            return
+        column = self._focused_column()
+        length = self._model.column_length(column)
+        if not length:
+            return
+        index = self._view.currentIndex()
+        at = min(index.row(), length - 1) if index.isValid() else length - 1
+        self._model.remove_cell(column, at)
+        self.changed.emit()

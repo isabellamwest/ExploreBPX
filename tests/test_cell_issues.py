@@ -21,7 +21,7 @@ pytest.importorskip("PySide6")
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
-from ui_qt.cards.cell_issues import series_cells, table_cells
+from ui_qt.cards.cell_issues import experiment_cells, series_cells, table_cells
 from ui_qt.cards.grid import NumericGrid
 
 
@@ -123,6 +123,50 @@ def test_table_cells_distinguishes_x_and_y_columns():
     )
     result = table_cells([x_issue, y_issue])
     assert result == {(0, 0): "bad x", (2, 1): "bad y"}
+
+
+# ----------------------------------------------------------------------
+# Pure mapping: experiment_cells (ExperimentCard's N-named-column grid)
+# ----------------------------------------------------------------------
+
+
+def test_experiment_cells_maps_each_alias_to_its_own_column():
+    time_issue = _Issue(
+        loc=("Validation", "C/20 discharge", "Time [s]", "1", "float"),
+        message="bad time",
+    )
+    voltage_issue = _Issue(
+        loc=("Validation", "C/20 discharge", "Voltage [V]", "2", "float"),
+        message="bad voltage",
+    )
+    aliases = ("Time [s]", "Current [A]", "Voltage [V]", "Temperature [K]")
+    result = experiment_cells([time_issue, voltage_issue], aliases)
+    assert result == {(1, 0): "bad time", (2, 2): "bad voltage"}
+
+
+def test_experiment_cells_only_uses_columns_actually_shown():
+    """A run missing Temperature never offers it as a column; a diagnostic
+    naming an alias not in *aliases* maps to nothing (there is no such
+    column to tint)."""
+    issue = _Issue(
+        loc=("Validation", "run", "Temperature [K]", "0", "float"),
+        message="bad",
+    )
+    result = experiment_cells([issue], ("Time [s]", "Current [A]", "Voltage [V]"))
+    assert result == {}
+
+
+def test_experiment_cells_dedups_a_union_pair_on_one_cell():
+    float_issue = _Issue(
+        loc=("Validation", "run", "Voltage [V]", "0", "float"),
+        message="Input should be a valid number",
+    )
+    int_issue = _Issue(
+        loc=("Validation", "run", "Voltage [V]", "0", "int"),
+        message="Input should be a valid integer",
+    )
+    result = experiment_cells([float_issue, int_issue], ("Time [s]", "Voltage [V]"))
+    assert result == {(0, 1): f"{float_issue.message}\n{int_issue.message}"}
 
 
 # ----------------------------------------------------------------------

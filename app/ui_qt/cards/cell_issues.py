@@ -39,6 +39,27 @@ def series_cells(issues, alias: str) -> dict[Cell, str]:
     return {cell: "\n".join(_unique(messages)) for cell, messages in found.items()}
 
 
+def experiment_cells(issues, aliases: tuple[str, ...]) -> dict[Cell, str]:
+    """Cells blamed by *issues* in an N-named-column Validation-run grid.
+
+    Generalises :func:`series_cells` (one column) and :func:`table_cells` (a
+    fixed ``x``/``y`` pair) to any number of named columns -- ``ExperimentCard``
+    shows whichever subset of Time/Current/Voltage/Temperature the run holds,
+    in schema order, and the column index a diagnostic maps to depends on
+    which of those are actually present. The location names the column's own
+    alias and then the element index, exactly like ``series_cells``.
+    """
+    found: dict[Cell, list[str]] = {}
+    for issue in issues:
+        loc = _loc(issue)
+        for column, alias in enumerate(aliases):
+            row = _index_after(loc, alias)
+            if row is not None:
+                found.setdefault((row, column), []).append(_message(issue))
+                break
+    return {cell: "\n".join(_unique(messages)) for cell, messages in found.items()}
+
+
 def table_cells(issues) -> dict[Cell, str]:
     """Cells blamed by *issues* in a two-column ``x``/``y`` table grid.
 

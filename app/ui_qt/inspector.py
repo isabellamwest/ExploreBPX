@@ -42,10 +42,12 @@ from PySide6.QtWidgets import (
 
 from core import bpx_gateway
 from core.parameter_metadata import resolve_parameter_metadata
+from core.parameter_types import ParameterKind
 from core.tree_model import ParameterItem
 from core.validation import Severity
 from state.app_state import AppState
 
+from .cards.experiment import ExperimentCard, is_validation_run_path
 from .cards.parameter_card import ParameterCard
 from .documentation_tab import DocumentationTab
 from .issues_tab import IssuesTab, issue_count
@@ -166,11 +168,74 @@ class InspectorPanel(QWidget):
 
         This is the Inspector's part of a navigation reveal; object-level
         targets carry no parameter and fall back to the placeholder.
+
+        A target whose owning object is a Validation run routes to the
+        unified ``ExperimentCard`` instead -- whether navigation resolved to
+        one of the run's own array columns (focused there) or to the bare run
+        node (``parameter is None``, nothing focused). Any *other* parameter
+        under a run (a custom, non-array field) keeps today's single-parameter
+        card: only a genuine array reroutes.
         """
-        if parameter is not None:
+        run_path = self._experiment_run_path(parameter)
+        if run_path is not None:
+            self._show_experiment(run_path, parameter)
+        elif parameter is not None:
             self.show_parameter(parameter)
         else:
             self.show_placeholder()
+
+    def _experiment_run_path(self, parameter: ParameterItem | None) -> tuple[str, ...] | None:
+        """The Validation-run path this reveal targets, or ``None``.
+
+        ``reveal`` only ever receives a parameter (or ``None``) -- never the
+        object-level path a bare node selection resolved to -- so the bare-
+        node case is read back from session state instead:
+        ``NavigationService.navigate`` always calls ``session.select`` (or
+        ``select_parameter``, which also updates ``selected_path``) *before*
+        emitting, so ``selected_path`` already holds the fresh object path by
+        the time this runs.
+        """
+        if parameter is not None:
+            owner = tuple(parameter.path[:-1])
+            if is_validation_run_path(owner) and parameter.kind is ParameterKind.SERIES:
+                return owner
+            return None
+        session = self._state.active
+        if session is not None and session.selected_path is not None:
+            if is_validation_run_path(session.selected_path):
+                return session.selected_path
+        return None
+
+    def _show_experiment(self, run_path: tuple[str, ...], parameter: ParameterItem | None) -> None:
+        """Build and show the unified ``ExperimentCard`` for *run_path*.
+
+        Re-derives the run's :class:`~core.tree_model.TreeNode` from the
+        *current* document on every call (never cached across a rebuild), so
+        a rename or undo/redo while the card is open cannot leave it stale --
+        the same reveal-after-command pattern every other card relies on.
+        """
+        session = self._state.active
+        node = session.document.find(run_path) if session and session.document else None
+        if node is None:
+            self.show_placeholder()
+            return
+        self._secondary.resume()
+        self._clear_content()
+        focused_alias = parameter.label if parameter is not None else None
+        self._card = ExperimentCard(node, focused_alias)
+        self._card.bulk_commit_requested.connect(self._on_bulk_commit)
+        self._content_layout.addWidget(self._card)
+        self._content_layout.setAlignment(self._card, Qt.AlignTop)
+
+        # The secondary workspace stays scoped to one parameter, so it shows
+        # the focused array's own issues/documentation (mirroring today's
+        # single-parameter behaviour), or the "nothing selected" state for a
+        # bare run-node reveal.
+        count = self._issues_tab.show_parameter(parameter)
+        self._secondary.set_count("issues", count)
+        meta = bpx_gateway.field_meta(parameter.path) if parameter is not None else None
+        metadata = resolve_parameter_metadata(parameter.path, meta) if parameter is not None else None
+        self._docs_tab.show_metadata(metadata)
 
     def show_parameter(self, parameter: ParameterItem) -> None:
         self._secondary.resume()
