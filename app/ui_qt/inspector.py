@@ -296,6 +296,14 @@ class InspectorPanel(QWidget):
                 # widget merely taken from the layout stays a visible child of
                 # _content until then -- successive clears stack ghost labels
                 # over the live card. setParent(None) removes it immediately.
+                #
+                # hide() must come first: setParent(None) marks a widget hidden
+                # only if it is *already* visible, and a widget added to a
+                # visible layout is merely queued to be shown. Reparenting one
+                # in that queued state lets the pending show land on it once it
+                # is parentless -- a decorated top-level window titled "python",
+                # flashing for the frame before deleteLater reaps it.
+                widget.hide()
                 widget.setParent(None)
                 widget.deleteLater()
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)

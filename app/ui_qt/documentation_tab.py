@@ -143,5 +143,11 @@ class DocumentationTab(QWidget):
                 # loop unwinds, and a widget merely taken from the layout
                 # stays a visible child painting over its replacement (the
                 # Inspector ghost-placeholder bug, same class).
+                #
+                # hide() before setParent(None) -- see InspectorPanel
+                # ._clear_content: reparenting a widget that is queued to be
+                # shown but not yet visible lets the pending show land on it
+                # once it is parentless, flashing a stray top-level window.
+                widget.hide()
                 widget.setParent(None)
                 widget.deleteLater()
