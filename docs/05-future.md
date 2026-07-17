@@ -58,7 +58,7 @@ multi-document phase becomes an active milestone:
 - A `Workspace` state object holding Primary and optional Reference
   `DocumentSession`, introduced only when multi-document work begins — never as a
   speculative container before a consumer exists.
-- The **Workspace page** (activity-bar sibling to Editor and Validation):
+- The **Workspace page** (activity-bar sibling to Editor and Diagnostics):
   document/workspace-level info and management (title, description, references,
   BPX version, model, Primary/Reference details, recent documents, new-document
   actions).

@@ -44,21 +44,34 @@ states. Wireframe and full design rationale:
   one undo step; per-column paste; "＋ Temperature [K]" commits `[]`. SERIES params
   that aren't known arrays keep their ordinary card. Tests:
   `tests/test_experiment_card.py`. Suite green at 1039.
-- [ ] **Phase 2 — retire `SeriesCard`.** Registry cleanup; deletion of
-  `cards/series.py` awaits explicit sign-off (recommendation: delete; git history
-  keeps it recoverable).
-- [ ] **Phase 3 — import-first entry for empty runs.** Dropzone + Browse above the
+- [x] **Phase 2 — verify `SeriesCard`'s reachability; kept.** Checked whether any
+  path still reaches `cards/series.py`: `ParameterKind.SERIES` comes from schema
+  `is_series` metadata (`Experiment`'s four arrays only -- confirmed against the
+  live `bpx` schema, no other `$defs` property is `type: array`) or the
+  value-shape fallback for any list-valued parameter with no schema metadata.
+  Under a Validation run every SERIES parameter, known array or custom,
+  reroutes to `ExperimentCard` (`inspector.py._experiment_run_path` checks
+  `kind is SERIES` + run ownership, not alias). A list-valued custom/
+  unrecognized parameter *outside* a Validation run still classifies SERIES and
+  the registry still opens `SeriesCard` for it (reproduced: a hand-authored
+  extra list field under `Parameterisation/Cell`) -- confirms docs/03-features.md's
+  claim. `SeriesCard` and its `NumericGrid` context-column machinery
+  (`cards/grid.py`) are still the only editor for that case, so both stay; no
+  deletion, no registry change needed.
+- [x] **Phase 3 — import-first entry for empty runs.** Dropzone + Browse above the
   still-usable empty grid when all arrays are absent/empty (derived display state);
   same CSV pipeline; dismisses on first data, returns on undo. Also: expand-to-pane
-  parity for `MultiColumnGrid` (gap vs `NumericGrid.expand_toggled`), per-column
-  sample-count footer chip, 10k-row perf smoke (report-only).
-- [ ] **Phase 4 — guided empty state (zero runs).** Selecting `("Validation",)` with
-  no runs shows "No experiments yet" + **＋ Add experiment** (existing AddSection
-  flow as a button) and **Import CSV as new experiment…** (deliberately two undo
-  steps: add run, then fill — undoing the import keeps the named run).
-- [ ] **Wrap-up.** Prove the build matches the approved wireframe (AppDriver tests
-  AND real-app screenshots), sync docs/02-ui.md + docs/03-features.md, full-suite
-  green check.
+  parity for `MultiColumnGrid`, per-column sample-count footer chip, 10k-row perf
+  smoke (all timings <100ms; headless caveat noted).
+- [x] **Phase 4 — guided empty state (zero runs).** `ValidationEmptyState`
+  (app/ui_qt/validation_empty_state.py): "No experiments yet" + **＋ Add experiment**
+  + **Import CSV as new experiment…** (two undo steps: add run, then fill — undoing
+  the import keeps the named run; a cancelled mapping creates nothing).
+- [x] **Wrap-up.** Real-app screenshot proof vs the approved wireframe (matches;
+  two wrapped-label clipping bugs found on the native platform and fixed):
+  (internal design archive)
+  Docs synced (03-features.md §4; 05-future.md naming leftover). Suite green
+  at 1107 passed.
 
 ## Constraints
 

@@ -178,12 +178,15 @@ repaired in place.
 | Text editing (auto-growing, Shift+Enter newline, pattern hint) | Implemented |
 | Boolean editing (toggle) | Implemented |
 | Per-material map editing (keys seeded from sibling Particle names; duplicate keys blocked) | Implemented |
-| Series inline grid (raw-object cells, add/remove row, no coercion) | Implemented |
+| Series inline grid (raw-object cells, add/remove row, no coercion) — for a list-valued parameter outside a Validation run | Implemented |
 | Table inline grid (x/y grid over a live preview) | Implemented |
 | Expanded (takeover) grid editor — Expand/Collapse grows the grid to fill the pane | Implemented |
 | Paste into a grid (Ctrl+V or right-click; delimiter auto-detect, header skip, preview, replace/append, no coercion) | Implemented |
-| Read-only sibling columns on a Validation run's series grid (length mismatch visible) | Implemented |
-| CSV import (inline button, always-shown mapping dialog; Validation series → sibling arrays in one undo step; x/y table → positional mapping, both required) | Implemented |
+| Unified `ExperimentCard`: one multi-column grid for a Validation run's Time/Current/Voltage/optional-Temperature arrays, every column always editable, focused column set by which path navigation resolved | Implemented |
+| "+ Temperature [K]" toolbar action adds the run's optional array in one step | Implemented |
+| Import-first empty state for a run with no data yet (CSV dropzone + Browse, "or type values directly", dismisses on the first value) | Implemented |
+| Guided empty state for a Validation section with zero runs ("+ Add experiment", "Import CSV as new experiment…", two undo steps) | Implemented |
+| CSV import (inline button, always-shown mapping dialog; an experiment's own columns fill in one undo step; x/y table → positional mapping, both required) | Implemented |
 | Remove parameter (row context menu, Delete key) | Implemented |
 | Tree editing (add/remove sections; add/rename/remove materials and experiments; confirm before removing populated content) | Implemented |
 | Enhanced function-expression editor (syntax highlighting, validation) | Planned |
@@ -246,10 +249,15 @@ area; hint line from `FieldMeta.examples`; description).
 - **Large values.** Series/table cards use a compact inline grid with
   **Expand**/**Collapse**, first-class paste, and an **Import CSV…** button
   with an always-shown mapping dialog (non-numeric cells kept as text, never
-  zero-filled). A Validation series auto-matches siblings by header/position
-  in one atomic `SetValues` command; an x/y table maps columns *positionally*
-  (never `auto_map`'s substring rule, unsafe for one-letter `x`/`y`), both
-  required, and commits as a normal card draft.
+  zero-filled). A Validation run's own Time/Current/Voltage/optional-
+  Temperature arrays are edited together in one multi-column `ExperimentCard`
+  (`cards/experiment.py`) rather than one series card per array: every column
+  stays editable regardless of which one navigation focused, a typed cell
+  commits only the column that changed, and CSV import auto-matches the run's
+  own columns by header/position — both in one atomic `SetValues`. An x/y
+  table maps columns *positionally* (never `auto_map`'s substring rule,
+  unsafe for one-letter `x`/`y`), both required, and commits as a normal card
+  draft.
 - **Grids hold raw uncoerced objects, not numbers.** `NumericGrid`
   (`cards/values.py`) cells are the same lenient values line editors emit: a
   typed `oops` stays `"oops"`, a blank cell is `None`, neither is ever
@@ -272,7 +280,13 @@ dict keys only, gated by `structure.can_rename`) preserves key order and
 moves the *address* of every descendant; values referring to the old name
 (a per-material MAP key) are deliberately left for the validator to report,
 not rewritten. A card's contract is fixed: it edits one `ParameterItem`,
-emits raw input, never decides validity. See
+emits raw input, never decides validity — `ExperimentCard` is the deliberate
+exception, editing every array of a Validation run in one widget instead of
+one `ParameterItem` per card, still committing a single `SetValues` per Enter
+that touches only the columns whose draft changed. The Inspector routes any
+parameter or bare node under a Validation run to `ExperimentCard`; `SeriesCard`
+(`cards/series.py`) remains the single-column series editor, now reached only
+by a list-valued parameter outside a Validation run. See
 [01-architecture.md](01-architecture.md).
 
 **Undo restores the selection too**: each undo entry stores the selection
