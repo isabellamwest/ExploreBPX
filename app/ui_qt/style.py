@@ -123,6 +123,13 @@ def counts_tooltip(error_count: int, warning_count: int, outstanding_count: int)
         parts.append(outstanding_count_tooltip(outstanding_count))
     return " · ".join(parts)
 
+
+#: F8 (Diagnostics page filters, phase B): the filter text field's tooltip.
+#: Not enum/count-derived like the rest of this vocabulary -- it is a fixed
+#: sentence about the *feature*, not about any particular diagnostic/task --
+#: kept here anyway so the whole tooltip vocabulary has one home.
+FILTER_FIELD_TOOLTIP = "Filters the view — counts stay unchanged"
+
 STYLESHEET = """
 QWidget { font-size: 13px; color: #1f2328; }
 QMainWindow, QWidget#Panel { background: #ffffff; }
@@ -198,13 +205,29 @@ QListWidget#SearchPopupList::item:selected { background: #ddeeff; color: #1f2328
 QWidget#DiagnosticsSummaryStrip { background: #f9fafb; border-bottom: 1px solid #c4cdd5; }
 /* One strip chip (F2 wireframe: "boxes/shading to make regions
    distinguishable") -- a small bordered, rounded card on the shaded strip
-   band, distinct from the flat text it replaced. */
+   band, distinct from the flat text it replaced. F8: each chip is now a
+   click-toggle filter; its "off" state is a dynamic QSS property
+   (chipOff="true", set via setProperty + style().polish(), the same
+   pattern QPushButton#AddParameterCreate's own "selected" property already
+   uses below) -- a visibly muted/pressed-out card, never a hidden one
+   (toggling never removes the chip itself, only what it filters). */
 QLabel#DiagnosticsChip {
     background: #ffffff; border: 1px solid #c4cdd5; border-radius: 6px; padding: 4px 10px;
 }
+QLabel#DiagnosticsChip[chipOff="true"] { background: #eef0f2; border: 1px solid #d9dee5; }
+/* F8's text filter: compact, right-aligned on the strip. */
+QLineEdit#DiagnosticsFilterField {
+    background: #ffffff; border: 1px solid #c4cdd5; border-radius: 6px;
+    padding: 4px 8px; font-size: 12px; selection-background-color: #ddeeff;
+}
+QLineEdit#DiagnosticsFilterField:focus { border: 1px solid #1f6feb; }
 QListWidget#DiagnosticsRail { background: #f3f4f6; border: none; border-right: 1px solid #c4cdd5; outline: none; }
 QListWidget#DiagnosticsRail::item { padding: 0; border: none; }
 QLabel#DiagnosticsPaneHeader { font-size: 14px; padding-bottom: 2px; }
+/* F8's "N hidden by filters" line -- quiet, muted, never mistakable for a
+   pinned empty-state (those use the shared muted-message row colour too,
+   but this one only ever appears alongside real, still-counted rows). */
+QLabel#DiagnosticsHiddenLine { color: #57606a; font-size: 12px; padding: 2px 2px; }
 /* One F2 group box: a bordered, rounded card with a shaded, banded header
    row -- the same "IDE panel" language as QFrame#Card elsewhere. The header
    band uses HEADER_BAND_STRONG (#eef1f4), one step darker than the app's

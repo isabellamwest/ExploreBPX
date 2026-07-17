@@ -391,6 +391,61 @@ class AppDriver:
         (e.g. "✓ Nothing outstanding"), or None if it holds real rows."""
         return self._first_message_text(self._w._diagnostics._section_view._outstanding_box.list)
 
+    # -- Diagnostics filters (F8) ------------------------------------------
+
+    def diagnostics_chip_is_on(self, name: str) -> bool:
+        """*name* is "errors"/"warnings"/"outstanding"."""
+        return self._diagnostics_chip(name).is_on()
+
+    def diagnostics_toggle_chip(self, name: str) -> "AppDriver":
+        """Click the named strip chip, as a real mouse click would (F8)."""
+        self._qtbot.mouseClick(self._diagnostics_chip(name), Qt.LeftButton)
+        return self
+
+    def _diagnostics_chip(self, name: str):
+        strip = self._w._diagnostics._strip
+        return {"errors": strip._errors, "warnings": strip._warnings, "outstanding": strip._outstanding}[name]
+
+    def diagnostics_filter_text(self) -> str:
+        return self._w._diagnostics._strip._filter_edit.text()
+
+    def diagnostics_set_filter_text(self, text: str) -> "AppDriver":
+        """Type *text* into the strip's filter field, as the user would --
+        fires ``textChanged`` per keystroke, matching the live filter (F8)."""
+        field = self._w._diagnostics._strip._filter_edit
+        field.setFocus()
+        field.clear()
+        self._qtbot.keyClicks(field, text)
+        return self
+
+    def diagnostics_press_escape_in_filter(self) -> "AppDriver":
+        field = self._w._diagnostics._strip._filter_edit
+        field.setFocus()
+        self._qtbot.keyClick(field, Qt.Key_Escape)
+        return self
+
+    def diagnostics_section_hidden_line_text(self) -> str | None:
+        """The selected section pane's own "N hidden by filters" line, or
+        None if nothing is hidden there. Reads ``isHidden()`` rather than
+        ``isVisible()`` -- the latter also depends on the top-level window
+        actually being shown (which headless tests never do), while
+        ``isHidden()`` reflects only this label's own ``setVisible`` call."""
+        label = self._w._diagnostics._section_view._hidden_label
+        return label.text() if not label.isHidden() else None
+
+    def diagnostics_all_sections_hidden_line_text(self) -> str | None:
+        """The All-sections view's own "N hidden by filters" line (its last
+        row, when present), or None if nothing is hidden there."""
+        from ui_qt import diagnostics_panel as dp
+
+        lst = self._w._diagnostics._all_view._list
+        if lst.count() == 0:
+            return None
+        last = lst.item(lst.count() - 1)
+        if last.data(dp._KIND_ROLE) == "message" and "hidden by filters" in last.text():
+            return last.text()
+        return None
+
     def _first_message_text(self, list_widget) -> str | None:
         from ui_qt import diagnostics_panel as dp
 

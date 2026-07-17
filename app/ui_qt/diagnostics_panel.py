@@ -67,6 +67,7 @@ parameter list's own expansion-state convention.
 from __future__ import annotations
 
 import html as _html
+from dataclasses import dataclass
 
 from PySide6.QtCore import QRect, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPen
@@ -74,6 +75,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QListWidget,
     QListWidgetItem,
     QScrollArea,
@@ -229,6 +231,70 @@ def _paint_badges(painter: QPainter, rect: QRect, specs: list[tuple[str, str, st
     right = rect.right()
     for text, bg, fg in reversed(specs):
         right = _paint_one_badge(painter, right, y_mid, text, bg, fg)
+
+
+# ---------------------------------------------------------------------------
+# View-only filtering (F8, phase B). Rows are hidden by the VIEW BUILDERS
+# below (``_SectionDetailView``/``_AllSectionsView``) after they already
+# have their bucket's true, unfiltered content in hand -- ``core.page_
+# buckets`` is never touched, so rail badges/strip counts/the app badge/F3
+# reconciliation all keep reading the same unfiltered ``PageBuckets`` this
+# module always has. ``_FilterState`` and the two visibility predicates
+# below are the one shared, pure "does this row survive the filter" rule
+# both view builders consume -- neither one re-derives it.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class _FilterState:
+    """Per-session view-only filter state (F8). All-on/empty-text is the
+    default -- i.e. "no filtering"."""
+
+    error_on: bool = True
+    warning_on: bool = True
+    outstanding_on: bool = True
+    text: str = ""
+
+
+#: What an issue row shows in place of an empty section-relative location
+#: (a loc that collapses entirely into the bucket label, e.g. a section-level
+#: validator error). Shared by the row builder and the text-filter haystack
+#: so what the row displays and what the filter matches can never drift.
+_EMPTY_LOCATION_LABEL = "(document)"
+
+
+def _issue_visible(diagnostic, nav_path: tuple[str, ...], bucket_label: str, filters: _FilterState) -> bool:
+    """Whether one issue row survives *filters* -- severity chip first (a
+    cheap enum check), then the text filter against exactly the two strings
+    the row itself shows: its location (or its empty-location placeholder)
+    and its verbatim message (F8)."""
+    is_error = diagnostic.severity == Severity.ERROR
+    if is_error and not filters.error_on:
+        return False
+    if not is_error and not filters.warning_on:
+        return False
+    if filters.text:
+        location = _relative_location(bucket_label, nav_path) or _EMPTY_LOCATION_LABEL
+        haystack = f"{location} {diagnostic.message}".lower()
+        if filters.text.lower() not in haystack:
+            return False
+    return True
+
+
+def _task_visible(task: CompletionTask, absorbed_messages: tuple[str, ...], filters: _FilterState) -> bool:
+    """Whether one task row survives *filters* -- the outstanding chip
+    first, then the text filter against exactly the row's own name and its
+    absorbed messages (F8: "for task rows: name + absorbed message" --
+    deliberately not the REQUIRED tag or action text, which name the row's
+    *kind*, not its identity)."""
+    if not filters.outstanding_on:
+        return False
+    if filters.text:
+        name = _task_label(task)[0]
+        haystack = " ".join((name, *absorbed_messages)).lower()
+        if filters.text.lower() not in haystack:
+            return False
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -388,7 +454,7 @@ def _add_issue_row(list_widget: QListWidget, bucket_label: str, diagnostic, nav_
     is_error = diagnostic.severity == Severity.ERROR
     label = "ERROR" if is_error else "WARN"
     location = _relative_location(bucket_label, nav_path)
-    plain_loc = location or "(document)"
+    plain_loc = location or _EMPTY_LOCATION_LABEL
     item = QListWidgetItem(f"[{label}] {plain_loc}: {diagnostic.message}")
     item.setData(parameter_row.HTML_ROLE, parameter_row.compose_issue_row_html(location, diagnostic.message))
     item.setData(parameter_row.SEVERITY_ROLE, "error" if is_error else "warning")
@@ -438,6 +504,18 @@ def _add_fold_header_row(list_widget: QListWidget, bucket: SectionBucket, collap
     item.setData(_FOLD_BUCKET_ROLE, bucket)
     item.setData(_FOLD_COLLAPSED_ROLE, collapsed)
     list_widget.addItem(item)
+
+
+def _hidden_by_filters_text(count: int) -> str:
+    """F8's pinned copy for the one quiet line a view renders when filters
+    (chips and/or text) hid something -- never rendered for a genuinely
+    empty box/section (those keep the pinned ✓ wording instead, which
+    claims truth; this line only ever claims view state)."""
+    return f"{count} hidden by filters"
+
+
+def _add_hidden_line_row(list_widget: QListWidget, count: int) -> None:
+    _add_message_row(list_widget, _hidden_by_filters_text(count))
 
 
 class _DiagnosticsRowDelegate(ParameterRowDelegate):
@@ -637,10 +715,21 @@ class _SectionDetailView(QWidget):
         self._outstanding_box.list.itemActivated.connect(self._on_task_activated)
         layout.addWidget(self._outstanding_box)
 
+        self._hidden_label = QLabel()
+        self._hidden_label.setObjectName("DiagnosticsHiddenLine")
+        self._hidden_label.setVisible(False)
+        layout.addWidget(self._hidden_label)
+
         layout.addStretch(1)  # leftover space below the boxes, not inside them
         scroll.setWidget(content)
 
-    def render(self, bucket: SectionBucket, partition: PartitionedIssues | None, model: str | None) -> None:
+    def render(
+        self,
+        bucket: SectionBucket,
+        partition: PartitionedIssues | None,
+        model: str | None,
+        filters: _FilterState,
+    ) -> None:
         issue_count = len(bucket.issues)
         header_html = (
             f'<span style="font-weight:700;">{_html.escape(bucket.label)}</span>'
@@ -648,23 +737,43 @@ class _SectionDetailView(QWidget):
             f'{"s" if issue_count != 1 else ""} · {bucket.outstanding_count} outstanding</span>'
         )
         self._header.setText(header_html)
-        self._render_issues(bucket)
-        self._render_outstanding(bucket, partition, model)
+        hidden_issues = self._render_issues(bucket, filters)
+        hidden_tasks = self._render_outstanding(bucket, partition, model, filters)
+        self._set_hidden_count(hidden_issues + hidden_tasks)
 
-    def _render_issues(self, bucket: SectionBucket) -> None:
+    def _set_hidden_count(self, count: int) -> None:
+        self._hidden_label.setVisible(count > 0)
+        if count:
+            self._hidden_label.setText(_hidden_by_filters_text(count))
+
+    def _render_issues(self, bucket: SectionBucket, filters: _FilterState) -> int:
         lst = self._issues_box.list
         lst.clear()
-        self._issues_box.set_badges(_issue_badge_specs(bucket))
+        self._issues_box.set_badges(_issue_badge_specs(bucket))  # unfiltered truth (F8)
         if not bucket.issues:
             _add_message_row(lst, _MSG_NO_ISSUES)
-        else:
-            for diagnostic, nav_path in bucket.issues:
+            self._issues_box.refresh_content_size()
+            return 0
+        hidden = 0
+        for diagnostic, nav_path in bucket.issues:
+            if _issue_visible(diagnostic, nav_path, bucket.label, filters):
                 _add_issue_row(lst, bucket.label, diagnostic, nav_path)
+            else:
+                hidden += 1
+        # A filter emptying the box entirely leaves it with zero rows and no
+        # pinned message -- the box header/badge (already set above) stays
+        # true, and the pane-level hidden line accounts for the rows (F8);
+        # "no issues" would be a lie about content that still exists.
         self._issues_box.refresh_content_size()
+        return hidden
 
     def _render_outstanding(
-        self, bucket: SectionBucket, partition: PartitionedIssues | None, model: str | None
-    ) -> None:
+        self,
+        bucket: SectionBucket,
+        partition: PartitionedIssues | None,
+        model: str | None,
+        filters: _FilterState,
+    ) -> int:
         lst = self._outstanding_box.list
         lst.clear()
         if model == "Partial":
@@ -674,19 +783,44 @@ class _SectionDetailView(QWidget):
             self._outstanding_box.set_title("Outstanding")
             _add_message_row(lst, _MSG_PARTIAL_NO_TARGET)
             self._outstanding_box.refresh_content_size()
-            return
+            return 0
         self._outstanding_box.set_title(_outstanding_box_title(bucket))
         if not bucket.required_tasks and not bucket.optional_tasks:
             _add_message_row(lst, _MSG_NOTHING_OUTSTANDING)
             self._outstanding_box.refresh_content_size()
-            return
+            return 0
+
+        hidden = 0
+        required_rows = []
         for task in bucket.required_tasks:
-            _add_task_row(lst, task, _absorbed_messages(task, partition))
+            absorbed = _absorbed_messages(task, partition)
+            if _task_visible(task, absorbed, filters):
+                required_rows.append((task, absorbed))
+            else:
+                hidden += 1
+        for task, absorbed in required_rows:
+            _add_task_row(lst, task, absorbed)
+
         if bucket.optional_tasks:
-            _add_subhead_row(lst, f"OPTIONAL — {len(bucket.optional_tasks)} UNFILLED")
+            optional_rows = []
             for task in bucket.optional_tasks:
-                _add_task_row(lst, task, _absorbed_messages(task, partition))
+                absorbed = _absorbed_messages(task, partition)
+                if _task_visible(task, absorbed, filters):
+                    optional_rows.append((task, absorbed))
+                else:
+                    hidden += 1
+            # The "OPTIONAL -- K unfilled" subhead is itself a header for the
+            # rows beneath it -- like the box header, its own K is always
+            # true (bucket.optional_tasks, unfiltered); but showing it over
+            # zero surviving rows would orphan a header for nothing, so it
+            # only renders when at least one optional row survives.
+            if optional_rows:
+                _add_subhead_row(lst, f"OPTIONAL — {len(bucket.optional_tasks)} UNFILLED")
+                for task, absorbed in optional_rows:
+                    _add_task_row(lst, task, absorbed)
+
         self._outstanding_box.refresh_content_size()
+        return hidden
 
     def _on_issue_activated(self, item: QListWidgetItem) -> None:
         if item.data(_KIND_ROLE) == "issue":
@@ -723,32 +857,63 @@ class _AllSectionsView(QWidget):
         self._collapsed: set[tuple[str, ...]] = set()
         self._last_buckets: PageBuckets | None = None
         self._last_partition: PartitionedIssues | None = None
+        self._last_filters = _FilterState()
 
     def reset_fold_state(self) -> None:
         self._collapsed.clear()
 
-    def render(self, buckets: PageBuckets, partition: PartitionedIssues | None) -> None:
+    def render(self, buckets: PageBuckets, partition: PartitionedIssues | None, filters: _FilterState) -> None:
         self._last_buckets = buckets
         self._last_partition = partition
+        self._last_filters = filters
         self._list.clear()
+        hidden_total = 0
         for bucket in buckets.buckets:
             collapsed = bucket.path in self._collapsed
-            _add_fold_header_row(self._list, bucket, collapsed)
+            _add_fold_header_row(self._list, bucket, collapsed)  # unfiltered truth badges (F8)
             if collapsed:
+                # A fold-hidden row is not a filter-hidden row (F8): it was
+                # never even considered, so it contributes nothing to
+                # hidden_total -- filters and folds compose independently.
                 continue
+
             for diagnostic, nav_path in bucket.issues:
-                _add_issue_row(self._list, bucket.label, diagnostic, nav_path)
+                if _issue_visible(diagnostic, nav_path, bucket.label, filters):
+                    _add_issue_row(self._list, bucket.label, diagnostic, nav_path)
+                else:
+                    hidden_total += 1
+
             if bucket.required_tasks:
-                if not _is_declare_model_only(bucket):
-                    _add_subhead_row(self._list, f"{bucket.label} — {_ratio_words(bucket)}")
+                required_rows = []
                 for task in bucket.required_tasks:
-                    _add_task_row(self._list, task, _absorbed_messages(task, partition))
+                    absorbed = _absorbed_messages(task, partition)
+                    if _task_visible(task, absorbed, filters):
+                        required_rows.append((task, absorbed))
+                    else:
+                        hidden_total += 1
+                if required_rows:
+                    if not _is_declare_model_only(bucket):
+                        _add_subhead_row(self._list, f"{bucket.label} — {_ratio_words(bucket)}")
+                    for task, absorbed in required_rows:
+                        _add_task_row(self._list, task, absorbed)
+
             if bucket.optional_tasks:
-                _add_subhead_row(
-                    self._list, f"{bucket.label} · optional — {len(bucket.optional_tasks)} unfilled"
-                )
+                optional_rows = []
                 for task in bucket.optional_tasks:
-                    _add_task_row(self._list, task, _absorbed_messages(task, partition))
+                    absorbed = _absorbed_messages(task, partition)
+                    if _task_visible(task, absorbed, filters):
+                        optional_rows.append((task, absorbed))
+                    else:
+                        hidden_total += 1
+                if optional_rows:
+                    _add_subhead_row(
+                        self._list, f"{bucket.label} · optional — {len(bucket.optional_tasks)} unfilled"
+                    )
+                    for task, absorbed in optional_rows:
+                        _add_task_row(self._list, task, absorbed)
+
+        if hidden_total:
+            _add_hidden_line_row(self._list, hidden_total)
 
     def _on_activated(self, item: QListWidgetItem) -> None:
         kind = item.data(_KIND_ROLE)
@@ -763,7 +928,7 @@ class _AllSectionsView(QWidget):
         bucket: SectionBucket = item.data(_FOLD_BUCKET_ROLE)
         self._collapsed.symmetric_difference_update({bucket.path})
         if self._last_buckets is not None:
-            self.render(self._last_buckets, self._last_partition)
+            self.render(self._last_buckets, self._last_partition, self._last_filters)
 
 
 class _RailDelegate(ParameterRowDelegate):
@@ -881,18 +1046,86 @@ class _RailList(QListWidget):
             self.selection_changed.emit(current.data(_RAIL_PATH_ROLE))
 
 
-def _chip_html(icon: str, color: str, text: str) -> str:
+def _chip_html(icon: str, color: str, text: str, *, on: bool) -> str:
+    """*on* controls the chip's own text colours (F8) -- when a chip is
+    toggled off, both its icon and its count text go ``style.MUTED``, on
+    top of the "off" QSS state (:data:`_FilterChip`) that greys its card
+    background: visibly muted/pressed-out, never merely relabelled."""
+    icon_color = color if on else style.MUTED
+    text_color = parameter_row.DEFAULT_TEXT if on else style.MUTED
     return (
-        f'<span style="color:{color}; font-weight:700;">{icon}</span>'
-        f'<span style="color:{parameter_row.DEFAULT_TEXT};">  {_html.escape(text)}</span>'
+        f'<span style="color:{icon_color}; font-weight:700;">{icon}</span>'
+        f'<span style="color:{text_color};">  {_html.escape(text)}</span>'
     )
 
 
+class _FilterChip(QLabel):
+    """One strip chip, also a click-toggle filter (F8). Stays a ``QLabel``
+    (not a ``QPushButton``) so it keeps rendering its rich-text icon+count
+    content (a coloured dot plus text, :func:`_chip_html`) -- native Qt
+    buttons render ``text()`` as plain text, not HTML. Interactivity is
+    layered on with :meth:`mousePressEvent` and a dynamic "off" QSS
+    property, the same pattern ``QPushButton#AddParameterCreate``'s own
+    "selected" property already uses in this stylesheet."""
+
+    toggled = Signal(bool)
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setObjectName("DiagnosticsChip")
+        self.setCursor(Qt.PointingHandCursor)
+        self._on = True
+
+    def is_on(self) -> bool:
+        return self._on
+
+    def set_on(self, on: bool) -> None:
+        """Set the toggle state without emitting :attr:`toggled` -- used by
+        programmatic resets (:meth:`_SummaryStrip.reset_filters`), which
+        must not re-enter the filter-change/render path while a *different*
+        document's buckets are still being assembled."""
+        self._on = on
+        self.setProperty("chipOff", not on)
+        self.style().unpolish(self)
+        self.style().polish(self)
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802 -- Qt override
+        if event.button() != Qt.LeftButton:
+            super().mousePressEvent(event)
+            return
+        self.set_on(not self._on)
+        self.toggled.emit(self._on)
+
+
+class _FilterLineEdit(QLineEdit):
+    """The strip's text filter field (F8). Esc clears it (Qt's QLineEdit
+    has no such default) -- only when there is something to clear, so an
+    already-empty field's Escape still propagates normally. No global
+    shortcut (Ctrl+F) is wired -- deferred; see the module docstring."""
+
+    def keyPressEvent(self, event) -> None:  # noqa: N802 -- Qt override
+        if event.key() == Qt.Key_Escape and self.text():
+            self.clear()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+
 class _SummaryStrip(QWidget):
-    """Top band: three static count chips (F2 phase A -- no filtering yet,
-    per F7), each its own bordered, rounded card on the shaded strip band
-    (the wireframe's "boxes/shading to make regions distinguishable" --
-    plain coloured text was a Stage-B divergence, fixed here)."""
+    """Top band: three toggleable count-filter chips (F8; F2 phase A had
+    them static) plus a text filter field, each its own bordered, rounded
+    card on the shaded strip band (the wireframe's "boxes/shading to make
+    regions distinguishable"). Filtering here is purely a VIEW concern --
+    this widget owns the filter *state* (chip on/off, filter text) and
+    reports it via :meth:`filter_state`; it never touches counts, badges or
+    buckets itself (:class:`DiagnosticsPanel` reads the state and re-renders
+    the pane -- see F8's "view-only" rule)."""
+
+    #: Emitted whenever a chip is toggled or the filter text changes --
+    #: DiagnosticsPanel re-renders only the *pane* on this signal (never a
+    #: full ``refresh()``), so toggling can never re-enter the document-wide
+    #: refresh path.
+    filters_changed = Signal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -904,23 +1137,75 @@ class _SummaryStrip(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(16, 8, 16, 8)
         layout.setSpacing(10)
-        self._errors = QLabel()
-        self._warnings = QLabel()
-        self._outstanding = QLabel()
+
+        self._counts = (0, 0, 0)
+
+        self._errors = _FilterChip()
+        self._warnings = _FilterChip()
+        self._outstanding = _FilterChip()
         for chip in (self._errors, self._warnings, self._outstanding):
-            chip.setObjectName("DiagnosticsChip")
+            chip.toggled.connect(self._on_chip_toggled)
             layout.addWidget(chip)
+
         layout.addStretch(1)
 
+        self._filter_edit = _FilterLineEdit()
+        self._filter_edit.setObjectName("DiagnosticsFilterField")
+        self._filter_edit.setPlaceholderText("Filter…")
+        self._filter_edit.setToolTip(style.FILTER_FIELD_TOOLTIP)
+        self._filter_edit.setFixedWidth(180)
+        self._filter_edit.setClearButtonEnabled(True)
+        self._filter_edit.textChanged.connect(self._on_text_changed)
+        layout.addWidget(self._filter_edit)
+
     def set_counts(self, errors: int, warnings: int, outstanding: int) -> None:
-        self._errors.setText(_chip_html("●", style.ERROR, f"{errors} error{'s' if errors != 1 else ''}"))
+        self._counts = (errors, warnings, outstanding)
+        self._refresh_chip_text()
+        # Tooltips stay truthful regardless of on/off state (F8): they
+        # always describe the real, unfiltered counts.
         self._errors.setToolTip(style.error_count_tooltip(errors))
-        self._warnings.setText(
-            _chip_html("●", style.WARNING, f"{warnings} warning{'s' if warnings != 1 else ''}")
-        )
         self._warnings.setToolTip(style.warning_count_tooltip(warnings))
-        self._outstanding.setText(_chip_html("○", style.MUTED, f"{outstanding} outstanding"))
         self._outstanding.setToolTip(style.outstanding_count_tooltip(outstanding))
+
+    def filter_state(self) -> _FilterState:
+        return _FilterState(
+            error_on=self._errors.is_on(),
+            warning_on=self._warnings.is_on(),
+            outstanding_on=self._outstanding.is_on(),
+            text=self._filter_edit.text(),
+        )
+
+    def reset_filters(self) -> None:
+        """Back to all-on, empty text -- called only on a *different*
+        document (:meth:`DiagnosticsPanel.reset_view_state`), never on an
+        ordinary refresh, where persisting is the point (F8)."""
+        for chip in (self._errors, self._warnings, self._outstanding):
+            chip.set_on(True)
+        self._filter_edit.blockSignals(True)
+        self._filter_edit.clear()
+        self._filter_edit.blockSignals(False)
+        self._refresh_chip_text()
+
+    def _refresh_chip_text(self) -> None:
+        errors, warnings, outstanding = self._counts
+        self._errors.setText(
+            _chip_html("●", style.ERROR, f"{errors} error{'s' if errors != 1 else ''}", on=self._errors.is_on())
+        )
+        self._warnings.setText(
+            _chip_html(
+                "●", style.WARNING, f"{warnings} warning{'s' if warnings != 1 else ''}", on=self._warnings.is_on()
+            )
+        )
+        self._outstanding.setText(
+            _chip_html("○", style.MUTED, f"{outstanding} outstanding", on=self._outstanding.is_on())
+        )
+
+    def _on_chip_toggled(self, _on: bool) -> None:
+        self._refresh_chip_text()
+        self.filters_changed.emit()
+
+    def _on_text_changed(self, _text: str) -> None:
+        self.filters_changed.emit()
 
 
 class DiagnosticsPanel(QWidget):
@@ -949,6 +1234,7 @@ class DiagnosticsPanel(QWidget):
         content_layout.setSpacing(0)
 
         self._strip = _SummaryStrip()
+        self._strip.filters_changed.connect(self._on_filters_changed)
         content_layout.addWidget(self._strip)
 
         body = QWidget()
@@ -992,6 +1278,7 @@ class DiagnosticsPanel(QWidget):
     def reset_view_state(self) -> None:
         self._selected_key = _ALL_SECTIONS_KEY
         self._all_view.reset_fold_state()
+        self._strip.reset_filters()
 
     def refresh(
         self, buckets: PageBuckets | None, partition: PartitionedIssues | None, model: str | None
@@ -1046,21 +1333,29 @@ class DiagnosticsPanel(QWidget):
         self._selected_key = key
         self._render_pane()
 
+    def _on_filters_changed(self) -> None:
+        """A chip toggled or the filter text changed (F8) -- re-render only
+        the pane, never a full ``refresh()``: filters are view-only and
+        must never re-enter the document-wide refresh path (rail badges,
+        strip counts and the app badge are untouched by this call)."""
+        self._render_pane()
+
     def _render_pane(self) -> None:
         if self._buckets is None:
             return
+        filters = self._strip.filter_state()
         # Always keep the All-sections view current, even while a single
         # section is showing: it is the F3 backup view (nothing renders
         # there that isn't already counted in the strip/rail), and a stale
         # copy sitting behind the visible section pane would quietly break
         # that promise the moment the user (or a test) switches back to it.
-        self._all_view.render(self._buckets, self._partition)
+        self._all_view.render(self._buckets, self._partition, filters)
         if self._selected_key != _ALL_SECTIONS_KEY:
             bucket = next((b for b in self._buckets.buckets if b.path == self._selected_key), None)
             if bucket is not None:
                 self._pane_stack.setCurrentWidget(self._section_view)
-                self._section_view.render(bucket, self._partition, self._model)
+                self._section_view.render(bucket, self._partition, self._model, filters)
                 return
             self._selected_key = _ALL_SECTIONS_KEY
         self._pane_stack.setCurrentWidget(self._all_view)
-        self._all_view.render(self._buckets, self._partition)
+        self._all_view.render(self._buckets, self._partition, filters)

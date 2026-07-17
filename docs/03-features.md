@@ -378,9 +378,16 @@ two group boxes:
   instead.
 
 Selecting **"All sections"** (the default) instead shows every bucket at
-once, unfiltered — the reconciliation backup view: one foldable header per
+once — the reconciliation backup view: one foldable header per
 bucket (same badges as the rail) over its issue rows then its outstanding
 rows, so nothing on the page can ever go missing between the two views.
+
+The strip's chips and text field filter both views, **view-only**: hiding
+rows never changes a count (buckets, badges, ratios and the app badge stay
+post-absorption truth), the ✓ empty states never stand in for hidden rows,
+and a muted `N hidden by filters` line accounts per view for what the
+filters hid. Filter state is per-session panel state — never persisted,
+reset on a new document.
 
 A committed `null` is Outstanding whenever the field is schema-**Expected**,
 not only Required (creating an expected field and leaving it unfilled never
