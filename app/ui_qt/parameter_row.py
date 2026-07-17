@@ -376,10 +376,14 @@ class ParameterRowDelegate(QStyledItemDelegate):
         painter.restore()
 
     def _paint_severity_icon(self, painter, option: QStyleOptionViewItem, index) -> None:
-        """Paint a small filled-circle severity icon in the row's left
-        gutter (F5): a red circle with ``✕`` for an error, amber with ``!``
-        for a warning -- replaces the old bracketed ``[ERROR]``/``[WARN]``
-        text tag baked into the HTML (:func:`compose_issue_row_html`)."""
+        """Paint a flat filled-circle severity dot in the row's left gutter
+        (F5, polish round): red = error, amber = warning, no inner glyph --
+        a plain dot reads better at row size than the earlier icon-in-circle
+        (a bracketed ``[ERROR]``/``[WARN]`` text tag before that). Part of
+        the app's four-symbol vocabulary alongside a task row's own ``○``/
+        ``◐`` glyphs (:mod:`ui_qt.diagnostics_panel`); see
+        ``style.severity_tooltip``/``style.task_kind_tooltip`` for the
+        matching, drift-safe tooltip text."""
         severity = index.data(SEVERITY_ROLE)
         is_error = severity == "error"
         rect = QRect(
@@ -393,12 +397,6 @@ class ParameterRowDelegate(QStyledItemDelegate):
         painter.setPen(Qt.NoPen)
         painter.setBrush(QColor(style.ERROR if is_error else style.WARNING))
         painter.drawEllipse(rect)
-        font = QFont(painter.font())
-        font.setPixelSize(9)
-        font.setBold(True)
-        painter.setFont(font)
-        painter.setPen(QColor(style.BADGE_TEXT))
-        painter.drawText(rect, Qt.AlignCenter, "✕" if is_error else "!")
         painter.restore()
 
     def _paint_value(self, painter, option, index, reserved: int) -> None:

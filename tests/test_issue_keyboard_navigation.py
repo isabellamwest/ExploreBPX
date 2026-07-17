@@ -113,3 +113,34 @@ def test_issues_tab_selection_change_alone_does_not_activate(qtbot, issues_tab):
     issues_tab._list.setCurrentRow(0)
 
     assert received == []
+
+
+# --- tooltip vocabulary (polish round): severity/task-kind derived, never --
+# --- message-derived ---------------------------------------------------------
+
+
+def test_validation_panel_issue_row_tooltips_match_their_severity_role(validation_panel):
+    """Drift-safe by construction: the tooltip is looked up from the same
+    severity ("error"/"warning") already stashed on the row for the dot
+    icon, via ``style.severity_tooltip`` -- never from the row's own
+    verbatim validator message."""
+    from core.validation import Severity
+    from ui_qt import parameter_row, style
+
+    rows = _issue_rows(validation_panel)
+    assert rows  # fixture premise
+    for item in rows:
+        severity = Severity.ERROR if item.data(parameter_row.SEVERITY_ROLE) == "error" else Severity.WARNING
+        assert item.toolTip() == style.severity_tooltip(severity)
+
+
+def test_issues_tab_row_tooltip_is_severity_derived_not_message_derived(issues_tab):
+    """The fixture's fake diagnostic carries the message "Invalid" -- if the
+    tooltip were message-derived it would show something unrelated to the
+    pinned, generic sentence. It must show the fixed Severity.ERROR text
+    regardless."""
+    from core.validation import Severity
+    from ui_qt import style
+
+    item = issues_tab._list.item(0)
+    assert item.toolTip() == style.severity_tooltip(Severity.ERROR)

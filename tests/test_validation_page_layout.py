@@ -667,3 +667,107 @@ def test_fold_header_glyph_flips_with_collapsed_state(app_driver):
     d.toggle_all_sections_fold("Cell")
     header = next(item for item in d._validation_rows("fold_header") if item.data(dp._FOLD_BUCKET_ROLE).label == "Cell")
     assert header.text().startswith("▸")
+
+
+# --- polish round (2026-07-17): flat dots, tooltips, crisper boxes ---------
+
+
+def test_task_row_tooltip_is_task_kind_derived(app_driver):
+    """Drift-safe: the tooltip is looked up from the task's own ``kind``
+    enum via ``style.task_kind_tooltip`` -- never from its alias/path text."""
+    from core.completion import TaskKind
+    from ui_qt import diagnostics_panel as dp
+    from ui_qt import style
+
+    d = app_driver
+    d._w._new("SPM")
+    d.diagnostics_select_rail("Cell")
+    lst = d._w._diagnostics._section_view._outstanding_box.list
+    task_item = next(lst.item(i) for i in range(lst.count()) if lst.item(i).data(dp._KIND_ROLE) == "task")
+    task = task_item.data(dp._TASK_ROLE)
+
+    assert task.kind is TaskKind.MISSING_FIELD  # a fresh Cell skeleton's tasks are all missing fields
+    assert task_item.toolTip() == style.task_kind_tooltip(task.kind)
+
+
+def test_strip_chip_tooltips_reflect_counts(app_driver, many_issues_path):
+    from ui_qt import style
+
+    d = app_driver
+    d.open(many_issues_path)
+    strip = d._w._diagnostics._strip
+    errors, warnings, outstanding = d.diagnostics_strip_counts()
+
+    assert strip._errors.toolTip() == style.error_count_tooltip(errors)
+    assert strip._warnings.toolTip() == style.warning_count_tooltip(warnings)
+    assert strip._outstanding.toolTip() == style.outstanding_count_tooltip(outstanding)
+
+
+def test_rail_entry_tooltip_reflects_bucket_counts(app_driver, many_issues_path):
+    from ui_qt import style
+
+    d = app_driver
+    d.open(many_issues_path)
+    cell = d.diagnostics_bucket("Cell")
+
+    item = d._diagnostics_rail_item("Cell")
+
+    assert item.toolTip() == style.counts_tooltip(cell.error_count, cell.warning_count, cell.outstanding_count)
+    assert item.toolTip() != ""  # premise: Cell actually has something to report
+
+
+def test_rail_all_sections_tooltip_reflects_document_totals(app_driver, many_issues_path):
+    from ui_qt import style
+
+    d = app_driver
+    d.open(many_issues_path)
+    errors, warnings, outstanding = d.diagnostics_strip_counts()
+
+    item = d._diagnostics_rail_item("All sections")
+
+    assert item.toolTip() == style.counts_tooltip(errors, warnings, outstanding)
+
+
+def test_clean_bucket_rail_tooltip_is_empty(app_driver, many_issues_path):
+    """F4's quiet philosophy extends to tooltips: a clean bucket (State,
+    untouched in the many_issues fixture) has nothing to report, so its
+    tooltip is empty -- no "0 errors" noise on hover."""
+    d = app_driver
+    d.open(many_issues_path)
+    item = d._diagnostics_rail_item("State")
+    assert item.toolTip() == ""
+
+
+def test_severity_dots_carry_no_inner_glyph_text_in_the_delegate(app_driver, many_issues_path):
+    """The confirmed real-window feedback: the delegate paints a flat dot,
+    not an icon-in-circle. Structural proof (paint is a no-op to assert
+    against directly): the delegate's severity-icon painter no longer draws
+    any glyph text -- inspect its source rather than pixels, since colour-
+    only circle painting is already covered by test_activity_bar.py-style
+    pixel probes elsewhere in this suite for the equivalent badge pattern."""
+    from ui_qt.parameter_row import ParameterRowDelegate
+
+    import inspect
+
+    source = inspect.getsource(ParameterRowDelegate._paint_severity_icon)
+    assert "drawText" not in source
+    assert "✕" not in source and '"!"' not in source
+
+
+def test_task_glyph_is_muted_grey_not_bold(app_driver):
+    """Harmonisation ask: the ○/◐ glyph must render in the same grey
+    (#57606a) family as the dots, at regular weight -- not swept into the
+    bold name span the way it used to be."""
+    from ui_qt import diagnostics_panel as dp
+    from ui_qt import parameter_row, style
+
+    d = app_driver
+    d._w._new("SPM")
+    d.diagnostics_select_rail("Cell")
+    lst = d._w._diagnostics._section_view._outstanding_box.list
+    task_item = next(lst.item(i) for i in range(lst.count()) if lst.item(i).data(dp._KIND_ROLE) == "task")
+    html = task_item.data(parameter_row.HTML_ROLE)
+
+    glyph_span = html.split("</span>")[0] + "</span>"
+    assert style.MUTED in glyph_span
+    assert "font-weight:400" in glyph_span

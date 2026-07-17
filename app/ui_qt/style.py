@@ -7,6 +7,9 @@ use is reserved for validity status only.
 
 from __future__ import annotations
 
+from core.completion import TaskKind
+from core.validation import Severity
+
 OK = "#2e7d32"
 ERROR = "#c62828"
 WARNING = "#ef6c00"
@@ -38,12 +41,87 @@ MUTED = "#57606a"
 RAIL_BG = "#f3f4f6"
 RAIL_SELECTED_BG = "#e3edfd"
 RAIL_HOVER_BG = "#e8eaed"
-#: Glyph colour painted on top of a solid, saturated fill -- the severity
-#: icon's ✕/! (:meth:`ui_qt.parameter_row.ParameterRowDelegate.
-#: _paint_severity_icon`) and, potentially, any other delegate-drawn badge
-#: glyph on a coloured circle/pill. Named so a future one reuses it rather
-#: than re-hardcoding white.
-BADGE_TEXT = "#ffffff"
+#: Crisper-boxes polish round: one step darker than the app's usual
+#: ``#d0d7de``/``#d9dee5`` border tones, used only on the Diagnostics page's
+#: own chrome (group-box border, rail's right edge, strip's bottom edge,
+#: chip borders) so those regions read a touch more defined without raising
+#: contrast anywhere else in the app. Fills/palette are otherwise unchanged
+#: -- flat colour only, no shadows.
+BORDER_STRONG = "#c4cdd5"
+#: Slightly stronger shaded band for the Diagnostics group-box header row --
+#: one step darker than the app's usual ``#f6f8fa`` banded-header tone.
+HEADER_BAND_STRONG = "#eef1f4"
+
+# ---------------------------------------------------------------------------
+# Tooltip vocabulary (F5 polish round): the app's four completion/severity
+# symbols (● red error, ● amber warning, ○ hollow missing, ◐ half added-no-
+# value) each carry one fixed, generic tooltip sentence, chosen by the
+# *enum* the layers already own -- never by a diagnostic's message text or
+# ``error_type`` string, and never by a task's own alias/path text. This is
+# deliberate and load-bearing (explicit user requirement): a future bpx
+# wording change must never be able to make a tooltip lie, so every function
+# below takes ONLY a ``core.validation.Severity`` or a
+# ``core.completion.TaskKind`` -- there is no code path here that can even
+# see a message string. One place for the whole vocabulary (this module),
+# reused by the Diagnostics page (rail/strip/pane) and the Inspector's
+# Issues tab so the two issue surfaces never drift.
+# ---------------------------------------------------------------------------
+
+_SEVERITY_TOOLTIPS: dict[Severity, str] = {
+    Severity.ERROR: "Error — the BPX validator rejected this",
+    Severity.WARNING: "Warning — flagged by the BPX validator",
+}
+
+_TASK_KIND_TOOLTIPS: dict[TaskKind, str] = {
+    TaskKind.MISSING_FIELD: "Required field not yet added",
+    TaskKind.MISSING_SECTION: "Required section not yet added",
+    TaskKind.NULL_FIELD: "Added, but no value yet",
+    TaskKind.DECLARE_MODEL: "Model not yet declared",
+}
+
+
+def severity_tooltip(severity: Severity) -> str:
+    """The fixed, generic tooltip for a ●-severity row (an issue's dot, a
+    strip chip, a rail badge). Takes only the ``Severity`` enum bpx's own
+    diagnostic already carries -- never a message or ``error_type`` string."""
+    return _SEVERITY_TOOLTIPS[severity]
+
+
+def task_kind_tooltip(kind: TaskKind) -> str:
+    """The fixed, generic tooltip for a ○/◐ task-glyph row. Takes only the
+    app-owned ``TaskKind`` enum -- never a task's own alias/path text, which
+    names the specific field/section, not the *kind* of work outstanding."""
+    return _TASK_KIND_TOOLTIPS[kind]
+
+
+def _count_phrase(count: int, noun: str) -> str:
+    return f"{count} {noun}{'s' if count != 1 else ''}"
+
+
+def error_count_tooltip(count: int) -> str:
+    return _count_phrase(count, "validator error")
+
+
+def warning_count_tooltip(count: int) -> str:
+    return _count_phrase(count, "validator warning")
+
+
+def outstanding_count_tooltip(count: int) -> str:
+    return _count_phrase(count, "outstanding item")
+
+
+def counts_tooltip(error_count: int, warning_count: int, outstanding_count: int) -> str:
+    """Compose a combined tooltip from whichever counts are nonzero (e.g. a
+    rail entry showing both an error and an outstanding badge) -- "quiet"
+    like the badges themselves: a zero count contributes no clause at all."""
+    parts = []
+    if error_count:
+        parts.append(error_count_tooltip(error_count))
+    if warning_count:
+        parts.append(warning_count_tooltip(warning_count))
+    if outstanding_count:
+        parts.append(outstanding_count_tooltip(outstanding_count))
+    return " · ".join(parts)
 
 STYLESHEET = """
 QWidget { font-size: 13px; color: #1f2328; }
@@ -112,22 +190,28 @@ QListWidget#SearchPopupList::item:selected { background: #ddeeff; color: #1f2328
 /* The Diagnostics page (rail redesign, F2): a summary strip over a
    fixed-width rail beside a detail pane. The rail's own background is
    distinct from the white pane so the two read as separate surfaces, like
-   the activity bar beside the editor. */
-QWidget#DiagnosticsSummaryStrip { background: #f9fafb; border-bottom: 1px solid #d0d7de; }
+   the activity bar beside the editor. Crisper-boxes polish round: the
+   strip/rail/group-box/chip border lines use BORDER_STRONG (#c4cdd5), one
+   step darker than the app's usual #d0d7de/#d9dee5, so this page's own
+   regions read a touch more defined -- flat colour only, no shadows, and
+   nothing outside this page's chrome changed. */
+QWidget#DiagnosticsSummaryStrip { background: #f9fafb; border-bottom: 1px solid #c4cdd5; }
 /* One strip chip (F2 wireframe: "boxes/shading to make regions
    distinguishable") -- a small bordered, rounded card on the shaded strip
    band, distinct from the flat text it replaced. */
 QLabel#DiagnosticsChip {
-    background: #ffffff; border: 1px solid #d0d7de; border-radius: 6px; padding: 4px 10px;
+    background: #ffffff; border: 1px solid #c4cdd5; border-radius: 6px; padding: 4px 10px;
 }
-QListWidget#DiagnosticsRail { background: #f3f4f6; border: none; border-right: 1px solid #d0d7de; outline: none; }
+QListWidget#DiagnosticsRail { background: #f3f4f6; border: none; border-right: 1px solid #c4cdd5; outline: none; }
 QListWidget#DiagnosticsRail::item { padding: 0; border: none; }
 QLabel#DiagnosticsPaneHeader { font-size: 14px; padding-bottom: 2px; }
 /* One F2 group box: a bordered, rounded card with a shaded, banded header
-   row -- the same "IDE panel" language as QFrame#Card elsewhere. */
-QFrame#DiagnosticsGroupBox { background: #ffffff; border: 1px solid #d9dee5; border-radius: 6px; }
+   row -- the same "IDE panel" language as QFrame#Card elsewhere. The header
+   band uses HEADER_BAND_STRONG (#eef1f4), one step darker than the app's
+   usual #f6f8fa banded-header tone. */
+QFrame#DiagnosticsGroupBox { background: #ffffff; border: 1px solid #c4cdd5; border-radius: 6px; }
 QWidget#DiagnosticsGroupBoxHeader {
-    background: #f6f8fa; border-bottom: 1px solid #d9dee5;
+    background: #eef1f4; border-bottom: 1px solid #c4cdd5;
     border-top-left-radius: 6px; border-top-right-radius: 6px;
 }
 QLabel#DiagnosticsGroupBoxTitle { font-weight: 600; }

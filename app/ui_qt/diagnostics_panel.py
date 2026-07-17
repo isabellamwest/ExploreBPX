@@ -355,16 +355,21 @@ def _task_row_html(task: CompletionTask, absorbed_messages: tuple[str, ...]) -> 
     itself is NOT part of this HTML fragment -- it is painted separately,
     right-aligned, by the delegate (see :data:`parameter_row.ACTION_ROLE`,
     set by :func:`_add_task_row`) so it never competes with a long name for
-    the same line."""
+    the same line.
+
+    Polish round: the ``○``/``◐`` glyph is its own span, styled to
+    harmonise with the issue rows' flat severity dots -- ``style.MUTED``
+    (the same grey #57606a family) at regular weight, not swept up in the
+    bold name span the way it used to be."""
     glyph = _task_glyph(task)
     name, note, action = _task_label(task)
     label = f"{name} — {note}" if note else name
     hints: list[tuple[str, str]] = []
     if task.required:
         hints.append(("REQUIRED", style.REQUIRED))
-    fragment = parameter_row.compose_row_html(
-        f"{glyph}  {label}", hints, name_color=parameter_row.DEFAULT_TEXT
-    )
+    glyph_span = f'<span style="color:{style.MUTED}; font-weight:400;">{glyph}</span>'
+    name_fragment = parameter_row.compose_row_html(label, hints, name_color=parameter_row.DEFAULT_TEXT)
+    fragment = f"{glyph_span}  {name_fragment}"
     if absorbed_messages:
         secondary = "<br>".join(
             f'<span style="color:{style.MUTED}; font-size:90%;">{_html.escape(message)}</span>'
@@ -387,6 +392,7 @@ def _add_issue_row(list_widget: QListWidget, bucket_label: str, diagnostic, nav_
     item = QListWidgetItem(f"[{label}] {plain_loc}: {diagnostic.message}")
     item.setData(parameter_row.HTML_ROLE, parameter_row.compose_issue_row_html(location, diagnostic.message))
     item.setData(parameter_row.SEVERITY_ROLE, "error" if is_error else "warning")
+    item.setToolTip(style.severity_tooltip(diagnostic.severity))
     item.setData(_NAV_PATH_ROLE, nav_path)
     item.setData(_KIND_ROLE, "issue")
     list_widget.addItem(item)
@@ -398,6 +404,7 @@ def _add_task_row(list_widget: QListWidget, task: CompletionTask, absorbed_messa
     item.setData(_TASK_ROLE, task)
     item.setData(parameter_row.HTML_ROLE, _task_row_html(task, absorbed_messages))
     item.setData(parameter_row.ACTION_ROLE, _task_label(task)[2])
+    item.setToolTip(style.task_kind_tooltip(task.kind))
     list_widget.addItem(item)
 
 
@@ -826,6 +833,7 @@ def _add_rail_entry_all(rail: QListWidget, buckets: PageBuckets) -> None:
     item.setData(_RAIL_ABSENT_ROLE, False)
     badges = [(str(total), style.NEUTRAL_TINT, parameter_row.DEFAULT_TEXT)] if total else []
     item.setData(_RAIL_BADGE_ROLE, badges)
+    item.setToolTip(style.counts_tooltip(buckets.error_count, buckets.warning_count, buckets.outstanding_count))
     rail.addItem(item)
 
 
@@ -843,6 +851,7 @@ def _add_rail_entry_section(rail: QListWidget, bucket: SectionBucket) -> None:
     item.setData(_RAIL_PATH_ROLE, bucket.path)
     item.setData(_RAIL_ABSENT_ROLE, bucket.absent)
     item.setData(_RAIL_BADGE_ROLE, _bucket_badge_specs(bucket))
+    item.setToolTip(style.counts_tooltip(bucket.error_count, bucket.warning_count, bucket.outstanding_count))
     rail.addItem(item)
 
 
@@ -905,10 +914,13 @@ class _SummaryStrip(QWidget):
 
     def set_counts(self, errors: int, warnings: int, outstanding: int) -> None:
         self._errors.setText(_chip_html("●", style.ERROR, f"{errors} error{'s' if errors != 1 else ''}"))
+        self._errors.setToolTip(style.error_count_tooltip(errors))
         self._warnings.setText(
             _chip_html("●", style.WARNING, f"{warnings} warning{'s' if warnings != 1 else ''}")
         )
+        self._warnings.setToolTip(style.warning_count_tooltip(warnings))
         self._outstanding.setText(_chip_html("○", style.MUTED, f"{outstanding} outstanding"))
+        self._outstanding.setToolTip(style.outstanding_count_tooltip(outstanding))
 
 
 class DiagnosticsPanel(QWidget):

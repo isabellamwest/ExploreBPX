@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 from core.tree_model import ParameterItem
 from core.validation import Severity, merge_union_pair
 
-from . import parameter_row
+from . import parameter_row, style
 from .parameter_row import ParameterRowDelegate
 
 _PATH_ROLE = 256  # Qt.UserRole
@@ -121,6 +121,7 @@ class IssuesTab(QWidget):
                 parameter_row.compose_issue_row_html("", issue.message),
             )
             item.setData(parameter_row.SEVERITY_ROLE, "error" if is_error else "warning")
+            item.setToolTip(style.severity_tooltip(issue.severity))
             item.setData(_PATH_ROLE, parameter.path)
             self._list.addItem(item)
 
