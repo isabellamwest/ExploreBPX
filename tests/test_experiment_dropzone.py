@@ -31,6 +31,18 @@ def _qapp():
     yield QApplication.instance() or QApplication([])
 
 
+@pytest.fixture(autouse=True)
+def _no_exec_database_examples_dialog(monkeypatch):
+    """``DatabaseExamplesDialog.exec()`` is a real blocking modal loop; every
+    test that opens it here inspects the constructed instance directly
+    instead -- the same non-blocking idiom ``test_database_examples_dialog.py``
+    uses for the dialog's own tests (see ``AppDriver.open_database_examples_
+    dialog_from_dropzone``/``_from_toolbar``)."""
+    from ui_qt.cards.database_examples_dialog import DatabaseExamplesDialog
+
+    monkeypatch.setattr(DatabaseExamplesDialog, "exec", lambda self: None)
+
+
 def _write_doc(tmp_path, valid_spm_dict, validation, name="doc.json"):
     doc = dict(valid_spm_dict)
     doc["Validation"] = validation
@@ -253,3 +265,65 @@ def test_sample_count_chip_updates_live_with_a_typed_value(
     d.set_experiment_cell("Time [s]", 0, "0")
 
     assert d.experiment_sample_count_text() == "Time 1 · Current 0 · Voltage 0"
+
+
+# ---------------------------------------------------------------------------
+# "Add database examples…" entry points (dropzone + toolbar)
+# ---------------------------------------------------------------------------
+
+
+def test_dropzone_database_examples_button_opens_dialog_with_no_you_series(
+    app_driver, tmp_path, valid_spm_dict
+):
+    workfile = _write_doc(tmp_path, valid_spm_dict, {"New run": {}})
+    d = app_driver
+    d.open(workfile).go_to(("Validation", "New run"))
+    assert d.experiment_dropzone_shown() is True
+
+    dialog = d.open_database_examples_dialog_from_dropzone()
+
+    assert list(dialog._added) == []
+
+
+def test_toolbar_database_examples_button_is_visible_exactly_when_the_dropzone_is_not(
+    app_driver, spm_with_validation_path
+):
+    d = app_driver
+    d.open(spm_with_validation_path).go_to(_RUN)
+
+    assert d.experiment_dropzone_shown() is False
+    button = d.experiment_card()._database_examples_button
+    assert button is not None and not button.isHidden()
+
+
+def test_toolbar_database_examples_button_opens_dialog_with_you_from_the_live_grid(
+    app_driver, spm_with_validation_path
+):
+    d = app_driver
+    d.open(spm_with_validation_path).go_to(_RUN)
+
+    dialog = d.open_database_examples_dialog_from_toolbar()
+
+    assert "__you__" in dialog._added
+    added = dialog._added["__you__"]
+    assert added.label == "You — C/20 discharge"
+    assert added.data == {
+        "Time [s]": [0, 100, 200],
+        "Current [A]": [-0.6, -0.6, -0.6],
+        "Voltage [V]": [4.1, 4.0, 3.9],
+        "Temperature [K]": [298.15, 298.15, 298.15],
+    }
+
+
+def test_toolbar_database_examples_reflects_an_uncommitted_edit_live(
+    app_driver, spm_with_validation_path
+):
+    """"You" is built from the grid's *current draft*, not the last commit --
+    an edit that has not been confirmed with Enter yet still shows up."""
+    d = app_driver
+    d.open(spm_with_validation_path).go_to(_RUN)
+    d.set_experiment_cell("Voltage [V]", 0, "9.9")
+
+    dialog = d.open_database_examples_dialog_from_toolbar()
+
+    assert dialog._added["__you__"].data["Voltage [V]"] == [9.9, 4.0, 3.9]

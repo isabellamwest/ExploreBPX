@@ -13,6 +13,12 @@ specification document, with any implementation sequencing added to
 
 LIIONDB import and other BPX database sources, each as a source adapter
 (anti-corruption layer returning raw BPX dictionaries, mirroring `bpx_gateway.py`).
+**The pattern itself is now proven, not just proposed:** `core/example_library.py`
+is a first, real adapter of this shape over a bundled official-BPX-repo source (see
+`01-architecture.md`'s Core Module Responsibilities and Extension Seams), feeding
+the Validation-run "Add database examples" comparison dialog. A second source
+(LiionDB, or the PyBaMM-derived library below) is another entry in its source
+list — see the module for the exact seam.
 
 ### Bundled PyBaMM parameter sets as a reference library
 
@@ -20,7 +26,11 @@ Suggested externally (2026-07): ship a small, read-only library of well-known
 parameter sets (Chen2020, Marquis2019, …), converted from PyBaMM into BPX, so a
 user can pull one up as a **reference for comparison and plotting**. This is the
 concrete first candidate for the "other BPX database sources" bullet above and a
-natural source of Reference documents for the future Workspace.
+natural source of Reference documents for the future Workspace. Unlike the
+bundled-examples adapter above, a converted PyBaMM set has no Validation section
+(PyBaMM parameter sets carry no cycling data) — it would need its own picker UI
+built around Parameterisation comparison, not the run-comparison dialog that
+already exists.
 
 Feasibility has been checked on Chen2020 (converted to BPX, passes the `bpx`
 validator, and round-trips back into PyBaMM). Findings that constrain any future
@@ -53,7 +63,13 @@ The accepted **Workspace** philosophy — one Primary and optionally one Referen
 document, comparison as a capability of the Editor rather than a separate mode —
 lives in [00-project.md](00-project.md) and [01-architecture.md](01-architecture.md).
 Unresolved future design work, not to influence implementation until the
-multi-document phase becomes an active milestone:
+multi-document phase becomes an active milestone. **Not a precedent:** the
+"Add database examples" dialog (`database_examples_dialog.py`) reads like an
+early Workspace, but deliberately is not one — it holds a plain, disposable,
+read-only snapshot with no `DocumentSession`, no undo, no persistence across
+being closed. It does not validate any Workspace design question above; treat
+it as a comparison *dialog*, not a scaled-down Workspace, until a second,
+genuinely *interactive* multi-document consumer exists.
 
 - A `Workspace` state object holding Primary and optional Reference
   `DocumentSession`, introduced only when multi-document work begins — never as a

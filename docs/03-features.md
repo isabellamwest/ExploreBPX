@@ -187,6 +187,7 @@ repaired in place.
 | Import-first empty state for a run with no data yet (CSV dropzone + Browse, "or type values directly", dismisses on the first value) | Implemented |
 | Guided empty state for a Validation section with zero runs ("+ Add experiment", "Import CSV as new experiment…", two undo steps) | Implemented |
 | CSV import (inline button, always-shown mapping dialog; an experiment's own columns fill in one undo step; x/y table → positional mapping, both required) | Implemented |
+| "Add database examples…" comparison dialog: overlay a run (dropzone's own draft, or the card's live draft once populated) against bundled reference runs (`core/example_library.py`) by chart or table; read-only, no persistence | Implemented |
 | Remove parameter (row context menu, Delete key) | Implemented |
 | Tree editing (add/remove sections; add/rename/remove materials and experiments; confirm before removing populated content) | Implemented |
 | Enhanced function-expression editor (syntax highlighting, validation) | Planned |

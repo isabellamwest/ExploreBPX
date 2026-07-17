@@ -66,8 +66,12 @@ The items below are the capabilities still marked Planned.
 
 ## Deferred to future
 
-Recent documents, external database import, simulator hand-off, the
-multi-document **Workspace** (Primary plus optional Reference) and comparison as
-an Editor capability, the contextual toolbar, contextual launch, session change
-review, plausibility validation and richer authoring metadata are not scheduled
-here. See [05-future.md](05-future.md).
+Recent documents, simulator hand-off, the multi-document **Workspace** (Primary
+plus optional Reference) and comparison as an Editor capability, the contextual
+toolbar, contextual launch, session change review, plausibility validation and
+richer authoring metadata are not scheduled here. See [05-future.md](05-future.md).
+
+External database import is partly done: bundled BPX-repo examples ship as a
+comparison dialog off the Validation-run editor (`core/example_library.py`,
+see [03-features.md](03-features.md)). Other sources (LiionDB, PyBaMM-derived
+literature sets) remain unscheduled, see [05-future.md](05-future.md).

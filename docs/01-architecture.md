@@ -173,6 +173,7 @@ parameters, and none is needed under this model.
 | `parameter_descriptions.py` | Loads the technical-descriptions dataset (`app/data/parameter_descriptions.yaml`, transcribed from the Faraday Institution's BPX Parameter technical descriptions document) as replaceable data, not code. |
 | `validation.py` | `ValidationIssue` model and normalisers for Pydantic errors and warnings. |
 | `export.py` | Serialises the raw dict to JSON/YAML and can later generalise to target writers. |
+| `example_library.py` | Anti-corruption adapter over bundled reference BPX documents (`app/data/example_documents/`), mirroring `bpx_gateway.py`: lists and loads their `Validation` runs only, via the existing `load_raw` path, for the "Add database examples" comparison dialog. Never surfaces or claims validity for the rest of those documents. |
 
 ## BPX Integration Strategy
 
@@ -264,7 +265,7 @@ attach, without building the capabilities themselves ahead of need.
 | Function/table visualisation | Analysis tab in the Inspector secondary workspace consuming the selected `ParameterItem`; a launcher of `Show` actions that open floating visualisations, with BPX functions exposed through `bpx_gateway.py` and converted to callables via `bpx.function.Function.to_python_function()` upstream. |
 | Issue presentation | Qt-owned Issues tab in the Inspector secondary workspace consuming derived `ValidationIssue` state; no core or state dependency on the tab widgets. |
 | Authoring, skeletons and templates | `document_factory.py` creates incomplete structures without scientific defaults; `completion.py` is the stateless completion query built on top. Any future template state (inheritance, review status) stays separate from exported BPX data. |
-| External database import | A new anti-corruption adapter, mirroring `bpx_gateway.py`, returning raw BPX dicts from third-party sources. |
+| External database import | **Bundled examples implemented.** `core/example_library.py` (see Core Module Responsibilities) is a first anti-corruption adapter, mirroring `bpx_gateway.py`, over a static bundled source. A second source (LiionDB, PyBaMM-derived literature sets) is another entry in its source list — not built, see `05-future.md`. |
 | Simulator hand-off | `export.py` generalising from serialisation to target-specific writers. |
 | Multi-document Workspace and comparison | A `Workspace` holding the Primary and an optional Reference `DocumentSession`; components render the workspace (one or two documents) rather than switching into a compare mode. Shared-tree rendering, ownership indicators and dual inspectors are future design, not built ahead of need. |
 | Rich parameter documentation | **Implemented.** `core/parameter_metadata.py` combines `bpx_gateway.py`'s `FieldMeta` with the versioned dataset in `core/parameter_descriptions.py` (`app/data/parameter_descriptions.yaml`); surfaced in the UI by `ui_qt/documentation_tab.py`. |

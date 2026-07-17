@@ -1278,9 +1278,48 @@ class AppDriver:
     def click_experiment_dropzone_browse(self) -> "AppDriver":
         dropzone = self.experiment_card()._dropzone
         assert dropzone is not None, "No dropzone is currently shown."
-        button = dropzone.findChild(QPushButton)
+        button = dropzone.findChild(QPushButton, "ExperimentDropzoneUpload")
         self._qtbot.mouseClick(button, Qt.LeftButton)
         return self
+
+    def click_experiment_dropzone_database_examples(self) -> "AppDriver":
+        dropzone = self.experiment_card()._dropzone
+        assert dropzone is not None, "No dropzone is currently shown."
+        button = dropzone.findChild(QPushButton, "ExperimentDropzoneDatabaseExamples")
+        self._qtbot.mouseClick(button, Qt.LeftButton)
+        return self
+
+    def open_database_examples_dialog_from_dropzone(self):
+        """Click the dropzone's "Add database examples…" button and return
+        the live dialog it created -- the caller's own ``.exec()`` must
+        already be neutralised (see ``test_database_examples_dialog.py``'s
+        ``_no_exec`` fixture), or this blocks forever on a real modal loop."""
+        from ui_qt.cards.database_examples_dialog import DatabaseExamplesDialog
+
+        dropzone = self.experiment_card()._dropzone
+        self.click_experiment_dropzone_database_examples()
+        dialog = dropzone.findChild(DatabaseExamplesDialog)
+        assert dialog is not None, "Database examples dialog was not created."
+        return dialog
+
+    def click_experiment_database_examples(self) -> "AppDriver":
+        button = self.experiment_card()._database_examples_button
+        assert button is not None, "No database-examples button is currently shown."
+        self._qtbot.mouseClick(button, Qt.LeftButton)
+        return self
+
+    def open_database_examples_dialog_from_toolbar(self):
+        """Click the card header's "Add database examples…" button and
+        return the live dialog it created -- see
+        :meth:`open_database_examples_dialog_from_dropzone` for the
+        ``.exec()`` caveat."""
+        from ui_qt.cards.database_examples_dialog import DatabaseExamplesDialog
+
+        card = self.experiment_card()
+        self.click_experiment_database_examples()
+        dialog = card.findChild(DatabaseExamplesDialog)
+        assert dialog is not None, "Database examples dialog was not created."
+        return dialog
 
     # ------------------------------------------------------------------
     # ValidationEmptyState (zero-run Validation container, Phase 4)

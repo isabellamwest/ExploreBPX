@@ -54,6 +54,7 @@ from ..style import MUTED
 from .cell_issues import experiment_cells
 from .csv_dialog import CsvImportDialog
 from .csv_import import read_csv_file
+from .database_examples_dialog import DatabaseExamplesDialog
 from .grid import MultiColumnGrid
 from .values import values_equal
 
@@ -114,9 +115,10 @@ class _CsvDropzone(QFrame):
     *a path*, never reading or mapping the file itself -- that stays in
     ``ExperimentCard``'s existing CSV pipeline (``read_csv_file`` ->
     ``auto_map`` -> ``CsvImportDialog`` -> one ``SetValues``), so mapping
-    logic lives in exactly one place. The button row is a centred HBox so a
-    future sibling action (e.g. database examples for comparison) slots in
-    beside it without relayout.
+    logic lives in exactly one place. A second button, "Add database
+    examples…", sits beside it in the same centred HBox and opens
+    :class:`~.database_examples_dialog.DatabaseExamplesDialog` with no "You"
+    series (there is nothing of the user's to compare against yet).
     """
 
     #: A file the user picked (Browse) or dropped.
@@ -135,6 +137,10 @@ class _CsvDropzone(QFrame):
         upload.setObjectName("ExperimentDropzoneUpload")
         upload.clicked.connect(self._browse)
         buttons.addWidget(upload)
+        database_examples = QPushButton("Add database examples…")
+        database_examples.setObjectName("ExperimentDropzoneDatabaseExamples")
+        database_examples.clicked.connect(self._open_database_examples)
+        buttons.addWidget(database_examples)
         buttons.addStretch(1)
         layout.addLayout(buttons)
 
@@ -147,6 +153,10 @@ class _CsvDropzone(QFrame):
         )
         if path:
             self.csv_path_chosen.emit(path)
+
+    def _open_database_examples(self) -> None:
+        dialog = DatabaseExamplesDialog(parent=self)
+        dialog.exec()
 
     # --- drag-and-drop --------------------------------------------------
 
@@ -188,6 +198,9 @@ class ExperimentCard(QWidget):
         super().__init__()
         self.run_path = tuple(run.path)
         self._read_only = read_only
+        #: The run's own display name, kept for :meth:`_open_database_examples`
+        #: ("You — {label}") -- the same value :attr:`_title` is built from.
+        self._run_label = run.label
 
         by_alias = {
             parameter.label: parameter
@@ -237,6 +250,16 @@ class ExperimentCard(QWidget):
             self._import_button.setAutoRaise(True)
             self._import_button.clicked.connect(self._import_csv)
             header.addWidget(self._import_button)
+        self._database_examples_button = None
+        if not read_only:
+            self._database_examples_button = QToolButton()
+            self._database_examples_button.setText("Add database examples…")
+            self._database_examples_button.setToolTip(
+                "Compare this run against bundled reference examples"
+            )
+            self._database_examples_button.setAutoRaise(True)
+            self._database_examples_button.clicked.connect(self._open_database_examples)
+            header.addWidget(self._database_examples_button)
         layout.addLayout(header)
 
         # Import-first entry for a run with nothing typed yet (Phase 3): an
@@ -360,9 +383,11 @@ class ExperimentCard(QWidget):
                 for index in range(self._grid.column_count)
             )
             self._dropzone.setVisible(empty)
-            # "Upload data…" already covers an empty run; the toolbar import
-            # only earns its place once there is data to replace.
+            # "Upload data…"/"Add database examples…" already cover an empty
+            # run; the toolbar versions only earn their place once there is
+            # data to replace/compare.
             self._import_button.setVisible(not empty)
+            self._database_examples_button.setVisible(not empty)
         self._sample_count_chip.setText(self._sample_count_text())
 
     def _sample_count_text(self) -> str:
@@ -445,6 +470,26 @@ class ExperimentCard(QWidget):
         not only a ``SetValues``.
         """
         self.bulk_commit_requested.emit(AddParameter(self.run_path, _OPTIONAL_ALIAS, []))
+
+    # ------------------------------------------------------------------
+    # Database examples comparison
+    # ------------------------------------------------------------------
+
+    def _own_run_snapshot(self) -> dict[str, list]:
+        """The card's current live draft, in :class:`DatabaseExamplesDialog`'s
+        "own_run" shape: one entry per column this card actually holds --
+        e.g. no ``"Temperature [K]"`` key at all while that column hasn't
+        been added yet, exactly as the dialog expects "You" to lack it."""
+        return {
+            parameter.label: self._grid.column_values(index)
+            for index, parameter in enumerate(self._columns)
+        }
+
+    def _open_database_examples(self) -> None:
+        dialog = DatabaseExamplesDialog(
+            self._own_run_snapshot(), f"You — {self._run_label}", parent=self
+        )
+        dialog.exec()
 
     # ------------------------------------------------------------------
     # CSV import -- carries over SeriesCard's pipeline (series.py), targeting
