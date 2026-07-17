@@ -821,6 +821,11 @@ class MultiColumnGrid(QWidget):
     #: restores one column -- see ``NumericGrid.changed``.
     changed = Signal()
 
+    #: Emitted when the user toggles the expand (⤢) affordance -- the exact
+    #: contract ``NumericGrid.expand_toggled`` documents (``True`` takes over
+    #: the pane, the grid grows itself, a host may additionally react).
+    expand_toggled = Signal(bool)
+
     def __init__(
         self,
         headers: tuple[str, ...],
@@ -830,6 +835,7 @@ class MultiColumnGrid(QWidget):
         super().__init__(parent)
         self._model = _MultiColumnGridModel(headers, read_only, self)
         self._read_only = read_only
+        self._expanded = False
 
         self._view = QTableView()
         self._view.setModel(self._model)
@@ -857,6 +863,7 @@ class MultiColumnGrid(QWidget):
         # :meth:`add_toolbar_widget`, exactly like ``NumericGrid``.
         self._add_button = None
         self._remove_button = None
+        self._expand_button = None
         self._buttons = None
         if not read_only:
             self._add_button = self._row_button("+", "Add cell", self.insert_cell)
@@ -866,6 +873,14 @@ class MultiColumnGrid(QWidget):
             self._buttons.addWidget(self._add_button)
             self._buttons.addWidget(self._remove_button)
             self._buttons.addStretch(1)
+            # Expand/Collapse, same named-action convention and placement
+            # (after the stretch) as ``NumericGrid``'s -- see its own
+            # constructor -- so an ``ExperimentCard``'s long grid can take
+            # over the pane exactly like a series card's could.
+            self._expand_button = self._row_button(
+                "Expand", "Grow the editor to fill the panel", self._toggle_expanded
+            )
+            self._buttons.addWidget(self._expand_button)
             layout.addLayout(self._buttons)
             self._install_context_menu()
 
@@ -915,6 +930,35 @@ class MultiColumnGrid(QWidget):
         remove.triggered.connect(self.remove_cell)
         self._view.addActions([self._paste_action, add, remove])
         self._view.setContextMenuPolicy(Qt.ActionsContextMenu)
+
+    def _toggle_expanded(self) -> None:
+        self.set_expanded(not self._expanded)
+        self.expand_toggled.emit(self._expanded)
+
+    def set_expanded(self, expanded: bool) -> None:
+        """Grow the grid to fill the pane (expanded) or return to compact
+        height -- identical mechanics to ``NumericGrid.set_expanded``."""
+        self._expanded = expanded
+        if expanded:
+            self._view.setMinimumHeight(self._compact_height())
+            self._view.setMaximumHeight(16_777_215)  # Qt's QWIDGETSIZE_MAX
+            self._view.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+            self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        else:
+            self._view.setFixedHeight(self._compact_height())
+            self._view.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+            self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+        if self._expand_button is not None:
+            self._expand_button.setText("Collapse" if expanded else "Expand")
+            self._expand_button.setToolTip(
+                "Return the editor to its compact size"
+                if expanded
+                else "Grow the editor to fill the panel"
+            )
+
+    @property
+    def is_expanded(self) -> bool:
+        return self._expanded
 
     def paste(self) -> None:
         """Parse the clipboard into the focused column and preview it.

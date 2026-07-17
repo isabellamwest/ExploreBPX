@@ -53,6 +53,7 @@ from .documentation_tab import DocumentationTab
 from .issues_tab import IssuesTab, issue_count
 from .secondary_workspace import SecondaryWorkspace
 from .style import ERROR, OK, WARNING
+from .validation_empty_state import ValidationEmptyState
 
 _DEFAULT_PANEL_HEIGHT = 200
 
@@ -167,7 +168,11 @@ class InspectorPanel(QWidget):
         """Show *parameter*'s work surface, or the placeholder for none.
 
         This is the Inspector's part of a navigation reveal; object-level
-        targets carry no parameter and fall back to the placeholder.
+        targets carry no parameter and fall back to the placeholder -- except
+        the bare ``("Validation",)`` container with zero runs, which gets its
+        own guided empty state instead (Phase 4; see
+        ``_show_validation_empty_state``). With at least one run, or for
+        every other object-level target, the placeholder is unchanged.
 
         A target whose owning object is a Validation run routes to the
         unified ``ExperimentCard`` instead -- whether navigation resolved to
@@ -181,8 +186,20 @@ class InspectorPanel(QWidget):
             self._show_experiment(run_path, parameter)
         elif parameter is not None:
             self.show_parameter(parameter)
+        elif self._is_empty_validation_container():
+            self._show_validation_empty_state()
         else:
             self.show_placeholder()
+
+    def _is_empty_validation_container(self) -> bool:
+        """Whether this reveal targets the bare ``("Validation",)`` node and
+        it currently has zero runs -- the one case the guided empty state
+        replaces the placeholder for (see ``reveal``)."""
+        session = self._state.active
+        if session is None or session.selected_path != ("Validation",):
+            return False
+        node = session.document.find(("Validation",)) if session.document else None
+        return node is not None and not node.children
 
     def _experiment_run_path(self, parameter: ParameterItem | None) -> tuple[str, ...] | None:
         """The Validation-run path this reveal targets, or ``None``.
@@ -224,6 +241,7 @@ class InspectorPanel(QWidget):
         focused_alias = parameter.label if parameter is not None else None
         self._card = ExperimentCard(node, focused_alias)
         self._card.bulk_commit_requested.connect(self._on_bulk_commit)
+        self._card.expand_toggled.connect(self._on_card_expanded)
         self._content_layout.addWidget(self._card)
         self._content_layout.setAlignment(self._card, Qt.AlignTop)
 
@@ -236,6 +254,24 @@ class InspectorPanel(QWidget):
         meta = bpx_gateway.field_meta(parameter.path) if parameter is not None else None
         metadata = resolve_parameter_metadata(parameter.path, meta) if parameter is not None else None
         self._docs_tab.show_metadata(metadata)
+
+    def _show_validation_empty_state(self) -> None:
+        """Build and show the guided empty state for a zero-run Validation
+        section (see ``reveal``/``_is_empty_validation_container``).
+
+        Mirrors ``show_placeholder``'s secondary-workspace state (nothing to
+        show issues/documentation for), not a real card's -- this is a
+        substitute for the placeholder, not a parameter work surface.
+        """
+        self._clear_content()
+        self._card = ValidationEmptyState()
+        self._card.bulk_commit_requested.connect(self._on_bulk_commit)
+        self._content_layout.addWidget(self._card)
+        self._content_layout.setAlignment(self._card, Qt.AlignTop)
+        self._issues_tab.show_parameter(None)
+        self._docs_tab.show_metadata(None)
+        self._secondary.set_count("issues", 0)
+        self._secondary.suspend()
 
     def show_parameter(self, parameter: ParameterItem) -> None:
         self._secondary.resume()

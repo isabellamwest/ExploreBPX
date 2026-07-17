@@ -497,6 +497,50 @@ def test_read_only_grid_has_no_context_menu_actions():
     assert grid._view.actions() == []
 
 
+# ----------------------------------------------------------------------
+# Expand affordance (Phase 3 gap vs NumericGrid.expand_toggled)
+# ----------------------------------------------------------------------
+
+
+def test_expand_button_placement_mirrors_numeric_grid():
+    """Same named-action convention and placement (after the +/- row's
+    stretch) as ``NumericGrid.expand_toggled`` -- see ``test_grid_bulk.py``'s
+    own ``test_bulk_grid_has_expand_and_paste_affordances``."""
+    grid = MultiColumnGrid(("x", "y"))
+    assert grid._expand_button is not None
+    assert grid._expand_button.text() == "Expand"
+
+
+def test_read_only_grid_has_no_expand_button():
+    grid = MultiColumnGrid(("x", "y"), read_only=True)
+    assert grid._expand_button is None
+
+
+def test_expand_toggle_emits_and_relabels():
+    grid = MultiColumnGrid(("x", "y"))
+    seen = []
+    grid.expand_toggled.connect(seen.append)
+
+    grid._toggle_expanded()
+    assert seen == [True]
+    assert grid.is_expanded is True
+    assert grid._expand_button.text() == "Collapse"
+
+    grid._toggle_expanded()
+    assert seen == [True, False]
+    assert grid.is_expanded is False
+    assert grid._expand_button.text() == "Expand"
+
+
+def test_set_expanded_is_reversible():
+    grid = MultiColumnGrid(("x",))
+    compact = grid._view.maximumHeight()
+    grid.set_expanded(True)
+    assert grid._view.maximumHeight() > compact
+    grid.set_expanded(False)
+    assert grid._view.maximumHeight() == compact
+
+
 def test_paste_is_a_noop_when_read_only(monkeypatch):
     import ui_qt.cards.grid as grid_module
 

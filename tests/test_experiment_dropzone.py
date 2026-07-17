@@ -1,0 +1,255 @@
+"""ExperimentCard's Phase 3 additions: the import-first dropzone for an empty
+run, the multi-column grid expand affordance, and the per-column sample-count
+footer chip.
+
+The dropzone empty state is a derived display fact, no new document state,
+computed from the grid own column lengths, live (via changed) so a typed cell
+dismisses it before any commit, and re-derived fresh whenever the card is
+rebuilt (every commit rebuilds it; see InspectorPanel._show_experiment), so
+undo naturally brings it back.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+
+import pytest
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+pytest.importorskip("PySide6")
+
+from PySide6.QtWidgets import QApplication
+
+import ui_qt.cards.experiment as experiment_module
+
+_RUN = ("Validation", "C/20 discharge")
+
+
+@pytest.fixture(autouse=True)
+def _qapp():
+    yield QApplication.instance() or QApplication([])
+
+
+def _write_doc(tmp_path, valid_spm_dict, validation, name="doc.json"):
+    doc = dict(valid_spm_dict)
+    doc["Validation"] = validation
+    path = tmp_path / name
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    return path
+
+
+class _StubCsvDialog:
+    last = None
+
+    def __init__(self, data, targets, parent=None, **kwargs):
+        self.data = data
+        self.targets = targets
+        self.kwargs = kwargs
+        self.accepted_mapping = None
+        _StubCsvDialog.last = self
+
+    def exec(self):
+        pass
+
+
+def _stub_dialog(monkeypatch, mapping):
+    class _Configured(_StubCsvDialog):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.accepted_mapping = mapping
+
+    monkeypatch.setattr(experiment_module, "CsvImportDialog", _Configured)
+
+
+def _stub_file_dialog(monkeypatch, path):
+    monkeypatch.setattr(
+        experiment_module.QFileDialog, "getOpenFileName", lambda *a, **k: (str(path), "")
+    )
+
+
+def test_freshly_created_empty_run_shows_the_dropzone(app_driver, tmp_path, valid_spm_dict):
+    workfile = _write_doc(tmp_path, valid_spm_dict, {"New run": {}})
+    d = app_driver
+    d.open(workfile).go_to(("Validation", "New run"))
+
+    assert d.experiment_dropzone_shown() is True
+    assert d.experiment_columns() == ("Time [s]", "Current [A]", "Voltage [V]")
+
+
+def test_run_with_every_array_present_but_empty_shows_the_dropzone(
+    app_driver, tmp_path, valid_spm_dict
+):
+    workfile = _write_doc(
+        tmp_path,
+        valid_spm_dict,
+        {
+            "New run": {
+                "Time [s]": [],
+                "Current [A]": [],
+                "Voltage [V]": [],
+                "Temperature [K]": [],
+            }
+        },
+    )
+    d = app_driver
+    d.open(workfile).go_to(("Validation", "New run"))
+
+    assert d.experiment_dropzone_shown() is True
+
+
+def test_populated_run_never_shows_the_dropzone(app_driver, spm_with_validation_path):
+    d = app_driver
+    d.open(spm_with_validation_path).go_to(_RUN)
+
+    assert d.experiment_dropzone_shown() is False
+
+
+def test_one_filled_column_is_enough_to_hide_the_dropzone(
+    app_driver, tmp_path, valid_spm_dict
+):
+    workfile = _write_doc(tmp_path, valid_spm_dict, {"Partial": {"Time [s]": [0, 1, 2]}})
+    d = app_driver
+    d.open(workfile).go_to(("Validation", "Partial"))
+
+    assert d.experiment_dropzone_shown() is False
+
+
+def test_typing_the_first_value_dismisses_the_dropzone_live(
+    app_driver, tmp_path, valid_spm_dict
+):
+    """A genuinely empty grid has zero displayed rows (see
+    ``test_numeric_grid_multicolumn.test_row_count_is_zero_for_two_empty_columns``),
+    so typing the very first value is, like any empty grid in this app, a
+    "+" (create the row) then type the cell -- exactly what a real
+    click on the grid's own "+" button does."""
+    workfile = _write_doc(tmp_path, valid_spm_dict, {"New run": {}})
+    d = app_driver
+    d.open(workfile).go_to(("Validation", "New run"))
+    assert d.experiment_dropzone_shown() is True
+
+    d.experiment_card()._grid.insert_cell()
+    d.set_experiment_cell("Time [s]", 0, "0")
+
+    assert d.experiment_dropzone_shown() is False
+    assert d.undo_enabled() is False
+
+
+def test_reverting_the_only_typed_value_brings_the_dropzone_back(
+    app_driver, tmp_path, valid_spm_dict
+):
+    workfile = _write_doc(tmp_path, valid_spm_dict, {"New run": {}})
+    d = app_driver
+    d.open(workfile).go_to(("Validation", "New run"))
+
+    d.experiment_card()._grid.insert_cell()
+    d.set_experiment_cell("Time [s]", 0, "0")
+    assert d.experiment_dropzone_shown() is False
+
+    d.revert_experiment()
+
+    assert d.experiment_dropzone_shown() is True
+
+
+def test_browse_import_fills_mapped_columns_in_one_undo_step_and_dismisses(
+    app_driver, main_window, tmp_path, valid_spm_dict, monkeypatch
+):
+    workfile = _write_doc(tmp_path, valid_spm_dict, {"New run": {}})
+    csv_path = tmp_path / "trace.csv"
+    csv_path.write_text("time,current,voltage\n0,-0.5,4.1\n50,-0.5,4.0\n", encoding="utf-8")
+    _stub_file_dialog(monkeypatch, csv_path)
+    _stub_dialog(monkeypatch, mapping=(0, 1, 2))
+
+    d = app_driver
+    d.open(workfile).go_to(("Validation", "New run"))
+    assert d.experiment_dropzone_shown() is True
+
+    d.click_experiment_dropzone_browse()
+
+    run = main_window._state.active.document.raw["Validation"]["New run"]
+    assert run["Time [s]"] == [0, 50]
+    assert run["Current [A]"] == [-0.5, -0.5]
+    assert run["Voltage [V]"] == [4.1, 4.0]
+    assert d.undo_enabled() is True
+    assert d.experiment_dropzone_shown() is False
+
+    d.undo()
+
+    assert main_window._state.active.document.raw["Validation"]["New run"] == {}
+    assert d.experiment_dropzone_shown() is True
+
+
+def test_dropped_file_fills_mapped_columns_the_same_way_as_browse(
+    app_driver, main_window, tmp_path, valid_spm_dict, monkeypatch
+):
+    workfile = _write_doc(tmp_path, valid_spm_dict, {"New run": {}})
+    csv_path = tmp_path / "trace.csv"
+    csv_path.write_text("time,current,voltage\n0,-0.5,4.1\n50,-0.5,4.0\n", encoding="utf-8")
+    _stub_dialog(monkeypatch, mapping=(0, 1, 2))
+
+    d = app_driver
+    d.open(workfile).go_to(("Validation", "New run"))
+
+    d.drop_file_on_experiment_dropzone(csv_path)
+
+    run = main_window._state.active.document.raw["Validation"]["New run"]
+    assert run["Time [s]"] == [0, 50]
+    assert d.experiment_dropzone_shown() is False
+
+
+def test_experiment_card_forwards_the_grids_expand_toggle(
+    app_driver, spm_with_validation_path
+):
+    d = app_driver
+    d.open(spm_with_validation_path).go_to(_RUN)
+    card = d.experiment_card()
+    seen = []
+    card.expand_toggled.connect(seen.append)
+
+    card._grid._toggle_expanded()
+
+    assert seen == [True]
+    assert card._grid.is_expanded is True
+
+
+def test_sample_count_chip_reports_each_columns_length(
+    app_driver, spm_with_validation_path
+):
+    d = app_driver
+    d.open(spm_with_validation_path).go_to(_RUN)
+
+    assert d.experiment_sample_count_text() == "Time 3 · Current 3 · Voltage 3 · Temperature 3"
+
+
+def test_sample_count_chip_reflects_a_length_mismatch_factually(
+    app_driver, tmp_path, valid_spm_dict
+):
+    workfile = _write_doc(
+        tmp_path,
+        valid_spm_dict,
+        {
+            "Ragged": {
+                "Time [s]": [0, 1, 2, 3],
+                "Current [A]": [-0.6, -0.6, -0.6, -0.6],
+                "Voltage [V]": [4.1, 4.0],
+            }
+        },
+    )
+    d = app_driver
+    d.open(workfile).go_to(("Validation", "Ragged"))
+
+    assert d.experiment_sample_count_text() == "Time 4 · Current 4 · Voltage 2"
+
+
+def test_sample_count_chip_updates_live_with_a_typed_value(
+    app_driver, tmp_path, valid_spm_dict
+):
+    workfile = _write_doc(tmp_path, valid_spm_dict, {"New run": {}})
+    d = app_driver
+    d.open(workfile).go_to(("Validation", "New run"))
+    assert d.experiment_sample_count_text() == "Time 0 · Current 0 · Voltage 0"
+
+    d.experiment_card()._grid.insert_cell()
+    d.set_experiment_cell("Time [s]", 0, "0")
+
+    assert d.experiment_sample_count_text() == "Time 1 · Current 0 · Voltage 0"

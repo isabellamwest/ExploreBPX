@@ -31,11 +31,16 @@ one undo step.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, Qt, Signal
+from pathlib import Path
+
+from PySide6.QtCore import QEvent, QMimeData, Qt, Signal
+from PySide6.QtGui import QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import (
     QFileDialog,
+    QFrame,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -45,6 +50,7 @@ from core.commands import AddParameter, SetValues
 from core.parameter_types import ParameterKind
 from core.tree_model import ParameterItem, TreeNode
 
+from ..style import MUTED
 from .cell_issues import experiment_cells
 from .csv_dialog import CsvImportDialog
 from .csv_import import read_csv_file
@@ -75,6 +81,90 @@ def is_validation_run_path(path: tuple[str, ...]) -> bool:
     return len(path) == 2 and path[0] == "Validation"
 
 
+def _short_alias(alias: str) -> str:
+    """"Time [s]" -> "Time" -- the unit-stripped name the sample-count
+    footer chip uses (see :meth:`ExperimentCard._sample_count_text`)."""
+    return alias.split(" [")[0]
+
+
+#: Extensions the CSV pipeline actually reads (matches the ``QFileDialog``
+#: filter this card and ``_CsvDropzone`` both use), so a drag-and-drop only
+#: ever accepts a file the pipeline can do something with.
+_CSV_EXTENSIONS = (".csv", ".tsv", ".txt")
+
+
+def _first_csv_file(mime_data: QMimeData) -> Path | None:
+    """The first local file in *mime_data* with a CSV-shaped extension, or
+    ``None`` -- same idiom as ``WorkspacePanel``'s own drop filter for BPX
+    files, applied to the extensions this card's own CSV import accepts."""
+    for url in mime_data.urls():
+        if not url.isLocalFile():
+            continue
+        path = Path(url.toLocalFile())
+        if path.suffix.lower() in _CSV_EXTENSIONS:
+            return path
+    return None
+
+
+class _CsvDropzone(QFrame):
+    """Import-first affordance shown above an empty run's grid (Phase 3).
+
+    One "Upload data…" button on a frame that also accepts a dropped file;
+    both funnel into the same file path: this widget's whole job is obtaining
+    *a path*, never reading or mapping the file itself -- that stays in
+    ``ExperimentCard``'s existing CSV pipeline (``read_csv_file`` ->
+    ``auto_map`` -> ``CsvImportDialog`` -> one ``SetValues``), so mapping
+    logic lives in exactly one place. The button row is a centred HBox so a
+    future sibling action (e.g. database examples for comparison) slots in
+    beside it without relayout.
+    """
+
+    #: A file the user picked (Browse) or dropped.
+    csv_path_chosen = Signal(str)
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("ExperimentDropzone")
+        self.setAcceptDrops(True)
+
+        layout = QVBoxLayout(self)
+
+        buttons = QHBoxLayout()
+        buttons.addStretch(1)
+        upload = QPushButton("Upload data…")
+        upload.setObjectName("ExperimentDropzoneUpload")
+        upload.clicked.connect(self._browse)
+        buttons.addWidget(upload)
+        buttons.addStretch(1)
+        layout.addLayout(buttons)
+
+    def _browse(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Import CSV",
+            "",
+            "CSV files (*.csv *.tsv *.txt);;All files (*)",
+        )
+        if path:
+            self.csv_path_chosen.emit(path)
+
+    # --- drag-and-drop --------------------------------------------------
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802
+        if _first_csv_file(event.mimeData()) is not None:
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event: QDropEvent) -> None:  # noqa: N802
+        path = _first_csv_file(event.mimeData())
+        if path is None:
+            event.ignore()
+            return
+        event.acceptProposedAction()
+        self.csv_path_chosen.emit(str(path))
+
+
 class ExperimentCard(QWidget):
     """Edits every array of one Validation run in one multi-column grid."""
 
@@ -84,6 +174,10 @@ class ExperimentCard(QWidget):
     #: ``_on_bulk_commit`` to execute as one undo step -- see the module
     #: docstring.
     bulk_commit_requested = Signal(object)
+    #: Forwarded verbatim from the grid's own ``expand_toggled`` (see
+    #: ``MultiColumnGrid``), the same contract every other card's grid-
+    #: takeover uses (``InspectorPanel._on_card_expanded``).
+    expand_toggled = Signal(bool)
 
     def __init__(
         self,
@@ -100,9 +194,20 @@ class ExperimentCard(QWidget):
             for parameter in run.parameters
             if parameter.kind is ParameterKind.SERIES
         }
-        #: The run's known columns, present-only, in schema order.
+        #: The run's columns, in schema order. The three schema-required
+        #: aliases (everything but ``_OPTIONAL_ALIAS``) always get a column,
+        #: even when genuinely absent from the raw dict (a brand-new run
+        #: added via "+ Add experiment", ``{}``, has none of its four keys
+        #: yet) -- :meth:`_placeholder_column` stands in so the grid always
+        #: has something to type or import into. Temperature alone stays
+        #: behind its own "+" button while absent (see below), unchanged
+        #: from Phase 1.
         self._columns: list[ParameterItem] = [
-            by_alias[alias] for alias in KNOWN_ALIASES if alias in by_alias
+            by_alias[alias]
+            if alias in by_alias
+            else self._placeholder_column(run, alias)
+            for alias in KNOWN_ALIASES
+            if alias in by_alias or alias != _OPTIONAL_ALIAS
         ]
         #: Snapshot of each column's committed value, normalised to the grid's
         #: own display shape -- also the reference :meth:`_dirty_updates`
@@ -134,11 +239,24 @@ class ExperimentCard(QWidget):
             header.addWidget(self._import_button)
         layout.addLayout(header)
 
+        # Import-first entry for a run with nothing typed yet (Phase 3): an
+        # upload/drop target above the still-usable empty grid. Disappears
+        # the moment any column holds a value -- see
+        # :meth:`_refresh_derived_state`, kept live via the grid's own
+        # ``changed`` so a typed cell (not only a commit) dismisses it.
+        self._dropzone = None
+        if not read_only:
+            self._dropzone = _CsvDropzone()
+            self._dropzone.csv_path_chosen.connect(self._import_csv_from_path)
+            layout.addWidget(self._dropzone)
+
         headers = tuple(parameter.label for parameter in self._columns)
         self._grid = MultiColumnGrid(headers, read_only=read_only)
         for index, values in enumerate(self._originals):
             self._grid.set_column_values(index, values)
         self._grid.set_cell_issues(experiment_cells(self._all_issues(), headers))
+        self._grid.changed.connect(self._on_grid_changed)
+        self._grid.expand_toggled.connect(self.expand_toggled)
         layout.addWidget(self._grid, 1)
 
         # "+ Temperature [K]" only while it is genuinely absent: present-but-
@@ -171,12 +289,22 @@ class ExperimentCard(QWidget):
             self._chip.setWordWrap(True)
             self._grid.add_toolbar_widget(self._chip)
 
+        # Per-column sample counts ("Time 120 · Current 120 · Voltage 118"):
+        # factual counts only, never a validity judgement -- bpx alone judges
+        # whether a mismatch matters (the chip above). Kept live by
+        # :meth:`_refresh_derived_state`, the same as the dropzone.
+        self._sample_count_chip = QLabel()
+        self._sample_count_chip.setObjectName("SampleCountChip")
+        self._sample_count_chip.setStyleSheet(f"color: {MUTED};")
+        self._grid.add_toolbar_widget(self._sample_count_chip)
+
         # Focus the resolved column, if any -- a bare run-node reveal
         # (``focused_alias is None``) leaves the grid's default focus alone
         # (decision D1a). All columns stay editable regardless.
         if focused_alias in headers:
             self._grid.focus_column(headers.index(focused_alias))
 
+        self._refresh_derived_state()
         self._install_keyboard_handler(self._grid.focus_widget())
 
     # ------------------------------------------------------------------
@@ -206,6 +334,45 @@ class ExperimentCard(QWidget):
     def _revert(self) -> None:
         for index, original in enumerate(self._originals):
             self._grid.set_column_values(index, original)
+        # ``set_column_values`` is silent by design (it seeds), so Escape
+        # must refresh the dropzone/sample-count chip itself -- the same
+        # derived state a real edit updates via ``_on_grid_changed``.
+        self._refresh_derived_state()
+
+    # ------------------------------------------------------------------
+    # Derived display state: dropzone visibility + sample-count chip
+    # ------------------------------------------------------------------
+
+    def _on_grid_changed(self) -> None:
+        self._refresh_derived_state()
+
+    def _refresh_derived_state(self) -> None:
+        """Recompute the dropzone's visibility and the sample-count chip
+        from the grid's *current* draft -- not just the last committed
+        baseline -- so a typed first value dismisses the dropzone live,
+        without waiting for a commit. (A commit rebuilds this card from
+        scratch anyway -- see ``InspectorPanel._show_experiment`` -- which
+        re-derives the same state fresh.)
+        """
+        if self._dropzone is not None:
+            empty = all(
+                self._grid.column_length(index) == 0
+                for index in range(self._grid.column_count)
+            )
+            self._dropzone.setVisible(empty)
+            # "Upload data…" already covers an empty run; the toolbar import
+            # only earns its place once there is data to replace.
+            self._import_button.setVisible(not empty)
+        self._sample_count_chip.setText(self._sample_count_text())
+
+    def _sample_count_text(self) -> str:
+        """"Time 120 · Current 120 · Voltage 118" -- one entry per column,
+        its short alias (see ``_short_alias``) and its current length."""
+        parts = (
+            f"{_short_alias(parameter.label)} {self._grid.column_length(index)}"
+            for index, parameter in enumerate(self._columns)
+        )
+        return " · ".join(parts)
 
     # ------------------------------------------------------------------
     # Dirty tracking: per-column, diffed against each column's own baseline
@@ -240,6 +407,18 @@ class ExperimentCard(QWidget):
         generalised to any non-list value so a malformed stored value never
         blocks the column from opening (see the constructor's docstring)."""
         return list(value) if isinstance(value, list) else []
+
+    @staticmethod
+    def _placeholder_column(run: TreeNode, alias: str) -> ParameterItem:
+        """A stand-in for a schema-required array *alias* not yet present in
+        *run* -- see the ``_columns`` construction. ``value=None`` renders
+        as an empty column exactly like :meth:`_baseline` already treats any
+        non-list value; committing it (a typed cell, or CSV import) writes
+        the key for the first time through the ordinary upsert path
+        (``SetValues``/``core.editing.set_values``), so nothing here is
+        itself a document mutation -- it only lets the grid show a column
+        that doesn't exist yet."""
+        return ParameterItem(label=alias, path=run.path + (alias,), kind=ParameterKind.SERIES)
 
     def _all_issues(self) -> list:
         issues: list = []
@@ -282,8 +461,13 @@ class ExperimentCard(QWidget):
             "",
             "CSV files (*.csv *.tsv *.txt);;All files (*)",
         )
-        if not path:
-            return
+        if path:
+            self._import_csv_from_path(path)
+
+    def _import_csv_from_path(self, path: str) -> None:
+        """Read, map and (on confirm) apply *path* -- shared by the header's
+        "Import CSV…" button and the dropzone (Browse or drop), so a file
+        obtained either way runs through exactly one mapping pipeline."""
         data = read_csv_file(path)
         if data.row_count == 0:
             return

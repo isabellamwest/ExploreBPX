@@ -1263,6 +1263,73 @@ class AppDriver:
         self.experiment_card()._apply_csv_import(data, mapping)
         return self
 
+    def experiment_dropzone_shown(self) -> bool:
+        """Whether the import-first dropzone is currently visible (Phase 3).
+
+        ``isHidden()``, not ``isVisible()``: the window is never shown in
+        this suite, so ``isVisible()`` would read ``False`` regardless of
+        the widget's own hidden flag (see ``test_modal_cards.py``)."""
+        dropzone = self.experiment_card()._dropzone
+        return dropzone is not None and not dropzone.isHidden()
+
+    def experiment_sample_count_text(self) -> str:
+        return self.experiment_card()._sample_count_chip.text()
+
+    def click_experiment_dropzone_browse(self) -> "AppDriver":
+        dropzone = self.experiment_card()._dropzone
+        assert dropzone is not None, "No dropzone is currently shown."
+        button = dropzone.findChild(QPushButton)
+        self._qtbot.mouseClick(button, Qt.LeftButton)
+        return self
+
+    # ------------------------------------------------------------------
+    # ValidationEmptyState (zero-run Validation container, Phase 4)
+    # ------------------------------------------------------------------
+
+    def validation_empty_state_shown(self) -> bool:
+        from ui_qt.validation_empty_state import ValidationEmptyState
+
+        return isinstance(self._w._inspector._card, ValidationEmptyState)
+
+    def _validation_empty_state(self):
+        from ui_qt.validation_empty_state import ValidationEmptyState
+
+        card = self._w._inspector._card
+        assert isinstance(card, ValidationEmptyState), (
+            "Inspector is not showing the ValidationEmptyState "
+            f"({type(card).__name__ if card is not None else None})."
+        )
+        return card
+
+    def click_add_experiment(self) -> "AppDriver":
+        widget = self._validation_empty_state()
+        self._qtbot.mouseClick(widget._add_button, Qt.LeftButton)
+        return self
+
+    def click_import_csv_as_new_experiment(self) -> "AppDriver":
+        widget = self._validation_empty_state()
+        self._qtbot.mouseClick(widget._import_button, Qt.LeftButton)
+        return self
+
+    def confirm_validation_empty_state_name(self, name: str) -> "AppDriver":
+        """Type *name* into the open name popup and confirm it -- same
+        directness as ``test_tree_editing.py``'s own ``NamePopup`` driving."""
+        widget = self._validation_empty_state()
+        widget._popup._input.setText(name)
+        widget._popup._input.confirm_requested.emit()
+        return self
+
+    def drop_file_on_experiment_dropzone(self, path: Path | str) -> "AppDriver":
+        """Simulate dropping *path* onto the card's dropzone -- same real-
+        ``QDropEvent`` idiom as :meth:`drop_file_on_workspace`."""
+        dropzone = self.experiment_card()._dropzone
+        assert dropzone is not None, "No dropzone is currently shown."
+        mime = QMimeData()
+        mime.setUrls([QUrl.fromLocalFile(str(path))])
+        event = QDropEvent(QPointF(0, 0), Qt.CopyAction, mime, Qt.LeftButton, Qt.NoModifier)
+        dropzone.dropEvent(event)
+        return self
+
     def open_experiment_cell_editor(self, alias: str, row: int) -> "AppDriver":
         """Open the real per-cell editor widget for one cell of column
         *alias* -- mirrors :meth:`open_grid_cell_editor` for the multi-column
