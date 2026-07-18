@@ -28,7 +28,6 @@ venv/
 ENV/
 env/
 .venv/
-.python-version
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -56,9 +55,6 @@ coverage.xml
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# pyenv
-.python-version
-
 # VS Code
 .vscode/
 
@@ -82,3 +78,4 @@ Thumbs.db
 scratch/
 
 /PROJECT_STATUS.md
+/UVNOTES.md
