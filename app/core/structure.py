@@ -45,17 +45,14 @@ def required_sections(model: str | None) -> tuple[tuple[str, ...], ...]:
     """Top-level/child sections the validator actually requires for a model
     (excludes ``Partial``).
 
-    ``State`` IS required for every concrete model (corrected 2026-07-14,
-    plan V1): ``bpx.BPX``'s root ``mode="after"`` validator raises
-    *"'State' section must be provided unless using a 'Partial'
-    parameterisation"* — a root-level ``value_error`` at ``loc=()``, not a
-    ``missing``. It only runs once ``Parameterisation`` has already validated
-    cleanly (a *separate*, earlier ``mode="before"`` validator raises first
-    on any ``Parameterisation`` problem and short-circuits the whole model),
-    which is why a skeleton probe (which always also has a ``Parameterisation``
-    problem) never saw it. Do not remove ``State`` from this list against a
-    skeleton probe again — the demand is real, it is just invisible when
-    anything else is also wrong.
+    ``State`` is NOT in this list: bpx 1.1.1 made it optional
+    (``schema.py``'s ``State`` field is ``Field(None, alias="State")``) and
+    deleted the root validator that used to demand it for every concrete
+    model. This list exists only to track the real validator's actual
+    requirements, whatever they currently are — it must be re-verified
+    against ``bpx`` (not against memory of a past version) whenever the
+    package changes; :mod:`tests.test_completion`/:mod:`tests.test_schema_contract`
+    pin it against the live validator.
     """
     if model == "Partial" or model is None:
         return (("Header",), ("Parameterisation",))
@@ -70,7 +67,6 @@ def required_sections(model: str | None) -> tuple[tuple[str, ...], ...]:
         sections.append(("Parameterisation", "Electrolyte"))
     if model_requires_separator(model):
         sections.append(("Parameterisation", "Separator"))
-    sections.append(("State",))
     return tuple(sections)
 
 

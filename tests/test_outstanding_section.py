@@ -73,7 +73,7 @@ def test_state1_fresh_skeleton(app_driver, tmp_path):
     d.open(_skeleton_path(tmp_path))
 
     assert d.validation_issue_count() == 0
-    assert d.diagnostics_strip_counts() == (0, 0, 5 + 9 + 9 + 2)
+    assert d.diagnostics_strip_counts() == (0, 0, 5 + 9 + 9)
     assert d.validation_badge_count() == 0
     assert d.validation_badge_severity() is None
 
@@ -81,21 +81,13 @@ def test_state1_fresh_skeleton(app_driver, tmp_path):
     assert "Cell — 5 of 5 remaining" in headers
     assert "Negative electrode — 9 of 9 remaining" in headers
     assert "Positive electrode — 9 of 9 remaining" in headers
-    # The State bucket itself has no own leaf fields on a fresh skeleton --
-    # only its two required children, both absent (core.page_buckets groups
-    # a present section's absent children into its own bucket, so this reads
-    # as one State sub-head naming both, not two standalone headers).
-    assert "State — 2 sections absent" in headers
-    assert d.validation_outstanding_count() == 5 + 9 + 9 + 2
+    # bpx 1.1.1 made `State` schema-optional (Field(None, alias="State")) and
+    # deleted the root validator that used to demand it, so `document_factory`
+    # no longer scaffolds it at all -- there is no State group here.
+    assert not any(header.startswith("State") for header in headers)
+    assert d.validation_outstanding_count() == 5 + 9 + 9
     tasks = d.outstanding_tasks()
-    assert any(
-        t.kind is TaskKind.MISSING_SECTION and t.path == ("State", "Initial conditions")
-        for t in tasks
-    )
-    assert any(
-        t.kind is TaskKind.MISSING_SECTION and t.path == ("State", "Thermal environment")
-        for t in tasks
-    )
+    assert not any(t.path[:1] == ("State",) for t in tasks)
 
 
 # ---------------------------------------------------------------------------
@@ -210,30 +202,45 @@ def test_null_field_activation_selects_the_parameter(app_driver, tmp_path, valid
 def test_missing_section_activation_adds_and_cascades_end_to_end(app_driver, tmp_path):
     """V7's cascade, end to end: activating an absent section's Outstanding
     row adds it (one undo step) and navigates into it, and the Outstanding
-    list immediately enumerates the new section's own required fields."""
+    list immediately enumerates the new section's own required fields.
+
+    Re-baselined for bpx 1.1.1: this used to exercise a doubly-nested case
+    (``State`` -> ``Thermal environment``), but bpx 1.1.1 made every one of
+    ``State``'s own children schema-optional too (probed directly: none of
+    ``Initial conditions``/``Thermal environment``/``Degradation`` are in
+    ``State``'s own JSON-schema ``"required"`` list any more), so no
+    ``MISSING_SECTION`` task can ever be generated for them -- there is no
+    remaining nested required section anywhere in the schema to demonstrate
+    this with. ``Parameterisation`` -> ``Electrolyte`` (required for SPMe)
+    exercises the same cascade mechanism one level up instead.
+    """
     d = app_driver
-    d.open(_skeleton_path(tmp_path))
-    thermal_path = ("State", "Thermal environment")
+    raw = document_factory.create("SPMe", title="probe")
+    del raw["Parameterisation"]["Electrolyte"]
+    d.open(_write(tmp_path, "spme_no_electrolyte.json", raw))
+    electrolyte_path = ("Parameterisation", "Electrolyte")
     task = next(
         t
         for t in d.outstanding_tasks()
-        if t.kind is TaskKind.MISSING_SECTION and t.path == thermal_path
+        if t.kind is TaskKind.MISSING_SECTION and t.path == electrolyte_path
     )
     assert d.undo_enabled() is False
 
     d.activate_outstanding_task(task)
 
     assert d.undo_enabled() is True  # exactly one undo step
-    assert d.tree_selection_label() == "Thermal environment"
+    assert d.tree_selection_label() == "Electrolyte"
     tasks_after = d.outstanding_tasks()
-    assert not any(t.kind is TaskKind.MISSING_SECTION and t.path == thermal_path for t in tasks_after)
-    assert any(
-        t.kind is TaskKind.MISSING_FIELD and t.path == thermal_path + ("Ambient temperature [K]",)
-        for t in tasks_after
+    assert not any(
+        t.kind is TaskKind.MISSING_SECTION and t.path == electrolyte_path for t in tasks_after
     )
     assert any(
         t.kind is TaskKind.MISSING_FIELD
-        and t.path == thermal_path + ("Heat transfer coefficient [W.m-2.K-1]",)
+        and t.path == electrolyte_path + ("Cation transference number",)
+        for t in tasks_after
+    )
+    assert any(
+        t.kind is TaskKind.MISSING_FIELD and t.path == electrolyte_path + ("Diffusivity [m2.s-1]",)
         for t in tasks_after
     )
 
@@ -242,8 +249,8 @@ def test_missing_section_activation_adds_and_cascades_end_to_end(app_driver, tmp
 
     assert d.undo_enabled() is False
     tasks_undone = d.outstanding_tasks()
-    assert any(t.kind is TaskKind.MISSING_SECTION and t.path == thermal_path for t in tasks_undone)
-    assert not any(t.path[:2] == thermal_path and len(t.path) > 2 for t in tasks_undone)
+    assert any(t.kind is TaskKind.MISSING_SECTION and t.path == electrolyte_path for t in tasks_undone)
+    assert not any(t.path[:2] == electrolyte_path and len(t.path) > 2 for t in tasks_undone)
 
 
 def test_declare_model_task_renders_standalone_with_no_group_header(app_driver, tmp_path):

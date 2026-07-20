@@ -408,12 +408,20 @@ def _is_container_link(prop: dict) -> bool:
     refs), ``ElectrodeBlended``'s ``"Particle"`` (dict of ``Particle`` refs).
     A field whose value may be a plain number *or* a ``$ref`` to
     ``InterpolatedTable`` (the function/table fields) is not a container
-    link: its ``anyOf`` mixes the ref with primitive types.
+    link: its ``anyOf`` mixes the ref with primitive types. A ``null``
+    member does not count as such a primitive: ``anyOf: [$ref, null]`` is
+    how the schema spells an *optional* section (bpx 1.1.1's
+    ``State.Initial conditions`` / ``State.Thermal environment``), still a
+    container link.
     """
     if "$ref" in prop:
         return True
     any_of = prop.get("anyOf")
-    if any_of and all("$ref" in member for member in any_of):
+    if (
+        any_of
+        and any("$ref" in member for member in any_of)
+        and all("$ref" in member or member.get("type") == "null" for member in any_of)
+    ):
         return True
     additional = prop.get("additionalProperties")
     if isinstance(additional, dict) and "$ref" in additional:

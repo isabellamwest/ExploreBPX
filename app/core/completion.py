@@ -6,23 +6,16 @@ distinct from validation (see ``PLAN-completion-track.md`` S1/S2): a
 section-level ``mode="before"`` validator can raise before pydantic ever
 checks that section's own required fields, so an absent field can leave the
 validator's diagnostics byte-identical; an absent section always collapses to
-one ``missing`` diagnostic, its inner required fields never enumerated; and,
-more broadly (found while implementing this module, and folded into the
-plan's corrected V1), ``bpx.BPX``'s root ``mode="before"`` validator raises
-as soon as ``Parameterisation`` itself fails, which stops pydantic validating
-``State``/``Validation`` at all -- so a document with any Parameterisation
-problem shows zero diagnostics about State, **including the root-level
-demand for State itself**: a ``mode="after"`` root validator raises
-*"'State' section must be provided unless using a 'Partial' parameterisation"*
-(a root ``value_error`` at ``loc=()``) once Parameterisation validates
-cleanly. ``State`` IS required for every concrete model -- the original V1
-("required by no model") was a short-circuit artifact: every skeleton probe
-also has a broken Parameterisation, so the root validator never reached the
-State check. Completion never reads diagnostics to decide what is expected;
-it reads the schema and the raw dict directly -- except for this one demand,
-which the JSON schema itself does not encode (``State`` is absent from the
-root's own ``"required"`` list; the requirement lives only in the root
-validator), so :func:`document_completion` special-cases it explicitly.
+one ``missing`` diagnostic, its inner required fields never enumerated.
+
+Completion never reads diagnostics to decide what is expected; it reads the
+schema (via :func:`core.bpx_gateway.expected_fields`) and the raw dict
+directly, walking every section the schema resolves. (bpx 1.1.1 note: an
+earlier version of this module special-cased ``State`` here, because a since-
+deleted root validator in bpx 1.1.0 demanded it outside the JSON schema's own
+``"required"`` list; bpx 1.1.1 made ``State`` a genuinely optional field
+[``Field(None, alias="State")``] and removed that validator, so the special
+case is gone -- the schema-driven walk now covers everything on its own.)
 
 Terminology (decision B, use exactly): Expected = schema names the field for
 this section. Required = schema requires it AND the model is concrete
@@ -209,22 +202,16 @@ def document_completion(raw: dict) -> tuple[CompletionTask, ...]:
       with their own fields *not* enumerated (decision M) -- this includes
       the well-known top structure (``Parameterisation``'s ``Cell``,
       electrodes, Electrolyte/Separator) and any deeper required container
-      once its parent exists (e.g. ``State``'s ``Initial conditions``/
-      ``Thermal environment``, once ``State`` itself has been added).
-    * ``State`` absent on a concrete model -> ``MISSING_SECTION ("State",)``,
-      required. This is the one section the schema-driven walk above cannot
-      find on its own (corrected V1 -- see the module docstring): the
-      demand is a root ``mode="after"`` validator, not a schema ``required``
-      entry, so it is special-cased here rather than discovered generically.
-      Not raised under Partial/undeclared -- the validator's own message
-      exempts Partial, and an undeclared model already short-circuits above.
+      once its parent exists. ``State`` itself is schema-optional (bpx
+      1.1.1: ``Field(None, alias="State")``) and so is never a task on its
+      own; if a document does add it, its own children (``Initial
+      conditions``/``Thermal environment``/``Degradation``) are likewise all
+      optional, so an empty ``State: {}`` yields no child tasks either.
 
     Task order is document order: a section's own field tasks (schema
     declaration order, via ``expected_fields``) before its child-section
     tasks, before recursing into sections that already exist (walked in the
-    raw dict's own key order), with the special-cased ``State`` absence
-    reported last (it would otherwise sort after ``Parameterisation`` in the
-    raw dict too).
+    raw dict's own key order).
     """
     if not isinstance(raw, dict):
         raw = {}
@@ -243,9 +230,6 @@ def document_completion(raw: dict) -> tuple[CompletionTask, ...]:
         tasks.append(CompletionTask(TaskKind.MISSING_SECTION, ("Parameterisation",), None, True))
 
     _walk_completion(build_tree(raw), model, tasks)
-
-    if not isinstance(raw.get("State"), dict):
-        tasks.append(CompletionTask(TaskKind.MISSING_SECTION, ("State",), None, True))
 
     return tuple(tasks)
 
@@ -306,13 +290,6 @@ def _nav_path_candidates(path: tuple[str, ...]) -> tuple[tuple[str, ...], ...]:
     return tuple(candidates)
 
 
-#: The exact wording bpx's root validator raises when a concrete model has no
-#: ``State`` (corrected V1). Pinned here -- and by a regression test against
-#: the real validator -- so a future bpx wording change fails loudly instead
-#: of silently un-absorbing this one diagnostic.
-STATE_REQUIRED_MESSAGE_FRAGMENT = "'State' section must be provided"
-
-
 @dataclass(frozen=True)
 class PartitionedIssues:
     """The document's diagnostics, split between the Issues and Outstanding
@@ -354,15 +331,7 @@ def partition_issues(document: "BPXDocument", tasks: tuple[CompletionTask, ...])
         whose path matches one of that task's :func:`_nav_path_candidates`,
         regardless of ``error_type`` -- a committed-null union field raises
         two diagnostics, one per branch (V5), and both absorb into the same
-        task; or
-    (c) the ``MISSING_SECTION ("State",)`` task, when the diagnostic is the
-        root ``value_error`` demanding ``State`` (corrected V1; plan decision
-        E's one deliberate exception to the missing-only rule):
-        ``error_type == "value_error"``, ``loc == ()``, and the message
-        contains :data:`STATE_REQUIRED_MESSAGE_FRAGMENT`. Only matches when
-        that task exists -- if ``State`` is present the diagnostic cannot
-        occur, and under Partial no such task is ever raised, so the safety
-        net below still applies.
+        task.
 
     Everything else stays ``visible``, including Partial's union-branch
     ``missing`` errors (no tasks exist under Partial, so nothing matches --
@@ -388,10 +357,6 @@ def partition_issues(document: "BPXDocument", tasks: tuple[CompletionTask, ...])
         if task.kind is TaskKind.NULL_FIELD
         for candidate in _nav_path_candidates(task.path)
     }
-    state_task = next(
-        (task for task in tasks if task.kind is TaskKind.MISSING_SECTION and task.path == ("State",)),
-        None,
-    )
 
     visible: list[tuple[ValidatorDiagnostic, tuple[str, ...]]] = []
     absorbed: list[tuple[ValidatorDiagnostic, tuple[str, ...]]] = []
@@ -403,13 +368,6 @@ def partition_issues(document: "BPXDocument", tasks: tuple[CompletionTask, ...])
             matched_task = missing_task_by_path[nav_path]
         elif nav_path and nav_path in null_task_by_path:
             matched_task = null_task_by_path[nav_path]
-        elif (
-            state_task is not None
-            and not nav_path
-            and error_type == "value_error"
-            and STATE_REQUIRED_MESSAGE_FRAGMENT in getattr(diagnostic, "message", "")
-        ):
-            matched_task = state_task
 
         if matched_task is not None:
             pair = (diagnostic, nav_path)

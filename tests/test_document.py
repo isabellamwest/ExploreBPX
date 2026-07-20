@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from core.document import BPXDocument
 
 
@@ -95,14 +93,25 @@ def test_identity_coerces_non_string_bpx_version(valid_spm_dict):
     assert document.identity.bpx_version == "1.0"
 
 
-@pytest.mark.parametrize(
-    "filename",
-    ["lfp_18650_cell_BPX.json", "nmc_pouch_cell_BPX.json"],
-)
-def test_invalid_files_still_open(fixtures_dir, filename):
-    data = (fixtures_dir / filename).read_bytes()
-    document = BPXDocument.from_bytes(data, filename)
-    # The whole point: invalid files load and remain explorable.
+def test_invalid_document_still_opens(valid_spm_dict):
+    """The whole point: an invalid file still loads and remains explorable,
+    rather than being rejected outright.
+
+    Re-baselined for bpx 1.1.1: this used to parametrize over the nmc/lfp
+    fixtures, which failed validation on legacy deprecated-field errors
+    (``Cell.'Initial temperature [K]'``/``'Ambient temperature [K]'``); bpx
+    1.1.1 auto-converts those cleanly now (probed directly against the real
+    validator -- both open with zero errors), so they no longer demonstrate
+    this. A minimal document with a garbage-typed ``Cell`` section is built
+    here instead, which is still, genuinely invalid.
+    """
+    import json
+
+    raw = valid_spm_dict
+    raw["Parameterisation"]["Cell"] = "not a section"
+    data = json.dumps(raw).encode("utf-8")
+
+    document = BPXDocument.from_bytes(data, "invalid_probe.json")
     assert document.is_valid is False
     assert document.error_count > 0
     assert document.tree.children

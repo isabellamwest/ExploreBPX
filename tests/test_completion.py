@@ -20,25 +20,33 @@ def _diagnostic_tuples(issues):
     return [(getattr(d, "error_type", None), getattr(d, "loc", None), d.message) for d in issues]
 
 
-def test_keystone_cell_field_deletion_invisible_to_validator(fixtures_dir):
-    """Deleting a required Cell field from the nmc fixture leaves the
-    validator's own issue list unchanged, while completion reports it.
+def test_keystone_cell_field_deletion_invisible_to_validator(valid_spm_dict):
+    """Deleting a required Cell field from a document whose Cell already
+    trips a ``mode="before"`` validator leaves the validator's own issue list
+    unchanged, while completion reports it.
 
     This is the fact the whole layer exists to fix (V1/plan SS1): ``Cell``
     has a ``mode="before"`` validator (a deprecated-fields check) that raises
-    before pydantic ever checks Cell's own required fields. This premise
-    depends on the nmc fixture already tripping that check at baseline
-    (``value_error ('Cell',)``, from its own pre-existing deprecated
-    ``'Initial temperature [K]'``/``'Ambient temperature [K]'`` fields) -- if
-    a future fixture cleanup makes this file validate cleanly, this test's
-    premise inverts and it must be revisited, not just kept green.
+    before pydantic ever checks Cell's own required fields.
+
+    Re-baselined for bpx 1.1.1: this used to read the nmc fixture, which
+    tripped the check via its own pre-existing deprecated
+    ``'Initial temperature [K]'``/``'Ambient temperature [K]'`` fields --
+    but that fixture is a legacy BPX v0.x object (``Header.BPX`` < 1), and
+    bpx 1.1.1 auto-converts those cleanly (probed directly against the real
+    validator: it now validates with warnings only), so it no longer trips
+    this premise. A deprecated field is injected directly into a genuinely-v1
+    document instead (``Header.BPX`` >= 1, so bpx does not treat it as
+    legacy) -- the injected field is what trips the validator, not legacy
+    conversion.
     """
-    raw = json.loads((fixtures_dir / "nmc_pouch_cell_BPX.json").read_text("utf-8"))
+    raw = copy.deepcopy(valid_spm_dict)
+    raw["Parameterisation"]["Cell"]["Ambient temperature [K]"] = 298.15
     baseline_issues = bpx_gateway.validate(raw).issues
     assert any(
         getattr(d, "error_type", None) == "value_error" and getattr(d, "loc", None) == ("Cell",)
         for d in baseline_issues
-    ), "premise: the fixture must already trip Cell's mode='before' validator"
+    ), "premise: the injected deprecated field must trip Cell's mode='before' validator"
 
     baseline_tasks = completion.document_completion(raw)
 
@@ -163,74 +171,64 @@ def test_absent_required_section_then_cascade_on_readd():
     assert field_tasks_after  # cascade: fields enumerate immediately
 
 
-# --- Corrected V1: State IS validator-required for concrete models -------
+# --- bpx 1.1.1: State (and its own children) are schema-optional ---------
 #
-# The original V1 ("State required by no model") was a short-circuit
-# artifact: bpx's root `mode="after"` validator that demands State never ran
-# against a skeleton probe, because every skeleton also has a broken
-# Parameterisation, and the root `mode="before"` validator raises on that
-# first. These tests use `valid_spm_dict` (a genuinely clean document) so the
-# root validator actually reaches the State check.
+# bpx 1.1.0 had a root `mode="after"` validator that demanded State for every
+# concrete model ("'State' section must be provided unless using a 'Partial'
+# parameterisation"); bpx 1.1.1 deleted that validator and made `State` a
+# genuinely optional field (`Field(None, alias="State")`), so a valid
+# concrete document with State removed now validates cleanly. These tests
+# pin that against the real validator (not a restated/assumed message).
 
 
-def test_valid_spm_minus_state_yields_one_required_state_task(valid_spm_dict):
+def test_valid_spm_minus_state_yields_no_task_and_no_diagnostics(valid_spm_dict):
+    """Removing State from an otherwise-valid document is now a no-op for
+    both completion and validation: no task, no diagnostic."""
     raw = copy.deepcopy(valid_spm_dict)
     del raw["State"]
 
     tasks = completion.document_completion(raw)
-    state_tasks = [t for t in tasks if t.path == ("State",)]
-    assert state_tasks == [CompletionTask(TaskKind.MISSING_SECTION, ("State",), None, True)]
+    assert not any(t.path == ("State",) for t in tasks)
+    assert bpx_gateway.validate(raw).issues == []
 
     doc = BPXDocument.from_raw(raw, filename="probe", fmt="json")
     result = completion.partition_issues(doc, tasks)
     assert result.visible == ()
+    assert result.absorbed == ()
     assert result.error_count == 0
-    assert any(
-        getattr(d, "error_type", None) == "value_error" and nav == () for d, nav in result.absorbed
-    )
 
 
-def test_state_required_message_is_pinned_against_the_real_validator(valid_spm_dict):
-    """Anchors ``completion.STATE_REQUIRED_MESSAGE_FRAGMENT`` against bpx's
-    own wording, read from the real validator (not restated/assumed). If a
-    future bpx release changes this message, THIS test must fail loudly --
-    otherwise ``partition_issues``'s State absorption would silently stop
-    matching and the root diagnostic would reappear as an unexplained
-    visible Issue on every concrete document with no signal pointing at why.
+def test_state_optional_is_pinned_against_the_real_validator(valid_spm_dict):
+    """Loud-failure pin of the bpx 1.1.1 contract, read from the real
+    validator: a valid concrete document with State removed draws ZERO
+    diagnostics. If a future bpx release reintroduces a State-required
+    check, THIS test must fail loudly -- ``document_completion`` would then
+    need its own ``MISSING_SECTION ("State",)`` special case reinstated
+    (see git history for the pre-1.1.1 implementation) rather than letting
+    the root diagnostic reappear as an unexplained, unabsorbed Issue.
     """
     raw = copy.deepcopy(valid_spm_dict)
     del raw["State"]
-    issues = bpx_gateway.validate(raw).issues
-    state_diagnostics = [
-        d
-        for d in issues
-        if getattr(d, "error_type", None) == "value_error" and getattr(d, "loc", None) == ()
-    ]
-    assert len(state_diagnostics) == 1
-    assert completion.STATE_REQUIRED_MESSAGE_FRAGMENT in state_diagnostics[0].message
+    assert bpx_gateway.validate(raw).issues == []
 
 
-def test_empty_state_on_clean_document_absorbs_both_child_section_tasks(valid_spm_dict):
-    """State present-but-empty draws two real ``missing`` diagnostics for its
-    own required children (the recursive schema walk already finds these --
-    no special-casing needed beyond the top-level State-absent case)."""
+def test_empty_state_on_clean_document_yields_no_tasks_or_diagnostics(valid_spm_dict):
+    """State's own children (Initial conditions/Thermal environment/
+    Degradation) are all schema-optional too (bpx 1.1.1), so committing an
+    empty ``State: {}`` on an otherwise-valid document adds no completion
+    task and draws no validator diagnostic -- there is nothing here for
+    completion to absorb."""
     raw = copy.deepcopy(valid_spm_dict)
     raw["State"] = {}
 
     tasks = completion.document_completion(raw)
-    assert not any(t.path == ("State",) for t in tasks)  # State itself IS present
-    expected_children = {
-        CompletionTask(TaskKind.MISSING_SECTION, ("State", "Initial conditions"), None, True),
-        CompletionTask(TaskKind.MISSING_SECTION, ("State", "Thermal environment"), None, True),
-    }
-    assert expected_children <= set(tasks)
+    assert not any(t.path[:1] == ("State",) for t in tasks)
+    assert bpx_gateway.validate(raw).issues == []
 
     doc = BPXDocument.from_raw(raw, filename="probe", fmt="json")
     result = completion.partition_issues(doc, tasks)
     assert result.visible == ()
-    absorbed_locs = {nav for _, nav in result.absorbed}
-    assert ("State", "Initial conditions") in absorbed_locs
-    assert ("State", "Thermal environment") in absorbed_locs
+    assert result.absorbed == ()
 
 
 def test_partial_has_no_state_task():
@@ -242,13 +240,24 @@ def test_partial_has_no_state_task():
 
 
 def test_header_field_absorption_regression(valid_spm_dict):
-    """The reviewed defect: a missing ``Header.BPX`` diagnostic carries
-    nav_path ``('BPX',)`` -- the validator drops a leading ``Header``
-    component, exactly like it drops ``Parameterisation`` (V4, now fully
-    mapped). A matcher that only stripped ``Parameterisation`` left every
-    required Header field double-surfaced: a red Issue *and* an Outstanding
-    row for the same absence, inflating the badge (violates decisions E/G).
-    Must absorb cleanly now that both prefixes are tried.
+    """The reviewed defect this test used to pin: a missing ``Header.BPX``
+    diagnostic used to carry nav_path ``('BPX',)`` -- the validator dropping
+    a leading ``Header`` component, exactly like it drops ``Parameterisation``
+    (V4) -- and a matcher that only stripped ``Parameterisation`` left every
+    required Header field double-surfaced.
+
+    Re-baselined for bpx 1.1.1 (probed directly against the real validator):
+    bpx 1.1.1 added an ``is_legacy_bpx`` pre-check that reads ``Header.BPX``
+    *before* pydantic validation runs at all, so a document missing it no
+    longer raises the plain pydantic ``missing`` error the old fix absorbed
+    -- it raises a bare ``ValueError`` instead, wrapped as a
+    :class:`core.validation.BPXExceptionDiagnostic` with neither
+    ``error_type`` nor ``loc``. ``document_completion`` still reports the
+    schema-required ``MISSING_FIELD`` task (it never reads diagnostics), but
+    ``partition_issues`` cannot match a diagnostic carrying no
+    ``error_type``/``loc`` to it, so -- faithfully surfacing bpx's new
+    behaviour, not a bug -- the task and the real validator's own message now
+    stay visible side by side (mirrors decision V6's ``DECLARE_MODEL`` case).
     """
     raw = copy.deepcopy(valid_spm_dict)
     del raw["Header"]["BPX"]
@@ -258,10 +267,11 @@ def test_header_field_absorption_regression(valid_spm_dict):
 
     doc = BPXDocument.from_raw(raw, filename="probe", fmt="json")
     result = completion.partition_issues(doc, tasks)
-    assert result.visible == ()
-    assert result.error_count == 0
-    absorbed_locs = {nav for _, nav in result.absorbed}
-    assert ("BPX",) in absorbed_locs
+    assert result.absorbed == ()
+    assert len(result.visible) == 1
+    diagnostic, _nav_path = result.visible[0]
+    assert getattr(diagnostic, "error_type", None) is None
+    assert "BPX" in diagnostic.message
 
 
 def test_validation_run_field_absorption_keeps_full_prefix(valid_spm_dict):
@@ -506,14 +516,18 @@ def test_ordering_is_deterministic_and_document_ordered():
     # Header's own fields are all optional (decision B filters them out of
     # document_completion entirely -- see the required-only regression test
     # below), so Cell's required fields are the earliest document-ordered
-    # tasks; State is scaffolded (present-but-empty) here, so its required
-    # children surface as MISSING_SECTION tasks walked after Parameterisation
-    # (module docstring: the tree walk visits root's children in raw order).
+    # tasks, followed by each Parameterisation child in schema order (the
+    # tree walk visits root's children in raw order). ``State`` is no longer
+    # scaffolded (bpx 1.1.1: schema-optional, so the factory never adds it),
+    # so Electrolyte -- the SPMe scaffold's last child -- is the last section
+    # here instead.
     cell_positions = [i for i, t in enumerate(first) if t.path[:2] == ("Parameterisation", "Cell")]
     electrode_positions = [
         i for i, t in enumerate(first) if t.path[:2] == ("Parameterisation", "Negative electrode")
     ]
-    state_positions = [i for i, t in enumerate(first) if t.path[:1] == ("State",)]
-    assert cell_positions and electrode_positions and state_positions
+    electrolyte_positions = [
+        i for i, t in enumerate(first) if t.path[:2] == ("Parameterisation", "Electrolyte")
+    ]
+    assert cell_positions and electrode_positions and electrolyte_positions
     assert max(cell_positions) < min(electrode_positions)
-    assert max(electrode_positions) < min(state_positions)
+    assert max(electrode_positions) < min(electrolyte_positions)

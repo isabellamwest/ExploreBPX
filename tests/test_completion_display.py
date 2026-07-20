@@ -130,16 +130,19 @@ def test_outstanding_row_shows_the_absorbed_validator_message(app_driver, tmp_pa
     assert "Input should be a valid integer" not in text
 
 
-def test_outstanding_row_shows_state_root_message(app_driver, tmp_path, valid_spm_dict):
+def test_removing_state_from_a_valid_document_leaves_it_complete(app_driver, tmp_path, valid_spm_dict):
+    """bpx 1.1.1 made ``State`` schema-optional and deleted the root
+    validator that used to demand it ("'State' section must be provided
+    unless using a 'Partial' parameterisation") -- removing it from an
+    otherwise-valid document no longer produces an Outstanding row or any
+    validator diagnostic at all."""
     raw = json.loads(json.dumps(valid_spm_dict))
     del raw["State"]
     d = app_driver
     d.open(_write(tmp_path, "no_state.json", raw))
 
-    task = next(t for t in d.outstanding_tasks() if t.path == ("State",))
-    text = d.outstanding_task_row_text(task)
-
-    assert "'State' section must be provided" in text
+    assert d.outstanding_tasks() == []
+    assert d.validation_issue_count() == 0
 
 
 # ---------------------------------------------------------------------------

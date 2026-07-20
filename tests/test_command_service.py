@@ -50,14 +50,14 @@ def test_factory_creates_spme_scaffold_with_separator_no_section_level_missing()
     assert ("Separator", "Thickness [m]") in missing_locs
 
 
-def test_factory_scaffolds_state_for_every_concrete_model_but_not_partial():
-    """State IS validator-required for every concrete model (corrected V1 --
-    bpx's root validator demands it unless the model is Partial), so it
-    appears in every concrete model's fresh scaffold; Partial (which has no
-    required sections) gets none."""
-    for model in ("SPM", "SPMe", "DFN"):
-        assert "State" in document_factory.create(model)
-    assert "State" not in document_factory.create("Partial")
+def test_factory_never_scaffolds_state_since_it_is_schema_optional():
+    """bpx 1.1.1 made ``State`` a genuinely optional field (``Field(None,
+    alias="State")``), removing the root validator that used to demand it
+    for every concrete model. The factory only scaffolds validator-required
+    structure, so a fresh document -- concrete model or Partial -- never gets
+    a ``State`` section; the user adds it explicitly if they want one."""
+    for model in ("SPM", "SPMe", "DFN", "Partial"):
+        assert "State" not in document_factory.create(model)
 
 
 def test_protected_top_level_cannot_be_removed():
@@ -135,20 +135,23 @@ def test_change_model_to_an_unknown_string_presumes_no_structure():
 
 def test_change_model_skips_children_of_a_broken_parent():
     """A non-dict Parameterisation must not fail the whole model change: the
-    model is still set, the unreachable child sections are skipped, and the
-    validator reports the broken parent."""
+    model is still set, and the unreachable child sections are skipped (never
+    raised) rather than failing the whole command -- the validator reports
+    the broken parent. (``State`` is schema-optional since bpx 1.1.1, so it
+    is never presumed here either; nothing else is required independently of
+    ``Parameterisation``, so no section is added at all.)"""
     raw = {"Header": {"Model": "SPM"}, "Parameterisation": "oops"}
     result = command_service.execute(raw, ChangeModel("DFN"))
     assert result.raw["Header"]["Model"] == "DFN"
     assert result.raw["Parameterisation"] == "oops"
-    assert "State" in result.raw  # top-level additions still happen
+    assert "State" not in result.raw
 
 
 def test_change_model_creates_a_missing_parent_before_its_children():
     raw = {"Header": {"Model": "Partial"}}
     result = command_service.execute(raw, ChangeModel("SPM"))
     assert result.raw["Parameterisation"]["Cell"] == {}
-    assert result.raw["State"] == {}
+    assert "State" not in result.raw
 
 
 def test_change_model_preview_lists_the_model_and_every_addition(valid_spm_dict):
@@ -277,13 +280,11 @@ def test_named_child_noun_for_the_two_dict_keyed_containers():
     assert structure.named_child_noun(("Parameterisation",)) is None
 
 
-def test_required_sections_includes_state_for_concrete_models_only():
-    """Corrected V1: State IS validator-required for every concrete model
-    (bpx's root validator raises unless the model is Partial), so
-    required_sections lists it there and only there."""
-    for model in ("SPM", "SPMe", "DFN"):
-        assert ("State",) in structure.required_sections(model)
-    for model in ("Partial", None):
+def test_required_sections_never_includes_state():
+    """bpx 1.1.1 made ``State`` schema-optional and removed the root
+    validator that used to demand it, so no model -- concrete or not --
+    lists it as required structure."""
+    for model in ("SPM", "SPMe", "DFN", "Partial", None):
         assert ("State",) not in structure.required_sections(model)
 
 

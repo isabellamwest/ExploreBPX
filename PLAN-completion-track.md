@@ -10,6 +10,17 @@ Mockup of the target UI (approved): (internal design archive)
 
 Anchored at commit `d6f4d9d` ("feat: redo"), working tree clean, **808 tests passing**.
 
+> **AMENDMENT 2026-07-20 (bpx 1.1.0 → 1.1.1, user-approved bump).** The validator's
+> truth changed and the app followed it: `State` is now **schema-optional for every
+> model** (`state: State = Field(None)`), the root *"'State' section must be
+> provided"* validator was **deleted upstream**, and `State`'s children are nullable.
+> V1 below and Phase 1's "`required_sections` keeps `("State",)`" instruction are
+> **superseded** — `required_sections` no longer lists `State`, and `completion.py`'s
+> State-absorption special case was removed. Additionally, 1.1.1 auto-converts legacy
+> v0.x files (a new `is_legacy_bpx` pre-check reads `Header.BPX` *before* pydantic —
+> a missing `Header.BPX` now surfaces as a raw exception diagnostic, not a pydantic
+> `missing`). The superseded text below is kept as the verified 1.1.0 record.
+
 ---
 
 ## 0. Working agreements (same as the input-system track)
@@ -70,7 +81,7 @@ All probed at `d6f4d9d` by validating factory skeletons and mutations of them th
 
 | # | Fact | Evidence |
 |---|---|---|
-| V1 | **CORRECTED 2026-07-14 (user: "follow validator precisely"): `State` IS validator-required for concrete models**, via bpx's root `mode="before"` validator — *"'State' section must be provided unless using a 'Partial' parameterisation"* — emitted as a root-level `value_error` at `loc=()`, NOT a `missing`. The original V1 ("required by no model") was an artifact: the root validator short-circuits on ANY `Parameterisation` problem, and every skeleton has one, so skeleton probes never saw it. **The suppression is broader than first recorded**: any Parameterisation issue hides ALL State/Validation diagnostics, not just Cell's. `State`'s own children `Initial conditions` and `Thermal environment` are schema-required once State exists. | Valid SPM fixture minus `State` → `value_error ()` with the message above; minus `State.Thermal environment` → `missing ('State','Thermal environment')`; empty `State` → both children `missing`. Skeleton probes show none of these. So `required_sections` keeps `("State",)` for concrete models — it was right all along. |
+| V1 | **SUPERSEDED 2026-07-20 — bpx 1.1.1 made `State` optional; see the amendment at the top. 1.1.0 record follows.** **CORRECTED 2026-07-14 (user: "follow validator precisely"): `State` IS validator-required for concrete models**, via bpx's root `mode="before"` validator — *"'State' section must be provided unless using a 'Partial' parameterisation"* — emitted as a root-level `value_error` at `loc=()`, NOT a `missing`. The original V1 ("required by no model") was an artifact: the root validator short-circuits on ANY `Parameterisation` problem, and every skeleton has one, so skeleton probes never saw it. **The suppression is broader than first recorded**: any Parameterisation issue hides ALL State/Validation diagnostics, not just Cell's. `State`'s own children `Initial conditions` and `Thermal environment` are schema-required once State exists. | Valid SPM fixture minus `State` → `value_error ()` with the message above; minus `State.Thermal environment` → `missing ('State','Thermal environment')`; empty `State` → both children `missing`. Skeleton probes show none of these. So `required_sections` keeps `("State",)` for concrete models — it was right all along. |
 | V2 | **SPMe requires `Separator`; the factory doesn't scaffold it.** `_SEPARATOR_MODELS = {"DFN"}` is wrong. | `create("SPMe")` validates with `missing ('Separator',)`. SPM and DFN skeletons demand no extra sections — the other constants are correct in both directions. |
 | V3 | **Union `missing` locs carry NO branch tags.** | Partial + electrode holding only `Thickness [m]` → exactly 8 diagnostics like `missing ('Negative electrode', 'Minimum stoichiometry')` — clean paths, pydantic settled the SPM branch. |
 | V4 | **Diagnostic locs are section-relative, not root-absolute — and the convention is asymmetric** (fully mapped 2026-07-14): the validator DROPS a leading `Header` (`missing ('BPX',)` for absent `Header.BPX`) and a leading `Parameterisation` (`('Cell',)`), but KEEPS `State` and `Validation` prefixes in full (`('State','Thermal environment')`, `('Validation','C/20','Time [s]')`). The attachment pass passes unresolvable Header-relative locs through as-is (a missing-`BPX` diagnostic surfaces with nav_path `('BPX',)`). Absorption matching must therefore test the candidate prefixes (`loc`, `('Header',)+loc`, `('Parameterisation',)+loc`) — a strip that knows only `Parameterisation` leaves missing required Header fields double-surfaced (red Issue + Outstanding row), which was a real reviewed defect. Also noted: `Temperature [K]` is optional in `Experiment` (only Time/Current/Voltage are schema-required). |
@@ -146,18 +157,14 @@ Partial empty-state copy above is the user-facing acknowledgement.
 ## 4. Phases (dependency order; one commit each; STOP before each commit)
 
 ### Phase 1 — `structure.py` tells the validator's truth
-One verified bug, no UI. (**Revised after V1's correction.** The original brief also
-removed `State` from `required_sections` and split out a `scaffold_sections`; both
-were implemented, then reverted when the root-validator probe proved State IS required
-for concrete models. Do not reintroduce the split — `required_sections` was right all
-along about State.)
+One verified bug, no UI. (**Revised after V1's correction; State parts superseded
+2026-07-20** — bpx 1.1.1 made `State` optional and `required_sections` no longer
+lists it; see the amendment at the top. The 1.1.0-era brief follows as record.)
 - `_SEPARATOR_MODELS` → `{"SPMe", "DFN"}` (V2). That is the whole code change.
-- `required_sections` keeps `("State",)` for concrete models; its docstring cites the
-  root-validator message ("'State' section must be provided unless using a 'Partial'
-  parameterisation") so nobody "fixes" it against a skeleton probe again.
+- ~~`required_sections` keeps `("State",)` for concrete models~~ (superseded: it
+  now tracks the 1.1.1 validator, which demands no `State`).
 - Tests: `create("SPMe")` contains `Separator` and draws no section-level `missing`;
-  `create(model)` still contains `State` for concrete models; `required_sections`
-  includes `Separator` for SPMe/DFN and `State` for concrete models; Partial/None
+  `required_sections` includes `Separator` for SPMe/DFN; Partial/None
   return only Header+Parameterisation; ChangeModel to SPMe adds `Separator`.
 
 ### Phase 2 — `core/completion.py`
@@ -168,7 +175,9 @@ validator cannot see. **That test's premise is fixture-dependent**: the byte-ide
 suppression holds because the nmc fixture already trips Cell's `mode="before"`
 validator at baseline (`value_error ('Cell',)`). State this in the test's docstring so
 a future fixture cleanup that makes nmc validate cleanly doesn't silently invert the
-premise. Also test: the Partial case (zero Required, full Expected);
+premise. (2026-07-20: exactly this happened — bpx 1.1.1 auto-converts the legacy nmc
+fixture cleanly, so the test now injects the deprecated `Ambient temperature [K]`
+into `valid_spm_dict` to trip the same `mode="before"` validator.) Also test: the Partial case (zero Required, full Expected);
 null-counts-as-outstanding (and `[]` does not); undeclared/garbage model → single
 declare-model task; absent section → one item, fields enumerated once present.
 

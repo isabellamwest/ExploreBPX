@@ -11,6 +11,7 @@ brief.
 
 from __future__ import annotations
 
+import copy
 import json
 
 import pytest
@@ -161,23 +162,20 @@ def test_absent_required_section_is_one_absent_bucket():
     assert electrolyte.required_tasks[0].kind is TaskKind.MISSING_SECTION
 
 
-def test_entirely_absent_top_level_state_is_one_absent_bucket():
-    """The top-level-section counterpart of the ``Electrolyte`` case above:
-    ``State`` sits directly under the document root (not nested inside
-    ``Parameterisation``), and its absence is reported by the validator's
-    own root-level value_error (corrected V1), not a plain ``missing`` --
-    the bucket must still reconcile to one absent ``State`` bucket, same
-    shape as any other absent section."""
+def test_state_absent_from_fresh_scaffold_yields_no_bucket_task_or_diagnostic():
+    """bpx 1.1.1 made ``State`` schema-optional (``Field(None, alias="State")``)
+    and deleted the root validator that used to demand it for every concrete
+    model (obsoleting the old "corrected V1" story this test used to pin):
+    a fresh scaffold never has ``State`` at all (``document_factory`` no
+    longer adds it), ``document_completion`` raises no task for its absence,
+    and the real validator raises no diagnostic either -- so, unlike every
+    other schema-required section, there is no ``State`` bucket at all."""
     raw = document_factory.create("SPM", title="probe")
-    del raw["State"]
+    assert "State" not in raw
     _doc, tasks, partition, result = _bucket_page(raw, "SPM")
     _assert_reconciled(tasks, partition, result)
-    state = next(b for b in result.buckets if b.path == ("State",))
-    assert state.absent is True
-    assert state.required_total is None  # decision M: fields never enumerated
-    assert len(state.required_tasks) == 1
-    assert state.required_tasks[0].kind is TaskKind.MISSING_SECTION
-    assert state.error_count == 0  # the root value_error absorbs into the task (decision E)
+    assert not any(b.path == ("State",) for b in result.buckets)
+    assert not any(t.path == ("State",) for t in tasks)
 
 
 def test_partial_model_has_no_tasks_and_stripped_locs_land_correctly():
@@ -229,22 +227,29 @@ def test_garbage_model_yields_declare_model_task_and_visible_error():
     assert header_bucket.error_count == 1  # literal_error, never absorbed (V6)
 
 
-def test_garbage_model_plus_missing_header_field_both_land_in_header():
+def test_garbage_model_plus_extra_header_field_both_land_in_header():
     """A second V4-stripped-loc regression: with the model garbage,
     ``document_completion`` short-circuits to the single DECLARE_MODEL task
-    (decision C), so a SEPARATE missing Header field (``BPX``) has no task to
-    absorb into and stays visible with nav_path ``('BPX',)`` -- no ``Header``
-    prefix (V4). It must still land in the Header bucket, not its own bogus
-    ``('BPX',)`` bucket.
+    (decision C), so a SEPARATE, un-absorbable Header diagnostic has no task
+    to absorb into and stays visible -- it must still land in the Header
+    bucket, not its own bogus per-field bucket.
+
+    Re-baselined for bpx 1.1.1: this used to pair the garbage Model with a
+    missing ``BPX`` field, but bpx 1.1.1 added an ``is_legacy_bpx`` pre-check
+    that reads ``Header.BPX`` before pydantic runs at all, so a missing
+    ``BPX`` now short-circuits the *whole* document into one raw exception,
+    masking the Model diagnostic entirely (probed directly against the real
+    validator). A custom, schema-unknown Header field triggers a real,
+    still-coexisting ``extra_forbidden`` diagnostic instead.
     """
     raw = document_factory.create("SPM", title="probe")
     raw["Header"]["Model"] = "banana"
-    del raw["Header"]["BPX"]
+    raw["Header"]["Not a real field"] = 1
     _doc, tasks, partition, result = _bucket_page(raw, None)
     _assert_reconciled(tasks, partition, result)
-    assert not any(b.label == "BPX" for b in result.buckets)
+    assert not any(b.label == "Not a real field" for b in result.buckets)
     header_bucket = next(b for b in result.buckets if b.path == ("Header",))
-    assert header_bucket.error_count == 2  # literal_error(Model) + missing(BPX)
+    assert header_bucket.error_count == 2  # literal_error(Model) + extra_forbidden(Not a real field)
 
 
 # ---------------------------------------------------------------------------
@@ -325,12 +330,14 @@ def test_buckets_are_in_document_order_with_absent_section_at_its_schema_positio
     ``structure.required_sections``), not ``raw``'s own key order, so a
     schema-required-but-absent child (a deleted SPMe ``Electrolyte``) still
     gets its natural position instead of being stranded wherever
-    ``document_completion``'s task walk happens to first name it."""
+    ``document_completion``'s task walk happens to first name it. (``State``
+    is schema-optional since bpx 1.1.1 and is never scaffolded, so it is not
+    one of the buckets here.)"""
     raw = document_factory.create("SPMe", title="probe")
     del raw["Parameterisation"]["Electrolyte"]
     _doc, tasks, partition, result = _bucket_page(raw, "SPMe")
     labels = [bucket.label for bucket in result.buckets]
-    assert labels == ["Header", "Cell", "Negative electrode", "Positive electrode", "Electrolyte", "Separator", "State"]
+    assert labels == ["Header", "Cell", "Negative electrode", "Positive electrode", "Electrolyte", "Separator"]
 
 
 def test_required_total_is_none_for_absent_sections_and_the_document_bucket():
@@ -350,20 +357,28 @@ def test_required_total_is_none_for_absent_sections_and_the_document_bucket():
 # ---------------------------------------------------------------------------
 
 
-def test_keystone_nmc_cell_field_deletion_still_reconciles(fixtures_dir):
-    """Depends on the same fixture premise as
+def test_keystone_nmc_cell_field_deletion_still_reconciles(valid_spm_dict):
+    """Depends on the same premise as
     ``test_completion.test_keystone_cell_field_deletion_invisible_to_validator``:
-    the nmc fixture already trips ``Cell``'s ``mode="before"`` validator at
-    baseline, so deleting a required Cell field leaves the validator's own
-    diagnostics unchanged while completion still reports the task -- if a
-    future fixture cleanup makes nmc validate cleanly, this premise inverts.
+    a document that already trips ``Cell``'s ``mode="before"`` validator at
+    baseline leaves the validator's own diagnostics unchanged when a required
+    Cell field is also deleted, while completion still reports the task.
+
+    Re-baselined for bpx 1.1.1: the nmc fixture this used to read is a legacy
+    BPX v0.x object (``Header.BPX`` < 1), and bpx 1.1.1 auto-converts those
+    cleanly (probed directly -- it now validates with warnings only, no
+    ``value_error``), so it no longer trips the premise. A deprecated field
+    is injected directly into a genuinely-v1 document instead (``Header.BPX``
+    >= 1, so bpx does not treat it as legacy) -- the injected field is what
+    trips ``Cell``'s validator, not legacy conversion.
     """
-    raw = json.loads((fixtures_dir / "nmc_pouch_cell_BPX.json").read_text("utf-8"))
+    raw = copy.deepcopy(valid_spm_dict)
+    raw["Parameterisation"]["Cell"]["Ambient temperature [K]"] = 298.15
     baseline_issues = bpx_gateway.validate(raw).issues
     assert any(
         getattr(d, "error_type", None) == "value_error" and getattr(d, "loc", None) == ("Cell",)
         for d in baseline_issues
-    ), "premise: the fixture must already trip Cell's mode='before' validator"
+    ), "premise: the injected deprecated field must trip Cell's mode='before' validator"
 
     del raw["Parameterisation"]["Cell"]["Nominal cell capacity [A.h]"]
     _doc, tasks, partition, result = _bucket_page(raw)

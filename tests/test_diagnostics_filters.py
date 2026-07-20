@@ -274,11 +274,14 @@ def test_fold_hidden_rows_are_excluded_from_the_hidden_count(app_driver):
     d = app_driver
     d._w._new("SPM")
     d.diagnostics_toggle_chip("outstanding")
-    assert d.diagnostics_all_sections_hidden_line_text() == "25 hidden by filters"
+    # bpx 1.1.1: `State` is schema-optional and no longer scaffolded by a new
+    # document (see core.document_factory), so its two former task rows are
+    # gone -- 23, not 25.
+    assert d.diagnostics_all_sections_hidden_line_text() == "23 hidden by filters"
 
     d.toggle_all_sections_fold("Cell")
 
-    assert d.diagnostics_all_sections_hidden_line_text() == "20 hidden by filters"
+    assert d.diagnostics_all_sections_hidden_line_text() == "18 hidden by filters"
 
 
 # ---------------------------------------------------------------------------

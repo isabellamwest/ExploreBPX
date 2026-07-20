@@ -62,15 +62,21 @@ _VALUE_SHAPE_DEFS = {"InterpolatedTable"}
 
 def _direct_refs(prop: dict) -> list[str]:
     """Definition name(s) *prop* names directly: a bare $ref, or an anyOf
-    whose members are ALL $refs (a union of section shapes, e.g. "Negative
-    electrode"). Does NOT include additionalProperties -- that is a
-    dict-of-model, which introduces an extra user-chosen key level in a real
-    document path (see _dict_model_ref)."""
+    whose members are ALL $refs or null (a union of section shapes, e.g.
+    "Negative electrode"; bpx 1.1.1 spells an *optional* section as
+    ``anyOf: [$ref, null]`` -- the null member is not a shape, so it is
+    skipped, not a disqualifier). Does NOT include additionalProperties --
+    that is a dict-of-model, which introduces an extra user-chosen key level
+    in a real document path (see _dict_model_ref)."""
     if "$ref" in prop:
         return [prop["$ref"].split("/")[-1]]
     any_of = prop.get("anyOf")
-    if any_of and all("$ref" in member for member in any_of):
-        return [member["$ref"].split("/")[-1] for member in any_of]
+    if any_of:
+        refs = [member for member in any_of if "$ref" in member]
+        if refs and all(
+            "$ref" in member or member.get("type") == "null" for member in any_of
+        ):
+            return [member["$ref"].split("/")[-1] for member in refs]
     return []
 
 
