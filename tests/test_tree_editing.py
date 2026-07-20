@@ -193,6 +193,20 @@ def test_popup_ignores_an_empty_confirm(qtbot):
     assert chosen == []
 
 
+def test_popup_shows_and_clears_the_note(qtbot):
+    """``open_at``'s optional ``note`` shows a plain informational line for
+    the whole time the popup is open, and a later call without one clears it
+    (rather than leaving a stale note from a previous rename)."""
+    popup = NamePopup()
+    qtbot.addWidget(popup)
+    popup.open_at(QPoint(0, 0), "New name…", note="A note.")
+    assert popup._note.isVisible()
+    assert popup._note.text() == "A note."
+
+    popup.open_at(QPoint(0, 0), "New name…")
+    assert not popup._note.isVisible()
+
+
 def test_rename_flow_prefills_and_routes_through_one_intent(qtbot, blended_validation_tree):
     """Rename… seeds the popup with the current name (taken includes it), and
     the chosen name comes back as a rename request for the original path."""
@@ -213,6 +227,42 @@ def test_rename_flow_prefills_and_routes_through_one_intent(qtbot, blended_valid
     panel._popup._input.setText("C/10 discharge")
     panel._popup._input.confirm_requested.emit()
     assert fired == [(("Validation", "C/20 discharge"), "C/10 discharge")]
+    panel._popup.hide()
+
+
+def test_particle_material_rename_popup_shows_the_reference_note(qtbot, blended_validation_tree):
+    """A Particle material's old name is never rewritten in a per-material
+    reference elsewhere (RenameKey's own docstring); the rename popup notes
+    this so the user isn't surprised by the validator flagging it later."""
+    panel = _panel_with(qtbot, blended_validation_tree)
+    node = _find(
+        blended_validation_tree,
+        ("Parameterisation", "Positive electrode", "Particle", "Primary"),
+    )
+    panel._open_rename(node)
+    assert (
+        panel._popup._note.text()
+        == "State-section references are not updated; validation will flag mismatches."
+    )
+    assert panel._popup._note.isVisible()
+    panel._popup.hide()
+
+
+def test_validation_run_rename_popup_shows_no_note(qtbot, blended_validation_tree):
+    """A Validation run's name is never referenced elsewhere, so no note."""
+    panel = _panel_with(qtbot, blended_validation_tree)
+    node = _find(blended_validation_tree, ("Validation", "C/20 discharge"))
+    panel._open_rename(node)
+    assert not panel._popup._note.isVisible()
+    panel._popup.hide()
+
+
+def test_user_defined_rename_popup_shows_no_note(qtbot, user_defined_tree):
+    """User-defined content is never referenced elsewhere, so no note."""
+    panel = _panel_with(qtbot, user_defined_tree)
+    node = _find(user_defined_tree, _USER_DEFINED + ("Thermal tweaks",))
+    panel._open_rename(node)
+    assert not panel._popup._note.isVisible()
     panel._popup.hide()
 
 
@@ -392,7 +442,7 @@ def test_add_parameter_into_user_defined_seeds_empty_value(window_with_user_defi
     parameter list's "+ Add parameter" handler (a typed custom name), the one
     surface for parameters now that the tree menu only adds subsections."""
     window = window_with_user_defined
-    window._on_add_parameter_requested(_USER_DEFINED, "capacity offset")
+    window._on_add_parameter_requested(_USER_DEFINED, "capacity offset", None)
     bucket = window._state.active.document.raw["Parameterisation"]["User-defined"]
     assert bucket == {"capacity offset": None}
 

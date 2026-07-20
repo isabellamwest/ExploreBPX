@@ -15,20 +15,42 @@ unchanged and re-exposes ``parameter``, ``value()``, ``reset()`` and
 ``is_dirty`` so callers can treat it like the editor it wraps. It does not
 decide validity: the badge is driven externally via :meth:`set_validity`, and
 all validation orchestration stays in ``InspectorPanel``.
+
+For a parameter whose own key is user-owned (``core.structure.can_rename`` --
+today, only content inside the open ``Parameterisation/User-defined`` bucket
+ever reaches a plain ``ParameterCard`` this way), the header also carries a
+small "✎" button that expands an inline Name/Unit row in place (Concept A of
+the completion-track rename/duplicate/move phase). This is the single rename
+surface for such a parameter: the parameter-list row's "Rename…" context-menu
+action opens/focuses the very same row via :meth:`open_rename_editor`, rather
+than a second popup-based implementation. Applying composes the new key and
+emits ``rename_requested``; ``InspectorPanel`` executes the ``RenameKey``
+command and reports a refusal back via :meth:`show_rename_error`, the same
+inline-error convention other cards use for a blocked commit.
 """
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
+from core import structure
 from core.bpx_gateway import FieldMeta
 from core.parameter_metadata import resolve_parameter_metadata
+from core.parameter_types import split_name_and_unit
 from core.tree_model import ParameterItem
 
+from ..icons import PENCIL, hover_icon
 from ..latex import symbol_label
 from ..parameter_info_popover import ParameterInfoPopover
-from ..style import MUTED
+from ..style import ERROR, MUTED
 from .registry import create_card
 
 
@@ -40,12 +62,16 @@ class ParameterCard(QWidget):
     commit_requested = Signal()
     expand_toggled = Signal(bool)
     bulk_commit_requested = Signal(object)
+    #: (path, new_key) -- the inline rename row's "Apply". Only ever emitted
+    #: when the pencil button exists at all (``self._renamable``).
+    rename_requested = Signal(tuple, str)
 
     def __init__(self, parameter: ParameterItem, meta: FieldMeta | None) -> None:
         super().__init__()
         self.parameter = parameter
         self._meta = meta
         self._popover: ParameterInfoPopover | None = None
+        self._renamable = structure.can_rename(parameter.path)
         # Resolved once and reused by the ( i ) popover: the symbol shown in the
         # header comes from the same source, so both render identical maths and
         # neither invents anything the dataset does not carry.
@@ -66,6 +92,23 @@ class ParameterCard(QWidget):
             symbol = symbol_label(self._metadata.symbol, point_size=13.0, color=MUTED)
             symbol.setObjectName("CardSymbol")
             header.addWidget(symbol)
+        if self._renamable:
+            # Flat, box-less pencil (Concept A "without the box"): no border or
+            # fill of its own, the icon just darkens on hover. A real drawn glyph
+            # in the app's icon family, not the bare "✎" text it replaces.
+            self._rename_button = QPushButton()
+            self._rename_button.setObjectName("CardRenameButton")
+            self._rename_button.setToolTip("Rename name & unit")
+            self._rename_button.setIcon(hover_icon(PENCIL, 16))
+            self._rename_button.setIconSize(QSize(16, 16))
+            self._rename_button.setFixedSize(22, 22)
+            self._rename_button.setFlat(True)
+            self._rename_button.setCursor(Qt.PointingHandCursor)
+            self._rename_button.setStyleSheet("border: none; background: transparent; padding: 0;")
+            self._rename_button.clicked.connect(self._open_rename_row)
+            header.addWidget(self._rename_button)
+        else:
+            self._rename_button = None
         header.addStretch(1)
         self._badge = QLabel("")
         header.addWidget(self._badge)
@@ -79,6 +122,12 @@ class ParameterCard(QWidget):
         self._info_button.clicked.connect(self._toggle_info_popover)
         header.addWidget(self._info_button)
         layout.addLayout(header)
+
+        if self._renamable:
+            self._rename_row = self._build_rename_row()
+            layout.addWidget(self._rename_row)
+        else:
+            self._rename_row = None
 
         self._editor = create_card(parameter, meta)
         self._editor.draft_changed.connect(self.draft_changed)
@@ -156,3 +205,104 @@ class ParameterCard(QWidget):
             self._popover = ParameterInfoPopover(self)
         self._popover.show_metadata(self._metadata)
         self._popover.open_below(self._info_button)
+
+    # ------------------------------------------------------------------
+    # Inline rename row (Concept A) -- only built when ``self._renamable``
+    # ------------------------------------------------------------------
+
+    def _build_rename_row(self) -> QWidget:
+        """Build (but do not populate) the collapsible Name/Unit/Apply row."""
+        self._rename_name = QLineEdit()
+        self._rename_name.setObjectName("AddParameterInput")  # shared popup styling
+        self._rename_name.setPlaceholderText("Name")
+        self._rename_name.textChanged.connect(self._update_rename_apply_enabled)
+
+        self._rename_unit = QLineEdit()
+        self._rename_unit.setObjectName("AddParameterInput")
+        self._rename_unit.setPlaceholderText("Unit (optional)")
+
+        self._rename_apply = QPushButton("Apply")
+        self._rename_apply.setEnabled(False)
+        self._rename_apply.clicked.connect(self._apply_rename)
+
+        self._rename_cancel = QPushButton("Cancel")
+        self._rename_cancel.clicked.connect(self._collapse_rename_row)
+
+        fields = QHBoxLayout()
+        fields.setContentsMargins(0, 0, 0, 0)
+        fields.addWidget(self._rename_name, 2)
+        fields.addWidget(self._rename_unit, 1)
+        fields.addWidget(self._rename_apply)
+        fields.addWidget(self._rename_cancel)
+
+        self._rename_error = QLabel("")
+        self._rename_error.setObjectName("CardRenameError")
+        self._rename_error.setStyleSheet(f"color: {ERROR};")
+        self._rename_error.setWordWrap(True)
+        self._rename_error.hide()
+
+        row = QWidget()
+        row.setObjectName("CardRenameRow")
+        row_layout = QVBoxLayout(row)
+        row_layout.setContentsMargins(0, 4, 0, 4)
+        row_layout.setSpacing(4)
+        row_layout.addLayout(fields)
+        row_layout.addWidget(self._rename_error)
+        row.hide()
+        return row
+
+    def open_rename_editor(self) -> None:
+        """Expand (or refocus) the inline rename row.
+
+        The single entry point both the pencil button and the parameter-list
+        row's "Rename…" context-menu action drive -- one rename surface, not
+        two independent implementations. A no-op for a non-renamable card
+        (``self._rename_row`` is ``None``).
+        """
+        self._open_rename_row()
+
+    def show_rename_error(self, message: str) -> None:
+        """Show *message* inline under the (still-expanded) rename row.
+
+        Called by ``InspectorPanel`` when the ``RenameKey`` command refuses
+        the composed name (empty, unchanged, or already taken by a sibling)
+        -- the same inline-error convention other cards use for a blocked
+        commit, rather than a dialog. The user's typed values are left
+        untouched so they can correct and retry.
+        """
+        if self._rename_row is None:
+            return
+        self._rename_row.show()
+        self._rename_error.setText(message)
+        self._rename_error.show()
+
+    def _open_rename_row(self, *_args) -> None:
+        if self._rename_row is None:
+            return
+        name, unit = split_name_and_unit(self.parameter.label)
+        self._rename_name.setText(name)
+        self._rename_unit.setText(unit)
+        self._rename_error.hide()
+        self._rename_error.setText("")
+        self._update_rename_apply_enabled()
+        self._rename_row.show()
+        self._rename_name.setFocus()
+        self._rename_name.selectAll()
+
+    def _collapse_rename_row(self, *_args) -> None:
+        if self._rename_row is None:
+            return
+        self._rename_row.hide()
+        self._rename_error.hide()
+        self._rename_error.setText("")
+
+    def _update_rename_apply_enabled(self, *_args) -> None:
+        self._rename_apply.setEnabled(bool(self._rename_name.text().strip()))
+
+    def _apply_rename(self) -> None:
+        name = self._rename_name.text().strip()
+        if not name:
+            return
+        unit = self._rename_unit.text().strip()
+        new_key = f"{name} [{unit}]" if unit else name
+        self.rename_requested.emit(self.parameter.path, new_key)

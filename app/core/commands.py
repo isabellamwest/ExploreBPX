@@ -83,6 +83,42 @@ class RenameKey(Command):
 
 
 @dataclass(frozen=True)
+class MoveParameter(Command):
+    """Move the key ``key`` one position up or down among its siblings under
+    ``parent_path``.
+
+    ``direction`` is ``"up"`` or ``"down"``. Sibling order is cosmetic to the
+    BPX spec -- it never changes validity -- but export (:mod:`core.export`)
+    preserves dict order for both JSON and YAML, so a move persists like any
+    other edit. A move past the first/last sibling is refused
+    (``CommandError``). Undo is not an inverse command here: like every other
+    command, the session's undo/redo restores the whole document snapshot
+    from before the move ran (see ``state.document_session``).
+    """
+
+    parent_path: tuple[str, ...]
+    key: str
+    direction: str
+
+
+@dataclass(frozen=True)
+class DuplicateParameter(Command):
+    """Deep-copy the value at ``parent_path / key`` into a new sibling key
+    spliced in immediately after the original.
+
+    Allowed exactly where renaming is allowed -- Particle materials,
+    Validation runs, and User-defined content (``structure.can_duplicate``,
+    which mirrors ``can_rename``). The new key's name is the original's base
+    name with a numeric suffix inserted before any unit bracket
+    (``"Foo"`` -> ``"Foo (2)"``, ``"Foo [V]"`` -> ``"Foo (2) [V]"``),
+    incremented until unique among siblings -- see ``editing.duplicate_key``.
+    """
+
+    parent_path: tuple[str, ...]
+    key: str
+
+
+@dataclass(frozen=True)
 class AddParameter(Command):
     """Add a parameter ``key`` with an initial ``value`` under ``parent_path``."""
 

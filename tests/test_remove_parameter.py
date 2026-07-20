@@ -76,11 +76,19 @@ def test_right_click_on_row_selects_it_and_offers_remove(panel):
     assert panel._list.currentItem() is item  # right-click selects what it clicked
     actions = captured.get("actions")
     assert actions is not None, "No context menu was shown"
-    assert [a.text() for a in actions] == ["Remove parameter"]
-    # The action declares no shortcut: Delete is bound by the list view's own
-    # keyPressEvent, so a QKeySequence here would be a redundant second
-    # binding that Qt would also render as a "Del" hint beside the label.
-    assert actions[0].shortcut().isEmpty()
+    # A schema-fixed row (not user-owned) offers no Rename…/Duplicate; Move
+    # up/down are always offered, and this is the last of two rows. A
+    # separator precedes "Remove parameter" -- excluded here, its own text
+    # is empty and carries no assertion value.
+    real_actions = [a for a in actions if not a.isSeparator()]
+    assert [a.text() for a in real_actions] == ["Move up", "Move down", "Remove parameter"]
+    move_up, move_down, remove = real_actions
+    assert move_up.isEnabled() is True
+    assert move_down.isEnabled() is False
+    # The Remove action declares no shortcut: Delete is bound by the list
+    # view's own keyPressEvent, so a QKeySequence here would be a redundant
+    # second binding that Qt would also render as a "Del" hint beside the label.
+    assert remove.shortcut().isEmpty()
 
 
 def test_right_click_on_empty_space_shows_no_menu(panel):
@@ -194,7 +202,8 @@ def test_remove_custom_parameter_end_to_end(app_driver, spm_workfile):
     d.select_object(_CELL)
     d.open_add_parameter_popup()
     d.type_new_parameter_alias("My custom parameter")
-    d.activate_selected_add_parameter_row()
+    d.activate_selected_add_parameter_row()  # expands the inline form
+    d.submit_custom_parameter_form()  # Scalar is the default type
     assert any("My custom parameter" in label for label in d.parameter_labels())
 
     index = _row_index(d.parameter_labels(), "My custom parameter")

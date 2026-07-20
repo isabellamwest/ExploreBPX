@@ -315,7 +315,9 @@ def test_selecting_a_suggestion_emits_its_known_alias(popup, anchor, qtbot):
     item = _row_item(popup, "Density [kg.m-3]")
     with qtbot.waitSignal(popup.custom_parameter_requested) as blocker:
         popup._list.itemClicked.emit(item)
-    assert blocker.args[0] == "Density [kg.m-3]"
+    # A suggestion row never goes through the custom-parameter form -- it
+    # always seeds an honest empty value (``None``), like before.
+    assert blocker.args == ["Density [kg.m-3]", None]
 
 
 # ---------------------------------------------------------------------------
@@ -406,22 +408,192 @@ def test_footer_withheld_when_typed_text_exactly_matches_a_suggestion(popup, anc
 
 
 def test_click_activates_custom_footer(popup, anchor, qtbot):
+    """Clicking the pinned footer expands the inline form in place -- no new
+    window, and nothing is created yet."""
     popup.open_for_section(anchor, "Cell", existing_aliases=set())
     popup._input.setText("New Param")
-    with qtbot.waitSignal(popup.custom_parameter_requested) as blocker:
+    with qtbot.assertNotEmitted(popup.custom_parameter_requested):
         popup._create_button.click()
-    assert blocker.args[0] == "New Param"
-    assert popup.isVisible() is False
+    assert popup.isVisible() is True
+    assert popup._form_visible is True
+    assert popup._create_button.isVisible() is False
+    assert popup._form_name.text() == "New Param"  # typed text seeds Name
 
 
 def test_enter_activates_custom_footer_when_it_is_the_only_target(popup, anchor, qtbot):
     popup.open_for_section(anchor, "Cell", existing_aliases=set())
     popup._input.setText("New Param")  # matches no BPX alias
-    # With no rows, the footer is the default keyboard target, so Enter creates.
+    # With no rows, the footer is the default keyboard target, so Enter expands it.
     assert popup._footer_selected is True
-    with qtbot.waitSignal(popup.custom_parameter_requested) as blocker:
+    with qtbot.assertNotEmitted(popup.custom_parameter_requested):
         popup._activate()
-    assert blocker.args[0] == "New Param"
+    assert popup._form_visible is True
+    assert popup._form_name.text() == "New Param"
+
+
+# ---------------------------------------------------------------------------
+# AddParameterPopup: inline custom-parameter form (type-at-creation)
+# ---------------------------------------------------------------------------
+
+
+def _expand_form(popup, anchor, typed: str = "Foo") -> None:
+    popup.open_for_section(anchor, "Cell", existing_aliases=set())
+    popup._input.setText(typed)
+    popup._activate()  # expands the pinned footer into the form
+    assert popup._form_visible is True
+
+
+def test_form_key_composition_without_a_unit(popup, anchor, qtbot):
+    _expand_form(popup, anchor)
+    popup._form_name.setText("  My field  ")  # leading/trailing whitespace
+    popup._form_unit.clear()
+    with qtbot.waitSignal(popup.custom_parameter_requested) as blocker:
+        popup._form_add.click()
+    assert blocker.args == ["My field", 0.0]  # Scalar is the default type
+
+
+def test_form_key_composition_with_a_unit(popup, anchor, qtbot):
+    _expand_form(popup, anchor)
+    popup._form_name.setText("My field")
+    popup._form_unit.setText("  V  ")  # stripped before composing the key
+    with qtbot.waitSignal(popup.custom_parameter_requested) as blocker:
+        popup._form_add.click()
+    assert blocker.args == ["My field [V]", 0.0]
+
+
+@pytest.mark.parametrize(
+    "type_label, expected_seed",
+    [
+        ("Scalar", 0.0),
+        ("Text", ""),
+        ("Boolean", False),
+        ("Table", {"x": [], "y": []}),
+        ("Series", []),
+    ],
+)
+def test_form_type_button_picks_the_matching_seed(popup, anchor, qtbot, type_label, expected_seed):
+    from ui_qt.add_parameter_popup import _CUSTOM_TYPE_LABELS
+
+    _expand_form(popup, anchor)
+    popup._form_name.setText("My field")
+    popup._form_type_strip._buttons[_CUSTOM_TYPE_LABELS.index(type_label)].click()
+    with qtbot.waitSignal(popup.custom_parameter_requested) as blocker:
+        popup._form_add.click()
+    assert blocker.args == ["My field", expected_seed]
+
+
+def test_add_disabled_while_name_is_empty_or_whitespace(popup, anchor):
+    _expand_form(popup, anchor)
+    assert popup._form_add.isEnabled() is True  # Name was pre-seeded from the typed text
+
+    popup._form_name.setText("   ")  # whitespace only
+    assert popup._form_add.isEnabled() is False
+
+    popup._form_name.clear()
+    assert popup._form_add.isEnabled() is False
+
+    popup._form_name.setText("Real name")
+    assert popup._form_add.isEnabled() is True
+
+
+def test_add_is_a_no_op_when_name_is_still_empty(popup, anchor, qtbot):
+    """Belt-and-braces: even a direct click while disabled creates nothing."""
+    _expand_form(popup, anchor)
+    popup._form_name.clear()
+    with qtbot.assertNotEmitted(popup.custom_parameter_requested):
+        popup._submit_custom_form()
+    assert popup.isVisible() is True
+
+
+def test_add_refuses_a_composed_key_that_collides_with_an_existing_parameter(popup, anchor, qtbot):
+    """Regression: Name/Unit split across the two separate form fields must
+    not bypass the collision guard just because neither field alone matches
+    the existing alias verbatim -- ``core.editing.add_parameter`` writes
+    ``parent[key] = value`` unconditionally, so composing back to an
+    existing key here must refuse rather than silently overwrite it."""
+    existing = {"Diffusivity constant [m2.s-1]"}
+    popup.open_for_section(anchor, "Cell", existing_aliases=existing)
+    popup._input.setText("Diffusivity constant")
+    assert popup._footer_shown is True  # no alias matches the bare name exactly
+    popup._activate()  # expands the form; Name pre-seeded, Unit still blank
+    assert popup._form_visible is True
+
+    popup._form_unit.setText("m2.s-1")  # now composes back to the existing key
+    with qtbot.assertNotEmitted(popup.custom_parameter_requested):
+        popup._form_add.click()
+
+    assert popup._form_message.isVisible() is True
+    assert popup.isVisible() is True  # refused in place -- nothing created, popup stays open
+    assert popup._form_visible is True  # the form itself is untouched, ready to correct
+
+
+def test_editing_name_after_a_collision_clears_the_message_and_allows_a_fresh_add(popup, anchor, qtbot):
+    existing = {"Diffusivity constant [m2.s-1]"}
+    popup.open_for_section(anchor, "Cell", existing_aliases=existing)
+    popup._input.setText("Diffusivity constant")
+    popup._activate()
+    popup._form_unit.setText("m2.s-1")
+    popup._form_add.click()
+    assert popup._form_message.isVisible() is True
+
+    popup._form_name.setText("Diffusivity constant 2")  # no longer collides
+    assert popup._form_message.isVisible() is False  # editing Name clears the stale message
+
+    with qtbot.waitSignal(popup.custom_parameter_requested) as blocker:
+        popup._form_add.click()
+    assert blocker.args == ["Diffusivity constant 2 [m2.s-1]", 0.0]
+
+
+def test_editing_unit_after_a_collision_also_clears_the_message(popup, anchor, qtbot):
+    existing = {"Diffusivity constant [m2.s-1]"}
+    popup.open_for_section(anchor, "Cell", existing_aliases=existing)
+    popup._input.setText("Diffusivity constant")
+    popup._activate()
+    popup._form_unit.setText("m2.s-1")
+    popup._form_add.click()
+    assert popup._form_message.isVisible() is True
+
+    popup._form_unit.setText("m2.s-2")  # different unit -> no longer collides
+    assert popup._form_message.isVisible() is False
+
+
+def test_scalar_warning_shown_only_for_scalar_type(popup, anchor):
+    from ui_qt.add_parameter_popup import _CUSTOM_TYPE_LABELS
+
+    _expand_form(popup, anchor)
+    assert popup._form_warning.isVisible() is True  # Scalar is the default type
+
+    for label in ("Text", "Boolean", "Table", "Series"):
+        popup._form_type_strip._buttons[_CUSTOM_TYPE_LABELS.index(label)].click()
+        assert popup._form_warning.isVisible() is False, label
+
+    popup._form_type_strip._buttons[_CUSTOM_TYPE_LABELS.index("Scalar")].click()
+    assert popup._form_warning.isVisible() is True
+
+
+def test_cancel_collapses_the_form_and_clears_its_fields(popup, anchor, qtbot):
+    _expand_form(popup, anchor)
+    popup._form_unit.setText("V")
+
+    with qtbot.assertNotEmitted(popup.custom_parameter_requested):
+        popup._form_cancel.click()
+
+    assert popup._form_visible is False
+    assert popup._form.isVisible() is False
+    assert popup._create_button.isVisible() is True  # the plain footer is back
+    assert popup._form_name.text() == ""
+    assert popup._form_unit.text() == ""
+    assert popup.isVisible() is True  # cancelling stays in the popup, doesn't close it
+
+
+def test_changing_the_typed_text_collapses_an_open_form(popup, anchor):
+    """The form was expanded for a specific typed alias; once that text
+    changes the form's context is stale, so it collapses back to the plain
+    footer rather than silently keeping stale Name/Unit/type state around."""
+    _expand_form(popup, anchor)
+    popup._input.setText("Foo!")  # still matches nothing -> footer re-offered
+    assert popup._form_visible is False
+    assert popup._create_button.isVisible() is True
 
 
 # ---------------------------------------------------------------------------
@@ -450,9 +622,10 @@ def test_keyboard_navigation_skips_headers_and_reaches_the_footer(popup, anchor,
 
     popup._move_selection(-1)  # wraps up onto the footer
     assert popup._footer_selected is True
-    with qtbot.waitSignal(popup.custom_parameter_requested) as blocker:
-        popup._activate()
-    assert blocker.args[0] == "Densit"
+    with qtbot.assertNotEmitted(popup.custom_parameter_requested):
+        popup._activate()  # Enter on the footer expands the form, doesn't create yet
+    assert popup._form_visible is True
+    assert popup._form_name.text() == "Densit"
 
 
 def test_staged_escape_clears_text_then_closes(popup, anchor):
@@ -588,13 +761,18 @@ def test_add_button_disabled_again_once_selection_clears(panel):
     assert panel._add_button.isEnabled() is False
 
 
-def test_custom_parameter_activation_carries_section_path_and_alias(panel, qtbot):
+def test_custom_parameter_form_add_carries_section_path_key_and_seed(panel, qtbot):
+    """The inline form's "Add" -- not the footer activation itself -- is what
+    fires ``add_parameter_requested``, now carrying a seed (Scalar's ``0.0``,
+    the default type) alongside the section path and composed key."""
     panel.show_node(_section_node())
     panel._open_add_popup()
     panel._popup._input.setText("New Param")
+    panel._popup._activate()  # expands the inline form; doesn't emit yet
+    assert panel._popup._form_visible is True
     with qtbot.waitSignal(panel.add_parameter_requested) as blocker:
-        panel._popup._activate()
-    assert blocker.args == [_CELL, "New Param"]
+        panel._popup._form_add.click()
+    assert blocker.args == [_CELL, "New Param", 0.0]
 
 
 def test_existing_parameter_alias_is_excluded_from_custom_footer(panel):
@@ -704,15 +882,80 @@ def test_add_custom_parameter_end_to_end(app_driver, spm_workfile):
 
     d.open_add_parameter_popup()
     d.type_new_parameter_alias("My custom parameter")
-    d.activate_selected_add_parameter_row()
+    d.activate_selected_add_parameter_row()  # expands the inline form
+    assert d.add_parameter_custom_form_visible() is True
+    d.submit_custom_parameter_form()  # Scalar is the default type
 
-    # The command wrote an honest empty value (None -> classifies UNKNOWN),
-    # so the new row opens in the editable RawCard fallback, still rendering
-    # empty text but round-tripping to None -- not "" -- as its draft value.
+    # The command wrote the Scalar type's seed (0.0), so the new row opens
+    # straight on the real ScalarCard -- not the metadata-less RawCard
+    # fallback the old always-None seed produced.
     assert d.inspector_title() == "My custom parameter"
+    assert d.editor_kind() == "ScalarCard"
     assert d.card_is_editable() is True
-    assert d.field_value() is None
+    assert d.field_value() == 0.0
     assert any("My custom parameter" in label for label in d.parameter_labels())
+
+
+def test_add_refuses_a_colliding_composed_key_end_to_end(app_driver, spm_workfile):
+    """Regression for the popup-overwrites-a-parameter defect: Name/Unit
+    composing back to an existing alias -- via the two separate form fields,
+    never matching anything the popup's own list/footer guards against on
+    their own -- must not execute ``AddParameter`` and silently replace the
+    existing value."""
+    d = app_driver
+    d.open(spm_workfile)
+    d.select_object(_CELL)
+    session = d._w._state.active
+    cell = session.document.raw["Parameterisation"]["Cell"]
+    original = cell["Nominal cell capacity [A.h]"]
+
+    d.open_add_parameter_popup()
+    d.type_new_parameter_alias("Nominal cell capacity")  # no exact alias match -> footer offered
+    d.activate_selected_add_parameter_row()  # expands the inline form
+    assert d.add_parameter_custom_form_visible() is True
+    d.type_custom_parameter_unit("A.h")  # composes back to the existing alias
+    d.submit_custom_parameter_form()
+
+    popup = d._w._params._popup
+    assert popup.isVisible() is True  # refused in place, not closed
+    assert popup._form_message.isVisible() is True
+    assert cell["Nominal cell capacity [A.h]"] == original  # untouched
+    assert (
+        sum(1 for label in d.parameter_labels() if label.startswith("Nominal cell capacity"))
+        == 1
+    )  # no duplicate row either
+
+
+@pytest.mark.parametrize(
+    "type_label, expected_kind, expected_value",
+    [
+        ("Scalar", "ScalarCard", 0.0),
+        ("Text", "TextCard", ""),
+        ("Boolean", "BooleanCard", False),
+        ("Table", "TableCard", {"x": [], "y": []}),
+        ("Series", "SeriesCard", []),
+    ],
+)
+def test_custom_parameter_type_picks_the_matching_card_end_to_end(
+    app_driver, spm_workfile, type_label, expected_kind, expected_value
+):
+    """Each of the five type buttons seeds a value that ``classify`` (no
+    schema metadata exists for a custom alias) routes to that exact card --
+    the whole point of type-at-creation over the old always-None/RawCard
+    fallback."""
+    d = app_driver
+    d.open(spm_workfile)
+    d.select_object(_CELL)
+
+    d.open_add_parameter_popup()
+    d.type_new_parameter_alias(f"My {type_label} field")
+    d.activate_selected_add_parameter_row()
+    d.select_custom_parameter_type(type_label)
+    d.submit_custom_parameter_form()
+
+    assert d.inspector_title() == f"My {type_label} field"
+    assert d.editor_kind() == expected_kind
+    assert d.field_value() == expected_value
 
 
 def test_add_known_alias_suggestion_end_to_end(app_driver, spm_workfile):
@@ -773,6 +1016,8 @@ def test_electrode_section_lists_standard_and_custom_add_works_end_to_end(
     d.type_new_parameter_alias("My hand-typed field")
     assert d.add_parameter_can_create_custom() is True
     d.activate_selected_add_parameter_row()
+    assert d.add_parameter_custom_form_visible() is True
+    d.submit_custom_parameter_form()
 
     assert d.inspector_title() == "My hand-typed field"
     assert d.card_is_editable() is True

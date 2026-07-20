@@ -31,16 +31,28 @@ the *whole* BPX standard for the target section up front -- no typing required
 Typing filters both groups by substring. The "Create custom parameter"
 fallback is a **pinned footer action**, not a scrolling row: it stays put
 beneath the list (separated by a divider), reachable by keyboard as the last
-navigable entry. All routes end the same way -- creating a parameter with an
-honest empty value (``None``) and letting ``core.commands.AddParameter``/the
-validator judge legality, not this widget; a suggested alias always resolves
-its proper :class:`~core.bpx_gateway.FieldMeta` on rebuild (it is, by
-definition, expected by the target section's own schema). An "other" alias
-resolves its meaning the same schema-honest way BPX itself does -- keyed by
-*(section, alias)*, not alias alone -- so it opens its proper editor only if
-the target section's schema actually defines that alias; otherwise it falls
-back to the metadata-less raw editor rather than borrowing an unrelated
-section's meaning for the same alias.
+navigable entry. Activating it expands an **inline form in place** -- no new
+window -- with a Name field, an optional Unit field, and a Scalar/Text/
+Boolean/Table/Series type picker (Scalar checked by default). "Add" composes
+the key (``name`` plus `` [unit]`` when a unit is given) and seeds the value
+for the chosen type -- ``0.0``/``""``/``False``/an empty table/an empty list
+-- so the new parameter lands straight on its matching card
+(:mod:`ui_qt.cards`) instead of the metadata-less raw fallback. If the
+composed key already names a parameter in this section, "Add" refuses (a
+plain inline message explains why) rather than silently overwriting it --
+``core.editing.add_parameter`` writes unconditionally, so this is the only
+guard against it.
+
+A suggestion row (either group) skips the form entirely: it emits its known
+alias with an honest empty value (``None``), letting
+``core.commands.AddParameter``/the validator judge legality, not this widget;
+a suggested alias always resolves its proper :class:`~core.bpx_gateway.FieldMeta`
+on rebuild (it is, by definition, expected by the target section's own
+schema). An "other" alias resolves its meaning the same schema-honest way BPX
+itself does -- keyed by *(section, alias)*, not alias alone -- so it opens its
+proper editor only if the target section's schema actually defines that
+alias; otherwise it falls back to the metadata-less raw editor rather than
+borrowing an unrelated section's meaning for the same alias.
 """
 
 from __future__ import annotations
@@ -50,6 +62,8 @@ from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
     QGraphicsDropShadowEffect,
+    QHBoxLayout,
+    QLabel,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
@@ -62,8 +76,35 @@ from PySide6.QtWidgets import (
 from core.bpx_gateway import ExpectedField, FieldMeta, expected_fields, searchable_parameters
 from core.parameter_types import extract_unit
 from ui_qt import parameter_row, style
+from ui_qt.cards.modal import ModeStrip
 from ui_qt.dismissal import OutsideDismissFilter
 from ui_qt.parameter_row import ParameterRowDelegate
+
+#: The inline custom-parameter form's type picker, in the order the row shows
+#: them, mapped to the seed value each type commits when "Add" is pressed.
+#: Chosen so ``core.parameter_types.classify`` (no schema metadata exists for
+#: a custom alias) lands the new parameter on the matching kind -- SCALAR/
+#: TEXT/BOOLEAN/TABLE/SERIES -- with an honest "nothing set yet" value for
+#: that kind, never guessed data. ``classify`` itself is not touched: these
+#: seeds are simply values it already routes correctly.
+_CUSTOM_TYPE_SEEDS: dict[str, object] = {
+    "Scalar": 0.0,
+    "Text": "",
+    "Boolean": False,
+    "Table": {"x": [], "y": []},
+    "Series": [],
+}
+_CUSTOM_TYPE_LABELS = tuple(_CUSTOM_TYPE_SEEDS)
+
+#: Shown only while Scalar is the selected type -- a plain, honest warning
+#: that the new parameter starts at a placeholder, not a real measurement.
+_SCALAR_SEED_WARNING = "Scalar starts at 0.0 — set the real value on the card."
+
+#: Shown when Name/Unit compose a key that already exists in this section --
+#: refusing the add rather than letting ``core.editing.add_parameter``'s
+#: unconditional ``parent[key] = value`` silently overwrite the existing
+#: parameter's value.
+_COLLISION_MESSAGE = "A parameter with this name already exists here."
 
 #: Visible-row cap before the list scrolls; keeps the popup within screen
 #: bounds however long the full standard gets. Counts every row (headers
@@ -255,7 +296,11 @@ class AddParameterPopup(QWidget):
     """Frameless popup listing the whole BPX standard for a section (suggested
     fields highlighted) plus a pinned custom-add footer."""
 
-    custom_parameter_requested = Signal(str)  # the chosen alias (suggested or typed)
+    #: (key, seed) -- a suggestion row (either group) always carries seed
+    #: ``None`` (the honest empty value); the inline custom-parameter form's
+    #: "Add" carries whichever seed its selected type maps to
+    #: (``_CUSTOM_TYPE_SEEDS``).
+    custom_parameter_requested = Signal(str, object)
 
     _ALIAS_ROLE = Qt.UserRole
     #: Which tier a row belongs to -- "suggested", "other" or "header". Drives
@@ -294,6 +339,9 @@ class AddParameterPopup(QWidget):
         self._typed: str = ""
         self._footer_shown: bool = False
         self._footer_selected: bool = False
+        #: Whether the footer is currently expanded into the inline
+        #: custom-parameter form (see ``_show_custom_form``).
+        self._form_visible: bool = False
 
         self._input = _PopupInput()
         self._input.setObjectName("AddParameterInput")
@@ -328,8 +376,11 @@ class AddParameterPopup(QWidget):
         self._create_button.setIcon(_plus_icon())
         self._create_button.setFocusPolicy(Qt.NoFocus)
         self._create_button.setCursor(Qt.PointingHandCursor)
-        self._create_button.clicked.connect(self._emit_custom)
+        self._create_button.clicked.connect(self._show_custom_form)
         self._create_button.hide()
+
+        self._form = self._build_custom_form()
+        self._form.hide()
 
         card = self._card = QFrame()
         card.setObjectName("AddParameterCard")
@@ -341,6 +392,7 @@ class AddParameterPopup(QWidget):
         card_layout.addWidget(self._list)
         card_layout.addWidget(self._divider)
         card_layout.addWidget(self._create_button)
+        card_layout.addWidget(self._form)
 
         shadow = QGraphicsDropShadowEffect(self)
         shadow.setBlurRadius(24)
@@ -426,7 +478,12 @@ class AddParameterPopup(QWidget):
         typing filters both groups by substring. The "Suggested" group is
         omitted entirely when the section has no resolvable expected fields, so
         such sections just show the full "other" list with no header.
+
+        A typed-text change always means the section/text context the inline
+        custom-parameter form was expanded for is stale, so this collapses it
+        back to the plain footer first (a no-op if it wasn't expanded).
         """
+        self._collapse_custom_form()
         self._list.clear()
         typed = text.strip()
         needle = typed.lower()
@@ -512,6 +569,142 @@ class AddParameterPopup(QWidget):
         if show:
             self._create_button.setText(f"  Create custom parameter “{self._typed}”")
 
+    # -- inline custom-parameter form ---------------------------------
+    def _build_custom_form(self) -> QWidget:
+        """Build (but do not show) the form the pinned footer expands into:
+        Name, an optional Unit, a Scalar/Text/Boolean/Table/Series type
+        picker (plain text, no icons -- a standing project rule), the
+        Scalar-only seed warning, a same-styled collision message, and
+        Add/Cancel."""
+        self._form_name = QLineEdit()
+        self._form_name.setObjectName("AddParameterInput")  # same look as the search field
+        self._form_name.setPlaceholderText("Name")
+
+        self._form_unit = QLineEdit()
+        self._form_unit.setObjectName("AddParameterInput")
+        self._form_unit.setPlaceholderText("optional, e.g. V")
+
+        self._form_type_strip = ModeStrip(_CUSTOM_TYPE_LABELS, self._on_form_type_changed)
+        self._form_type_strip.select(0)  # Scalar, the default
+
+        self._form_warning = QLabel(_SCALAR_SEED_WARNING)
+        self._form_warning.setObjectName("Hint")
+        self._form_warning.setWordWrap(True)
+
+        #: Shown instead of submitting when the composed key already exists
+        #: in this section (see ``_submit_custom_form``); same plain-label
+        #: convention as ``_form_warning``, above it so it sits right next to
+        #: the fields that caused it.
+        self._form_message = QLabel(_COLLISION_MESSAGE)
+        self._form_message.setObjectName("Hint")
+        self._form_message.setWordWrap(True)
+        self._form_message.hide()
+
+        self._form_add = QPushButton("Add")
+        self._form_add.setEnabled(False)
+
+        self._form_cancel = QPushButton("Cancel")
+
+        buttons = QHBoxLayout()
+        buttons.setContentsMargins(0, 0, 0, 0)
+        buttons.addWidget(self._form_add)
+        buttons.addWidget(self._form_cancel)
+        buttons.addStretch(1)
+
+        form = QWidget()
+        form.setObjectName("CustomParameterForm")
+        layout = QVBoxLayout(form)
+        layout.setContentsMargins(10, 4, 10, 8)
+        layout.setSpacing(6)
+        layout.addWidget(self._form_name)
+        layout.addWidget(self._form_unit)
+        layout.addWidget(self._form_type_strip)
+        layout.addWidget(self._form_warning)
+        layout.addWidget(self._form_message)
+        layout.addLayout(buttons)
+
+        self._form_name.textChanged.connect(self._update_form_add_enabled)
+        self._form_name.textChanged.connect(self._clear_collision_message)
+        self._form_unit.textChanged.connect(self._clear_collision_message)
+        self._form_add.clicked.connect(self._submit_custom_form)
+        self._form_cancel.clicked.connect(self._collapse_custom_form)
+        return form
+
+    def _show_custom_form(self, *_args) -> None:
+        """Expand the pinned footer into the inline form, in place -- never a
+        new window. The typed search text seeds Name, since it is the alias
+        the user was already typing toward; Unit starts blank and Scalar
+        starts selected."""
+        self._form_visible = True
+        self._create_button.hide()
+        self._form_name.setText(self._typed)
+        self._form_unit.clear()
+        self._form_type_strip.select(0)
+        self._form_warning.setVisible(True)
+        self._form_message.hide()
+        self._update_form_add_enabled()
+        self._form.show()
+        self._refit()
+        self._form_name.setFocus()
+        self._form_name.selectAll()
+
+    def _collapse_custom_form(self, *_args) -> None:
+        """Collapse the form back to the plain pinned footer button (Cancel,
+        or a fresh ``_refresh_rows`` making its typed context stale),
+        clearing its fields so the next expansion starts fresh."""
+        if not self._form_visible:
+            return
+        self._form_visible = False
+        self._form.hide()
+        self._form_name.clear()
+        self._form_unit.clear()
+        self._form_type_strip.select(0)
+        self._form_warning.setVisible(True)
+        self._form_message.hide()
+        self._create_button.show()
+        self._refit()
+
+    def _update_form_add_enabled(self, *_args) -> None:
+        """Add stays disabled while Name is empty/whitespace -- there is
+        nothing yet to key the new parameter with."""
+        self._form_add.setEnabled(bool(self._form_name.text().strip()))
+
+    def _on_form_type_changed(self, index: int) -> None:
+        """The scalar-seed warning is only honest while Scalar is selected;
+        the type never affects the composed key, but a stale collision
+        message is cleared too, matching Name/Unit."""
+        self._form_warning.setVisible(_CUSTOM_TYPE_LABELS[index] == "Scalar")
+        self._clear_collision_message()
+
+    def _clear_collision_message(self, *_args) -> None:
+        self._form_message.hide()
+
+    def _submit_custom_form(self, *_args) -> None:
+        """Compose the key from Name/Unit and emit it with the seed the
+        selected type maps to, then close the popup -- the same
+        close-and-emit shape every other route through this popup uses.
+
+        Refuses (and surfaces ``_form_message`` instead) when the composed
+        key already names a parameter in this section: ``core.editing.
+        add_parameter`` writes ``parent[key] = value`` unconditionally, so
+        without this check a name/unit combination that happens to collide
+        with an existing alias -- typed across the two separate fields,
+        never matching anything the popup's own list/footer already guards
+        against -- would silently overwrite that parameter's value.
+        """
+        name = self._form_name.text().strip()
+        if not name:
+            return
+        unit = self._form_unit.text().strip()
+        key = f"{name} [{unit}]" if unit else name
+        if key in self._existing_aliases:
+            self._form_message.show()
+            self._refit()
+            return
+        label = _CUSTOM_TYPE_LABELS[self._form_type_strip.current_index()]
+        self.hide()
+        self.custom_parameter_requested.emit(key, _CUSTOM_TYPE_SEEDS[label])
+
     def _resize_list(self) -> None:
         """Size the list to hug its content -- no dead space, no premature
         scrollbar -- but cap it at ``_MAX_VISIBLE_ROWS`` so it scrolls natively
@@ -519,30 +712,36 @@ class AddParameterPopup(QWidget):
         count = self._list.count()
         if count == 0:
             self._list.setFixedHeight(0)
-            return
-        frame = 2 * self._list.frameWidth()
-        heights = [self._list.sizeHintForRow(i) for i in range(count)]
-        if count > _MAX_VISIBLE_ROWS:
-            self._list.setFixedHeight(sum(heights[:_MAX_VISIBLE_ROWS]) + frame)
         else:
-            self._list.setFixedHeight(sum(heights) + frame)
-        # Shrink the popup back to its content, or filtering a long list down
-        # to one row would leave the card full of dead space. Two Qt details
-        # make this more than a bare ``adjustSize``: a top-level's layout sets
-        # the window's *minimum* size and only ever raises it (so the minimum
-        # from the unfiltered list would pin the height), and ``adjustSize``
-        # reads a cached hint, so the layout must be re-activated after the
-        # row height set above.
-        if self.isVisible():
-            self.setMinimumHeight(0)
-            self._list.updateGeometry()
-            # The card's own layout holds the list, so it is the one whose
-            # cached hint is stale; activating only the outer layout would
-            # resize the window against the pre-filter height.
-            self._card.layout().invalidate()
-            self._card.layout().activate()
-            self.layout().activate()
-            self.adjustSize()
+            frame = 2 * self._list.frameWidth()
+            heights = [self._list.sizeHintForRow(i) for i in range(count)]
+            if count > _MAX_VISIBLE_ROWS:
+                self._list.setFixedHeight(sum(heights[:_MAX_VISIBLE_ROWS]) + frame)
+            else:
+                self._list.setFixedHeight(sum(heights) + frame)
+        self._refit()
+
+    def _refit(self) -> None:
+        """Shrink the popup back to fit whatever it is currently showing --
+        the list (after ``_resize_list``) or the inline custom-parameter form
+        appearing/collapsing -- or dead space would linger from a taller
+        prior state. Two Qt details make this more than a bare
+        ``adjustSize``: a top-level's layout sets the window's *minimum* size
+        and only ever raises it (so a prior taller minimum would pin the
+        height), and ``adjustSize`` reads a cached hint, so the layout must
+        be re-activated first.
+        """
+        if not self.isVisible():
+            return
+        self.setMinimumHeight(0)
+        self._list.updateGeometry()
+        # The card's own layout holds the list/form, so it is the one whose
+        # cached hint is stale; activating only the outer layout would resize
+        # the window against the pre-change height.
+        self._card.layout().invalidate()
+        self._card.layout().activate()
+        self.layout().activate()
+        self.adjustSize()
 
     # -- selection / activation --------------------------------------
     def _selectable_rows(self) -> list[int]:
@@ -586,7 +785,8 @@ class AddParameterPopup(QWidget):
 
     def _activate(self, *_args) -> None:
         if self._footer_selected and self._footer_shown:
-            self._emit_custom()
+            if not self._form_visible:  # already expanded: don't re-seed it
+                self._show_custom_form()
             return
         item = self._list.currentItem()
         if item is None:
@@ -595,13 +795,7 @@ class AddParameterPopup(QWidget):
         if not alias:
             return
         self.hide()
-        self.custom_parameter_requested.emit(alias)
-
-    def _emit_custom(self, *_args) -> None:
-        if not self._typed:
-            return
-        self.hide()
-        self.custom_parameter_requested.emit(self._typed)
+        self.custom_parameter_requested.emit(alias, None)
 
     # -- keyboard ------------------------------------------------------
     def _move_selection(self, delta: int) -> None:

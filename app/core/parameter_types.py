@@ -64,6 +64,19 @@ def extract_unit(label: str) -> str:
     return match.group(1) if match else ""
 
 
+def split_name_and_unit(label: str) -> tuple[str, str]:
+    """Split a trailing-unit BPX label (``"Thickness [m]"``) into its bare
+    name and unit, using the same trailing-bracket convention as
+    :func:`extract_unit`. A label with no unit suffix returns it unchanged,
+    with an empty unit."""
+    unit = extract_unit(label)
+    if not unit:
+        return label, ""
+    idx = label.rfind("[")
+    name = label[:idx].rstrip() if idx != -1 else label
+    return name, unit
+
+
 def looks_like_table(value: object) -> bool:
     """True if ``value`` is an interpolated table (``{"x": [...], "y": [...]}``)."""
     return (

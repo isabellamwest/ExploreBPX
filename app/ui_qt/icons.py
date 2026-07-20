@@ -86,6 +86,19 @@ PARAMETER = """
 </svg>
 """.strip()
 
+#: Pencil over a baseline -- the card-header "rename name & unit" button on a
+#: User-defined parameter. Drawn in the same outline family as the rail icons
+#: (24x24, 1.5px stroke, round caps) so it reads as one of ours, not a stray
+#: glyph -- which is exactly what the bare "✎" QPushButton text it replaces
+#: looked like.
+PENCIL = """
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+     stroke="{color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M12 20h8"/>
+  <path d="M16 4.5a1.9 1.9 0 0 1 2.7 2.7L7.6 18.3l-3.6 0.9 0.9-3.6z"/>
+</svg>
+""".strip()
+
 
 def _device_pixel_ratio() -> float:
     """The primary screen's device-pixel-ratio, or 1.0 with no QApplication."""
@@ -157,4 +170,18 @@ def activity_icon(svg: str) -> QIcon:
     icon = QIcon()
     icon.addPixmap(_render_pixmap(svg, _MUTED, 20), QIcon.Normal, QIcon.Off)
     icon.addPixmap(_render_pixmap(svg, _STRONG, 20), QIcon.Normal, QIcon.On)
+    return icon
+
+
+def hover_icon(svg: str, size: int = 16) -> QIcon:
+    """Build one QIcon that darkens when the pointer is over it.
+
+    Muted at rest, strong ink under the pointer (Qt paints the ``Active``
+    pixmap while a widget is hovered) -- the same tone jump as
+    :func:`activity_icon`'s selected state. It lets a flat, box-less icon
+    button still signal "live" on hover with no border or fill of its own.
+    """
+    icon = QIcon()
+    icon.addPixmap(_render_pixmap(svg, _MUTED, size), QIcon.Normal, QIcon.Off)
+    icon.addPixmap(_render_pixmap(svg, _STRONG, size), QIcon.Active, QIcon.Off)
     return icon

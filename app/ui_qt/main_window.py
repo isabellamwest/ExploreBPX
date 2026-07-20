@@ -31,6 +31,8 @@ from core.bpx_gateway import BPX_VERSION, LoadError
 from core.commands import (
     AddParameter,
     AddSection,
+    DuplicateParameter,
+    MoveParameter,
     RemoveParameter,
     RemoveSection,
     RenameKey,
@@ -259,6 +261,9 @@ class MainWindow(QMainWindow):
         self._params.parameter_selected.connect(self._navigation.navigate)
         self._params.add_parameter_requested.connect(self._on_add_parameter_requested)
         self._params.remove_parameter_requested.connect(self._on_remove_parameter_requested)
+        self._params.rename_parameter_requested.connect(self._on_rename_parameter_requested)
+        self._params.duplicate_parameter_requested.connect(self._on_duplicate_parameter_requested)
+        self._params.move_parameter_requested.connect(self._on_move_parameter_requested)
         self._diagnostics.issue_activated.connect(self._navigation.navigate)
         self._diagnostics.task_activated.connect(self._on_task_activated)
         self._inspector.issue_activated.connect(self._navigation.navigate)
@@ -349,19 +354,24 @@ class MainWindow(QMainWindow):
             if not self._params.reveal_missing_alias(task.alias):
                 self._navigation.navigate(task.path)
 
-    def _on_add_parameter_requested(self, section_path: tuple, alias: str) -> None:
+    def _on_add_parameter_requested(self, section_path: tuple, alias: str, seed: object) -> None:
         """Add a custom parameter to *section_path* and reveal it.
 
-        Routes through the existing ``AddParameter`` command with an honest
-        empty value (``None``); the validator, not the UI, judges whether the
-        resulting alias/value is legal. Refresh-then-navigate mirrors
-        ``_on_committed``: the document is rebuilt first, then the new
-        parameter is revealed through the single ``NavigationService``.
+        Routes through the existing ``AddParameter`` command with *seed* as
+        the initial value -- ``None`` (an honest empty value) for a schema
+        suggestion, or a type-matching seed (0.0/""/False/table/list) from
+        the add-parameter popup's inline custom-parameter form, so the new
+        parameter lands on its matching card straight away
+        (``core.parameter_types.classify``). Either way the validator, not
+        the UI, judges whether the resulting alias/value is legal.
+        Refresh-then-navigate mirrors ``_on_committed``: the document is
+        rebuilt first, then the new parameter is revealed through the single
+        ``NavigationService``.
         """
         session = self._state.active
         if session is None or session.document is None:
             return
-        session.execute_command(AddParameter(tuple(section_path), alias, None))
+        session.execute_command(AddParameter(tuple(section_path), alias, seed))
         target = session.selected_parameter_path
         self._refresh_all()
         if target:
@@ -382,6 +392,51 @@ class MainWindow(QMainWindow):
             return
         session.execute_command(RemoveParameter(tuple(parameter_path)))
         target = session.selected_path
+        self._refresh_all()
+        if target:
+            self._navigation.navigate(target)
+
+    def _on_rename_parameter_requested(self, parameter_path: tuple) -> None:
+        """Open the row's own card-header rename editor (one rename surface --
+        see ``cards.parameter_card.ParameterCard.open_rename_editor``).
+
+        Navigates to the parameter first so the Inspector is showing its
+        card, then asks that card to expand its inline row -- no command
+        runs here; the card's own "Apply" is what does that.
+        """
+        self._navigation.navigate(tuple(parameter_path))
+        self._inspector.open_rename_editor()
+
+    def _on_duplicate_parameter_requested(self, parameter_path: tuple) -> None:
+        """Duplicate a parameter via its row's context menu.
+
+        Routes through ``DuplicateParameter``, whose own ``CommandResult``
+        selects the new sibling key (``command_service.execute``), so
+        navigating to ``selected_parameter_path`` afterwards lands the user
+        on the duplicate, not the original.
+        """
+        session = self._state.active
+        if session is None or session.document is None:
+            return
+        path = tuple(parameter_path)
+        session.execute_command(DuplicateParameter(path[:-1], path[-1]))
+        target = session.selected_parameter_path or session.selected_path
+        self._refresh_all()
+        if target:
+            self._navigation.navigate(target)
+
+    def _on_move_parameter_requested(self, parameter_path: tuple, direction: str) -> None:
+        """Reorder a parameter one position via its row's context menu.
+
+        The menu only offers a legal direction (disabled at the first/last
+        row), so a refusal here would be a menu-gating bug, not user error.
+        """
+        session = self._state.active
+        if session is None or session.document is None:
+            return
+        path = tuple(parameter_path)
+        session.execute_command(MoveParameter(path[:-1], path[-1], direction))
+        target = session.selected_parameter_path or session.selected_path
         self._refresh_all()
         if target:
             self._navigation.navigate(target)

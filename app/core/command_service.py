@@ -18,6 +18,8 @@ from .commands import (
     Command,
     CommandResult,
     CreateDocument,
+    DuplicateParameter,
+    MoveParameter,
     Preview,
     RemoveParameter,
     RemoveSection,
@@ -53,6 +55,10 @@ def preview(raw: dict, command: Command) -> Preview:
         return Preview("Add parameter", (command.parent_path + (command.key,),))
     if isinstance(command, RemoveParameter):
         return Preview("Remove parameter", (command.path,))
+    if isinstance(command, MoveParameter):
+        return Preview(f"Move {command.direction}", (command.parent_path + (command.key,),))
+    if isinstance(command, DuplicateParameter):
+        return Preview("Duplicate parameter", (command.parent_path + (command.key,),))
     if isinstance(command, CreateDocument):
         return Preview(f"New {command.model}")
     raise CommandError(f"Unsupported command: {type(command).__name__}")
@@ -105,6 +111,28 @@ def execute(raw: dict, command: Command) -> CommandResult:
     if isinstance(command, RemoveParameter):
         new = editing.remove_parameter(raw, command.path)
         return CommandResult(new, "Remove parameter", command.path[:-1])
+    if isinstance(command, MoveParameter):
+        if command.direction not in ("up", "down"):
+            raise CommandError(f"Unknown move direction: {command.direction!r}")
+        parent = raw_at(raw, command.parent_path)
+        if not isinstance(parent, dict) or command.key not in parent:
+            raise CommandError("This parameter no longer exists.")
+        keys = list(parent)
+        index = keys.index(command.key)
+        if command.direction == "up" and index == 0:
+            raise CommandError(f"“{command.key}” is already first.")
+        if command.direction == "down" and index == len(keys) - 1:
+            raise CommandError(f"“{command.key}” is already last.")
+        path = command.parent_path + (command.key,)
+        new = editing.move_key(raw, path, command.direction)
+        return CommandResult(new, f"Move {command.direction}", command.parent_path, path)
+    if isinstance(command, DuplicateParameter):
+        path = command.parent_path + (command.key,)
+        if not structure.can_duplicate(path):
+            raise CommandError("This parameter cannot be duplicated.")
+        new, new_key = editing.duplicate_key(raw, path)
+        new_path = command.parent_path + (new_key,)
+        return CommandResult(new, "Duplicate parameter", command.parent_path, new_path)
     if isinstance(command, CreateDocument):
         new = document_factory.create(command.model, command.title)
         return CommandResult(new, f"New {command.model}", ("Header",))

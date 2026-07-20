@@ -185,7 +185,7 @@ def test_suggestion_click_emits_add_parameter_requested(panel, qtbot):
 
     with qtbot.waitSignal(panel.add_parameter_requested) as blocker:
         panel._list.itemClicked.emit(row)
-    assert blocker.args == [_CELL, "Density [kg.m-3]"]
+    assert blocker.args == [_CELL, "Density [kg.m-3]", None]
 
 
 def test_enter_on_current_suggestion_row_emits_add_parameter_requested(panel, qtbot):
@@ -198,7 +198,7 @@ def test_enter_on_current_suggestion_row_emits_add_parameter_requested(panel, qt
 
     with qtbot.waitSignal(panel.add_parameter_requested) as blocker:
         qtbot.keyClick(panel._list, Qt.Key_Return)
-    assert blocker.args == [_CELL, "Density [kg.m-3]"]
+    assert blocker.args == [_CELL, "Density [kg.m-3]", None]
 
 
 def test_enter_on_current_header_row_does_not_add(panel, qtbot):

@@ -116,6 +116,32 @@ def can_rename(path: tuple[str, ...]) -> bool:
     return False
 
 
+def can_duplicate(path: tuple[str, ...]) -> bool:
+    """Whether the key at ``path`` may be duplicated.
+
+    Duplication is allowed exactly where renaming is: Particle materials,
+    Validation runs, and User-defined content -- a duplicate is itself a new
+    user-owned name, so it can only exist where the user is already free to
+    name things. See :func:`can_rename`.
+    """
+    return can_rename(path)
+
+
+def is_particle_material(path: tuple[str, ...]) -> bool:
+    """Whether ``path`` names a Particle material instance
+    (``.../Particle/<name>``) -- the one renamable key whose old name may
+    still be referenced elsewhere in the raw dict (a per-material MAP key,
+    e.g. under a Degradation field) after a rename, since ``RenameKey``
+    deliberately does not rewrite those references (the validator reports
+    the mismatch, the app invents nothing). Validation runs and User-defined
+    content are never referenced by name elsewhere, so this is False for
+    them. Used only to decide whether the rename UI shows a note about this;
+    it plays no part in whether the rename itself is legal (see
+    :func:`can_rename`).
+    """
+    return len(path) >= 2 and path[-2] == "Particle"
+
+
 def is_freeform_section(path: tuple[str, ...]) -> bool:
     """Whether *path* is a place the user may freely add named subsections and
     parameters: the ``User-defined`` bucket and any subsection within it.

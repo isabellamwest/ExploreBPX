@@ -28,7 +28,11 @@ from PySide6.QtWidgets import (
     QStyleOptionViewItem,
 )
 
-from core.parameter_types import ParameterKind, extract_unit, looks_like_table
+from core.parameter_types import ParameterKind, looks_like_table
+# split_name_and_unit lives in core.parameter_types (also used outside ui_qt,
+# e.g. core.editing); re-exported here so existing ``parameter_row.``
+# call sites (this module's own rows, the add-parameter popup) are unchanged.
+from core.parameter_types import split_name_and_unit
 from ui_qt import style
 
 #: Item-data role carrying the HTML fragment :class:`ParameterRowDelegate`
@@ -113,19 +117,6 @@ def value_preview(value: object, kind: ParameterKind) -> tuple[str, bool]:
         count = len(value)
         return f"{noun} · {count} value{'s' if count != 1 else ''}", True
     return str(value), False
-
-
-def split_name_and_unit(label: str) -> tuple[str, str]:
-    """Split a trailing-unit BPX label (``"Thickness [m]"``) into its bare
-    name and unit, using the same trailing-bracket convention as
-    :func:`core.parameter_types.extract_unit`. A label with no unit suffix
-    returns it unchanged, with an empty unit."""
-    unit = extract_unit(label)
-    if not unit:
-        return label, ""
-    idx = label.rfind("[")
-    name = label[:idx].rstrip() if idx != -1 else label
-    return name, unit
 
 
 def _span(text: str, *, color: str, bold: bool = False) -> str:

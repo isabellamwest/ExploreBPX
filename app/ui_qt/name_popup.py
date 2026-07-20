@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
 )
 
 from .dismissal import OutsideDismissFilter
-from .style import ERROR
+from .style import ERROR, MUTED
 
 _CARD_WIDTH = 300
 _SHADOW_MARGIN = 16
@@ -76,6 +76,17 @@ class NamePopup(QWidget):
         self._input.confirm_requested.connect(self._confirm)
         self._input.escape_requested.connect(self.hide)
 
+        # A small, plain, informational note about *what renaming here means*
+        # -- e.g. that a Particle material's old name stays behind in any
+        # per-material reference (decision: UI copy only, no validation logic
+        # here -- see ``core.structure.is_particle_material``). Muted, not
+        # error-coloured: unlike ``_reason`` it never blocks Enter.
+        self._note = QLabel("")
+        self._note.setObjectName("NamePopupNote")
+        self._note.setStyleSheet(f"color: {MUTED}; padding: 2px 4px 4px 4px; font-size: 11px;")
+        self._note.setWordWrap(True)
+        self._note.hide()
+
         self._reason = QLabel("")
         self._reason.setObjectName("NamePopupReason")
         self._reason.setStyleSheet(f"color: {ERROR}; padding: 2px 4px 4px 4px;")
@@ -89,6 +100,7 @@ class NamePopup(QWidget):
         card_layout.setContentsMargins(8, 8, 8, 8)
         card_layout.setSpacing(6)
         card_layout.addWidget(self._input)
+        card_layout.addWidget(self._note)
         card_layout.addWidget(self._reason)
 
         shadow = QGraphicsDropShadowEffect(self)
@@ -110,6 +122,7 @@ class NamePopup(QWidget):
         placeholder: str,
         taken: frozenset[str] = frozenset(),
         initial: str = "",
+        note: str = "",
     ) -> None:
         """Show the popup with its card's top-left at *global_pos*.
 
@@ -118,13 +131,18 @@ class NamePopup(QWidget):
         pre-fills (and selects) the current name so a rename starts from what
         is being renamed; re-confirming it unchanged is not a rename, so Enter
         then simply does nothing -- no red warning for a name the user has not
-        even edited yet.
+        even edited yet. *note*, when given, shows one small plain line under
+        the input for the whole time the popup is open (e.g. the Particle
+        rename note); empty by default, and cleared by every subsequent call
+        that doesn't repeat it.
         """
         self._taken = frozenset(taken)
         self._initial = initial.strip()
         self._input.setPlaceholderText(placeholder)
         self._input.setText(initial)
         self._input.selectAll()
+        self._note.setText(note)
+        self._note.setVisible(bool(note))
         self._refresh_gate()
         self.move(global_pos - QPoint(_SHADOW_MARGIN, _SHADOW_MARGIN))
         self.show()

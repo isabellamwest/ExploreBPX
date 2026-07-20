@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import copy
 
+from . import parameter_types
+
 
 class EditError(KeyError):
     """Raised when an edit path does not resolve in the raw dict."""
@@ -110,6 +112,86 @@ def rename_key(raw: dict, path: tuple[str, ...], new_key: str) -> dict:
     parent.clear()
     parent.update(items)
     return updated
+
+
+def move_key(raw: dict, path: tuple[str, ...], direction: str) -> dict:
+    """Return a copy of ``raw`` with the key at ``path`` moved one position
+    up or down among its siblings within the owning dict.
+
+    ``direction`` is ``"up"`` or ``"down"``. Like :func:`rename_key`, this is
+    a dict-rebuild that swaps the two neighbouring entries -- the value moves
+    untouched, descendants and all.
+
+    Raises :class:`EditError` when the key is missing, when ``direction`` is
+    neither ``"up"`` nor ``"down"``, or when the move would go past the
+    first/last sibling (a boundary move).
+    """
+    if not path:
+        raise EditError("Cannot move the document root")
+    if direction not in ("up", "down"):
+        raise EditError(f"Unknown move direction: {direction!r}")
+    updated = copy.deepcopy(raw)
+    parent = _navigate(updated, path)
+    key = path[-1]
+    if key not in parent:
+        raise EditError(f"Path segment not found: {key!r} in {path!r}")
+    keys = list(parent)
+    index = keys.index(key)
+    new_index = index - 1 if direction == "up" else index + 1
+    if not (0 <= new_index < len(keys)):
+        raise EditError(f"Cannot move {key!r} further {direction}")
+    keys[index], keys[new_index] = keys[new_index], keys[index]
+    items = [(k, parent[k]) for k in keys]
+    parent.clear()
+    parent.update(items)
+    return updated
+
+
+def _next_duplicate_name(key: str, existing_keys: object) -> str:
+    """The first unique sibling name for a duplicate of ``key``.
+
+    A numeric suffix is inserted before any unit bracket -- ``"Foo"`` ->
+    ``"Foo (2)"``, ``"Foo [V]"`` -> ``"Foo (2) [V]"`` -- incrementing until
+    the candidate is not already among ``existing_keys``.
+    """
+    name, unit = parameter_types.split_name_and_unit(key)
+    existing = set(existing_keys)
+    suffix = 2
+    while True:
+        candidate = f"{name} ({suffix})" + (f" [{unit}]" if unit else "")
+        if candidate not in existing:
+            return candidate
+        suffix += 1
+
+
+def duplicate_key(raw: dict, path: tuple[str, ...]) -> tuple[dict, str]:
+    """Return a copy of ``raw`` with the value at ``path`` deep-copied into a
+    new sibling key immediately after the original, plus the new key.
+
+    The new key is named by :func:`_next_duplicate_name`. Unlike
+    :func:`add_parameter` (which always lands at whatever position dict
+    insertion gives it), the duplicate is spliced in right after its source
+    so it reads as "the copy of that entry", not as an unrelated addition at
+    the end.
+
+    Raises :class:`EditError` when the key is missing.
+    """
+    if not path:
+        raise EditError("Cannot duplicate the document root")
+    updated = copy.deepcopy(raw)
+    parent = _navigate(updated, path)
+    key = path[-1]
+    if key not in parent:
+        raise EditError(f"Path segment not found: {key!r} in {path!r}")
+    new_key = _next_duplicate_name(key, parent.keys())
+    items: list[tuple[str, object]] = []
+    for existing_key, value in parent.items():
+        items.append((existing_key, value))
+        if existing_key == key:
+            items.append((new_key, copy.deepcopy(value)))
+    parent.clear()
+    parent.update(items)
+    return updated, new_key
 
 
 def add_section(raw: dict, parent_path: tuple[str, ...], key: str) -> dict:

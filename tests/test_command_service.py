@@ -9,6 +9,8 @@ from core.commands import (
     AddSection,
     ChangeModel,
     CreateDocument,
+    DuplicateParameter,
+    MoveParameter,
     RemoveParameter,
     RemoveSection,
     RenameKey,
@@ -258,6 +260,127 @@ def test_rename_then_undo_restores_the_old_name_and_position():
     assert list(session.document.raw["Validation"]) == ["Run A", "Run B"]
 
 
+# --- MoveParameter: reorder a sibling, undo restores the prior order ---
+
+
+def test_move_parameter_up_and_down_changes_sibling_order():
+    raw = {"Header": {"a": 1, "b": 2, "c": 3}}
+    up = command_service.execute(raw, MoveParameter(("Header",), "b", "up"))
+    assert list(up.raw["Header"]) == ["b", "a", "c"]
+    assert up.label == "Move up"
+    assert up.select_path == ("Header",)
+    assert up.select_parameter_path == ("Header", "b")
+    down = command_service.execute(raw, MoveParameter(("Header",), "b", "down"))
+    assert list(down.raw["Header"]) == ["a", "c", "b"]
+    assert down.label == "Move down"
+    # Source untouched.
+    assert list(raw["Header"]) == ["a", "b", "c"]
+
+
+def test_move_parameter_boundary_move_is_refused():
+    raw = {"Header": {"a": 1, "b": 2, "c": 3}}
+    with pytest.raises(CommandError):
+        command_service.execute(raw, MoveParameter(("Header",), "a", "up"))
+    with pytest.raises(CommandError):
+        command_service.execute(raw, MoveParameter(("Header",), "c", "down"))
+
+
+def test_move_parameter_unknown_direction_is_refused():
+    raw = {"Header": {"a": 1, "b": 2}}
+    with pytest.raises(CommandError):
+        command_service.execute(raw, MoveParameter(("Header",), "a", "sideways"))
+
+
+def test_move_parameter_missing_key_is_refused():
+    raw = {"Header": {"a": 1}}
+    with pytest.raises(CommandError):
+        command_service.execute(raw, MoveParameter(("Header",), "nope", "up"))
+
+
+def test_move_parameter_then_undo_restores_order():
+    from state.document_session import DocumentSession
+
+    session = DocumentSession()
+    session.execute_command(CreateDocument("SPM", "T"))
+    session.execute_command(AddParameter(("Header",), "a", 1))
+    session.execute_command(AddParameter(("Header",), "b", 2))
+    before = list(session.document.raw["Header"])
+    session.execute_command(MoveParameter(("Header",), "a", "down"))
+    assert list(session.document.raw["Header"]) != before
+    session.undo()
+    assert list(session.document.raw["Header"]) == before
+
+
+# --- DuplicateParameter: adjacent copy with a unit-aware unique name ---
+
+
+def _raw_with_material():
+    return {
+        "Parameterisation": {
+            "Positive electrode": {
+                "Particle": {"Primary": {"Radius [m]": 1e-6}, "Secondary": {}}
+            }
+        }
+    }
+
+
+def test_duplicate_parameter_inserts_adjacent_with_correct_name():
+    raw = _raw_with_material()
+    parent_path = ("Parameterisation", "Positive electrode", "Particle")
+    result = command_service.execute(raw, DuplicateParameter(parent_path, "Primary"))
+    particle = result.raw["Parameterisation"]["Positive electrode"]["Particle"]
+    assert list(particle) == ["Primary", "Primary (2)", "Secondary"]
+    assert particle["Primary (2)"] == {"Radius [m]": 1e-6}
+    assert result.label == "Duplicate parameter"
+    assert result.select_parameter_path == parent_path + ("Primary (2)",)
+    # Source untouched.
+    assert "Primary (2)" not in raw["Parameterisation"]["Positive electrode"]["Particle"]
+
+
+def test_duplicate_parameter_unit_suffixed_key():
+    """Duplication is gated like renaming, so a unit-suffixed key is
+    exercised inside the User-defined bucket (a place the user actually owns
+    parameter names), not at an arbitrary schema-fixed location."""
+    raw = {"Parameterisation": {"User-defined": {"Time [s]": [0, 1], "Other": True}}}
+    parent_path = ("Parameterisation", "User-defined")
+    result = command_service.execute(raw, DuplicateParameter(parent_path, "Time [s]"))
+    user_defined = result.raw["Parameterisation"]["User-defined"]
+    assert list(user_defined) == ["Time [s]", "Time (2) [s]", "Other"]
+    assert user_defined["Time (2) [s]"] == [0, 1]
+
+
+def test_duplicate_parameter_name_collision_increments_to_three():
+    raw = {
+        "Parameterisation": {
+            "User-defined": {"Foo": 1, "Foo (2)": 9},
+        }
+    }
+    result = command_service.execute(
+        raw, DuplicateParameter(("Parameterisation", "User-defined"), "Foo")
+    )
+    user_defined = result.raw["Parameterisation"]["User-defined"]
+    assert list(user_defined) == ["Foo", "Foo (3)", "Foo (2)"]
+
+
+def test_duplicate_parameter_gated_like_rename_is_refused_for_schema_keys():
+    raw = {"Header": {"Model": "SPM"}}
+    with pytest.raises(CommandError):
+        command_service.execute(raw, DuplicateParameter(("Header",), "Model"))
+
+
+def test_duplicate_parameter_then_undo_removes_it():
+    from state.document_session import DocumentSession
+
+    session = DocumentSession()
+    session.execute_command(CreateDocument("SPM", "T"))
+    session.execute_command(AddSection((), "Validation"))
+    session.execute_command(AddSection(("Validation",), "Run A"))
+    session.execute_command(DuplicateParameter(("Validation",), "Run A"))
+    assert "Run A (2)" in session.document.raw["Validation"]
+    session.undo()
+    assert "Run A (2)" not in session.document.raw["Validation"]
+
+
 # --- structure queries behind the tree's context menu ---
 
 
@@ -273,6 +396,30 @@ def test_can_rename_materials_runs_and_user_defined_content():
     assert not structure.can_rename(("Header",))
     assert not structure.can_rename(("Parameterisation", "Cell"))
     assert not structure.can_rename(("Validation",))
+
+
+def test_can_duplicate_mirrors_can_rename():
+    """Duplication is allowed exactly where renaming is: it produces a new
+    user-owned name, so it can only exist where the user already owns
+    names."""
+    allowed = (
+        ("Validation", "C/20 discharge"),
+        ("Parameterisation", "Negative electrode", "Particle", "Primary"),
+        ("Parameterisation", "User-defined", "Thermal"),
+        ("Parameterisation", "User-defined", "Thermal", "h"),
+    )
+    refused = (
+        ("Parameterisation", "User-defined"),
+        ("Header",),
+        ("Parameterisation", "Cell"),
+        ("Validation",),
+    )
+    for path in allowed:
+        assert structure.can_rename(path) is True
+        assert structure.can_duplicate(path) is True
+    for path in refused:
+        assert structure.can_rename(path) is False
+        assert structure.can_duplicate(path) is False
 
 
 def test_is_freeform_section_covers_the_user_defined_bucket_and_its_content():

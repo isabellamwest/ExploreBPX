@@ -28,6 +28,19 @@ from PySide6.QtGui import QDropEvent
 from PySide6.QtWidgets import QComboBox, QLineEdit, QPushButton, QSpinBox
 
 
+def _find_tree_node(root, path: tuple[str, ...]):
+    """Walk *root* (a ``TreeNode``) down to the child at *path*, or None."""
+    if root is None:
+        return None
+    node = root
+    for depth in range(1, len(path) + 1):
+        target = path[:depth]
+        node = next((child for child in node.children if child.path == target), None)
+        if node is None:
+            return None
+    return node
+
+
 class AppDriver:
     """Drives a live :class:`MainWindow` the way a user would."""
 
@@ -563,9 +576,58 @@ class AppDriver:
 
     def activate_selected_add_parameter_row(self) -> "AppDriver":
         """Activate whichever row is currently highlighted in the
-        add-parameter popup -- a BPX-alias suggestion or the "Create custom
-        parameter" fallback, whichever the popup currently has selected."""
+        add-parameter popup -- a BPX-alias suggestion (creates immediately)
+        or the "Create custom parameter" footer, which instead expands the
+        inline custom-parameter form in place (see
+        :meth:`submit_custom_parameter_form`)."""
         self._w._params._popup._activate()
+        return self
+
+    def add_parameter_custom_form_visible(self) -> bool:
+        """True once the "Create custom parameter" footer has expanded into
+        its inline Name/Unit/type form."""
+        return self._w._params._popup._form_visible
+
+    def type_custom_parameter_name(self, text: str) -> "AppDriver":
+        """Replace the inline custom-parameter form's Name field."""
+        popup = self._w._params._popup
+        popup._form_name.clear()
+        self._qtbot.keyClicks(popup._form_name, text)
+        return self
+
+    def type_custom_parameter_unit(self, text: str) -> "AppDriver":
+        """Replace the inline custom-parameter form's (optional) Unit field."""
+        popup = self._w._params._popup
+        popup._form_unit.clear()
+        self._qtbot.keyClicks(popup._form_unit, text)
+        return self
+
+    def select_custom_parameter_type(self, label: str) -> "AppDriver":
+        """Click one of the inline form's five type buttons (e.g. "Scalar",
+        "Table")."""
+        from ui_qt.add_parameter_popup import _CUSTOM_TYPE_LABELS
+
+        popup = self._w._params._popup
+        button = popup._form_type_strip._buttons[_CUSTOM_TYPE_LABELS.index(label)]
+        self._qtbot.mouseClick(button, Qt.LeftButton)
+        return self
+
+    def custom_parameter_add_enabled(self) -> bool:
+        return self._w._params._popup._form_add.isEnabled()
+
+    def custom_parameter_scalar_warning_visible(self) -> bool:
+        return self._w._params._popup._form_warning.isVisible()
+
+    def submit_custom_parameter_form(self) -> "AppDriver":
+        """Click "Add" on the inline custom-parameter form, committing the
+        composed key and the selected type's seed value."""
+        self._qtbot.mouseClick(self._w._params._popup._form_add, Qt.LeftButton)
+        return self
+
+    def cancel_custom_parameter_form(self) -> "AppDriver":
+        """Click "Cancel" on the inline custom-parameter form, collapsing it
+        back to the plain pinned footer without creating anything."""
+        self._qtbot.mouseClick(self._w._params._popup._form_cancel, Qt.LeftButton)
         return self
 
     def right_click_parameter_row(self, index: int) -> "AppDriver":
@@ -658,6 +720,122 @@ class AppDriver:
         row-removal accelerator."""
         self._qtbot.keyClick(self._w._params._list, Qt.Key_Delete)
         return self
+
+    # -- Parameter-list row menu: Rename…/Duplicate/Move up/down ---------
+    #
+    # Built directly via ``ParameterListPanel._build_row_menu`` rather than
+    # a real right-click -- the same "inspect without exec'ing" convention
+    # ``tests/test_tree_editing.py`` uses for the tree's own structure menu
+    # (``TreePanel._build_menu``), avoiding ``QMenu.exec()``'s blocking
+    # native modal loop entirely.
+
+    def _parameter_row_path(self, index: int) -> tuple[str, ...]:
+        panel = self._w._params
+        item = panel._list.item(index)
+        assert item is not None, f"No parameter row at index {index}"
+        path = item.data(256)
+        assert path is not None, f"Row {index} is not a real parameter row"
+        return path
+
+    def parameter_row_menu_actions(self, index: int) -> list:
+        """The row's context-menu actions, in order (separators included)."""
+        panel = self._w._params
+        return panel._build_row_menu(self._parameter_row_path(index)).actions()
+
+    def parameter_row_menu_labels(self, index: int) -> list[str]:
+        """Visible action labels for the row's context menu, in order
+        (separators excluded -- their own text is always empty)."""
+        return [a.text() for a in self.parameter_row_menu_actions(index) if not a.isSeparator()]
+
+    def parameter_row_menu_action_enabled(self, index: int, label: str) -> bool:
+        for action in self.parameter_row_menu_actions(index):
+            if action.text() == label:
+                return action.isEnabled()
+        raise AssertionError(f"No {label!r} action on row {index}'s context menu.")
+
+    def trigger_parameter_row_menu_action(self, index: int, label: str) -> "AppDriver":
+        """Trigger one named action from the row's freshly built context menu."""
+        for action in self.parameter_row_menu_actions(index):
+            if action.text() == label:
+                action.trigger()
+                return self
+        raise AssertionError(f"No {label!r} action on row {index}'s context menu.")
+
+    # -- Card-header inline rename editor (Concept A pencil) --------------
+
+    def card_rename_pencil_present(self) -> bool:
+        """True when the active card offers the "✎" rename button."""
+        card = self._w._inspector._card
+        return card is not None and getattr(card, "_rename_button", None) is not None
+
+    def click_card_rename_pencil(self) -> "AppDriver":
+        card = self._w._inspector._card
+        assert card is not None and card._rename_button is not None, (
+            "Active card has no rename pencil."
+        )
+        self._qtbot.mouseClick(card._rename_button, Qt.LeftButton)
+        return self
+
+    def card_rename_row_visible(self) -> bool:
+        """True once the rename row has been shown.
+
+        Reads ``isHidden()``, not ``isVisible()`` -- the window is never
+        shown in this suite, so ``isVisible()`` would read False regardless
+        of the row's own hidden flag (the same reasoning as
+        ``diagnostics_section_hidden_line_text``)."""
+        card = self._w._inspector._card
+        row = getattr(card, "_rename_row", None) if card is not None else None
+        return row is not None and not row.isHidden()
+
+    def card_rename_name_text(self) -> str:
+        return self._w._inspector._card._rename_name.text()
+
+    def card_rename_unit_text(self) -> str:
+        return self._w._inspector._card._rename_unit.text()
+
+    def type_card_rename_name(self, text: str) -> "AppDriver":
+        card = self._w._inspector._card
+        card._rename_name.clear()
+        self._qtbot.keyClicks(card._rename_name, text)
+        return self
+
+    def type_card_rename_unit(self, text: str) -> "AppDriver":
+        card = self._w._inspector._card
+        card._rename_unit.clear()
+        self._qtbot.keyClicks(card._rename_unit, text)
+        return self
+
+    def click_card_rename_apply(self) -> "AppDriver":
+        card = self._w._inspector._card
+        self._qtbot.mouseClick(card._rename_apply, Qt.LeftButton)
+        return self
+
+    def click_card_rename_cancel(self) -> "AppDriver":
+        card = self._w._inspector._card
+        self._qtbot.mouseClick(card._rename_cancel, Qt.LeftButton)
+        return self
+
+    def card_rename_error_text(self) -> str | None:
+        """Visible inline rename-error text, or None if none is shown.
+
+        Reads ``isHidden()``, not ``isVisible()`` -- see
+        :meth:`card_rename_row_visible`."""
+        card = self._w._inspector._card
+        if card is None or getattr(card, "_rename_row", None) is None:
+            return None
+        return card._rename_error.text() if not card._rename_error.isHidden() else None
+
+    def card_unit_tooltip(self) -> str | None:
+        """The active card's own unit label tooltip, or None (no unit shown,
+        or no tooltip set -- a renamable/custom parameter's unit)."""
+        card = self._w._inspector._card
+        assert card is not None, "No active card; navigate to a parameter first."
+        label = getattr(card._editor, "_unit_label", None)
+        if label is None:
+            # A ModalCard's unit label lives on its active mode body.
+            body = getattr(card._editor, "_body", None)
+            label = getattr(body, "_unit_label", None)
+        return label.toolTip() if label is not None else None
 
     def undo(self) -> "AppDriver":
         """Click the toolbar's Undo button: a document command.
@@ -1384,6 +1562,21 @@ class AppDriver:
         """Rename the user-named key at *path*, as the tree's rename UI does."""
         self._w._tree.rename_requested.emit(tuple(path), new_name)
         return self
+
+    def open_tree_rename_popup(self, path: tuple[str, ...]) -> "AppDriver":
+        """Open the tree's rename popup for the node at *path*, as its own
+        "Rename…" context-menu action would."""
+        tree = self._w._tree
+        node = _find_tree_node(tree._root, tuple(path))
+        assert node is not None, f"No tree node at {path!r}"
+        tree._open_rename(node)
+        return self
+
+    def tree_rename_popup_note_text(self) -> str | None:
+        """The rename popup's small informational note line, or None when
+        hidden (every target but a Particle material)."""
+        note = self._w._tree._popup._note
+        return note.text() if note.isVisible() else None
 
     # ------------------------------------------------------------------
     # Internals -- the one place that knows card widget structure

@@ -7,10 +7,18 @@ anchored underneath it. This is deliberately the only add-parameter surface;
 creation is never offered by a row's right-click.
 
 A row's right-click context menu instead offers actions on that *existing*
-row -- currently just "Remove parameter", also reachable via the Delete key
-once a row is current. Context menus never create; creation controls are
-never hidden behind a right-click (see the parameter-list pane section of
-docs/02-ui.md).
+row: "Remove parameter" (also reachable via the Delete key once a row is
+current), and -- gated by ``core.structure.can_rename``/``can_duplicate``,
+today only true for content inside the open ``Parameterisation/User-defined``
+bucket -- "Rename…" and "Duplicate". "Move up"/"Move down" are offered for
+every real row, individually disabled at the first/last sibling. Context
+menus never create; creation controls are never hidden behind a right-click
+(see the parameter-list pane section of docs/02-ui.md).
+
+"Rename…" does not open its own popup: it opens (or focuses) the same
+inline card-header editor the row's own parameter card offers via a pencil
+button (:class:`~.cards.parameter_card.ParameterCard`) -- one rename surface,
+not two independently-drifting ones.
 """
 
 from __future__ import annotations
@@ -26,7 +34,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from core import completion
+from core import completion, structure
 from core.completion import MissingField
 from core.tree_model import TreeNode
 
@@ -90,8 +98,19 @@ class ParameterListPanel(QWidget):
     """Lists a node's parameters; emits the selected parameter's path."""
 
     parameter_selected = Signal(tuple)
-    add_parameter_requested = Signal(tuple, str)  # (section_path, typed_alias)
+    #: (section_path, key, seed) -- seed is ``None`` for a schema suggestion
+    #: (either the popup's or this panel's own "fields to add" rows) and the
+    #: type-matching seed (0.0/""/False/table/list) for the add-parameter
+    #: popup's inline custom-parameter form.
+    add_parameter_requested = Signal(tuple, str, object)
     remove_parameter_requested = Signal(tuple)  # parameter_path
+    #: (parameter_path,): open/focus the row's inline card-header rename editor.
+    rename_parameter_requested = Signal(tuple)
+    #: (parameter_path,): duplicate the row via ``core.commands.DuplicateParameter``.
+    duplicate_parameter_requested = Signal(tuple)
+    #: (parameter_path, direction): reorder the row via ``core.commands.MoveParameter``.
+    #: ``direction`` is ``"up"`` or ``"down"``.
+    move_parameter_requested = Signal(tuple, str)
 
     #: Item-data roles marking a synthetic "fields to add" row -- a group
     #: header or one field suggestion -- as distinct from a real parameter
@@ -350,12 +369,13 @@ class ParameterListPanel(QWidget):
             return
         if kind == "suggestion":
             if self._node is not None:
-                self.add_parameter_requested.emit(self._node.path, item.data(self._GROUP_ROW_ALIAS_ROLE))
+                alias = item.data(self._GROUP_ROW_ALIAS_ROLE)
+                self.add_parameter_requested.emit(self._node.path, alias, None)
             return
         self.parameter_selected.emit(item.data(256))
 
     def _on_context_menu_requested(self, pos: QPoint) -> None:
-        """Show "Remove parameter" for the row under *pos*, or nothing.
+        """Show the row menu for the real parameter under *pos*, or nothing.
 
         A right-click always acts on whatever row it lands on -- never a
         stale prior selection -- so the target row is made current first,
@@ -365,15 +385,63 @@ class ParameterListPanel(QWidget):
         disabled menu is not shown either, matching the app's "no disabled
         placeholders" convention. A synthetic "fields to add" row (role 256
         is ``None``) is not an existing parameter either, so it offers no
-        "Remove parameter" menu.
+        menu.
         """
         item = self._list.itemAt(pos)
-        if item is None or item.data(256) is None:
+        path = item.data(256) if item is not None else None
+        if path is None:
             return
         self._list.setCurrentItem(item)
-        menu = QMenu(self)
-        menu.addAction(self._remove_action)
+        menu = self._build_row_menu(path)
         menu.exec(self._list.mapToGlobal(pos))
+
+    def _build_row_menu(self, path: tuple[str, ...]) -> QMenu:
+        """The legal row actions for the real parameter at *path*, in the
+        order the design specifies: Rename…/Duplicate (only where the
+        backend allows -- ``core.structure``), a separator, Move up/down
+        (always offered, disabled at the first/last real row), a separator,
+        then the unchanged Remove parameter.
+        """
+        menu = QMenu(self)
+        if structure.can_rename(path):
+            rename_action = menu.addAction("Rename…")
+            rename_action.triggered.connect(
+                lambda _checked=False, p=path: self.rename_parameter_requested.emit(p)
+            )
+        if structure.can_duplicate(path):
+            duplicate_action = menu.addAction("Duplicate")
+            duplicate_action.triggered.connect(
+                lambda _checked=False, p=path: self.duplicate_parameter_requested.emit(p)
+            )
+        if not menu.isEmpty():
+            menu.addSeparator()
+
+        index = self._real_parameter_index(path)
+        last_index = len(self._node.parameters) - 1 if self._node is not None else -1
+        move_up = menu.addAction("Move up")
+        move_up.setEnabled(index is not None and index > 0)
+        move_up.triggered.connect(
+            lambda _checked=False, p=path: self.move_parameter_requested.emit(p, "up")
+        )
+        move_down = menu.addAction("Move down")
+        move_down.setEnabled(index is not None and index < last_index)
+        move_down.triggered.connect(
+            lambda _checked=False, p=path: self.move_parameter_requested.emit(p, "down")
+        )
+
+        menu.addSeparator()
+        menu.addAction(self._remove_action)
+        return menu
+
+    def _real_parameter_index(self, path: tuple[str, ...]) -> int | None:
+        """*path*'s position among ``self._node.parameters`` (real rows only,
+        in the same order the list renders them), or ``None`` if not found."""
+        if self._node is None:
+            return None
+        for index, parameter in enumerate(self._node.parameters):
+            if parameter.path == path:
+                return index
+        return None
 
     def _remove_current_parameter(self) -> None:
         """Request removal of whichever row is current.
@@ -405,7 +473,7 @@ class ParameterListPanel(QWidget):
             self._node.value,
         )
 
-    def _on_custom_parameter_requested(self, typed_alias: str) -> None:
+    def _on_custom_parameter_requested(self, key: str, seed: object) -> None:
         if self._node is None:
             return
-        self.add_parameter_requested.emit(self._node.path, typed_alias)
+        self.add_parameter_requested.emit(self._node.path, key, seed)

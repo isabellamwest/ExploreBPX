@@ -16,6 +16,9 @@ under the cursor.
 
 from __future__ import annotations
 
+from core import structure
+
+from ..style import FIXED_UNIT_TOOLTIP
 from .bodies import ExpressionBody, NumberBody, RawJsonBody, TableBody
 from .modal import RAW_MODE, Mode, ModalCard
 from .values import is_grid_cell
@@ -74,8 +77,9 @@ class FunctionCard(ModalCard):
 
     def __init__(self, parameter, meta) -> None:
         opens_in = initial_mode(parameter.value)
+        unit_tooltip = "" if structure.can_rename(parameter.path) else FIXED_UNIT_TOOLTIP
         modes = [
-            Mode(FLOAT_INT, NumberBody(parameter.unit)),
+            Mode(FLOAT_INT, NumberBody(parameter.unit, unit_tooltip)),
             Mode(FUNCTION, ExpressionBody()),
             Mode(INTERPOLATED_TABLE, TableBody()),
         ]

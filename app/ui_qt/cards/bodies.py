@@ -91,9 +91,15 @@ class ModeBody(QWidget):
 
 
 class NumberBody(ModeBody):
-    """``FloatInt``: a free-text number field plus the parameter's unit."""
+    """``FloatInt``: a free-text number field plus the parameter's unit.
 
-    def __init__(self, unit: str = "") -> None:
+    *unit_tooltip*, when given, is set on the unit label -- the caller's job
+    (``FunctionCard``/``MapCard``) to decide, from ``core.structure.can_rename``
+    on the parameter's own path, since this body knows only the unit string,
+    never the path.
+    """
+
+    def __init__(self, unit: str = "", unit_tooltip: str = "") -> None:
         super().__init__()
         self._seed: object = None
         layout = QHBoxLayout(self)
@@ -101,8 +107,14 @@ class NumberBody(ModeBody):
         self._edit = QLineEdit()
         self._edit.textChanged.connect(lambda *_: self.changed.emit())
         layout.addWidget(self._edit, 1)
+        #: The unit label, or ``None`` when no unit was given -- kept as an
+        #: attribute (not just laid out) so tests can read its tooltip.
+        self._unit_label: QLabel | None = None
         if unit:
-            layout.addWidget(QLabel(unit))
+            self._unit_label = QLabel(unit)
+            if unit_tooltip:
+                self._unit_label.setToolTip(unit_tooltip)
+            layout.addWidget(self._unit_label)
 
     def value(self) -> object:
         return parse_value(self._edit.text())

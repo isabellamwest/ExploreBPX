@@ -217,14 +217,24 @@ class TreePanel(QWidget):
 
         The taken set is the parent's full key set; the popup treats the
         pre-filled current name as "unchanged, no-op" rather than a collision.
+        A Particle material additionally gets a note: its old name is never
+        rewritten in any per-material reference elsewhere in the document
+        (``core.structure.is_particle_material`` -- UI copy only, no
+        validation logic here). Validation runs and User-defined content are
+        never referenced by name elsewhere, so they get no note.
         """
         parent_value = _value_at(
             self._root.value if self._root is not None else None, node.path[:-1]
         )
         taken = frozenset(parent_value) if isinstance(parent_value, dict) else frozenset()
+        note = (
+            "State-section references are not updated; validation will flag mismatches."
+            if structure.is_particle_material(node.path)
+            else ""
+        )
         self._popup_intent = ("rename", node.path)
         self._popup.open_at(
-            self._anchor_for(node), "New name…", taken, initial=node.path[-1]
+            self._anchor_for(node), "New name…", taken, initial=node.path[-1], note=note
         )
 
     def _on_name_chosen(self, name: str) -> None:

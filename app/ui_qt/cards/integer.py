@@ -12,6 +12,9 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QSpinBox
 
+from core import structure
+
+from ..style import FIXED_UNIT_TOOLTIP
 from .base import EditorCard
 
 
@@ -44,8 +47,15 @@ class IntegerCard(EditorCard):
             layout.addWidget(self._fallback, 1)
             input_widget = self._fallback
 
+        #: The unit label, or ``None`` when the parameter has no unit --
+        #: kept as an attribute (not just laid out) so tests can read its
+        #: tooltip directly.
+        self._unit_label: QLabel | None = None
         if parameter.unit:
-            layout.addWidget(QLabel(parameter.unit))
+            self._unit_label = QLabel(parameter.unit)
+            if not structure.can_rename(parameter.path):
+                self._unit_label.setToolTip(FIXED_UNIT_TOOLTIP)
+            layout.addWidget(self._unit_label)
         self._install_keyboard_handler(input_widget)
 
     def value(self) -> object:

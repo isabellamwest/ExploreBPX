@@ -18,6 +18,9 @@ for which materials are legal.
 
 from __future__ import annotations
 
+from core import structure
+
+from ..style import FIXED_UNIT_TOOLTIP
 from .bodies import MaterialMapBody, NumberBody, RawJsonBody
 from .modal import RAW_MODE, Mode, ModalCard
 from .values import is_grid_cell
@@ -70,8 +73,9 @@ class MapCard(ModalCard):
 
     def __init__(self, parameter, meta) -> None:
         opens_in = initial_mode(parameter.value)
+        unit_tooltip = "" if structure.can_rename(parameter.path) else FIXED_UNIT_TOOLTIP
         modes = [
-            Mode(FLOAT_INT, NumberBody(parameter.unit)),
+            Mode(FLOAT_INT, NumberBody(parameter.unit, unit_tooltip)),
             Mode(DICT_STR_FLOAT_INT, MaterialMapBody(parameter.key_suggestions)),
         ]
         if opens_in == RAW_MODE:

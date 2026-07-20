@@ -41,6 +41,8 @@ from PySide6.QtWidgets import (
 )
 
 from core import bpx_gateway
+from core.command_service import CommandError
+from core.commands import RenameKey
 from core.parameter_metadata import resolve_parameter_metadata
 from core.parameter_types import ParameterKind
 from core.tree_model import ParameterItem
@@ -287,6 +289,7 @@ class InspectorPanel(QWidget):
         self._card.commit_requested.connect(self._on_commit)
         self._card.bulk_commit_requested.connect(self._on_bulk_commit)
         self._card.expand_toggled.connect(self._on_card_expanded)
+        self._card.rename_requested.connect(self._on_card_rename_requested)
         # Top-aligned so the card sits at its natural height with space beneath;
         # expanding (a grid takeover) clears the alignment so the card -- and its
         # now-stretching grid -- fills the pane. This replaces a trailing stretch
@@ -301,6 +304,20 @@ class InspectorPanel(QWidget):
         count = self._issues_tab.show_parameter(parameter)
         self._secondary.set_count("issues", count)
         self._docs_tab.show_metadata(resolve_parameter_metadata(parameter.path, meta))
+
+    def open_rename_editor(self) -> None:
+        """Expand the current card's inline rename row, if it has one.
+
+        Used by the parameter-list row's "Rename…" context-menu action:
+        called after navigating so the target parameter's card is already
+        showing, this opens the same header editor the card's own pencil
+        button opens -- one rename surface, not two. A no-op when the
+        current card carries no rename row at all (a non-``ParameterCard``,
+        or a ``ParameterCard`` for a non-renamable, schema-named parameter).
+        """
+        opener = getattr(self._card, "open_rename_editor", None)
+        if callable(opener):
+            opener()
 
     def has_focused_draft(self, widget) -> bool:
         """True when *widget* is inside a card holding an uncommitted draft.
@@ -364,6 +381,25 @@ class InspectorPanel(QWidget):
             # "empty" is (e.g. "").
             return
         self._state.active.apply_value(self._card.parameter.path, self._card.value())
+        self.committed.emit()
+
+    def _on_card_rename_requested(self, path: tuple, new_key: str) -> None:
+        """Execute the card header's rename row as a ``RenameKey`` command.
+
+        A refusal (empty/unchanged name, or a name already taken by a
+        sibling -- ``core.command_service`` decides, never this layer) is
+        reported back to the still-showing card as an inline error instead
+        of a dialog, the same convention other cards use for a blocked
+        commit; nothing here duplicates the command service's own gating.
+        """
+        if self._state.active is None:
+            return
+        try:
+            self._state.active.execute_command(RenameKey(tuple(path), new_key))
+        except CommandError as exc:
+            if self._card is not None:
+                self._card.show_rename_error(str(exc))
+            return
         self.committed.emit()
 
     def _on_bulk_commit(self, command) -> None:
