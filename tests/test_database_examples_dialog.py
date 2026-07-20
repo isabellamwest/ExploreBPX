@@ -304,19 +304,36 @@ def test_temperature_panel_hidden_until_a_series_with_temperature_is_added(
     assert dialog._chart_page.temperature.isHidden()
 
 
-def test_own_run_can_be_removed_via_its_own_chip_without_crashing():
-    """The own run is a chip like any other -- its "x" must not assume it
-    occupies a reference colour slot (it never does)."""
+def test_own_run_is_the_anchor_and_cannot_be_removed():
+    """The active document's own run has no picker row to add it back from,
+    so it is the non-removable anchor: its legend chip carries no "x", and
+    ``_remove_series`` refuses it even if called directly (the dead-end Bella
+    hit 2026-07-20)."""
     dialog = DatabaseExamplesDialog(_OWN_RUN, "my_cell · test run")
+
+    assert dialog._chips["__you__"].removable is False
 
     dialog._remove_series("__you__")
 
-    assert dialog._added == {}
-    assert dialog._selected_table_id is None
-    assert dialog._view_stack.currentWidget() is dialog._hint_label
+    assert "__you__" in dialog._added
+    assert dialog._selected_table_id == "__you__"
 
 
-def test_you_carries_line_width_three_and_reference_runs_carry_two():
+def test_a_reference_chip_stays_removable():
+    """A reference run keeps its "x" -- it can be toggled back on from its
+    picker row, so removing it is never a dead-end."""
+    dialog = DatabaseExamplesDialog(_OWN_RUN, "my_cell · test run")
+    dialog._toggle_run(_first_run())
+
+    reference_id = next(sid for sid in dialog._chips if sid != "__you__")
+    assert dialog._chips[reference_id].removable is True
+
+    dialog._remove_series(reference_id)
+
+    assert reference_id not in dialog._added
+
+
+def test_own_run_carries_line_width_three_and_reference_runs_carry_two():
     dialog = DatabaseExamplesDialog(_OWN_RUN)
     run = _first_run()
     dialog._toggle_run(run)

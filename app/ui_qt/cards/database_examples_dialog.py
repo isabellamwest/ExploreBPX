@@ -227,23 +227,36 @@ class _PickerRow(QFrame):
 
 class _LegendChip(QFrame):
     """One legend entry: colour swatch + label, over the added series'
-    ``series_id``. Clicking the chip body selects it for Table mode; the
-    trailing "x" removes it from the comparison -- two independent click
-    targets on one small widget, so removing never gets mistaken for
-    selecting."""
+    ``series_id``. Clicking the chip body selects it for Table mode; a
+    *removable* chip also carries a trailing "x" that drops it from the
+    comparison -- two independent click targets on one small widget, so
+    removing never gets mistaken for selecting.
+
+    The active document's own run is **not** removable: it is the anchor the
+    whole dialog compares against, and -- unlike a reference run -- it has no
+    picker row to add it back from, so a removed one would be gone for good
+    (the bug Bella hit 2026-07-20). Its chip therefore has no "x"."""
 
     clicked = Signal()
     remove_requested = Signal()
 
-    def __init__(self, series_id: str, label: str, color: str, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        series_id: str,
+        label: str,
+        color: str,
+        removable: bool = True,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         self.series_id = series_id
         self.color = color
+        self.removable = removable
         self.setObjectName("DatabaseExampleChip")
         self.setCursor(Qt.PointingHandCursor)
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(6, 2, 4, 2)
+        layout.setContentsMargins(6, 2, 4 if removable else 8, 2)
         layout.setSpacing(6)
 
         swatch = QLabel()
@@ -253,12 +266,13 @@ class _LegendChip(QFrame):
 
         layout.addWidget(QLabel(label))
 
-        remove = QToolButton()
-        remove.setText("×")
-        remove.setAutoRaise(True)
-        remove.setToolTip(f"Remove {label} from the comparison")
-        remove.clicked.connect(lambda checked=False: self.remove_requested.emit())
-        layout.addWidget(remove)
+        if removable:
+            remove = QToolButton()
+            remove.setText("×")
+            remove.setAutoRaise(True)
+            remove.setToolTip(f"Remove {label} from the comparison")
+            remove.clicked.connect(lambda checked=False: self.remove_requested.emit())
+            layout.addWidget(remove)
 
         self._selected = False
         self.set_selected(False)
@@ -518,7 +532,10 @@ class DatabaseExamplesDialog(QDialog):
         self._after_change()
 
     def _remove_series(self, series_id: str) -> None:
-        if series_id not in self._added:
+        # The active document's own run is the non-removable anchor (see
+        # ``_LegendChip``): it has no picker row to re-add it from, so it must
+        # never leave ``_added``. Its chip carries no "x", but guard here too.
+        if series_id == _YOU_ID or series_id not in self._added:
             return
         del self._added[series_id]
         if series_id in self._reference_slots:
@@ -619,7 +636,9 @@ class DatabaseExamplesDialog(QDialog):
                 widget.deleteLater()
         self._chips = {}
         for series_id, added in self._added.items():
-            chip = _LegendChip(series_id, added.label, added.color)
+            chip = _LegendChip(
+                series_id, added.label, added.color, removable=series_id != _YOU_ID
+            )
             chip.set_selected(series_id == self._selected_table_id)
             chip.clicked.connect(lambda sid=series_id: self._select_table_series(sid))
             chip.remove_requested.connect(lambda sid=series_id: self._remove_series(sid))
