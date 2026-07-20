@@ -318,13 +318,14 @@ def _build_table() -> QTableWidget:
 
 
 class DatabaseExamplesDialog(QDialog):
-    """Overlay reference runs against "You" (the card's own live draft), by
-    chart or by table -- see the module docstring."""
+    """Overlay reference runs against the active document's own run (the
+    card's live draft, labelled by file name -- never "You", Bella's call
+    2026-07-20), by chart or by table -- see the module docstring."""
 
     def __init__(
         self,
         own_run: dict[str, list] | None = None,
-        own_label: str = "You",
+        own_label: str = "Active file",
         run_label: str = "",
         parent: QWidget | None = None,
     ) -> None:

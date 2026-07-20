@@ -324,9 +324,12 @@ def test_toolbar_compare_button_visible_in_both_empty_and_populated_states(
     assert empty_button is not None and not empty_button.isHidden()
 
 
-def test_toolbar_database_examples_button_opens_dialog_with_you_from_the_live_grid(
+def test_toolbar_database_examples_labels_own_run_by_file_name_not_you(
     app_driver, spm_with_validation_path
 ):
+    """The active document's own series reads "<file> · <run>" -- the file
+    name, never "You" (Bella's call 2026-07-20). The fixture is saved as
+    ``spm_with_validation.json``."""
     d = app_driver
     d.open(spm_with_validation_path).go_to(_RUN)
 
@@ -334,7 +337,7 @@ def test_toolbar_database_examples_button_opens_dialog_with_you_from_the_live_gr
 
     assert "__you__" in dialog._added
     added = dialog._added["__you__"]
-    assert added.label == "You — C/20 discharge"
+    assert added.label == "spm_with_validation · C/20 discharge"
     assert added.data == {
         "Time [s]": [0, 100, 200],
         "Current [A]": [-0.6, -0.6, -0.6],
@@ -343,11 +346,31 @@ def test_toolbar_database_examples_button_opens_dialog_with_you_from_the_live_gr
     }
 
 
+def test_toolbar_database_examples_labels_an_unsaved_document_active_file(
+    app_driver, tmp_path, valid_spm_dict
+):
+    """An unsaved document has no real file name yet, so its own series falls
+    back to "Active file · <run>" rather than a bare "untitled"."""
+    workfile = _write_doc(
+        tmp_path,
+        valid_spm_dict,
+        {"C/20 discharge": {"Time [s]": [0, 1], "Current [A]": [-1, -1], "Voltage [V]": [4.0, 3.9]}},
+        name="untitled.json",
+    )
+    d = app_driver
+    d.open(workfile).go_to(_RUN)
+
+    dialog = d.open_database_examples_dialog_from_toolbar()
+
+    assert dialog._added["__you__"].label == "Active file · C/20 discharge"
+
+
 def test_toolbar_database_examples_reflects_an_uncommitted_edit_live(
     app_driver, spm_with_validation_path
 ):
-    """"You" is built from the grid's *current draft*, not the last commit --
-    an edit that has not been confirmed with Enter yet still shows up."""
+    """The own run is built from the grid's *current draft*, not the last
+    commit -- an edit that has not been confirmed with Enter yet still shows
+    up."""
     d = app_driver
     d.open(spm_with_validation_path).go_to(_RUN)
     d.set_experiment_cell("Voltage [V]", 0, "9.9")

@@ -100,12 +100,12 @@ def test_with_no_own_run_nothing_is_added_and_the_hint_shows():
 
 
 def test_own_run_is_added_first_in_accent_and_never_takes_a_reference_slot():
-    dialog = DatabaseExamplesDialog(_OWN_RUN, "You — test run")
+    dialog = DatabaseExamplesDialog(_OWN_RUN, "my_cell · test run")
 
     assert list(dialog._added) == ["__you__"]
     added = dialog._added["__you__"]
     assert added.color == ACCENT
-    assert added.label == "You — test run"
+    assert added.label == "my_cell · test run"
     assert dialog._reference_slots == [None] * MAX_REFERENCE_RUNS
 
 
@@ -290,7 +290,7 @@ def test_adding_a_run_with_temperature_adds_its_curve_to_the_temperature_chart(
 def test_temperature_panel_hidden_until_a_series_with_temperature_is_added(
     _with_temperature_run,
 ):
-    dialog = DatabaseExamplesDialog(_OWN_RUN)  # "You" has no Temperature
+    dialog = DatabaseExamplesDialog(_OWN_RUN)  # the own run has no Temperature
     run = _with_temperature_run
 
     assert dialog._chart_page.temperature.isHidden()
@@ -304,10 +304,10 @@ def test_temperature_panel_hidden_until_a_series_with_temperature_is_added(
     assert dialog._chart_page.temperature.isHidden()
 
 
-def test_you_can_be_removed_via_its_own_chip_without_crashing():
-    """"You" is a chip like any other -- its "x" must not assume it occupies
-    a reference colour slot (it never does)."""
-    dialog = DatabaseExamplesDialog(_OWN_RUN, "You")
+def test_own_run_can_be_removed_via_its_own_chip_without_crashing():
+    """The own run is a chip like any other -- its "x" must not assume it
+    occupies a reference colour slot (it never does)."""
+    dialog = DatabaseExamplesDialog(_OWN_RUN, "my_cell · test run")
 
     dialog._remove_series("__you__")
 
@@ -345,7 +345,7 @@ def test_window_title_is_generic_without_a_run_label():
 
 
 # ---------------------------------------------------------------------------
-# CompareOwnDataNotice: stated plainly whenever "You" has nothing to show
+# CompareOwnDataNotice: stated plainly whenever the own run has nothing to show
 # ---------------------------------------------------------------------------
 
 
@@ -381,11 +381,11 @@ def test_numbers_table_hidden_until_something_is_added():
     assert dialog._chart_page.numbers.rowCount() == 0
 
 
-def test_numbers_table_reports_points_duration_and_ranges_for_you_and_a_reference():
+def test_numbers_table_reports_points_duration_and_ranges_for_own_run_and_a_reference():
     """Expected strings are hand-computed from the actual bundled data (see
     ``test_example_library.py``'s equivalent scrape) and from ``_OWN_RUN``
     above, not re-derived through the formatting helpers under test."""
-    dialog = DatabaseExamplesDialog(_OWN_RUN, "You — test run")
+    dialog = DatabaseExamplesDialog(_OWN_RUN, "my_cell · test run")
     # Pinned by id, not picker position -- the picker's curated order (NMC
     # first) is presentation, and these hand-computed values are the LFP
     # C/20 run's (1000 pts).
@@ -402,8 +402,8 @@ def test_numbers_table_reports_points_duration_and_ranges_for_you_and_a_referenc
     assert table.rowCount() == 2
     assert not table.isHidden()
 
-    # Row 0: "You" -- 3 points spanning 2 s, constant current, 3.8-4 V.
-    assert table.item(0, 0).text() == "You — test run"
+    # Row 0: the own run -- 3 points spanning 2 s, constant current, 3.8-4 V.
+    assert table.item(0, 0).text() == "my_cell · test run"
     assert table.item(0, 1).text() == "3"
     assert table.item(0, 2).text() == "2 s"
     assert table.item(0, 3).text() == "-1 A"

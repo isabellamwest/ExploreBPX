@@ -186,13 +186,16 @@ class ExperimentCard(QWidget):
         run: TreeNode,
         focused_alias: str | None = None,
         read_only: bool = False,
+        document_name: str = "",
     ) -> None:
         super().__init__()
         self.run_path = tuple(run.path)
         self._read_only = read_only
-        #: The run's own display name, kept for :meth:`_open_database_examples`
-        #: ("You — {label}") -- the same value :attr:`_title` is built from.
+        #: The run's own display name (the same value :attr:`_title` is built
+        #: from) and the document's file name -- together they label this
+        #: run's own series in :meth:`_open_database_examples`.
         self._run_label = run.label
+        self._document_name = document_name
 
         by_alias = {
             parameter.label: parameter
@@ -478,10 +481,19 @@ class ExperimentCard(QWidget):
             for index, parameter in enumerate(self._columns)
         }
 
+    def _own_series_label(self) -> str:
+        """This run's own series label in the compare dialog: "<file> ·
+        <run>", reading like the reference runs rather than "You" (Bella's
+        call 2026-07-20). Falls back to "Active file" for an unsaved
+        document with no real name yet."""
+        stem = Path(self._document_name).stem
+        name = stem if stem and stem.lower() != "untitled" else "Active file"
+        return f"{name} · {self._run_label}"
+
     def _open_database_examples(self) -> None:
         dialog = DatabaseExamplesDialog(
             self._own_run_snapshot(),
-            f"You — {self._run_label}",
+            self._own_series_label(),
             run_label=self._run_label,
             parent=self,
         )

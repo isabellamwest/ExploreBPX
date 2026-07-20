@@ -239,7 +239,10 @@ class InspectorPanel(QWidget):
         self._secondary.resume()
         self._clear_content()
         focused_alias = parameter.label if parameter is not None else None
-        self._card = ExperimentCard(node, focused_alias)
+        document_name = (
+            session.backing_file.name if session.backing_file else session.document.filename
+        )
+        self._card = ExperimentCard(node, focused_alias, document_name=document_name)
         self._card.bulk_commit_requested.connect(self._on_bulk_commit)
         self._card.expand_toggled.connect(self._on_card_expanded)
         self._content_layout.addWidget(self._card)
