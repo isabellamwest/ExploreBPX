@@ -173,11 +173,11 @@ parameters, and none is needed under this model.
 | `parameter_descriptions.py` | Loads the technical-descriptions dataset (`app/data/parameter_descriptions.yaml`, transcribed from the Faraday Institution's BPX Parameter technical descriptions document) as replaceable data, not code. |
 | `validation.py` | `ValidationIssue` model and normalisers for Pydantic errors and warnings. |
 | `export.py` | Serialises the raw dict to JSON/YAML and can later generalise to target writers. |
-| `example_library.py` | Anti-corruption adapter over bundled reference BPX documents (`app/data/example_documents/`), mirroring `bpx_gateway.py`: lists and loads their `Validation` runs only, via the existing `load_raw` path, for the "Add database examples" comparison dialog. Never surfaces or claims validity for the rest of those documents. |
+| `example_library.py` | Anti-corruption adapter over reference BPX documents, mirroring `bpx_gateway.py`: lists and loads `Validation` runs only, via the existing `load_raw` path, for the "Compare…" dialog. Two paths, one shape: the bundled About:Energy sample cells (`app/data/example_documents/about_energy/`, rebuilt from their full-resolution validation data by `scripts/build_example_library.py`) and any user-chosen BPX file (`load_reference_document`). Never surfaces or claims validity for the rest of a reference document. |
 
 ## BPX Integration Strategy
 
-Explore_BPX consumes `bpx` as a pinned PyPI dependency (`bpx==1.1.0`), coupling
+Explore_BPX consumes `bpx` as a pinned PyPI dependency (`bpx==1.1.1`), coupling
 isolated in `core/bpx_gateway.py` via public APIs only (`parse_bpx_obj`, `BPX`,
 `model_json_schema()`). Rejected alternatives: a local editable BPX checkout
 (not reproducible, drifts), a Git/commit dependency (heavier, kept only as a

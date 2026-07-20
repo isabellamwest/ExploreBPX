@@ -19,7 +19,7 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 pytest.importorskip("PySide6")
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QPushButton
 
 import ui_qt.cards.experiment as experiment_module
 
@@ -37,7 +37,7 @@ def _no_exec_database_examples_dialog(monkeypatch):
     test that opens it here inspects the constructed instance directly
     instead -- the same non-blocking idiom ``test_database_examples_dialog.py``
     uses for the dialog's own tests (see ``AppDriver.open_database_examples_
-    dialog_from_dropzone``/``_from_toolbar``)."""
+    dialog_from_toolbar``)."""
     from ui_qt.cards.database_examples_dialog import DatabaseExamplesDialog
 
     monkeypatch.setattr(DatabaseExamplesDialog, "exec", lambda self: None)
@@ -268,11 +268,12 @@ def test_sample_count_chip_updates_live_with_a_typed_value(
 
 
 # ---------------------------------------------------------------------------
-# "Add database examples…" entry points (dropzone + toolbar)
+# "Compare…" entry point (toolbar-only -- redesign 2026-07-20 removed the
+# dropzone's own affordance: getting data in is that widget's sole job now)
 # ---------------------------------------------------------------------------
 
 
-def test_dropzone_database_examples_button_opens_dialog_with_no_you_series(
+def test_dropzone_has_no_compare_or_database_examples_button(
     app_driver, tmp_path, valid_spm_dict
 ):
     workfile = _write_doc(tmp_path, valid_spm_dict, {"New run": {}})
@@ -280,20 +281,47 @@ def test_dropzone_database_examples_button_opens_dialog_with_no_you_series(
     d.open(workfile).go_to(("Validation", "New run"))
     assert d.experiment_dropzone_shown() is True
 
-    dialog = d.open_database_examples_dialog_from_dropzone()
+    dropzone = d.experiment_card()._dropzone
+    assert dropzone.findChild(QPushButton, "ExperimentDropzoneDatabaseExamples") is None
 
-    assert list(dialog._added) == []
+
+def test_toolbar_compare_button_visible_while_the_dropzone_shows(
+    app_driver, tmp_path, valid_spm_dict
+):
+    workfile = _write_doc(tmp_path, valid_spm_dict, {"New run": {}})
+    d = app_driver
+    d.open(workfile).go_to(("Validation", "New run"))
+    assert d.experiment_dropzone_shown() is True
+
+    button = d.experiment_card()._database_examples_button
+    assert button is not None and not button.isHidden()
 
 
-def test_toolbar_database_examples_button_is_visible_exactly_when_the_dropzone_is_not(
-    app_driver, spm_with_validation_path
+def test_toolbar_compare_button_opens_dialog_with_no_you_series_on_an_empty_run(
+    app_driver, tmp_path, valid_spm_dict
+):
+    workfile = _write_doc(tmp_path, valid_spm_dict, {"New run": {}})
+    d = app_driver
+    d.open(workfile).go_to(("Validation", "New run"))
+
+    dialog = d.open_database_examples_dialog_from_toolbar()
+
+    assert dialog._added == {}
+    assert not dialog._own_notice.isHidden()
+
+
+def test_toolbar_compare_button_visible_in_both_empty_and_populated_states(
+    app_driver, spm_with_validation_path, tmp_path, valid_spm_dict
 ):
     d = app_driver
     d.open(spm_with_validation_path).go_to(_RUN)
+    populated_button = d.experiment_card()._database_examples_button
+    assert populated_button is not None and not populated_button.isHidden()
 
-    assert d.experiment_dropzone_shown() is False
-    button = d.experiment_card()._database_examples_button
-    assert button is not None and not button.isHidden()
+    workfile = _write_doc(tmp_path, valid_spm_dict, {"New run": {}})
+    d.open(workfile).go_to(("Validation", "New run"))
+    empty_button = d.experiment_card()._database_examples_button
+    assert empty_button is not None and not empty_button.isHidden()
 
 
 def test_toolbar_database_examples_button_opens_dialog_with_you_from_the_live_grid(

@@ -14,11 +14,11 @@ specification document, with any implementation sequencing added to
 LIIONDB import and other BPX database sources, each as a source adapter
 (anti-corruption layer returning raw BPX dictionaries, mirroring `bpx_gateway.py`).
 **The pattern itself is now proven, not just proposed:** `core/example_library.py`
-is a first, real adapter of this shape over a bundled official-BPX-repo source (see
+is a first, real adapter of this shape over a bundled About:Energy source (see
 `01-architecture.md`'s Core Module Responsibilities and Extension Seams), feeding
-the Validation-run "Add database examples" comparison dialog. A second source
-(LiionDB, or the PyBaMM-derived library below) is another entry in its source
-list — see the module for the exact seam.
+the Validation-run "Compare…" dialog. A second source (LiionDB, or the
+PyBaMM-derived library below) is another entry in its source list — see the
+module for the exact seam.
 
 ### Bundled PyBaMM parameter sets as a reference library
 

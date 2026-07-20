@@ -115,10 +115,10 @@ class _CsvDropzone(QFrame):
     *a path*, never reading or mapping the file itself -- that stays in
     ``ExperimentCard``'s existing CSV pipeline (``read_csv_file`` ->
     ``auto_map`` -> ``CsvImportDialog`` -> one ``SetValues``), so mapping
-    logic lives in exactly one place. A second button, "Add database
-    examples…", sits beside it in the same centred HBox and opens
-    :class:`~.database_examples_dialog.DatabaseExamplesDialog` with no "You"
-    series (there is nothing of the user's to compare against yet).
+    logic lives in exactly one place. Getting data in is this widget's ONLY
+    job (redesign 2026-07-20): comparison lives solely behind the card
+    toolbar's always-visible "Compare…" button, which handles an empty run
+    with a plain notice instead of a second, confusing entry point here.
     """
 
     #: A file the user picked (Browse) or dropped.
@@ -137,10 +137,6 @@ class _CsvDropzone(QFrame):
         upload.setObjectName("ExperimentDropzoneUpload")
         upload.clicked.connect(self._browse)
         buttons.addWidget(upload)
-        database_examples = QPushButton("Add database examples…")
-        database_examples.setObjectName("ExperimentDropzoneDatabaseExamples")
-        database_examples.clicked.connect(self._open_database_examples)
-        buttons.addWidget(database_examples)
         buttons.addStretch(1)
         layout.addLayout(buttons)
 
@@ -153,10 +149,6 @@ class _CsvDropzone(QFrame):
         )
         if path:
             self.csv_path_chosen.emit(path)
-
-    def _open_database_examples(self) -> None:
-        dialog = DatabaseExamplesDialog(parent=self)
-        dialog.exec()
 
     # --- drag-and-drop --------------------------------------------------
 
@@ -253,9 +245,9 @@ class ExperimentCard(QWidget):
         self._database_examples_button = None
         if not read_only:
             self._database_examples_button = QToolButton()
-            self._database_examples_button.setText("Add database examples…")
+            self._database_examples_button.setText("Compare…")
             self._database_examples_button.setToolTip(
-                "Compare this run against bundled reference examples"
+                "Compare this run's data against sample cells or another BPX file"
             )
             self._database_examples_button.setAutoRaise(True)
             self._database_examples_button.clicked.connect(self._open_database_examples)
@@ -383,11 +375,12 @@ class ExperimentCard(QWidget):
                 for index in range(self._grid.column_count)
             )
             self._dropzone.setVisible(empty)
-            # "Upload data…"/"Add database examples…" already cover an empty
-            # run; the toolbar versions only earn their place once there is
-            # data to replace/compare.
+            # The dropzone's "Upload data…" already covers an empty run, so
+            # the toolbar's "Import CSV…" only earns its place once there is
+            # data to replace. "Compare…" stays put regardless: opened on an
+            # empty run, the dialog says so plainly and still shows the
+            # reference data (redesign 2026-07-20).
             self._import_button.setVisible(not empty)
-            self._database_examples_button.setVisible(not empty)
         self._sample_count_chip.setText(self._sample_count_text())
 
     def _sample_count_text(self) -> str:
@@ -487,7 +480,10 @@ class ExperimentCard(QWidget):
 
     def _open_database_examples(self) -> None:
         dialog = DatabaseExamplesDialog(
-            self._own_run_snapshot(), f"You — {self._run_label}", parent=self
+            self._own_run_snapshot(),
+            f"You — {self._run_label}",
+            run_label=self._run_label,
+            parent=self,
         )
         dialog.exec()
 
