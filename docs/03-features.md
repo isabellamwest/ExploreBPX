@@ -189,6 +189,7 @@ repaired in place.
 | CSV import (inline button, always-shown mapping dialog; an experiment's own columns fill in one undo step; x/y table → positional mapping, both required) | Implemented |
 | "Compare…" dialog (card toolbar, always visible): overlay the card's live draft against reference runs — bundled About:Energy sample cells (NMC pouch + LFP 18650, 5 runs each) or any BPX file via "Open BPX file…" — by chart or table, with a key-numbers summary (points, duration, current/voltage range); picker selection = bordered box + small tick (no circled badges, standing rule); an empty run states "no data yet" plainly; read-only, no persistence | Implemented |
 | Remove parameter (row context menu, Delete key) | Implemented |
+| Typed custom parameters (Name+Unit form, five value types with neutral seeds; card-header pencil edits name/unit; rename/duplicate/move on user-owned rows) | Implemented |
 | Tree editing (add/remove sections; add/rename/remove materials and experiments; confirm before removing populated content) | Implemented |
 | User-defined authoring (add unlimited named subsections + parameters inside the `User-defined` bucket, nested without limit; rename/remove them; a plain "· custom" tree tag; all valid BPX) | Implemented |
 | Enhanced function-expression editor (syntax highlighting, validation) | Planned |
@@ -597,9 +598,12 @@ but not yet filled is Outstanding, never a red Issue.
 
 Parameters are added from a section-scoped "+ Add parameter" header
 ([02-ui.md](02-ui.md)); the popup lists expected BPX aliases and, on search,
-other schema aliases (greyed) plus a "Create custom parameter" fallback.
-Every add writes an empty value through `AddParameter` and reveals the row
-via `NavigationService`; nothing is fabricated. An undeclared/unrecognised
+other schema aliases (greyed) plus a "Create custom parameter" fallback — a
+typed Name+Unit form offering five value types (scalar, text, boolean,
+table, series), each seeded with a neutral empty value; the type is the
+stored value's shape, nothing extra persisted. A schema-alias add writes
+`null` through `AddParameter`; either way the row is revealed via
+`NavigationService` and nothing scientific is fabricated. An undeclared/unrecognised
 `Header.Model` collapses every completion surface to a single "declare a
 model" task revealing `Header.Model` (the one group that survives, since
 Header's fields don't vary by model); `Partial` suggests every Expected
