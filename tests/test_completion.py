@@ -11,7 +11,7 @@ import json
 
 import pytest
 
-from core import bpx_gateway, completion, document_factory
+from core import bpx_gateway, completion, document_factory, validation
 from core.completion import CompletionTask, TaskKind
 from core.document import BPXDocument
 
@@ -452,6 +452,86 @@ def test_partition_null_field_absorbs_both_union_branch_diagnostics():
     # compare by list membership (uses __eq__), not a set.
     assert all(pair in result.absorbed for pair in capacity_diagnostics)
     assert not any(pair in result.visible for pair in capacity_diagnostics)
+
+
+def test_partition_null_function_table_field_absorbs_all_four_branches():
+    """The diffusivity-class bug (fixed at 03849b6): a committed-null
+    function/table union field raises FOUR diagnostics -- ``float_type``/
+    ``int_type``/``string_type``/``model_type``, one per union branch -- and
+    pydantic tags the function/table branches with names
+    (``function-after[validate(), str]``, ``InterpolatedTable``) that the
+    old ``_NAV_STRIP_TAGS`` denylist never matched, so those nav_paths kept
+    a bogus trailing component and absorption missed them: the field
+    rendered grey AND red at once. The fix stores the resolved parameter's
+    canonical ``.path`` as nav_path, so all four absorb into the one
+    NULL_FIELD task; decision Q's display merge then shows exactly three
+    messages (float+int collapse, string and table stay distinct)."""
+    raw = document_factory.create("SPM", title="probe")
+    path = ("Parameterisation", "Negative electrode", "Diffusivity [m2.s-1]")
+    raw["Parameterisation"]["Negative electrode"]["Diffusivity [m2.s-1]"] = None
+    doc = BPXDocument.from_raw(raw, filename="probe", fmt="json")
+    tasks = completion.document_completion(raw)
+    null_task = next(t for t in tasks if t.path == path)
+    assert null_task.kind is TaskKind.NULL_FIELD
+
+    result = completion.partition_issues(doc, tasks)
+
+    absorbed_here = result.absorbed_by_task[null_task]
+    assert {getattr(d, "error_type", None) for d, _ in absorbed_here} == {
+        "float_type",
+        "int_type",
+        "string_type",
+        "model_type",
+    }
+    assert all(nav == path for _, nav in absorbed_here)
+    assert result.visible == ()
+    assert result.error_count == 0
+    merged = validation.merge_union_pair(tuple(d for d, _ in absorbed_here))
+    assert [d.message for d in merged] == [
+        "Input should be a valid number",
+        "Input should be a valid string",
+        "Input should be a valid dictionary or instance of InterpolatedTable",
+    ]
+
+
+def _set_leaf(raw, path, value):
+    node = raw
+    for key in path[:-1]:
+        node = node.setdefault(key, {})
+    node[path[-1]] = value
+
+
+@pytest.mark.parametrize("model", ["SPM", "SPMe", "DFN"])
+def test_every_expected_field_committed_null_absorbs_fully(model):
+    """Class-of-bug regression for the diffusivity fix: scaffold every
+    section the completion cascade enumerates, commit every expected field
+    ``null``, and assert the whole document stays calm -- every diagnostic
+    (whatever union branch or pydantic tag produced it) absorbs into its
+    NULL_FIELD task, and every absorbed nav_path equals the task's canonical
+    parameter path. A future bpx branch-tag rename cannot silently reopen
+    the bug without failing here."""
+    raw = document_factory.create(model, title="probe")
+    for _ in range(6):
+        tasks = completion.document_completion(raw)
+        pending = [
+            t for t in tasks if t.kind in (TaskKind.MISSING_SECTION, TaskKind.MISSING_FIELD)
+        ]
+        if not pending:
+            break
+        for task in pending:
+            _set_leaf(raw, task.path, {} if task.kind is TaskKind.MISSING_SECTION else None)
+    tasks = completion.document_completion(raw)
+    assert tasks and all(t.kind is TaskKind.NULL_FIELD for t in tasks)
+
+    doc = BPXDocument.from_raw(raw, filename="probe", fmt="json")
+    result = completion.partition_issues(doc, tasks)
+
+    assert result.visible == ()
+    assert result.error_count == 0
+    assert result.warning_count == 0
+    assert len(result.absorbed) == len(doc.issues)
+    for task, pairs in result.absorbed_by_task.items():
+        assert all(nav == task.path for _, nav in pairs)
 
 
 def test_partition_garbage_model_shows_both_error_and_task():

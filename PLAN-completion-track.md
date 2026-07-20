@@ -21,6 +21,22 @@ Anchored at commit `d6f4d9d` ("feat: redo"), working tree clean, **808 tests pas
 > a missing `Header.BPX` now surfaces as a raw exception diagnostic, not a pydantic
 > `missing`). The superseded text below is kept as the verified 1.1.0 record.
 
+> **AMENDMENT 2026-07-20 (diffusivity/null-field absorption, fix landed 03849b6).**
+> V5 undercounts: a committed-null **function/table union** field draws **four**
+> diagnostics (`float_type`/`int_type`/`string_type`/`model_type`), and pydantic
+> tags the function/table branches with names (`function-after[validate(), str]`,
+> `InterpolatedTable`) no exact-match denylist can keep up with. The fix therefore
+> abandons tag-stripping for resolvable parameters: when `_attach_issues` resolves
+> a `ParameterItem`, the stored nav_path IS that parameter's canonical `.path`.
+> `_NAV_STRIP_TAGS` is **deliberately untouched** (fallback for unresolvable locs
+> only — do not widen it). nav_path serves two masters that strip differently:
+> **identity** (absorption keying) uses the full canonical path; **display**
+> (section headings) strips a leading `Parameterisation` only, never `Header` —
+> owned by `core.page_buckets.strip_parameterisation_prefix`; do not merge it with
+> `completion._nav_path_candidates`, which strips both for loc-matching. Pinned by
+> `test_partition_null_function_table_field_absorbs_all_four_branches` and the
+> null-every-field walk in `test_completion.py`.
+
 ---
 
 ## 0. Working agreements (same as the input-system track)
