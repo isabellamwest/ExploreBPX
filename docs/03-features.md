@@ -190,6 +190,7 @@ repaired in place.
 | "Compare…" dialog (card toolbar, always visible): overlay the card's live draft against reference runs — bundled About:Energy sample cells (NMC pouch + LFP 18650, 5 runs each) or any BPX file via "Open BPX file…" — by chart or table, with a key-numbers summary (points, duration, current/voltage range); picker selection = bordered box + small tick (no circled badges, standing rule); an empty run states "no data yet" plainly; read-only, no persistence | Implemented |
 | Remove parameter (row context menu, Delete key) | Implemented |
 | Tree editing (add/remove sections; add/rename/remove materials and experiments; confirm before removing populated content) | Implemented |
+| User-defined authoring (add unlimited named subsections + parameters inside the `User-defined` bucket, nested without limit; rename/remove them; a plain "· custom" tree tag; all valid BPX) | Implemented |
 | Enhanced function-expression editor (syntax highlighting, validation) | Planned |
 | Model switch completes structure (adds required sections empty; removes nothing; one undo step) | Implemented |
 | Value preview in the parameter list (raw-verbatim, elided, full value on hover) | Implemented |

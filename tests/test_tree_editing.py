@@ -302,3 +302,106 @@ def test_removing_an_empty_section_does_not_ask(window_with_validation, monkeypa
     monkeypatch.setattr(type(window), "_confirm_populated_removal", _boom)
     window._on_remove_section_requested(("Validation", "empty run"))
     assert "empty run" not in window._state.active.document.raw["Validation"]
+
+
+# ----------------------------------------------------------------------
+# User-defined authoring: the one open bucket names both sections and
+# parameters freely, and its content is renamable (Concept C)
+# ----------------------------------------------------------------------
+
+_USER_DEFINED = ("Parameterisation", "User-defined")
+
+
+@pytest.fixture
+def user_defined_tree(valid_spm_dict):
+    """An SPM tree whose Parameterisation carries a populated User-defined
+    bucket: one custom subsection (holding a nested value) and one loose
+    parameter, so every free-form menu flavour has a live target."""
+    doc = dict(valid_spm_dict)
+    doc["Parameterisation"] = dict(doc["Parameterisation"])
+    doc["Parameterisation"]["User-defined"] = {
+        "Thermal tweaks": {"h": 25},
+        "loose scalar": 1.5,
+    }
+    return BPXDocument.from_raw(doc, "x.json", "json").tree
+
+
+def test_user_defined_bucket_offers_add_subsection(qtbot, user_defined_tree):
+    """The bucket names subsections but keeps its own schema name: add a
+    subsection, no rename, and "Remove section" (not the user-named "Remove").
+    Free-form parameters are added via the parameter list, not this menu."""
+    panel = _panel_with(qtbot, user_defined_tree)
+    _menu, labels = _menu_labels(panel, user_defined_tree, _USER_DEFINED)
+    assert labels == ["Add subsection…", "Remove section"]
+
+
+def test_user_defined_subsection_offers_authoring_menu(qtbot, user_defined_tree):
+    """A user-authored subsection nests further and is itself renamable, so it
+    reads the user-named "Remove"."""
+    panel = _panel_with(qtbot, user_defined_tree)
+    _menu, labels = _menu_labels(panel, user_defined_tree, _USER_DEFINED + ("Thermal tweaks",))
+    assert labels == ["Add subsection…", "Rename…", "Remove"]
+
+
+def test_add_subsection_routes_through_add_section_request(qtbot, user_defined_tree):
+    """"Add subsection…" is an ordinary AddSection under the bucket."""
+    panel = _panel_with(qtbot, user_defined_tree)
+    fired = []
+    panel.add_section_requested.connect(lambda path, key: fired.append((path, key)))
+    menu, _ = _menu_labels(panel, user_defined_tree, _USER_DEFINED)
+    next(a for a in menu.actions() if a.text() == "Add subsection…").trigger()
+    assert "Thermal tweaks" in panel._popup._taken  # popup opened over the bucket
+    panel._popup._input.setText("Ageing model")
+    panel._popup._input.confirm_requested.emit()
+    assert fired == [(_USER_DEFINED, "Ageing model")]
+    panel._popup.hide()
+
+
+def test_add_parameter_is_not_offered_on_the_tree_menu(qtbot, user_defined_tree):
+    """Adding a free-form parameter lives on the parameter list's
+    "+ Add parameter", never the tree context menu."""
+    panel = _panel_with(qtbot, user_defined_tree)
+    _menu, labels = _menu_labels(panel, user_defined_tree, _USER_DEFINED)
+    assert "Add parameter…" not in labels
+    assert not hasattr(panel, "add_parameter_requested")
+
+
+@pytest.fixture
+def window_with_user_defined(main_window, tmp_path, valid_spm_dict):
+    doc = dict(valid_spm_dict)
+    doc["Parameterisation"] = dict(doc["Parameterisation"])
+    doc["Parameterisation"]["User-defined"] = {}
+    work = tmp_path / "user_defined.json"
+    work.write_text(json.dumps(doc), encoding="utf-8")
+    main_window.open_document(work)
+    return main_window
+
+
+def test_multiple_subsections_land_in_one_bucket(window_with_user_defined):
+    """The old "only one user-defined section" limit is gone: the bucket holds
+    as many named subsections as the user adds."""
+    window = window_with_user_defined
+    window._on_add_section_requested(_USER_DEFINED, "Thermal tweaks")
+    window._on_add_section_requested(_USER_DEFINED, "Ageing model")
+    bucket = window._state.active.document.raw["Parameterisation"]["User-defined"]
+    assert bucket == {"Thermal tweaks": {}, "Ageing model": {}}
+
+
+def test_add_parameter_into_user_defined_seeds_empty_value(window_with_user_defined):
+    """A free-form parameter still lands in the bucket -- added through the
+    parameter list's "+ Add parameter" handler (a typed custom name), the one
+    surface for parameters now that the tree menu only adds subsections."""
+    window = window_with_user_defined
+    window._on_add_parameter_requested(_USER_DEFINED, "capacity offset")
+    bucket = window._state.active.document.raw["Parameterisation"]["User-defined"]
+    assert bucket == {"capacity offset": None}
+
+
+def test_rename_a_user_defined_subsection_moves_it(window_with_user_defined):
+    """Renaming user-authored content passes the backend can_rename guard that
+    refuses schema property names."""
+    window = window_with_user_defined
+    window._on_add_section_requested(_USER_DEFINED, "Thermal tweaks")
+    window._on_rename_requested(_USER_DEFINED + ("Thermal tweaks",), "Thermal")
+    bucket = window._state.active.document.raw["Parameterisation"]["User-defined"]
+    assert "Thermal" in bucket and "Thermal tweaks" not in bucket

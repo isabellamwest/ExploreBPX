@@ -58,6 +58,15 @@ class ParameterInfoPopover(QWidget):
         link label deliberately uses rich text, with an escaped href.
         """
         self._clear()
+        if metadata.is_custom:
+            # A parameter the BPX standard does not define: say so plainly
+            # rather than showing an empty popover. The validator, elsewhere,
+            # judges whether it is *legal* here -- this only states provenance.
+            self._layout.addWidget(QLabel("Custom parameter", objectName="Heading"))
+            note = QLabel("Not defined by the BPX schema — no standard documentation.")
+            note.setTextFormat(Qt.PlainText)
+            note.setWordWrap(True)
+            self._layout.addWidget(note)
         if metadata.symbol:
             self._layout.addWidget(QLabel("Symbol", objectName="Heading"))
             self._layout.addWidget(symbol_label(metadata.symbol))

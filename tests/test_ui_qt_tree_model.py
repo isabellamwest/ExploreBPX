@@ -103,3 +103,61 @@ def test_expanded_object_with_direct_object_error_keeps_marker():
     cell_index = model.index(0, 0)
 
     assert _display(model, cell_index) == "Cell ⚠"
+
+
+# ----------------------------------------------------------------------
+# The "· custom" tag: user-authored User-defined content reads apart from
+# the fixed schema sections
+# ----------------------------------------------------------------------
+
+_UD = ("Parameterisation", "User-defined")
+
+
+def _user_defined_model(sub_issue: bool = False):
+    sub = TreeNode(
+        label="Thermal tweaks",
+        path=_UD + ("Thermal tweaks",),
+        issues=[_error(_UD + ("Thermal tweaks",))] if sub_issue else [],
+    )
+    bucket = TreeNode(label="User-defined", path=_UD, children=[sub])
+    parameterisation = TreeNode(
+        label="Parameterisation", path=("Parameterisation",), children=[bucket]
+    )
+    root = TreeNode(label="BPX File", path=(), children=[parameterisation])
+    model = _model(root, expanded_paths={("Parameterisation",), _UD})
+    p_index = model.index(0, 0)
+    bucket_index = model.index(0, 0, p_index)
+    sub_index = model.index(0, 0, bucket_index)
+    return model, bucket_index, sub_index
+
+
+def test_user_defined_subsection_is_tagged_custom():
+    model, bucket_index, sub_index = _user_defined_model()
+    # The bucket keeps its fixed schema name; only its user-named content is tagged.
+    assert _display(model, bucket_index) == "User-defined"
+    assert _display(model, sub_index) == "Thermal tweaks · custom"
+
+
+def test_custom_tag_and_error_marker_coexist():
+    model, _bucket_index, sub_index = _user_defined_model(sub_issue=True)
+    assert _display(model, sub_index) == "Thermal tweaks · custom ⚠"
+
+
+def test_material_is_not_tagged_custom():
+    """A Particle material is renamable but not free-form, so it stays untagged
+    -- the tag composes ``is_freeform_section`` with ``can_rename``, not
+    ``can_rename`` alone."""
+    material = TreeNode(
+        label="Primary",
+        path=("Parameterisation", "Positive electrode", "Particle", "Primary"),
+    )
+    particle = TreeNode(
+        label="Particle",
+        path=("Parameterisation", "Positive electrode", "Particle"),
+        children=[material],
+    )
+    root = TreeNode(label="BPX File", path=(), children=[particle])
+    model = _model(root, expanded_paths={("Parameterisation", "Positive electrode", "Particle")})
+    particle_index = model.index(0, 0)
+    material_index = model.index(0, 0, particle_index)
+    assert _display(model, material_index) == "Primary"

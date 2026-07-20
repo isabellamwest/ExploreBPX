@@ -14,8 +14,13 @@ invented):
 - ``Add material… / Add experiment…`` -- on the two dict-keyed containers
   whose children the user names (``structure.named_child_noun``), via an
   anchored one-field popup.
-- ``Rename…`` -- only on user-named keys (materials, Validation runs;
-  ``structure.can_rename``). Schema property names are never editable.
+- ``Add subsection…`` -- on the open ``User-defined`` bucket and any
+  subsection within it (``structure.is_freeform_section``), for nesting
+  further named sections. Free-form *parameters* are added the usual way, via
+  the parameter list's "+ Add parameter" -- not duplicated here.
+- ``Rename…`` -- only on user-named keys (materials, Validation runs, and
+  User-defined content; ``structure.can_rename``). Schema property names are
+  never editable.
 - ``Remove / Remove section`` -- anything ``structure.can_remove`` allows,
   required or not ("guidance informs; it does not lock"); the *window*
   confirms when the target is populated.
@@ -171,6 +176,17 @@ class TreePanel(QWidget):
             action.triggered.connect(
                 lambda _checked=False, target=node, what=noun: self._open_add_named(
                     target, what
+                )
+            )
+
+        if structure.is_freeform_section(node.path):
+            # The open bucket where the user freely names nested sections.
+            # (Free-form parameters are added via the parameter list's
+            # "+ Add parameter", like anywhere else -- no duplicate here.)
+            add_sub = menu.addAction("Add subsection…")
+            add_sub.triggered.connect(
+                lambda _checked=False, target=node: self._open_add_named(
+                    target, "subsection"
                 )
             )
 

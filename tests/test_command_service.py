@@ -261,14 +261,29 @@ def test_rename_then_undo_restores_the_old_name_and_position():
 # --- structure queries behind the tree's context menu ---
 
 
-def test_can_rename_only_materials_and_runs():
+def test_can_rename_materials_runs_and_user_defined_content():
     assert structure.can_rename(("Validation", "C/20 discharge"))
     assert structure.can_rename(
         ("Parameterisation", "Negative electrode", "Particle", "Primary")
     )
+    # User-defined content is user-owned at any depth; the bucket itself is not.
+    assert structure.can_rename(("Parameterisation", "User-defined", "Thermal"))
+    assert structure.can_rename(("Parameterisation", "User-defined", "Thermal", "h"))
+    assert not structure.can_rename(("Parameterisation", "User-defined"))
     assert not structure.can_rename(("Header",))
     assert not structure.can_rename(("Parameterisation", "Cell"))
     assert not structure.can_rename(("Validation",))
+
+
+def test_is_freeform_section_covers_the_user_defined_bucket_and_its_content():
+    ud = ("Parameterisation", "User-defined")
+    assert structure.is_freeform_section(ud)  # the bucket accepts new children
+    assert structure.is_freeform_section(ud + ("Thermal",))  # so do its subsections
+    assert structure.is_freeform_section(ud + ("Thermal", "Nested"))
+    # Not the free-form area: schema sections and the dict-keyed collections.
+    assert not structure.is_freeform_section(("Parameterisation", "Cell"))
+    assert not structure.is_freeform_section(("Validation",))
+    assert not structure.is_freeform_section(("Parameterisation",))
 
 
 def test_named_child_noun_for_the_two_dict_keyed_containers():

@@ -12,7 +12,20 @@ from collections.abc import Callable
 
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt
 
+from core import structure
 from core.tree_model import TreeNode
+
+
+def _is_user_defined_content(node: TreeNode) -> bool:
+    """True for a user-authored subsection inside the open ``User-defined``
+    bucket -- not the bucket itself, whose name is a fixed schema property.
+
+    Composed from the two structural predicates: ``is_freeform_section`` holds
+    for the bucket and its subsections, ``can_rename`` narrows that to the
+    user-owned ones (excluding the bucket). These are the tree's only
+    free-form, user-named sections, tagged so they read apart from the fixed
+    schema sections (materials/runs are not free-form and stay untagged)."""
+    return structure.is_freeform_section(node.path) and structure.can_rename(node.path)
 
 
 class BpxTreeModel(QAbstractItemModel):
@@ -82,7 +95,12 @@ class BpxTreeModel(QAbstractItemModel):
             return None
         node: TreeNode = index.internalPointer()
         if role == Qt.DisplayRole:
-            return f"{node.label} ⚠" if self._shows_error_marker(index, node) else node.label
+            label = node.label
+            if _is_user_defined_content(node):
+                label = f"{label} · custom"
+            if self._shows_error_marker(index, node):
+                label = f"{label} ⚠"
+            return label
         if role == Qt.ToolTipRole:
             return node.description or node.label
         return None

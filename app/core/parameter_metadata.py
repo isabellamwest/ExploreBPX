@@ -40,6 +40,11 @@ class ParameterMetadata:
     specification_link: str | None = None
     documentation: tuple[tuple[str, str], ...] = ()
     source: str | None = None
+    #: True for a parameter the BPX standard does not define -- one with
+    #: neither schema ``FieldMeta`` nor a technical-descriptions entry (a
+    #: user-authored custom parameter, e.g. inside ``User-defined``). Lets the
+    #: info surfaces label it "custom" instead of showing an empty glance.
+    is_custom: bool = False
 
 
 def resolve_parameter_metadata(
@@ -61,6 +66,7 @@ def resolve_parameter_metadata(
         specification_link=description.battinfo if description else None,
         documentation=description.content if description else (),
         source=description.source if description else None,
+        is_custom=meta is None and description is None,
     )
 
 

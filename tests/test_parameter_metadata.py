@@ -17,11 +17,36 @@ def _path(alias: str, *sections: str) -> tuple[str, ...]:
     return ("Parameterisation", *sections, alias)
 
 
-def test_no_meta_and_no_description_yields_all_none():
+def test_no_meta_and_no_description_yields_all_none_but_flags_custom():
     # No unit marker, no FieldMeta, and a path outside every dataset section:
-    # every category is unpopulated.
+    # every documentation category is unpopulated, and the parameter is flagged
+    # custom (the BPX standard defines no such field).
     metadata = resolve_parameter_metadata(("User-defined", "Some alias"), None)
-    assert metadata == ParameterMetadata()
+    assert metadata == ParameterMetadata(is_custom=True)
+
+
+def test_custom_flag_set_for_a_user_typed_parameter_anywhere():
+    """Any parameter with neither FieldMeta nor a dataset entry is custom --
+    inside User-defined or typed into a schema section alike."""
+    assert resolve_parameter_metadata(
+        ("Parameterisation", "User-defined", "k_sei"), None
+    ).is_custom
+    assert resolve_parameter_metadata(
+        ("Parameterisation", "Cell", "my extra field"), None
+    ).is_custom
+
+
+def test_schema_parameter_is_not_custom():
+    meta = FieldMeta(alias="Ambient temperature [K]", description="The ambient temperature.")
+    metadata = resolve_parameter_metadata(("Header", "Ambient temperature [K]"), meta)
+    assert metadata.is_custom is False
+
+
+def test_documented_standard_parameter_is_not_custom_even_without_meta():
+    """A standard parameter the dataset documents is not custom, even when
+    resolved without FieldMeta -- the dataset entry proves it is a BPX field."""
+    metadata = resolve_parameter_metadata(_path("Nominal cell capacity [A.h]", "Cell"), None)
+    assert metadata.is_custom is False
 
 
 def test_no_meta_still_extracts_unit_from_alias():

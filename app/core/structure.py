@@ -26,6 +26,12 @@ _PROTECTED_TOP_LEVEL = frozenset({"Header", "Parameterisation"})
 #: Optional top-level sections a user may add to a document.
 _OPTIONAL_TOP_LEVEL = ("State", "Validation")
 
+#: The single BPX free-form authoring bucket. Its ``UserDefined`` schema
+#: definition is open (``additionalProperties: True``), so its descendants are
+#: the only Parameterisation content the user names and shapes freely --
+#: everywhere else keys are fixed schema property names.
+_USER_DEFINED = ("Parameterisation", "User-defined")
+
 
 def infer_model(raw: dict) -> str | None:
     """Return the declared model (``SPM``/``SPMe``/``DFN``/``Partial``) or None."""
@@ -85,19 +91,42 @@ def available_top_level_additions(raw: dict) -> tuple[str, ...]:
     return tuple(name for name in _OPTIONAL_TOP_LEVEL if name not in present)
 
 
+def _within_user_defined(path: tuple[str, ...]) -> bool:
+    """True for a node strictly *inside* the User-defined bucket -- not the
+    bucket itself, whose name is the fixed ``User-defined`` schema property."""
+    return len(path) > len(_USER_DEFINED) and path[: len(_USER_DEFINED)] == _USER_DEFINED
+
+
 def can_rename(path: tuple[str, ...]) -> bool:
     """Whether the key at ``path`` is a user-owned name.
 
-    Only the schema's dict-keyed collections have user-named keys: Particle
-    material instances (``.../Particle/<name>``) and Validation runs
-    (``Validation/<name>``). Every other key is a schema property name and is
-    never editable. Mirrors the tree's ``NodeType.DYNAMIC`` rule.
+    User-named keys are: Particle material instances (``.../Particle/<name>``),
+    Validation runs (``Validation/<name>``), and anything the user authored
+    inside the open ``User-defined`` bucket (subsections and parameters at any
+    depth). Every other key is a fixed schema property name and is never
+    editable. Mirrors the tree's ``NodeType.DYNAMIC`` rule plus the free-form
+    User-defined content.
     """
     if len(path) >= 2 and path[-2] == "Particle":
         return True
     if len(path) == 2 and path[0] == "Validation":
         return True
+    if _within_user_defined(path):
+        return True
     return False
+
+
+def is_freeform_section(path: tuple[str, ...]) -> bool:
+    """Whether *path* is a place the user may freely add named subsections and
+    parameters: the ``User-defined`` bucket and any subsection within it.
+
+    Unlike the single-noun dict-keyed collections (see
+    :func:`named_child_noun`), the schema's ``UserDefined`` definition is open
+    (``additionalProperties: True``), so both a named *section* and a named
+    *parameter* are legal here -- which is why this drives two menu actions
+    ("Add subsection…" / "Add parameter…") rather than one.
+    """
+    return path == _USER_DEFINED or _within_user_defined(path)
 
 
 def named_child_noun(path: tuple[str, ...]) -> str | None:

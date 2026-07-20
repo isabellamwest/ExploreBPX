@@ -60,6 +60,20 @@ def test_no_populated_fields_renders_nothing(qtbot):
     assert popover._layout.count() == 0
 
 
+def test_custom_parameter_says_custom(qtbot):
+    """A custom parameter's popover states its provenance rather than showing
+    an empty glance."""
+    _app()
+    popover = ParameterInfoPopover()
+    qtbot.addWidget(popover)
+    popover.show_metadata(ParameterMetadata(is_custom=True))
+    labels = [
+        popover._layout.itemAt(i).widget().text() for i in range(popover._layout.count())
+    ]
+    assert "Custom parameter" in labels
+    assert any("Not defined by the BPX schema" in text for text in labels)
+
+
 def test_symbol_link_and_docs_hint_render_when_populated(qtbot):
     _app()
     popover = ParameterInfoPopover()
@@ -135,6 +149,28 @@ def test_click_opens_popover_with_field_meta_content(card, qtbot):
     ]
     assert "The ambient temperature." in labels
     assert "K" in labels
+
+
+def test_custom_parameter_card_popover_says_custom(qtbot):
+    """A card built without FieldMeta (a user-authored parameter) surfaces
+    "Custom parameter" through the real ( i ) button -- the everywhere path."""
+    _app()
+    parameter = ParameterItem(
+        label="k_sei",
+        path=("Parameterisation", "User-defined", "Ageing model", "k_sei"),
+        kind=ParameterKind.SCALAR,
+        value=1e-14,
+    )
+    c = ParameterCard(parameter, None)  # no schema metadata -> custom
+    qtbot.addWidget(c)
+    qtbot.mouseClick(c._info_button, Qt.LeftButton)
+    labels = [
+        c._popover._layout.itemAt(i).widget().text()
+        for i in range(c._popover._layout.count())
+    ]
+    assert "Custom parameter" in labels
+    if c._popover is not None:
+        c._popover.close()
 
 
 def test_second_click_closes_popover(card, qtbot):
