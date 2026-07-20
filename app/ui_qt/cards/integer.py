@@ -53,7 +53,7 @@ class IntegerCard(EditorCard):
         self._unit_label: QLabel | None = None
         if parameter.unit:
             self._unit_label = QLabel(parameter.unit)
-            if not structure.can_rename(parameter.path):
+            if not structure.can_rename_parameter(parameter.path, parameter.value):
                 self._unit_label.setToolTip(FIXED_UNIT_TOOLTIP)
             layout.addWidget(self._unit_label)
         self._install_keyboard_handler(input_widget)

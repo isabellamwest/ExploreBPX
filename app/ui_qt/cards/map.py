@@ -73,7 +73,8 @@ class MapCard(ModalCard):
 
     def __init__(self, parameter, meta) -> None:
         opens_in = initial_mode(parameter.value)
-        unit_tooltip = "" if structure.can_rename(parameter.path) else FIXED_UNIT_TOOLTIP
+        renamable = structure.can_rename_parameter(parameter.path, parameter.value)
+        unit_tooltip = "" if renamable else FIXED_UNIT_TOOLTIP
         modes = [
             Mode(FLOAT_INT, NumberBody(parameter.unit, unit_tooltip)),
             Mode(DICT_STR_FLOAT_INT, MaterialMapBody(parameter.key_suggestions)),

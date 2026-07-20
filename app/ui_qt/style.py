@@ -131,10 +131,11 @@ def counts_tooltip(error_count: int, warning_count: int, outstanding_count: int)
 FILTER_FIELD_TOOLTIP = "Filters the view — counts stay unchanged"
 
 #: Shown on a value editor's unit label when the *parameter's own name* is a
-#: fixed BPX schema property (``not core.structure.can_rename(path)``) --
-#: never on a user-owned custom parameter's unit, which the user typed
-#: themselves. Nothing louder than a tooltip: the unit is still shown plainly,
-#: this only explains why it cannot be edited here.
+#: fixed BPX schema property (``not core.structure.can_rename_parameter(path,
+#: value)``) -- never on a user-owned or schema-undefined custom parameter's
+#: unit, which the user typed themselves. Nothing louder than a tooltip: the
+#: unit is still shown plainly, this only explains why it cannot be edited
+#: here.
 FIXED_UNIT_TOOLTIP = "Fixed by the BPX schema"
 
 STYLESHEET = """

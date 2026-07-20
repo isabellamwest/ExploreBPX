@@ -71,11 +71,14 @@ class RenameKey(Command):
 
     Only keys the user owns are renamable (Particle material instances,
     Validation runs -- see ``structure.can_rename``); schema property names
-    never are. Renaming moves the **address** of every descendant of the
-    renamed node: any future address-keyed sidecar metadata (e.g. per-value
-    provenance) must cascade here. Values referring to the old name (a
-    per-material MAP key) are deliberately *not* rewritten -- the validator
-    reports them, the app invents nothing.
+    never are. A parameter LEAF the schema defines nowhere is also renamable,
+    wherever it lives -- including directly inside a schema section, not only
+    inside User-defined -- via ``structure.can_rename_parameter``, which
+    ``can_rename`` alone does not cover. Renaming moves the **address** of
+    every descendant of the renamed node: any future address-keyed sidecar
+    metadata (e.g. per-value provenance) must cascade here. Values referring
+    to the old name (a per-material MAP key) are deliberately *not* rewritten
+    -- the validator reports them, the app invents nothing.
     """
 
     path: tuple[str, ...]
@@ -108,7 +111,9 @@ class DuplicateParameter(Command):
 
     Allowed exactly where renaming is allowed -- Particle materials,
     Validation runs, and User-defined content (``structure.can_duplicate``,
-    which mirrors ``can_rename``). The new key's name is the original's base
+    which mirrors ``can_rename``), plus any schema-undefined parameter leaf
+    wherever it lives (``structure.can_duplicate_parameter``, which mirrors
+    ``can_rename_parameter``). The new key's name is the original's base
     name with a numeric suffix inserted before any unit bracket
     (``"Foo"`` -> ``"Foo (2)"``, ``"Foo [V]"`` -> ``"Foo (2) [V]"``),
     incremented until unique among siblings -- see ``editing.duplicate_key``.

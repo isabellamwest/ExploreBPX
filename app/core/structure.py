@@ -13,7 +13,7 @@ isolated to this module so callers do not change.
 
 from __future__ import annotations
 
-from . import bpx_gateway
+from . import bpx_gateway, parameter_types
 
 #: Models that require a full electrolyte section.
 _ELECTROLYTE_MODELS = frozenset({"SPMe", "DFN"})
@@ -125,6 +125,38 @@ def can_duplicate(path: tuple[str, ...]) -> bool:
     name things. See :func:`can_rename`.
     """
     return can_rename(path)
+
+
+def _is_schema_undefined_leaf(path: tuple[str, ...], value: object) -> bool:
+    """True when *path* names a parameter LEAF (never a section) that the BPX
+    schema defines nowhere. ``field_meta`` being ``None`` is not sufficient on
+    its own -- it is equally ``None`` for a schema SECTION path -- so the
+    value is classified with the same no-metadata rule the tree uses to keep
+    a section out of the parameter list (see ``ui_qt.tree_model``'s object-node
+    check / :func:`parameter_types.classify`): a bare, non-table dict is a
+    SECTION, everything else is a leaf. Deliberately NOT
+    ``ParameterMetadata.is_custom``, which also requires an absent
+    technical-description entry (a docs concern); this is a rename-legality
+    concern and must not block an undocumented-but-real field.
+    """
+    if bpx_gateway.field_meta(path) is not None:
+        return False
+    return parameter_types.classify(value, None) != parameter_types.ParameterKind.SECTION
+
+
+def can_rename_parameter(path: tuple[str, ...], value: object) -> bool:
+    """Whether the parameter LEAF at ``path`` may be renamed: :func:`can_rename`'s
+    positional rule, OR a leaf the schema defines nowhere (a user-authored
+    custom parameter -- legal in any section now, not only User-defined --
+    or an alias we genuinely don't recognise, treated the same). Never call
+    this for a tree/section node; use :func:`can_rename` there.
+    """
+    return can_rename(path) or _is_schema_undefined_leaf(path, value)
+
+
+def can_duplicate_parameter(path: tuple[str, ...], value: object) -> bool:
+    """Mirrors :func:`can_rename_parameter`; see its docstring."""
+    return can_rename_parameter(path, value)
 
 
 def is_particle_material(path: tuple[str, ...]) -> bool:

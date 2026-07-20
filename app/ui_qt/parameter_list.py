@@ -8,12 +8,14 @@ creation is never offered by a row's right-click.
 
 A row's right-click context menu instead offers actions on that *existing*
 row: "Remove parameter" (also reachable via the Delete key once a row is
-current), and -- gated by ``core.structure.can_rename``/``can_duplicate``,
-today only true for content inside the open ``Parameterisation/User-defined``
-bucket -- "Rename…" and "Duplicate". "Move up"/"Move down" are offered for
-every real row, individually disabled at the first/last sibling. Context
-menus never create; creation controls are never hidden behind a right-click
-(see the parameter-list pane section of docs/02-ui.md).
+current), and -- gated by ``core.structure.can_rename_parameter``/
+``can_duplicate_parameter`` -- "Rename…" and "Duplicate". True for content
+inside the open ``Parameterisation/User-defined`` bucket, Particle materials,
+Validation runs, and any parameter leaf the schema defines nowhere, wherever
+it lives. "Move up"/"Move down" are offered for every real row, individually
+disabled at the first/last sibling. Context menus never create; creation
+controls are never hidden behind a right-click (see the parameter-list pane
+section of docs/02-ui.md).
 
 "Rename…" does not open its own popup: it opens (or focuses) the same
 inline card-header editor the row's own parameter card offers via a pencil
@@ -403,12 +405,15 @@ class ParameterListPanel(QWidget):
         then the unchanged Remove parameter.
         """
         menu = QMenu(self)
-        if structure.can_rename(path):
+        parameters = self._node.parameters if self._node is not None else ()
+        parameter = next((p for p in parameters if p.path == path), None)
+        value = parameter.value if parameter is not None else None
+        if structure.can_rename_parameter(path, value):
             rename_action = menu.addAction("Rename…")
             rename_action.triggered.connect(
                 lambda _checked=False, p=path: self.rename_parameter_requested.emit(p)
             )
-        if structure.can_duplicate(path):
+        if structure.can_duplicate_parameter(path, value):
             duplicate_action = menu.addAction("Duplicate")
             duplicate_action.triggered.connect(
                 lambda _checked=False, p=path: self.duplicate_parameter_requested.emit(p)

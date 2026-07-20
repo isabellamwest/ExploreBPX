@@ -65,7 +65,13 @@ def _capture_and_close_open_popup(captured: dict) -> None:
 
 
 def test_right_click_on_row_selects_it_and_offers_remove(panel):
-    panel.show_node(_section_node(parameters=[_parameter("Alpha"), _parameter("Beta")]))
+    # A real schema alias, not a made-up name -- under the schema-consulting
+    # can_rename_parameter/can_duplicate_parameter, a made-up name here would
+    # wrongly read as a custom (schema-undefined) parameter and offer
+    # Rename…/Duplicate too.
+    panel.show_node(
+        _section_node(parameters=[_parameter("Alpha"), _parameter("Reference temperature [K]")])
+    )
 
     item = panel._list.item(1)
     pos = panel._list.visualItemRect(item).center()

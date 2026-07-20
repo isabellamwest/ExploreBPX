@@ -16,10 +16,11 @@ unchanged and re-exposes ``parameter``, ``value()``, ``reset()`` and
 decide validity: the badge is driven externally via :meth:`set_validity`, and
 all validation orchestration stays in ``InspectorPanel``.
 
-For a parameter whose own key is user-owned (``core.structure.can_rename`` --
-today, only content inside the open ``Parameterisation/User-defined`` bucket
-ever reaches a plain ``ParameterCard`` this way), the header also carries a
-small "✎" button that expands an inline Name/Unit row in place (Concept A of
+For a parameter whose own key is renamable (``core.structure.can_rename_parameter``
+-- User-defined content, Particle materials, Validation runs, or any
+parameter leaf the schema defines nowhere, wherever it lives), the header
+also carries a small "✎" button that expands an inline Name/Unit row in
+place (Concept A of
 the completion-track rename/duplicate/move phase). This is the single rename
 surface for such a parameter: the parameter-list row's "Rename…" context-menu
 action opens/focuses the very same row via :meth:`open_rename_editor`, rather
@@ -71,7 +72,7 @@ class ParameterCard(QWidget):
         self.parameter = parameter
         self._meta = meta
         self._popover: ParameterInfoPopover | None = None
-        self._renamable = structure.can_rename(parameter.path)
+        self._renamable = structure.can_rename_parameter(parameter.path, parameter.value)
         # Resolved once and reused by the ( i ) popover: the symbol shown in the
         # header comes from the same source, so both render identical maths and
         # neither invents anything the dataset does not carry.

@@ -93,7 +93,7 @@ def execute(raw: dict, command: Command) -> CommandResult:
         new = editing.remove_section(raw, command.path)
         return CommandResult(new, "Remove section", command.path[:-1])
     if isinstance(command, RenameKey):
-        if not structure.can_rename(command.path):
+        if not structure.can_rename_parameter(command.path, raw_at(raw, command.path)):
             raise CommandError("This name cannot be changed.")
         new_key = command.new_key.strip()
         if not new_key:
@@ -128,7 +128,7 @@ def execute(raw: dict, command: Command) -> CommandResult:
         return CommandResult(new, f"Move {command.direction}", command.parent_path, path)
     if isinstance(command, DuplicateParameter):
         path = command.parent_path + (command.key,)
-        if not structure.can_duplicate(path):
+        if not structure.can_duplicate_parameter(path, raw_at(raw, path)):
             raise CommandError("This parameter cannot be duplicated.")
         new, new_key = editing.duplicate_key(raw, path)
         new_path = command.parent_path + (new_key,)

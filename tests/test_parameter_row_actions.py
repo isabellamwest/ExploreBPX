@@ -48,10 +48,28 @@ def panel(qtbot) -> ParameterListPanel:
 
 
 def test_schema_only_row_menu_is_move_and_remove(panel):
-    panel.show_node(_section_node(_CELL, [_parameter(_CELL, "Alpha")]))
-    menu = panel._build_row_menu(_CELL + ("Alpha",))
+    # A real schema alias, not a made-up name -- under the schema-consulting
+    # can_rename_parameter/can_duplicate_parameter, a made-up name here would
+    # wrongly read as a custom (schema-undefined) parameter. See
+    # test_card_rename.py, which uses the same alias as its schema-blocked
+    # example.
+    label = "Reference temperature [K]"
+    panel.show_node(_section_node(_CELL, [_parameter(_CELL, label)]))
+    menu = panel._build_row_menu(_CELL + (label,))
     labels = [a.text() for a in menu.actions() if not a.isSeparator()]
     assert labels == ["Move up", "Move down", "Remove parameter"]
+
+
+def test_custom_parameter_under_a_schema_section_offers_rename_and_duplicate(panel):
+    """A schema-undefined parameter leaf offers Rename…/Duplicate even
+    directly inside a schema section (Cell), not only inside User-defined --
+    the fixed-alias row above ("Reference temperature [K]") stays
+    Move/Remove-only for contrast."""
+    node = _section_node(_CELL, [_parameter(_CELL, "myname [cm7]")])
+    panel.show_node(node)
+    menu = panel._build_row_menu(_CELL + ("myname [cm7]",))
+    labels = [a.text() for a in menu.actions() if not a.isSeparator()]
+    assert labels == ["Rename…", "Duplicate", "Move up", "Move down", "Remove parameter"]
 
 
 def test_user_defined_row_menu_offers_rename_and_duplicate(panel):

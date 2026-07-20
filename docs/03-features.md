@@ -278,8 +278,9 @@ undo/dirty state. A card commit is a `SetValue` command on the same undo
 stack as structure edits (`AddSection`, `RemoveSection`, `RenameKey`). A
 multi-parameter edit (CSV import filling a Validation run's arrays) is one
 `SetValues` command — one undo entry, all-or-nothing. `RenameKey` (user-named
-dict keys only, gated by `structure.can_rename`) preserves key order and
-moves the *address* of every descendant; values referring to the old name
+dict keys and schema-undefined parameter leaves, gated by
+`structure.can_rename_parameter`) preserves key order and moves the
+*address* of every descendant; values referring to the old name
 (a per-material MAP key) are deliberately left for the validator to report,
 not rewritten. A card's contract is fixed: it edits one `ParameterItem`,
 emits raw input, never decides validity — `ExperimentCard` is the deliberate

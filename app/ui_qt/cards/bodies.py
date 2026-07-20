@@ -94,9 +94,9 @@ class NumberBody(ModeBody):
     """``FloatInt``: a free-text number field plus the parameter's unit.
 
     *unit_tooltip*, when given, is set on the unit label -- the caller's job
-    (``FunctionCard``/``MapCard``) to decide, from ``core.structure.can_rename``
-    on the parameter's own path, since this body knows only the unit string,
-    never the path.
+    (``FunctionCard``/``MapCard``) to decide, from
+    ``core.structure.can_rename_parameter`` on the parameter's own path and
+    value, since this body knows only the unit string, never the path.
     """
 
     def __init__(self, unit: str = "", unit_tooltip: str = "") -> None:

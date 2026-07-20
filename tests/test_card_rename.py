@@ -43,6 +43,18 @@ def test_pencil_present_for_user_defined_parameter(user_defined_window):
     assert d.card_rename_pencil_present() is True
 
 
+def test_pencil_present_for_custom_parameter_under_a_schema_section(app_driver, spm_workfile):
+    """A schema-undefined parameter authored directly inside a schema
+    section (Cell) -- not the User-defined bucket -- is renamable too; see
+    test_command_service.py's widened-gate tests for the backend rule."""
+    d = app_driver
+    d.open(spm_workfile)
+    window = d._w
+    window._on_add_parameter_requested(_CELL, "myname [cm7]", 0.0)
+    d.go_to(_CELL + ("myname [cm7]",))
+    assert d.card_rename_pencil_present() is True
+
+
 def test_pencil_absent_for_schema_parameter(app_driver, spm_workfile):
     d = app_driver
     d.open(spm_workfile)
@@ -60,6 +72,20 @@ def test_schema_parameter_unit_carries_fixed_tooltip(app_driver, spm_workfile):
 def test_user_defined_parameter_unit_carries_no_tooltip(user_defined_window):
     d = user_defined_window
     d.go_to(_USER_DEFINED + ("Foo [V]",))
+    assert d.card_unit_tooltip() in (None, "")
+
+
+def test_custom_parameter_under_a_schema_section_unit_carries_no_tooltip(
+    app_driver, spm_workfile
+):
+    """Contrast with test_schema_parameter_unit_carries_fixed_tooltip above:
+    a schema-undefined parameter's unit is never marked fixed, even when it
+    lives inside a schema section rather than User-defined."""
+    d = app_driver
+    d.open(spm_workfile)
+    window = d._w
+    window._on_add_parameter_requested(_CELL, "myname [cm7]", 0.0)
+    d.go_to(_CELL + ("myname [cm7]",))
     assert d.card_unit_tooltip() in (None, "")
 
 

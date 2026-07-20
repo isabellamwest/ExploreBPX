@@ -218,6 +218,19 @@ def test_rename_particle_material_is_allowed():
     assert particle["Main"] == {"a": 1}
 
 
+def test_rename_a_custom_parameter_under_a_schema_section_is_allowed():
+    """A schema-undefined parameter leaf is renamable directly inside a
+    schema section (e.g. Cell), not only inside User-defined -- the widened
+    gate under test."""
+    raw = {"Parameterisation": {"Cell": {"myname [cm7]": 1.0, "Other": 2}}}
+    path = ("Parameterisation", "Cell", "myname [cm7]")
+    result = command_service.execute(raw, RenameKey(path, "renamed [cm7]"))
+    cell = result.raw["Parameterisation"]["Cell"]
+    assert list(cell) == ["renamed [cm7]", "Other"]
+    assert cell["renamed [cm7]"] == 1.0
+    assert "myname [cm7]" in raw["Parameterisation"]["Cell"]  # source untouched
+
+
 def test_rename_a_schema_property_is_refused():
     """Schema property names are never editable; only the dict-keyed
     collections (materials, runs) carry user-owned names."""
@@ -349,6 +362,16 @@ def test_duplicate_parameter_unit_suffixed_key():
     assert user_defined["Time (2) [s]"] == [0, 1]
 
 
+def test_duplicate_a_custom_parameter_under_a_schema_section_is_allowed():
+    """Mirrors the RenameKey widening test above for DuplicateParameter."""
+    raw = {"Parameterisation": {"Cell": {"myname [cm7]": 1.0, "Other": 2}}}
+    parent_path = ("Parameterisation", "Cell")
+    result = command_service.execute(raw, DuplicateParameter(parent_path, "myname [cm7]"))
+    cell = result.raw["Parameterisation"]["Cell"]
+    assert list(cell) == ["myname [cm7]", "myname (2) [cm7]", "Other"]
+    assert cell["myname (2) [cm7]"] == 1.0
+
+
 def test_duplicate_parameter_name_collision_increments_to_three():
     raw = {
         "Parameterisation": {
@@ -420,6 +443,39 @@ def test_can_duplicate_mirrors_can_rename():
     for path in refused:
         assert structure.can_rename(path) is False
         assert structure.can_duplicate(path) is False
+
+
+def test_can_rename_parameter_widens_to_schema_undefined_leaves_anywhere():
+    """A custom (schema-undefined) parameter leaf is renamable/duplicable
+    wherever it lives -- not only inside User-defined -- while a real schema
+    field and the section itself stay refused. See :func:`structure.can_rename_parameter`."""
+    custom_leaf = ("Parameterisation", "Cell", "myname [V]")
+    real_field = ("Parameterisation", "Cell", "Reference temperature [K]")
+    section_itself = ("Parameterisation", "Cell")
+    custom_section_like = ("Parameterisation", "Cell", "My section")
+
+    assert structure.can_rename_parameter(custom_leaf, 1.5) is True
+    assert structure.can_duplicate_parameter(custom_leaf, 1.5) is True
+
+    assert structure.can_rename_parameter(real_field, 298.15) is False
+    assert structure.can_duplicate_parameter(real_field, 298.15) is False
+
+    assert structure.can_rename_parameter(section_itself, {}) is False
+    assert structure.can_duplicate_parameter(section_itself, {}) is False
+
+    # A dict-shaped custom value classifies as a SECTION, not a leaf -- still
+    # not renamable, even though its key is schema-undefined too.
+    assert structure.can_rename_parameter(custom_section_like, {"a": 1}) is False
+    assert structure.can_duplicate_parameter(custom_section_like, {"a": 1}) is False
+
+    # can_rename_parameter still covers everywhere can_rename already does.
+    for path in (
+        ("Validation", "C/20 discharge"),
+        ("Parameterisation", "Negative electrode", "Particle", "Primary"),
+        ("Parameterisation", "User-defined", "Thermal", "h"),
+    ):
+        assert structure.can_rename_parameter(path, 1.0) is True
+        assert structure.can_duplicate_parameter(path, 1.0) is True
 
 
 def test_is_freeform_section_covers_the_user_defined_bucket_and_its_content():
