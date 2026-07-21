@@ -98,7 +98,7 @@ _CUSTOM_TYPE_LABELS = tuple(_CUSTOM_TYPE_SEEDS)
 
 #: Shown only while Scalar is the selected type -- a plain, honest warning
 #: that the new parameter starts at a placeholder, not a real measurement.
-_SCALAR_SEED_WARNING = "Scalar starts at 0.0 — set the real value on the card."
+_SCALAR_SEED_WARNING = "Scalar starts at 0.0 - set the real value on the card."
 
 #: Shown when Name/Unit compose a key that already exists in this section --
 #: refusing the add rather than letting ``core.editing.add_parameter``'s

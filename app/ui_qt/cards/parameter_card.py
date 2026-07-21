@@ -3,7 +3,7 @@
 Top to bottom, a ``ParameterCard`` holds:
 
   1. a header (title label + validity badge + ( i ) information button that
-     toggles a :class:`~ui_qt.parameter_info_popover.ParameterInfoPopover` —
+     toggles a :class:`~ui_qt.parameter_info_popover.ParameterInfoPopover` -
      the quick glance; the long-form prose lives in the Inspector's
      Documentation tab),
   2. the per-kind value editor, produced by :func:`create_card`,

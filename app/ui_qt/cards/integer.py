@@ -2,7 +2,7 @@
 
 When the currently committed document value is a valid integer the card uses a
 ``QSpinBox`` (the normal path).  When the committed value cannot be interpreted
-as an integer — because an invalid value was previously saved — the card falls
+as an integer - because an invalid value was previously saved - the card falls
 back to a plain ``QLineEdit`` so the raw value remains visible and editable.
 This ensures the card is never read-only purely because the document contains
 an invalid value.

@@ -110,7 +110,7 @@ _MSG_NOTHING_OUTSTANDING = "✓ Nothing outstanding"
 #: a narrow, deliberate exception to "consume only PageBuckets" (grouping/
 #: counting logic itself stays entirely bucket-derived).
 _MSG_PARTIAL_NO_TARGET = (
-    "Model is Partial — no completion target. Expected fields are still "
+    "Model is Partial - no completion target. Expected fields are still "
     "suggested in each section's parameter list."
 )
 
@@ -406,13 +406,13 @@ def _task_label(task: CompletionTask) -> tuple[str, str | None, str]:
 def _task_row_text(task: CompletionTask, absorbed_messages: tuple[str, ...]) -> str:
     glyph = _task_glyph(task)
     name, note, action = _task_label(task)
-    label = f"{name} — {note}" if note else name
+    label = f"{name} - {note}" if note else name
     text = f"{glyph} {label}"
     if task.required:
         text += "  (REQUIRED)"
     text += f"  {action}"
     if absorbed_messages:
-        text += "  — " + "; ".join(absorbed_messages)
+        text += "  - " + "; ".join(absorbed_messages)
     return text
 
 
@@ -429,7 +429,7 @@ def _task_row_html(task: CompletionTask, absorbed_messages: tuple[str, ...]) -> 
     bold name span the way it used to be."""
     glyph = _task_glyph(task)
     name, note, action = _task_label(task)
-    label = f"{name} — {note}" if note else name
+    label = f"{name} - {note}" if note else name
     hints: list[tuple[str, str]] = []
     if task.required:
         hints.append(("REQUIRED", style.REQUIRED))
@@ -815,7 +815,7 @@ class _SectionDetailView(QWidget):
             # zero surviving rows would orphan a header for nothing, so it
             # only renders when at least one optional row survives.
             if optional_rows:
-                _add_subhead_row(lst, f"OPTIONAL — {len(bucket.optional_tasks)} UNFILLED")
+                _add_subhead_row(lst, f"OPTIONAL - {len(bucket.optional_tasks)} UNFILLED")
                 for task, absorbed in optional_rows:
                     _add_task_row(lst, task, absorbed)
 
@@ -893,7 +893,7 @@ class _AllSectionsView(QWidget):
                         hidden_total += 1
                 if required_rows:
                     if not _is_declare_model_only(bucket):
-                        _add_subhead_row(self._list, f"{bucket.label} — {_ratio_words(bucket)}")
+                        _add_subhead_row(self._list, f"{bucket.label} - {_ratio_words(bucket)}")
                     for task, absorbed in required_rows:
                         _add_task_row(self._list, task, absorbed)
 
@@ -907,7 +907,7 @@ class _AllSectionsView(QWidget):
                         hidden_total += 1
                 if optional_rows:
                     _add_subhead_row(
-                        self._list, f"{bucket.label} · optional — {len(bucket.optional_tasks)} unfilled"
+                        self._list, f"{bucket.label} · optional - {len(bucket.optional_tasks)} unfilled"
                     )
                     for task, absorbed in optional_rows:
                         _add_task_row(self._list, task, absorbed)

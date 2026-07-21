@@ -174,8 +174,8 @@ class AppDriver:
 
     def validation_group_headers(self) -> list[str]:
         """Text of every All-sections sub-head row, in order (e.g.
-        "Cell — 2 of 5 remaining", "Separator — section absent",
-        "Cell · optional — 1 unfilled") -- the pinned copy from S3."""
+        "Cell - 2 of 5 remaining", "Separator - section absent",
+        "Cell · optional - 1 unfilled") -- the pinned copy from S3."""
         return [item.text() for item in self._validation_rows("subhead")]
 
     def validation_task_row_count_under_header(self, header_text: str) -> int:

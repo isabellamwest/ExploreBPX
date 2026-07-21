@@ -81,13 +81,13 @@ class IssuesTab(QWidget):
         # connection covers keyboard and mouse activation without duplicate
         # emits. Selection changes alone (arrow keys) do not trigger it.
         self._list.itemActivated.connect(self._on_activated)
-        self._stack.addWidget(self._list)  # index 0 — issue list
+        self._stack.addWidget(self._list)  # index 0 - issue list
 
         self._placeholder = QLabel(_MSG_NO_SELECTION)
         self._placeholder.setObjectName("IssuesPlaceholder")
         self._placeholder.setAlignment(Qt.AlignCenter)
         self._placeholder.setWordWrap(True)
-        self._stack.addWidget(self._placeholder)  # index 1 — empty state
+        self._stack.addWidget(self._placeholder)  # index 1 - empty state
 
         layout.addWidget(self._stack)
         self._stack.setCurrentIndex(1)  # start on the placeholder

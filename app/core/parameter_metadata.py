@@ -53,7 +53,7 @@ def resolve_parameter_metadata(
     """Resolve the unified metadata for the parameter at *path*.
 
     ``FieldMeta`` supplies the schema-derived facts; the descriptions dataset
-    supplies symbol, link and documentation. Either source may be absent —
+    supplies symbol, link and documentation. Either source may be absent -
     a user-defined parameter has neither, and yields an all-empty result.
     """
     alias = path[-1] if path else ""

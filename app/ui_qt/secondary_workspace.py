@@ -3,7 +3,7 @@ the Inspector for parameter-centric tools (Issues today; Analysis, Documentation
 and References in future).
 
 This widget is a **generic container**.  It knows nothing about issues, BPX, or
-any specific tool — callers register tabs with :meth:`add_tab` and drive their
+any specific tool - callers register tabs with :meth:`add_tab` and drive their
 content directly.
 
 State model.  The workspace is **workspace state, not parameter state**:
@@ -26,7 +26,7 @@ Panel height is owned by the surrounding splitter (see ``InspectorPanel``); this
 widget only reports :meth:`tab_strip_height` and locks its own maximum height
 while collapsed so the splitter cannot reveal empty space.
 
-Future direction — ParameterTool protocol
+Future direction - ParameterTool protocol
 ------------------------------------------
 When a second concrete tool exists (Analysis, Documentation, etc.), consider
 evolving toward a ``ParameterTool`` protocol so tools register generically::

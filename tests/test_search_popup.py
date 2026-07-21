@@ -1,8 +1,8 @@
 """Focused tests for the SearchPopup navigation surface.
 
-These exercise the search box's own behaviour — indexing objects and
+These exercise the search box's own behaviour - indexing objects and
 parameters, name-over-path results, keyboard selection, staged Escape and
-activation — in isolation from the rest of the window. End-to-end navigation
+activation - in isolation from the rest of the window. End-to-end navigation
 through the window is covered in ``test_workflows_ui.py``.
 """
 

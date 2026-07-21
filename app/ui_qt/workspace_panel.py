@@ -211,9 +211,9 @@ class WorkspacePanel(QWidget):
         identity = document.identity
         self._info_title.setText(identity.title or "Untitled document")
         self._set_form_visible(True)
-        self._info_fields["Model"].setText(identity.model or "—")
-        self._info_fields["BPX version"].setText(identity.bpx_version or "—")
-        self._info_fields["File"].setText(filename or "—")
+        self._info_fields["Model"].setText(identity.model or "-")
+        self._info_fields["BPX version"].setText(identity.bpx_version or "-")
+        self._info_fields["File"].setText(filename or "-")
         self._info_fields["State"].setText("Modified" if dirty else "Saved")
         self._info_fields["Contents"].setText(
             f"{document.section_count} sections · {document.parameter_count} parameters"

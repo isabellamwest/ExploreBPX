@@ -68,8 +68,8 @@ HEADER_BAND_STRONG = "#eef1f4"
 # ---------------------------------------------------------------------------
 
 _SEVERITY_TOOLTIPS: dict[Severity, str] = {
-    Severity.ERROR: "Error — the BPX validator rejected this",
-    Severity.WARNING: "Warning — flagged by the BPX validator",
+    Severity.ERROR: "Error - the BPX validator rejected this",
+    Severity.WARNING: "Warning - flagged by the BPX validator",
 }
 
 _TASK_KIND_TOOLTIPS: dict[TaskKind, str] = {
@@ -128,7 +128,7 @@ def counts_tooltip(error_count: int, warning_count: int, outstanding_count: int)
 #: Not enum/count-derived like the rest of this vocabulary -- it is a fixed
 #: sentence about the *feature*, not about any particular diagnostic/task --
 #: kept here anyway so the whole tooltip vocabulary has one home.
-FILTER_FIELD_TOOLTIP = "Filters the view — counts stay unchanged"
+FILTER_FIELD_TOOLTIP = "Filters the view - counts stay unchanged"
 
 #: Shown on a value editor's unit label when the *parameter's own name* is a
 #: fixed BPX schema property (``not core.structure.can_rename_parameter(path,

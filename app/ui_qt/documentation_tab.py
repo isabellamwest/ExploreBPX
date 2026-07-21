@@ -10,7 +10,7 @@ dataset file changes the app's documentation without any code change.
 
 The ( i ) popover stays the quick glance; this tab is where multi-paragraph
 prose (physical correspondence, model sensitivity, measurement methods) can
-be read properly — it persists beside the editor instead of dismissing on the
+be read properly - it persists beside the editor instead of dismissing on the
 first outside click.
 
 Data contract mirrors :class:`~ui_qt.issues_tab.IssuesTab`:
@@ -59,13 +59,13 @@ class DocumentationTab(QWidget):
         self._content_layout = QVBoxLayout(self._content)
         self._content_layout.setContentsMargins(12, 8, 12, 8)
         self._scroll.setWidget(self._content)
-        self._stack.addWidget(self._scroll)  # index 0 — documentation
+        self._stack.addWidget(self._scroll)  # index 0 - documentation
 
         self._placeholder = QLabel(_MSG_NO_SELECTION)
         self._placeholder.setObjectName("DocumentationPlaceholder")
         self._placeholder.setAlignment(Qt.AlignCenter)
         self._placeholder.setWordWrap(True)
-        self._stack.addWidget(self._placeholder)  # index 1 — empty state
+        self._stack.addWidget(self._placeholder)  # index 1 - empty state
 
         layout.addWidget(self._stack)
         self._stack.setCurrentIndex(1)  # start on the placeholder

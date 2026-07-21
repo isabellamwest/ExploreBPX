@@ -23,7 +23,7 @@ from .latex import symbol_label
 
 #: (heading, ParameterMetadata field name) for the quick-glance facts, in
 #: display order. A field that resolves empty/``None`` is simply omitted.
-#: The long-form documentation deliberately does NOT render here — it is
+#: The long-form documentation deliberately does NOT render here - it is
 #: multi-paragraph prose and lives in the Inspector's Documentation tab; the
 #: popover stays a glance.
 _SECTIONS: tuple[tuple[str, str], ...] = (
@@ -63,7 +63,7 @@ class ParameterInfoPopover(QWidget):
             # rather than showing an empty popover. The validator, elsewhere,
             # judges whether it is *legal* here -- this only states provenance.
             self._layout.addWidget(QLabel("Custom parameter", objectName="Heading"))
-            note = QLabel("Not defined by the BPX schema — no standard documentation.")
+            note = QLabel("Not defined by the BPX schema - no standard documentation.")
             note.setTextFormat(Qt.PlainText)
             note.setWordWrap(True)
             self._layout.addWidget(note)

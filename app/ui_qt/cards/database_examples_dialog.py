@@ -97,7 +97,7 @@ MAX_REFERENCE_RUNS = len(_REFERENCE_COLORS)
 _YOU_WIDTH = 3.0
 _REFERENCE_WIDTH = 2.0
 
-_NO_OWN_DATA_NOTICE = "No data in this experiment yet — showing reference data only."
+_NO_OWN_DATA_NOTICE = "No data in this experiment yet - showing reference data only."
 
 
 @dataclass(frozen=True)
@@ -154,11 +154,11 @@ def _format_range(values: list[float], unit: str) -> str:
     """"2.9 to 4.19 V", collapsing to one value when the column never
     varies. " to " rather than an en dash: current ranges are routinely
     negative-to-negative ("-12.5–-0.0058 A" is unreadable, seen in the
-    real-app proof). "—" for a column with no numeric values (never a
+    real-app proof). "-" for a column with no numeric values (never a
     judgement -- the grid and validator flag bad cells; this table only
     states what is there)."""
     if not values:
-        return "—"
+        return "-"
     lo, hi = min(values), max(values)
     low, high = f"{lo:.4g}", f"{hi:.4g}"
     if low == high:
@@ -348,7 +348,7 @@ class DatabaseExamplesDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle(
-            f"Compare — Experiment · {run_label}" if run_label else "Compare experiment data"
+            f"Compare - Experiment · {run_label}" if run_label else "Compare experiment data"
         )
         self.resize(1000, 760)
 
@@ -679,7 +679,7 @@ class DatabaseExamplesDialog(QDialog):
         table.verticalHeader().hide()
         for r, (series_id, added) in enumerate(self._added.items()):
             time = _numeric(added.data.get(_TIME))
-            duration = _format_duration(max(time) - min(time)) if time else "—"
+            duration = _format_duration(max(time) - min(time)) if time else "-"
             name = QTableWidgetItem(added.label)
             name.setData(Qt.DecorationRole, QColor(added.color))
             cells = (

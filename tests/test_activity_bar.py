@@ -71,7 +71,7 @@ def test_badge_is_warning_only_for_a_warnings_only_document(app_driver, warning_
 
     assert d.validation_badge_count() == 1
     assert d.validation_badge_severity() == "warning"
-    assert d.validation_tooltip() == "Diagnostics — 1 warning"
+    assert d.validation_tooltip() == "Diagnostics - 1 warning"
 
 
 def test_badge_is_error_when_any_error_exists(app_driver, invalid_bpx_path):

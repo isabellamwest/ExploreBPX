@@ -50,7 +50,7 @@ from .paste_dialog import PastePreviewResult
 _PREVIEW_ROWS = 100
 
 #: The combo entry meaning "leave this parameter untouched".
-_SKIP = "— skip —"
+_SKIP = "- skip -"
 
 
 class CsvImportDialog(QDialog):

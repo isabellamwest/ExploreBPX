@@ -14,7 +14,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QSplitter, QStackedWidget, QVBoxLayout, QWidget
 
-_EMPTY_STATE_TEXT = "No document open — use the Workspace tab to open or create one"
+_EMPTY_STATE_TEXT = "No document open - use the Workspace tab to open or create one"
 
 _SPLITTER_INDEX = 0
 _EMPTY_INDEX = 1

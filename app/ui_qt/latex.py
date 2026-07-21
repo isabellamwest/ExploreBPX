@@ -25,7 +25,7 @@ def latex_pixmap(latex: str, point_size: float = 11.0, color: str = "#202020") -
     """Render *latex* (without surrounding ``$``) to a transparent pixmap.
 
     Returns ``None`` when matplotlib is unavailable or the expression does not
-    parse — callers fall back to showing the raw LaTeX source as plain text.
+    parse - callers fall back to showing the raw LaTeX source as plain text.
     """
     png = _render_png(latex, point_size, color)
     if png is None:
@@ -60,7 +60,7 @@ def symbol_label(latex: str, point_size: float = 11.0, color: str = "#202020") -
 
 @lru_cache(maxsize=256)
 def _render_png(latex: str, point_size: float, color: str) -> bytes | None:
-    """Rasterise to PNG bytes (cached — symbols repeat across popover opens)."""
+    """Rasterise to PNG bytes (cached - symbols repeat across popover opens)."""
     try:
         # The OO API (Figure + explicit Agg canvas) rasterises through Agg
         # regardless of the global backend, so this never sets or fights the

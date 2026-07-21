@@ -45,7 +45,7 @@ HTML_ROLE = Qt.UserRole + 100
 #: with no value column (group headers, suggestion rows, other lists).
 VALUE_ROLE = Qt.UserRole + 101
 #: Companion flag: True renders the preview ghosted (lighter, italic) --
-#: the "—" of a committed null and the derived summaries of Inspector-only
+#: the "-" of a committed null and the derived summaries of Inspector-only
 #: kinds ("table · 3 points"), as opposed to a verbatim raw value.
 VALUE_GHOST_ROLE = Qt.UserRole + 102
 #: Item-data role carrying ``"error"``/``"warning"`` for an issue row; when
@@ -91,14 +91,14 @@ def value_preview(value: object, kind: ParameterKind) -> tuple[str, bool]:
     Simple committed values render **verbatim from the raw document** (JSON
     spelling for numbers and booleans, the bare string for text) -- never
     reformatted, rounded or re-spelled, per validator fidelity. Committed
-    ``null`` renders as a ghosted "—" (the muted-emptiness language of
+    ``null`` renders as a ghosted "-" (the muted-emptiness language of
     decision P). Inspector-only kinds render a ghosted summary *derived*
     from the data (point/entry/value counts), never invented content.
     Elision to the available width is the delegate's job, not this one's:
     the full string is returned so tooltips can carry it.
     """
     if value is None:
-        return "—", True
+        return "-", True
     if isinstance(value, bool):
         return ("true" if value else "false"), False
     if isinstance(value, (int, float)):

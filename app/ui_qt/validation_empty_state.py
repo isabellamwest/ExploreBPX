@@ -55,8 +55,8 @@ from .style import MUTED
 
 _HEADING = "No experiments yet"
 _COPY = (
-    "Validation stores measured traces — time, current, voltage, "
-    "optionally temperature — to check this parameter set against."
+    "Validation stores measured traces - time, current, voltage, "
+    "optionally temperature - to check this parameter set against."
 )
 
 

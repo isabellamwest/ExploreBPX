@@ -254,7 +254,7 @@ class MainWindow(QMainWindow):
         # shown on the Workspace info card).
         version_label = QLabel(f"bpx {BPX_VERSION}")
         version_label.setToolTip(
-            "Installed bpx package — the validator every verdict in "
+            "Installed bpx package - the validator every verdict in "
             "this app comes from"
         )
         bar.addPermanentWidget(version_label)
@@ -869,7 +869,7 @@ class MainWindow(QMainWindow):
     @staticmethod
     def _diagnostics_tooltip(errors: int, warnings: int) -> str:
         """Compose the Diagnostics button's tooltip from honest error/warning
-        counts, e.g. 'Diagnostics — 2 errors, 1 warning'. A zero side is
+        counts, e.g. 'Diagnostics - 2 errors, 1 warning'. A zero side is
         omitted; singular/plural is handled per side."""
         if not errors and not warnings:
             return "Diagnostics"
@@ -878,7 +878,7 @@ class MainWindow(QMainWindow):
             parts.append(f"{errors} error" + ("" if errors == 1 else "s"))
         if warnings:
             parts.append(f"{warnings} warning" + ("" if warnings == 1 else "s"))
-        return "Diagnostics — " + ", ".join(parts)
+        return "Diagnostics - " + ", ".join(parts)
 
     def _refresh_all(self) -> None:
         """Refresh every view from one document snapshot.

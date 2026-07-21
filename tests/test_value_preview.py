@@ -1,8 +1,8 @@
 """Value preview in the parameter list (docs/02-ui.md "Parameter list pane").
 
 Rows carry a right-aligned, delegate-elided preview of the committed value:
-raw-verbatim for simple kinds, a ghosted "—" for committed null, a ghosted
-derived summary for Inspector-only kinds. Editing stays in the Inspector —
+raw-verbatim for simple kinds, a ghosted "-" for committed null, a ghosted
+derived summary for Inspector-only kinds. Editing stays in the Inspector -
 the preview replaced the once-planned inline quick inputs (user decision,
 2026-07-15): scanning was the value; the Inspector already edits well.
 """
@@ -26,7 +26,7 @@ _CELL = ("Parameterisation", "Cell")
 
 
 def test_null_is_a_ghosted_dash():
-    assert value_preview(None, ParameterKind.SCALAR) == ("—", True)
+    assert value_preview(None, ParameterKind.SCALAR) == ("-", True)
 
 
 def test_numbers_render_json_verbatim():
@@ -109,7 +109,7 @@ def test_null_valued_row_shows_ghost_dash_and_no_tooltip(app_driver, valid_spm_p
     for i in range(lst.count()):
         item = lst.item(i)
         if item.text().startswith("Electrode area"):
-            assert item.data(parameter_row.VALUE_ROLE) == "—"
+            assert item.data(parameter_row.VALUE_ROLE) == "-"
             assert item.data(parameter_row.VALUE_GHOST_ROLE) is True
             assert item.toolTip() == ""
             return

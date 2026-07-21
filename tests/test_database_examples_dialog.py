@@ -352,7 +352,7 @@ def test_own_run_carries_line_width_three_and_reference_runs_carry_two():
 def test_window_title_names_the_run_when_a_run_label_is_given():
     dialog = DatabaseExamplesDialog(run_label="C/20 discharge")
 
-    assert dialog.windowTitle() == "Compare — Experiment · C/20 discharge"
+    assert dialog.windowTitle() == "Compare - Experiment · C/20 discharge"
 
 
 def test_window_title_is_generic_without_a_run_label():

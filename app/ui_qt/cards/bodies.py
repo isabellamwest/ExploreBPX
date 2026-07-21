@@ -330,7 +330,7 @@ class MaterialMapBody(ModeBody):
         for key, _ in self._rows():
             if key in seen:
                 return (
-                    f'Duplicate material "{key}" — each material may appear '
+                    f'Duplicate material "{key}" - each material may appear '
                     "only once."
                 )
             seen.add(key)

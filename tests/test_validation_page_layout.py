@@ -319,7 +319,7 @@ def test_optional_subhead_only_when_optional_tasks_exist(app_driver, tmp_path):
     d.open(_write(tmp_path, "with_optional.json", raw))
     d.diagnostics_select_rail("Cell")
     subheads = d.diagnostics_section_optional_subhead_texts()
-    assert subheads == ["OPTIONAL — 1 UNFILLED"]
+    assert subheads == ["OPTIONAL - 1 UNFILLED"]
 
 
 def test_section_pane_empty_states_use_pinned_words(app_driver, valid_spm_path):

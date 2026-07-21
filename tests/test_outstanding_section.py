@@ -78,9 +78,9 @@ def test_state1_fresh_skeleton(app_driver, tmp_path):
     assert d.validation_badge_severity() is None
 
     headers = d.validation_group_headers()
-    assert "Cell — 5 of 5 remaining" in headers
-    assert "Negative electrode — 9 of 9 remaining" in headers
-    assert "Positive electrode — 9 of 9 remaining" in headers
+    assert "Cell - 5 of 5 remaining" in headers
+    assert "Negative electrode - 9 of 9 remaining" in headers
+    assert "Positive electrode - 9 of 9 remaining" in headers
     # bpx 1.1.1 made `State` schema-optional (Field(None, alias="State")) and
     # deleted the root validator that used to demand it, so `document_factory`
     # no longer scaffolds it at all -- there is no State group here.
@@ -111,7 +111,7 @@ def test_state2_working_document(app_driver, tmp_path, valid_spm_dict):
     )
     assert any(t.kind is TaskKind.NULL_FIELD and t.path == _LOWER_CUTOFF for t in tasks)
     headers = d.validation_group_headers()
-    assert "Cell — 2 of 5 remaining" in headers
+    assert "Cell - 2 of 5 remaining" in headers
 
 
 # ---------------------------------------------------------------------------
@@ -135,7 +135,7 @@ def test_state3_partial_sparse_electrode(app_driver, tmp_path):
     d.diagnostics_select_rail("Negative electrode")
     notice = d.diagnostics_section_outstanding_empty_text()
     assert notice == (
-        "Model is Partial — no completion target. Expected fields are "
+        "Model is Partial - no completion target. Expected fields are "
         "still suggested in each section's parameter list."
     )
     # Terminology discipline (decision B): "valid"/"invalid" never appear in
@@ -353,9 +353,9 @@ def test_optional_null_field_gets_its_own_subgroup(app_driver, tmp_path):
     d.open(_write(tmp_path, "optional_null_cell.json", raw))
 
     headers = d.validation_group_headers()
-    assert "Cell — 5 of 5 remaining" in headers
-    assert "Cell · optional — 1 unfilled" in headers
-    assert d.validation_task_row_count_under_header("Cell — 5 of 5 remaining") == 5
+    assert "Cell - 5 of 5 remaining" in headers
+    assert "Cell · optional - 1 unfilled" in headers
+    assert d.validation_task_row_count_under_header("Cell - 5 of 5 remaining") == 5
 
     optional_task = next(
         t for t in d.outstanding_tasks() if t.path == _CELL + ("Volume [m3]",)
@@ -378,7 +378,7 @@ def test_required_group_ratio_integrity_with_mixed_required_and_optional_tasks(
     d = app_driver
     d.open(_write(tmp_path, "ratio_integrity.json", raw))
 
-    assert d.validation_task_row_count_under_header("Cell — 5 of 5 remaining") == 5
+    assert d.validation_task_row_count_under_header("Cell - 5 of 5 remaining") == 5
 
 
 def test_section_with_only_optional_nulls_shows_no_required_header(
@@ -390,8 +390,8 @@ def test_section_with_only_optional_nulls_shows_no_required_header(
     d.open(_write(tmp_path, "only_optional_header.json", raw))
 
     headers = d.validation_group_headers()
-    assert "Header · optional — 1 unfilled" in headers
-    assert not any(h.startswith("Header —") for h in headers)
+    assert "Header · optional - 1 unfilled" in headers
+    assert not any(h.startswith("Header -") for h in headers)
 
 
 def test_fold_headers_are_non_activatable(app_driver, tmp_path):
