@@ -6,6 +6,7 @@ signals to state mutations, and refreshes views. No BPX logic lives here.
 
 from __future__ import annotations
 
+from enum import Enum
 from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt
@@ -40,7 +41,7 @@ from core.commands import (
 from core.completion import TaskKind
 from core.tree_model import build_parameter_path_map
 from core.validation import Severity
-from state.app_state import AppState
+from state.app_state import AppState, OpenReferenceOutcome
 from state.document_session import DocumentSession
 
 from . import icons
@@ -52,6 +53,7 @@ from .page_header import PageHeader
 from .parameter_list import ParameterListPanel
 from .search import SearchBar
 from .style import STYLESHEET
+from .toast import Toast
 from .tree_panel import TreePanel
 from .diagnostics_panel import DiagnosticsPanel
 from .workspace_panel import WorkspacePanel
@@ -60,6 +62,15 @@ _NO_DOCUMENT_TEXT = "No document"
 _EDITOR_PAGE_INDEX = 0  # QStackedWidget page hosting the tree/params/inspector
 _DIAGNOSTICS_PAGE_INDEX = 1
 _WORKSPACE_PAGE_INDEX = 2
+
+
+class OpenIntent(Enum):
+    """What to do with a chosen file when a document is already open (the
+    Open-dialog choice, PLAN-multi-file.md decision 8)."""
+
+    REPLACE_MAIN = "replace_main"
+    ADD_REFERENCE = "add_reference"
+    CANCEL = "cancel"
 
 
 class _IdentityLabel(QLabel):
@@ -122,6 +133,9 @@ class MainWindow(QMainWindow):
         self._build_toolbar()
         self._build_central()
         self._build_statusbar()
+        # Built last: the toast overlays the whole window, so it needs the
+        # fully assembled window as its parent.
+        self._toast = Toast(self)
         self._connect()
         self._refresh_all()
 
@@ -133,6 +147,12 @@ class MainWindow(QMainWindow):
         Export and search.
         """
         bar = self.addToolBar("Main")
+        # A stock QToolBar is movable, and right-clicking it opens
+        # QMainWindow's built-in panel-toggle menu whose only entry ("Main")
+        # hides the bar with no way to bring it back. This bar is fixed
+        # chrome, not a togglable panel, so both features are switched off.
+        bar.setMovable(False)
+        bar.setContextMenuPolicy(Qt.PreventContextMenu)
         bar.addWidget(self._identity_label)
 
         spacer = QWidget()
@@ -289,6 +309,8 @@ class MainWindow(QMainWindow):
         self._workspace.open_requested.connect(self._open)
         self._workspace.new_requested.connect(self._new)
         self._workspace.file_dropped.connect(self._on_file_dropped)
+        self._workspace.open_reference_requested.connect(self._open_reference)
+        self._workspace.remove_reference_requested.connect(self._on_remove_reference_requested)
 
     # --- navigation -----------------------------------------------------
     def _on_view_changed(self, page_index: int) -> None:
@@ -703,12 +725,10 @@ class MainWindow(QMainWindow):
         return self._save()
 
     def _open(self) -> None:
-        if not self._confirm_discard_if_dirty():
-            return
         name, _ = QFileDialog.getOpenFileName(self, "Open BPX", "", "BPX (*.json *.yaml *.yml)")
         if not name:
             return
-        self._open_path(name)
+        self._open_chosen_path(Path(name))
 
     def _open_path(self, path: Path | str) -> None:
         """Open *path*, showing the load-error dialog on parse/OS failure.
@@ -722,15 +742,93 @@ class MainWindow(QMainWindow):
         except (LoadError, OSError) as exc:
             QMessageBox.critical(self, "Cannot open file", str(exc))
 
+    def _open_chosen_path(self, path: Path) -> None:
+        """Route a chosen file (Open dialog or drop) to main or reference.
+
+        With no document open, this behaves exactly as before -- straight to
+        main, no dialog. With a document already open, :meth:`_ask_open_intent`
+        decides: replace the main (today's discard-guarded open), dock/replace
+        the reference (no discard guard needed -- the main is untouched), or
+        cancel (nothing happens, reference untouched either way).
+        """
+        if self._state.active is not None:
+            intent = self._ask_open_intent(path.name)
+            if intent is OpenIntent.CANCEL:
+                return
+            if intent is OpenIntent.ADD_REFERENCE:
+                self._open_reference_path(path)
+                return
+            if not self._confirm_discard_if_dirty():
+                return
+        self._open_path(path)
+
+    def _ask_open_intent(self, filename: str) -> OpenIntent:
+        """Ask how to open *filename* when a document is already active.
+
+        Overridable seam: headless tests monkeypatch this method directly to
+        bypass the real (blocking) dialog; one test exercises the actual
+        ``QMessageBox`` via the zero-delay popup-close idiom instead.
+        """
+        box = QMessageBox(self)
+        box.setWindowTitle(f"Open {filename}")
+        box.setText("A document is already open. Open this file as:")
+        replace_reference_label = (
+            "Replace reference" if self._state.reference is not None else "Add as reference"
+        )
+        replace_main = box.addButton("Replace main", QMessageBox.AcceptRole)
+        replace_reference = box.addButton(replace_reference_label, QMessageBox.ActionRole)
+        box.addButton("Cancel", QMessageBox.RejectRole)
+        box.setDefaultButton(replace_main)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked is replace_main:
+            return OpenIntent.REPLACE_MAIN
+        if clicked is replace_reference:
+            return OpenIntent.ADD_REFERENCE
+        return OpenIntent.CANCEL
+
+    def _open_reference(self) -> None:
+        """Open File as Reference: pick a file and dock it, unconditionally.
+
+        No discard guard and no open-intent choice -- the user has already
+        said what they want, and docking a reference never touches the main
+        document.
+        """
+        name, _ = QFileDialog.getOpenFileName(self, "Open BPX", "", "BPX (*.json *.yaml *.yml)")
+        if not name:
+            return
+        self._open_reference_path(Path(name))
+
+    def _open_reference_path(self, path: Path) -> None:
+        """Dock *path* as the reference, showing a toast for the outcome.
+
+        Load failure surfaces through the same error-dialog pattern as the
+        main Open flow.
+        """
+        try:
+            outcome = self._state.open_reference(path)
+        except (LoadError, OSError) as exc:
+            QMessageBox.critical(self, "Cannot open file", str(exc))
+            return
+        message = {
+            OpenReferenceOutcome.ADDED: f"Added {path.name} as reference",
+            OpenReferenceOutcome.ALREADY_REFERENCE: "Already open as reference",
+            OpenReferenceOutcome.IS_MAIN: "Already open as the main file",
+        }[outcome]
+        self._toast.show_message(message)
+        self._update_workspace_info()
+
+    def _on_remove_reference_requested(self) -> None:
+        self._state.remove_reference()
+        self._update_workspace_info()
+
     def _on_file_dropped(self, path: str) -> None:
         """Open a file dropped onto the Workspace page.
 
-        Goes through the same discard guard as Open before replacing the
-        active session.
+        Routes through :meth:`_open_chosen_path`, exactly like the Open
+        dialog.
         """
-        if not self._confirm_discard_if_dirty():
-            return
-        self._open_path(path)
+        self._open_chosen_path(Path(path))
 
     def _new(self, model: str) -> None:
         """Create a fresh incomplete document scaffold for *model*.
@@ -861,7 +959,12 @@ class MainWindow(QMainWindow):
         filename = self._fallback_filename(session) if document is not None else None
         dirty = session.dirty if session else False
         self._workspace.refresh(
-            document, filename, dirty, self._workspace_error_count, self._workspace_warning_count
+            document,
+            filename,
+            dirty,
+            self._workspace_error_count,
+            self._workspace_warning_count,
+            reference=self._state.reference,
         )
 
     def _update_actions_enabled(self) -> None:

@@ -14,6 +14,11 @@ OK = "#2e7d32"
 ERROR = "#c62828"
 WARNING = "#ef6c00"
 ACCENT = "#1f6feb"
+#: The docked reference file's own accent -- distinct from ``ACCENT`` (the
+#: app's general blue) so a reference tile/tag never reads as an ordinary
+#: suggestion or link. Used only by the Workspace reference tile (M1); ghost
+#: rows/sections (a later milestone) are expected to reuse it.
+REFERENCE = "#3f7d9a"
 #: A required-but-absent/required-parameter tint -- distinct from both
 #: ``ERROR`` (invalid) and ``ACCENT`` (a merely-suggested field), so a
 #: schema-required parameter reads as its own, readable, amber category in
@@ -164,6 +169,16 @@ def validity_pill_qss(background: str) -> str:
     return f"color: white; background: {background}; padding: 2px 9px; border-radius: 3px;"
 
 
+def toast_qss() -> str:
+    """Inline stylesheet for the app's one toast pill (``ui_qt.toast.Toast``):
+    a dark, ink-coloured pill with light text, matching the app's other
+    floating surfaces (rounded corners) rather than a flat banner."""
+    return (
+        f"background: {DEFAULT_TEXT}; color: #ffffff; "
+        "padding: 8px 18px; border-radius: 14px; font-size: 12px;"
+    )
+
+
 STYLESHEET = """
 QWidget { font-size: 13px; color: #1f2328; }
 QMainWindow, QWidget#Panel { background: #ffffff; }
@@ -196,6 +211,15 @@ QLabel#DocInfoTitle { font-size: 15px; font-weight: 600; }
 QLabel#DocInfoTitle:disabled { color: #8c959f; font-weight: 400; }
 QLabel#DocInfoKey { color: #57606a; }
 QLabel#NewChooserHeading { color: #57606a; font-weight: 600; }
+/* Workspace page: the docked reference tile (M1). Lighter/narrower than
+   QFrame#DocInfoCard -- no shaded fill, just a thin border plus the 3px
+   left accent bar that marks it as the reference's own colour family. */
+QFrame#ReferenceTile {
+    border: 1px solid #d0d7de; border-left: 3px solid #3f7d9a; border-radius: 6px;
+    background: #ffffff;
+}
+QLabel#ReferenceTileTag { color: #3f7d9a; font-weight: 600; }
+QLabel#ReferenceTileFilename { font-weight: 600; }
 QStatusBar { background: #f6f8fa; border-top: 1px solid #d0d7de; font-size: 12px; color: #57606a; }
 QWidget#ActivityBar { background: #f6f8fa; border-right: 1px solid #d0d7de; }
 QToolButton#ActivityButton { background: transparent; border: none; border-left: 2px solid transparent; }

@@ -93,6 +93,14 @@ def spm_with_ragged_table_path(valid_spm_dict, tmp_path) -> Path:
 
 
 @pytest.fixture
+def nmc_pouch_cell_path() -> Path:
+    """A real bundled About:Energy example file (DFN): valid, but with 3
+    warning-severity diagnostics -- used to pin ``ReferenceSnapshot``'s
+    load path against a genuine, non-fixture-authored document."""
+    return APP_DIR / "data" / "example_documents" / "about_energy" / "nmc_pouch_cell.json"
+
+
+@pytest.fixture
 def invalid_bpx_path() -> Path:
     """A fixture file that opens successfully but fails BPX validation."""
     return FIXTURES_DIR / "invalid_blended_state_mismatch.json"

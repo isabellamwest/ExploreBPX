@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from core.document import BPXDocument
-from state.app_state import AppState
+from state.app_state import AppState, OpenReferenceOutcome
 from state.document_session import DocumentSession
 
 
@@ -230,3 +230,102 @@ def test_new_document_unknown_model_leaves_previous_session_intact(valid_spm_pat
     with pytest.raises(ValueError):
         state.new_document("NotAModel")
     assert state.active is first_session
+
+
+# ---------------------------------------------------------------------------
+# open_reference / remove_reference (M1: reference in state + Workspace)
+# ---------------------------------------------------------------------------
+
+def test_open_reference_docks_a_snapshot(nmc_pouch_cell_path):
+    state = AppState()
+
+    outcome = state.open_reference(nmc_pouch_cell_path)
+
+    assert outcome is OpenReferenceOutcome.ADDED
+    assert state.reference is not None
+    assert state.reference.filename == nmc_pouch_cell_path.name
+    assert state.reference.model == "DFN"
+
+
+def test_open_reference_with_no_main_document_is_allowed(nmc_pouch_cell_path):
+    """A reference-only workspace is a legal state (no main document open)."""
+    state = AppState()
+    assert state.active is None
+
+    outcome = state.open_reference(nmc_pouch_cell_path)
+
+    assert outcome is OpenReferenceOutcome.ADDED
+    assert state.active is None
+    assert state.reference is not None
+
+
+def test_open_reference_a_second_time_replaces_the_first(
+    nmc_pouch_cell_path, valid_spm_path
+):
+    state = AppState()
+    state.open_reference(nmc_pouch_cell_path)
+
+    outcome = state.open_reference(valid_spm_path)
+
+    assert outcome is OpenReferenceOutcome.ADDED
+    assert state.reference.filename == valid_spm_path.name
+    assert state.reference.model == "SPM"
+
+
+def test_open_reference_same_path_again_is_already_reference(nmc_pouch_cell_path):
+    state = AppState()
+    state.open_reference(nmc_pouch_cell_path)
+
+    outcome = state.open_reference(nmc_pouch_cell_path)
+
+    assert outcome is OpenReferenceOutcome.ALREADY_REFERENCE
+    assert state.reference.filename == nmc_pouch_cell_path.name  # unchanged
+
+
+def test_open_reference_matching_the_main_file_is_is_main(valid_spm_path):
+    state = AppState()
+    state.open(valid_spm_path)
+
+    outcome = state.open_reference(valid_spm_path)
+
+    assert outcome is OpenReferenceOutcome.IS_MAIN
+    assert state.reference is None  # nothing docked
+
+
+def test_close_leaves_the_reference_untouched(valid_spm_path, nmc_pouch_cell_path):
+    state = AppState()
+    state.open(valid_spm_path)
+    state.open_reference(nmc_pouch_cell_path)
+
+    state.close()
+
+    assert state.active is None
+    assert state.reference is not None
+    assert state.reference.filename == nmc_pouch_cell_path.name
+
+
+def test_opening_a_new_main_leaves_the_reference_untouched(
+    valid_spm_path, nmc_pouch_cell_path, tmp_path
+):
+    import shutil
+
+    state = AppState()
+    state.open(valid_spm_path)
+    state.open_reference(nmc_pouch_cell_path)
+
+    other = tmp_path / "other.json"
+    shutil.copy(valid_spm_path, other)
+    state.open(other)
+
+    assert state.active.backing_file == other
+    assert state.reference is not None
+    assert state.reference.filename == nmc_pouch_cell_path.name
+
+
+def test_remove_reference_clears_it(nmc_pouch_cell_path):
+    state = AppState()
+    state.open_reference(nmc_pouch_cell_path)
+
+    state.remove_reference()
+
+    assert state.reference is None

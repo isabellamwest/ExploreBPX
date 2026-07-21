@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
 
 from core.document import BPXDocument
 from core.document_factory import SUPPORTED_MODELS
+from state.reference_snapshot import ReferenceSnapshot
 
 from . import style
 from .style import ERROR, OK, WARNING
@@ -65,12 +66,30 @@ _MODEL_DESCRIPTORS: dict[str, str] = {
 }
 
 
+def _reference_validity_text(errors: int, warnings: int) -> tuple[str, str]:
+    """The reference tile's validity line and colour.
+
+    Only two colours are used here (never ``ERROR``): a docked reference is
+    read-only and never blocks anything, so its tile never needs the same
+    alarm colour as the main document's own invalid state."""
+    if not errors and not warnings:
+        return "valid", OK
+    parts = []
+    if errors:
+        parts.append(f"{errors} error" + ("s" if errors != 1 else ""))
+    if warnings:
+        parts.append(f"{warnings} warning" + ("s" if warnings != 1 else ""))
+    return " · ".join(parts), WARNING
+
+
 class WorkspacePanel(QWidget):
     """Workspace-level actions (Open, New) plus current-document identity/state."""
 
     open_requested = Signal()
     new_requested = Signal(str)  # model name
     file_dropped = Signal(str)  # local file path
+    open_reference_requested = Signal()
+    remove_reference_requested = Signal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -91,6 +110,10 @@ class WorkspacePanel(QWidget):
         self._open_button.setObjectName("WorkspaceOpen")
         self._open_button.clicked.connect(self.open_requested)
         left.addWidget(self._open_button, 0, Qt.AlignLeft)
+        self._open_reference_button = QPushButton("Open File as Reference…")
+        self._open_reference_button.setObjectName("WorkspaceOpenReference")
+        self._open_reference_button.clicked.connect(self.open_reference_requested)
+        left.addWidget(self._open_reference_button, 0, Qt.AlignLeft)
         left.addWidget(self._build_new_chooser(), 0)
         left.addStretch(1)
         layout.addLayout(left, 1)
@@ -98,7 +121,9 @@ class WorkspacePanel(QWidget):
         # The document card is a compact, top-aligned tile, not a page-filling
         # panel: its height follows its content and its width is capped. The
         # future multi-document Workspace stacks one tile per document in this
-        # column, so the single tile today already has that shape.
+        # column, so the single tile today already has that shape. The
+        # reference heading/tile sit below it, both hidden when no reference
+        # is docked -- no empty-state placeholder (explicit user decision).
         right = QVBoxLayout()
         right.setSpacing(8)
         heading = QLabel("Current document")
@@ -107,6 +132,14 @@ class WorkspacePanel(QWidget):
         self._info_card = self._build_info_card()
         self._info_card.setMaximumWidth(420)
         right.addWidget(self._info_card, 0, Qt.AlignTop)
+
+        self._reference_heading = QLabel("Reference")
+        self._reference_heading.setObjectName("Heading")
+        right.addWidget(self._reference_heading)
+        self._reference_tile = self._build_reference_tile()
+        self._reference_tile.setMaximumWidth(420)
+        right.addWidget(self._reference_tile, 0, Qt.AlignTop)
+
         right.addStretch(1)
         layout.addLayout(right, 1)
 
@@ -151,6 +184,38 @@ class WorkspacePanel(QWidget):
             self._info_fields[key] = value
         card_layout.addLayout(self._info_form)
         return card
+
+    def _build_reference_tile(self) -> QWidget:
+        """The docked-reference tile: a compact, lighter-weight sibling of
+        the current-document card (see ``QFrame#ReferenceTile`` in
+        ``style.py`` for the deliberately narrower visual treatment)."""
+        tile = QFrame()
+        tile.setObjectName("ReferenceTile")
+        tile_layout = QVBoxLayout(tile)
+        tile_layout.setContentsMargins(12, 10, 12, 10)
+        tile_layout.setSpacing(4)
+
+        self._reference_tag = QLabel("◇ REFERENCE · read-only")
+        self._reference_tag.setObjectName("ReferenceTileTag")
+        tile_layout.addWidget(self._reference_tag)
+
+        self._reference_filename = QLabel()
+        self._reference_filename.setObjectName("ReferenceTileFilename")
+        self._reference_filename.setWordWrap(True)
+        tile_layout.addWidget(self._reference_filename)
+
+        self._reference_meta = QLabel()
+        tile_layout.addWidget(self._reference_meta)
+
+        self._reference_validity = QLabel()
+        tile_layout.addWidget(self._reference_validity)
+
+        self._reference_remove_button = QPushButton("Remove")
+        self._reference_remove_button.setObjectName("ReferenceTileRemove")
+        self._reference_remove_button.clicked.connect(self.remove_reference_requested)
+        tile_layout.addWidget(self._reference_remove_button, 0, Qt.AlignLeft)
+
+        return tile
 
     def _build_new_chooser(self) -> QWidget:
         """Inline "New" surface: one labelled button per supported model.
@@ -198,8 +263,9 @@ class WorkspacePanel(QWidget):
         dirty: bool,
         error_count: int = 0,
         warning_count: int = 0,
+        reference: ReferenceSnapshot | None = None,
     ) -> None:
-        """Update the info card from the active document's identity and state.
+        """Update the info card and reference tile from current state.
 
         Identity (Title/Model/BPX version) and the section/parameter counts are
         read only through the document's own properties; ``filename``/``dirty``
@@ -209,7 +275,13 @@ class WorkspacePanel(QWidget):
         (decision G in ``main_window._refresh_all``), not re-derived here from
         ``document.error_count``/``warning_count``, so the pill can never
         disagree with the Diagnostics rail badge over an absorbed diagnostic.
+
+        ``reference`` is independent of ``document``: a reference may be
+        docked with no main document open, so its tile is updated regardless
+        of which branch below runs.
         """
+        self._set_reference(reference)
+
         if document is None:
             self._info_title.setText(_INFO_PANEL_EMPTY_STATE_TEXT)
             self._info_title.setEnabled(False)
@@ -231,6 +303,26 @@ class WorkspacePanel(QWidget):
             f"{document.section_count} sections · {document.parameter_count} parameters"
         )
         self._set_validity_badge(error_count, warning_count)
+
+    def _set_reference(self, reference: ReferenceSnapshot | None) -> None:
+        """Show/populate or hide the reference heading + tile.
+
+        Both are hidden together when no reference is docked -- no
+        empty-state placeholder (explicit user decision)."""
+        if reference is None:
+            self._reference_heading.hide()
+            self._reference_tile.hide()
+            return
+        self._reference_heading.show()
+        self._reference_tile.show()
+        self._reference_filename.setText(reference.filename)
+        self._reference_meta.setText(
+            f"{reference.model or '-'} · {reference.section_count} sections · "
+            f"{reference.parameter_count} parameters"
+        )
+        text, colour = _reference_validity_text(reference.error_count, reference.warning_count)
+        self._reference_validity.setText(text)
+        self._reference_validity.setStyleSheet(f"color: {colour};")
 
     def _set_validity_badge(self, errors: int, warnings: int) -> None:
         if not errors and not warnings:

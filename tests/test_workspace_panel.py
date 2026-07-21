@@ -139,16 +139,28 @@ def test_opening_from_workspace_page_goes_through_discard_guard(
     app_driver, spm_workfile, valid_spm_path, monkeypatch
 ):
     """Open from the Workspace page reuses ``_confirm_discard_if_dirty``,
-    the same guard exercised by the toolbar Open in the discard-guard tests."""
+    the same guard exercised by the toolbar Open in the discard-guard tests.
+
+    A document is already open, so ``_open()`` now shows the open-intent
+    choice dialog first (M1) -- stubbed here to "Replace main" so the
+    discard guard is exercised in isolation, same as before.
+    """
     d = app_driver
     d.open(spm_workfile).go_to(_CAPACITY).edit_field(6.0).commit()
     assert d.status_text() == f"{spm_workfile.name}  |  Modified"
     original_status = d.status_text()
 
     monkeypatch.setattr(
+        d._w, "_ask_open_intent", lambda filename: main_window_module.OpenIntent.REPLACE_MAIN
+    )
+    monkeypatch.setattr(
         main_window_module.QMessageBox, "question", lambda *a, **k: main_window_module.QMessageBox.Cancel
     )
-    monkeypatch.setattr(main_window_module.QFileDialog, "getOpenFileName", _fail_if_called)
+    monkeypatch.setattr(
+        main_window_module.QFileDialog,
+        "getOpenFileName",
+        lambda *a, **k: (str(valid_spm_path), ""),
+    )
 
     d.click_workspace_open()
 
@@ -394,6 +406,9 @@ def test_dropping_a_valid_file_opens_it_and_switches_to_editor(app_driver, valid
 def test_dropping_a_file_goes_through_discard_guard_and_cancel_aborts(
     app_driver, spm_workfile, valid_spm_path, monkeypatch
 ):
+    """A document is already open, so the drop now shows the open-intent
+    choice dialog first (M1) -- stubbed here to "Replace main" so the
+    discard guard is exercised in isolation, same as before."""
     d = app_driver
     d.open(spm_workfile).go_to(_CAPACITY).edit_field(6.0).commit()
     original_identity = d.identity_text()
@@ -403,6 +418,9 @@ def test_dropping_a_file_goes_through_discard_guard_and_cancel_aborts(
     d.show_view("Workspace")  # starting off the Editor page so a wrongful
     # switch-to-Editor on the abort path would actually move the index
 
+    monkeypatch.setattr(
+        d._w, "_ask_open_intent", lambda filename: main_window_module.OpenIntent.REPLACE_MAIN
+    )
     monkeypatch.setattr(
         main_window_module.QMessageBox, "question", lambda *a, **k: main_window_module.QMessageBox.Cancel
     )
@@ -421,6 +439,9 @@ def test_dropping_a_file_discard_guard_proceeds_on_discard(
     d = app_driver
     d.open(spm_workfile).go_to(_CAPACITY).edit_field(6.0).commit()
 
+    monkeypatch.setattr(
+        d._w, "_ask_open_intent", lambda filename: main_window_module.OpenIntent.REPLACE_MAIN
+    )
     monkeypatch.setattr(
         main_window_module.QMessageBox, "question", lambda *a, **k: main_window_module.QMessageBox.Discard
     )

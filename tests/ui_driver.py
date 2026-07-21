@@ -546,6 +546,40 @@ class AppDriver:
         self._qtbot.mouseClick(self._w._workspace._open_button, Qt.LeftButton)
         return self
 
+    def click_workspace_open_reference(self) -> "AppDriver":
+        """Click the "Open File as Reference…" button on the Workspace page."""
+        self._qtbot.mouseClick(self._w._workspace._open_reference_button, Qt.LeftButton)
+        return self
+
+    def click_reference_remove(self) -> "AppDriver":
+        """Click the docked reference tile's Remove button."""
+        self._qtbot.mouseClick(self._w._workspace._reference_remove_button, Qt.LeftButton)
+        return self
+
+    def reference_heading_visible(self) -> bool:
+        return not self._w._workspace._reference_heading.isHidden()
+
+    def reference_tile_visible(self) -> bool:
+        return not self._w._workspace._reference_tile.isHidden()
+
+    def reference_tile_text(self) -> str:
+        """Text of the reference tile, flattened -- tag/filename/meta/validity
+        lines, one per line (mirrors :meth:`workspace_info_text`)."""
+        ws = self._w._workspace
+        return "\n".join(
+            [
+                ws._reference_tag.text(),
+                ws._reference_filename.text(),
+                ws._reference_meta.text(),
+                ws._reference_validity.text(),
+            ]
+        )
+
+    def toast_text(self) -> str | None:
+        """The toast's current message, or None while it is hidden."""
+        toast = self._w._toast
+        return toast.text() if not toast.isHidden() else None
+
     def drop_file_on_workspace(self, path: Path | str) -> "AppDriver":
         """Simulate the user dropping *path* onto the Workspace page.
 
