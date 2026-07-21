@@ -75,7 +75,6 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QListWidget,
     QListWidgetItem,
     QScrollArea,
@@ -235,54 +234,37 @@ def _paint_badges(painter: QPainter, rect: QRect, specs: list[tuple[str, str, st
 
 @dataclass(frozen=True)
 class _FilterState:
-    """Per-session view-only filter state (F8). All-on/empty-text is the
-    default -- i.e. "no filtering"."""
+    """Per-session view-only filter state (F8). All-on is the default --
+    i.e. "no filtering". (F8's text filter was removed by explicit user
+    decision: per-section buckets are small and the toolbar search already
+    finds anything by name -- the chips alone remain.)"""
 
     error_on: bool = True
     warning_on: bool = True
     outstanding_on: bool = True
-    text: str = ""
 
 
 #: What an issue row shows in place of an empty section-relative location
 #: (a loc that collapses entirely into the bucket label, e.g. a section-level
-#: validator error). Shared by the row builder and the text-filter haystack
-#: so what the row displays and what the filter matches can never drift.
+#: validator error).
 _EMPTY_LOCATION_LABEL = "(document)"
 
 
-def _issue_visible(diagnostic, nav_path: tuple[str, ...], bucket_label: str, filters: _FilterState) -> bool:
-    """Whether one issue row survives *filters* -- severity chip first (a
-    cheap enum check), then the text filter against exactly the two strings
-    the row itself shows: its location (or its empty-location placeholder)
-    and its verbatim message (F8)."""
+def _issue_visible(diagnostic, filters: _FilterState) -> bool:
+    """Whether one issue row survives *filters* -- its severity's chip must
+    be on (a cheap enum check)."""
     is_error = diagnostic.severity == Severity.ERROR
     if is_error and not filters.error_on:
         return False
     if not is_error and not filters.warning_on:
         return False
-    if filters.text:
-        location = _relative_location(bucket_label, nav_path) or _EMPTY_LOCATION_LABEL
-        haystack = f"{location} {diagnostic.message}".lower()
-        if filters.text.lower() not in haystack:
-            return False
     return True
 
 
-def _task_visible(task: CompletionTask, absorbed_messages: tuple[str, ...], filters: _FilterState) -> bool:
+def _task_visible(task: CompletionTask, filters: _FilterState) -> bool:
     """Whether one task row survives *filters* -- the outstanding chip
-    first, then the text filter against exactly the row's own name and its
-    absorbed messages (F8: "for task rows: name + absorbed message" --
-    deliberately not the REQUIRED tag or action text, which name the row's
-    *kind*, not its identity)."""
-    if not filters.outstanding_on:
-        return False
-    if filters.text:
-        name = _task_label(task)[0]
-        haystack = " ".join((name, *absorbed_messages)).lower()
-        if filters.text.lower() not in haystack:
-            return False
-    return True
+    must be on."""
+    return filters.outstanding_on
 
 
 # ---------------------------------------------------------------------------
@@ -501,7 +483,7 @@ def _add_fold_header_row(list_widget: QListWidget, bucket: SectionBucket, collap
 
 def _hidden_by_filters_text(count: int) -> str:
     """F8's pinned copy for the one quiet line a view renders when filters
-    (chips and/or text) hid something -- never rendered for a genuinely
+    (toggled-off chips) hid something -- never rendered for a genuinely
     empty box/section (those keep the pinned ✓ wording instead, which
     claims truth; this line only ever claims view state)."""
     return f"{count} hidden by filters"
@@ -735,7 +717,7 @@ class _SectionDetailView(QWidget):
             return 0
         hidden = 0
         for diagnostic, nav_path in bucket.issues:
-            if _issue_visible(diagnostic, nav_path, bucket.label, filters):
+            if _issue_visible(diagnostic, filters):
                 _add_issue_row(lst, bucket.label, diagnostic, nav_path)
             else:
                 hidden += 1
@@ -773,7 +755,7 @@ class _SectionDetailView(QWidget):
         required_rows = []
         for task in bucket.required_tasks:
             absorbed = _absorbed_messages(task, partition)
-            if _task_visible(task, absorbed, filters):
+            if _task_visible(task, filters):
                 required_rows.append((task, absorbed))
             else:
                 hidden += 1
@@ -784,7 +766,7 @@ class _SectionDetailView(QWidget):
             optional_rows = []
             for task in bucket.optional_tasks:
                 absorbed = _absorbed_messages(task, partition)
-                if _task_visible(task, absorbed, filters):
+                if _task_visible(task, filters):
                     optional_rows.append((task, absorbed))
                 else:
                     hidden += 1
@@ -857,7 +839,7 @@ class _AllSectionsView(QWidget):
                 continue
 
             for diagnostic, nav_path in bucket.issues:
-                if _issue_visible(diagnostic, nav_path, bucket.label, filters):
+                if _issue_visible(diagnostic, filters):
                     _add_issue_row(self._list, bucket.label, diagnostic, nav_path)
                 else:
                     hidden_total += 1
@@ -866,7 +848,7 @@ class _AllSectionsView(QWidget):
                 required_rows = []
                 for task in bucket.required_tasks:
                     absorbed = _absorbed_messages(task, partition)
-                    if _task_visible(task, absorbed, filters):
+                    if _task_visible(task, filters):
                         required_rows.append((task, absorbed))
                     else:
                         hidden_total += 1
@@ -880,7 +862,7 @@ class _AllSectionsView(QWidget):
                 optional_rows = []
                 for task in bucket.optional_tasks:
                     absorbed = _absorbed_messages(task, partition)
-                    if _task_visible(task, absorbed, filters):
+                    if _task_visible(task, filters):
                         optional_rows.append((task, absorbed))
                     else:
                         hidden_total += 1
@@ -1074,34 +1056,20 @@ class _FilterChip(QLabel):
         self.toggled.emit(self._on)
 
 
-class _FilterLineEdit(QLineEdit):
-    """The strip's text filter field (F8). Esc clears it (Qt's QLineEdit
-    has no such default) -- only when there is something to clear, so an
-    already-empty field's Escape still propagates normally. No global
-    shortcut (Ctrl+F) is wired -- deferred; see the module docstring."""
-
-    def keyPressEvent(self, event) -> None:  # noqa: N802 -- Qt override
-        if event.key() == Qt.Key_Escape and self.text():
-            self.clear()
-            event.accept()
-            return
-        super().keyPressEvent(event)
-
-
 class _SummaryStrip(QWidget):
     """Top band: three toggleable count-filter chips (F8; F2 phase A had
-    them static) plus a text filter field, each its own bordered, rounded
-    card on the shaded strip band (the wireframe's "boxes/shading to make
-    regions distinguishable"). Filtering here is purely a VIEW concern --
-    this widget owns the filter *state* (chip on/off, filter text) and
-    reports it via :meth:`filter_state`; it never touches counts, badges or
-    buckets itself (:class:`DiagnosticsPanel` reads the state and re-renders
-    the pane -- see F8's "view-only" rule)."""
+    them static), each its own bordered, rounded card on the shaded strip
+    band (the wireframe's "boxes/shading to make regions distinguishable").
+    Filtering here is purely a VIEW concern -- this widget owns the filter
+    *state* (chip on/off) and reports it via :meth:`filter_state`; it never
+    touches counts, badges or buckets itself (:class:`DiagnosticsPanel`
+    reads the state and re-renders the pane -- see F8's "view-only" rule).
+    F8's companion text-filter field was removed by explicit user decision;
+    the chips are the whole filter surface."""
 
-    #: Emitted whenever a chip is toggled or the filter text changes --
-    #: DiagnosticsPanel re-renders only the *pane* on this signal (never a
-    #: full ``refresh()``), so toggling can never re-enter the document-wide
-    #: refresh path.
+    #: Emitted whenever a chip is toggled -- DiagnosticsPanel re-renders
+    #: only the *pane* on this signal (never a full ``refresh()``), so
+    #: toggling can never re-enter the document-wide refresh path.
     filters_changed = Signal()
 
     def __init__(self) -> None:
@@ -1126,15 +1094,6 @@ class _SummaryStrip(QWidget):
 
         layout.addStretch(1)
 
-        self._filter_edit = _FilterLineEdit()
-        self._filter_edit.setObjectName("DiagnosticsFilterField")
-        self._filter_edit.setPlaceholderText("Filter…")
-        self._filter_edit.setToolTip(style.FILTER_FIELD_TOOLTIP)
-        self._filter_edit.setFixedWidth(180)
-        self._filter_edit.setClearButtonEnabled(True)
-        self._filter_edit.textChanged.connect(self._on_text_changed)
-        layout.addWidget(self._filter_edit)
-
     def set_counts(self, errors: int, warnings: int, outstanding: int) -> None:
         self._counts = (errors, warnings, outstanding)
         self._refresh_chip_text()
@@ -1149,18 +1108,14 @@ class _SummaryStrip(QWidget):
             error_on=self._errors.is_on(),
             warning_on=self._warnings.is_on(),
             outstanding_on=self._outstanding.is_on(),
-            text=self._filter_edit.text(),
         )
 
     def reset_filters(self) -> None:
-        """Back to all-on, empty text -- called only on a *different*
-        document (:meth:`DiagnosticsPanel.reset_view_state`), never on an
-        ordinary refresh, where persisting is the point (F8)."""
+        """Back to all-on -- called only on a *different* document
+        (:meth:`DiagnosticsPanel.reset_view_state`), never on an ordinary
+        refresh, where persisting is the point (F8)."""
         for chip in (self._errors, self._warnings, self._outstanding):
             chip.set_on(True)
-        self._filter_edit.blockSignals(True)
-        self._filter_edit.clear()
-        self._filter_edit.blockSignals(False)
         self._refresh_chip_text()
 
     def _refresh_chip_text(self) -> None:
@@ -1184,9 +1139,6 @@ class _SummaryStrip(QWidget):
 
     def _on_chip_toggled(self, _on: bool) -> None:
         self._refresh_chip_text()
-        self.filters_changed.emit()
-
-    def _on_text_changed(self, _text: str) -> None:
         self.filters_changed.emit()
 
 
@@ -1316,7 +1268,7 @@ class DiagnosticsPanel(QWidget):
         self._render_pane()
 
     def _on_filters_changed(self) -> None:
-        """A chip toggled or the filter text changed (F8) -- re-render only
+        """A chip toggled (F8) -- re-render only
         the pane, never a full ``refresh()``: filters are view-only and
         must never re-enter the document-wide refresh path (rail badges,
         strip counts and the app badge are untouched by this call)."""
