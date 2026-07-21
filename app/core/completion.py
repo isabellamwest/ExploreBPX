@@ -67,10 +67,13 @@ from .validation import Severity, ValidatorDiagnostic, merge_union_pairs_by_loca
 if TYPE_CHECKING:
     from .document import BPXDocument
 
-#: The three models with a full, fixed schema shape. A "Required" flag (decision
-#: B) only ever applies under one of these; an undeclared model or Partial
-#: never marks anything Required (decision C).
-CONCRETE_MODELS = frozenset({"SPM", "SPMe", "DFN"})
+#: The models with a full, fixed schema shape: the ``Header.Model`` enum
+#: minus ``Partial``, the one member the schema gives no required list. A
+#: "Required" flag (decision B) only ever applies under one of these; an
+#: undeclared model or Partial never marks anything Required (decision C).
+#: Derived, not restated, so a new upstream model is concrete by default --
+#: :mod:`tests.test_spec_literals_contract` forces its deliberate onboarding.
+CONCRETE_MODELS = frozenset(bpx_gateway.supported_models()) - {"Partial"}
 
 
 @dataclass(frozen=True)

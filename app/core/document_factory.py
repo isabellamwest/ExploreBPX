@@ -14,7 +14,8 @@ from __future__ import annotations
 
 from . import bpx_gateway, structure
 
-SUPPORTED_MODELS: tuple[str, ...] = ("SPM", "SPMe", "DFN", "Partial")
+#: The ``Header.Model`` enum, verbatim from the schema (never restated here).
+SUPPORTED_MODELS: tuple[str, ...] = bpx_gateway.supported_models()
 
 
 def create(model: str, title: str = "") -> dict:

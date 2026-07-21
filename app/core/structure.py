@@ -13,12 +13,9 @@ isolated to this module so callers do not change.
 
 from __future__ import annotations
 
-from . import bpx_gateway, parameter_types
+from functools import lru_cache
 
-#: Models that require a full electrolyte section.
-_ELECTROLYTE_MODELS = frozenset({"SPMe", "DFN"})
-#: Models that require a separator section.
-_SEPARATOR_MODELS = frozenset({"SPMe", "DFN"})
+from . import bpx_gateway, parameter_types
 
 #: Top-level sections that must always exist and can never be removed.
 _PROTECTED_TOP_LEVEL = frozenset({"Header", "Parameterisation"})
@@ -39,41 +36,39 @@ def infer_model(raw: dict) -> str | None:
     return header.get("Model") if isinstance(header, dict) else None
 
 
-def model_requires_electrolyte(model: str | None) -> bool:
-    return model in _ELECTROLYTE_MODELS
+@lru_cache(maxsize=None)
+def _required_parameterisation_children(model: str | None) -> tuple[str, ...]:
+    """Child sections the schema's own ``Parameterisation`` shape for *model*
+    marks required, in schema declaration order.
 
-
-def model_requires_separator(model: str | None) -> bool:
-    return model in _SEPARATOR_MODELS
+    Derived live through the gateway, never restated here: ``Partial``, an
+    undeclared model, and any model this app has never heard of all resolve
+    to the partial shape, whose ``required`` list is empty.
+    """
+    return tuple(
+        f.alias
+        for f in bpx_gateway.expected_fields(("Parameterisation",), model)
+        if f.required
+    )
 
 
 def required_sections(model: str | None) -> tuple[tuple[str, ...], ...]:
     """Top-level/child sections the validator actually requires for a model
     (excludes ``Partial``).
 
-    ``State`` is NOT in this list: bpx 1.1.1 made it optional
-    (``schema.py``'s ``State`` field is ``Field(None, alias="State")``) and
-    deleted the root validator that used to demand it for every concrete
-    model. This list exists only to track the real validator's actual
-    requirements, whatever they currently are — it must be re-verified
-    against ``bpx`` (not against memory of a past version) whenever the
-    package changes; :mod:`tests.test_completion`/:mod:`tests.test_schema_contract`
-    pin it against the live validator.
+    The ``Parameterisation`` children come straight from the schema's own
+    ``required`` list for the model's shape (schema order), so a ``bpx``
+    change moves this list automatically. ``State`` is NOT here: bpx 1.1.1
+    made it optional (``schema.py``'s ``State`` field is
+    ``Field(None, alias="State")``) and deleted the root validator that used
+    to demand it. The two root sections are the schema root's own
+    ``required`` list, pinned by :mod:`tests.test_spec_literals_contract`
+    (the gateway exposes no root-properties query yet).
     """
-    if model == "Partial" or model is None:
-        return (("Header",), ("Parameterisation",))
-    sections: list[tuple[str, ...]] = [
-        ("Header",),
-        ("Parameterisation",),
-        ("Parameterisation", "Cell"),
-        ("Parameterisation", "Negative electrode"),
-        ("Parameterisation", "Positive electrode"),
-    ]
-    if model_requires_electrolyte(model):
-        sections.append(("Parameterisation", "Electrolyte"))
-    if model_requires_separator(model):
-        sections.append(("Parameterisation", "Separator"))
-    return tuple(sections)
+    children = _required_parameterisation_children(model)
+    return (("Header",), ("Parameterisation",)) + tuple(
+        ("Parameterisation", child) for child in children
+    )
 
 
 def can_remove(path: tuple[str, ...]) -> bool:

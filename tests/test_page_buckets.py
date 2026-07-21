@@ -325,19 +325,19 @@ def test_document_bucket_first_when_occupied(fixtures_dir):
 
 
 def test_buckets_are_in_document_order_with_absent_section_at_its_schema_position():
-    """``Parameterisation``'s children walk in schema order (Cell, Negative
-    electrode, Positive electrode, Electrolyte, Separator --
-    ``structure.required_sections``), not ``raw``'s own key order, so a
-    schema-required-but-absent child (a deleted SPMe ``Electrolyte``) still
-    gets its natural position instead of being stranded wherever
-    ``document_completion``'s task walk happens to first name it. (``State``
-    is schema-optional since bpx 1.1.1 and is never scaffolded, so it is not
-    one of the buckets here.)"""
+    """``Parameterisation``'s children walk in the schema's own declaration
+    order (Cell, Electrolyte, Negative electrode, Positive electrode,
+    Separator -- ``structure.required_sections``, which now derives it live),
+    not ``raw``'s own key order, so a schema-required-but-absent child (a
+    deleted SPMe ``Electrolyte``) still gets its natural position instead of
+    being stranded wherever ``document_completion``'s task walk happens to
+    first name it. (``State`` is schema-optional since bpx 1.1.1 and is
+    never scaffolded, so it is not one of the buckets here.)"""
     raw = document_factory.create("SPMe", title="probe")
     del raw["Parameterisation"]["Electrolyte"]
     _doc, tasks, partition, result = _bucket_page(raw, "SPMe")
     labels = [bucket.label for bucket in result.buckets]
-    assert labels == ["Header", "Cell", "Negative electrode", "Positive electrode", "Electrolyte", "Separator"]
+    assert labels == ["Header", "Cell", "Electrolyte", "Negative electrode", "Positive electrode", "Separator"]
 
 
 def test_required_total_is_none_for_absent_sections_and_the_document_bucket():

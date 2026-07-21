@@ -278,6 +278,19 @@ def expected_fields(
     )
 
 
+def supported_models() -> tuple[str, ...]:
+    """The ``Header.Model`` enum, verbatim from the schema (declaration order).
+
+    The single source for *which models exist*: the New-document chooser,
+    scaffolding and completion all consume this rather than restating the
+    enum. Returns ``()`` if the schema ever stops declaring ``Model`` as an
+    enum -- a world in which :mod:`tests.test_spec_literals_contract` fails
+    loudly rather than this function guessing.
+    """
+    meta = field_meta(("Header", "Model"))
+    return tuple(meta.enum_values) if meta is not None else ()
+
+
 #: The two electrode section names, in the position the schema fixes them
 #: at (``("Parameterisation", <name>, ...)``).
 _ELECTRODE_NAMES: tuple[str, ...] = ("Negative electrode", "Positive electrode")

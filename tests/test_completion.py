@@ -596,18 +596,19 @@ def test_ordering_is_deterministic_and_document_ordered():
     # Header's own fields are all optional (decision B filters them out of
     # document_completion entirely -- see the required-only regression test
     # below), so Cell's required fields are the earliest document-ordered
-    # tasks, followed by each Parameterisation child in schema order (the
-    # tree walk visits root's children in raw order). ``State`` is no longer
-    # scaffolded (bpx 1.1.1: schema-optional, so the factory never adds it),
-    # so Electrolyte -- the SPMe scaffold's last child -- is the last section
-    # here instead.
+    # tasks, followed by each Parameterisation child in the schema's own
+    # declaration order (the scaffold inserts keys in
+    # ``structure.required_sections`` order, which derives it live:
+    # Cell, Electrolyte, Negative electrode, Positive electrode, Separator).
+    # ``State`` is no longer scaffolded (bpx 1.1.1: schema-optional, so the
+    # factory never adds it).
     cell_positions = [i for i, t in enumerate(first) if t.path[:2] == ("Parameterisation", "Cell")]
-    electrode_positions = [
-        i for i, t in enumerate(first) if t.path[:2] == ("Parameterisation", "Negative electrode")
-    ]
     electrolyte_positions = [
         i for i, t in enumerate(first) if t.path[:2] == ("Parameterisation", "Electrolyte")
     ]
-    assert cell_positions and electrode_positions and electrolyte_positions
-    assert max(cell_positions) < min(electrode_positions)
-    assert max(electrode_positions) < min(electrolyte_positions)
+    electrode_positions = [
+        i for i, t in enumerate(first) if t.path[:2] == ("Parameterisation", "Negative electrode")
+    ]
+    assert cell_positions and electrolyte_positions and electrode_positions
+    assert max(cell_positions) < min(electrolyte_positions)
+    assert max(electrolyte_positions) < min(electrode_positions)
