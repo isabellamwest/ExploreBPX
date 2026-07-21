@@ -15,6 +15,24 @@ Anchored at commit `85c2029` ("docs: add brainstorm idea pool"); working tree ha
 passing** per the app-audit Phase A baseline, 2026-07-21. Implementation starts
 **only on Bella's explicit go**, milestone by milestone.
 
+**Status 2026-07-21 (end of day):**
+- **M1a committed** (`9bacdf4`); M1b (New from source, 4c) approved in principle
+  but **parked** — Bella wants it refined before build; entry point undecided.
+- **M2 built and verified, uncommitted** — suite **1330 green** on a tree that
+  also carries the (separately owned) Workspace-restyle session's uncommitted
+  work. Rev 3 build wireframes (signed):
+  (internal design archive)
+- **M3 signed and ready to build** — Bella approved the plan 2026-07-21; a
+  different session/agent will implement it. Signed M3 wireframes:
+  (internal design archive)
+- M1 build wireframes (for the record):
+  (internal design archive)
+- **Per-milestone workflow (Bella)**: wireframes drawn and approved BEFORE each
+  milestone's build; verify against the real window, not offscreen alone; STOP
+  before committing with a suggested message; **commit messages must never
+  contain track codes** ("M1", "4a", …). Multiple sessions work this repo
+  concurrently — `git status` before assuming anything about the tree.
+
 ## 0. Working agreements
 
 Same as `PLAN-completion-track.md` §0, in full. In particular: one milestone =
@@ -51,15 +69,19 @@ is missing from the venv; two `PyparsingDeprecationWarning`s from bpx are expect
 3. **Row states**: equal · differs · fillable (empty main, value in ref) ·
    main-only (no tint — absence in a reference is not a defect) · ghost
    (ref-only row or whole ref-only section).
-4. **Ghost treatment is loud, everywhere**: blue dashed border + blue tint +
-   italic value + `◇ REF ONLY` tag. Ghost-selected inspector card is headed
-   "Not in the main file" and offers only ↑ Copy up.
-5. **↑ Copy up** (the only mutation): verbatim copy reference → main. Destination
-   exists → set; missing → add; missing ancestors → created in the same command.
-   **One undo entry** always. Section pull = one batch entry. Copy up commits
-   immediately and replaces any uncommitted card draft (undoable). Same-key
-   different-shape copies verbatim; row + card re-classify from the new shape.
-   One-way only — the reference is never a target.
+4. **Ghost treatment is loud, everywhere**: **purple** (`style.REFERENCE`)
+   dashed border + purple tint + italic value + `◇ REF ONLY` tag (blue in the
+   original design, superseded by the M1 purple amendment). Ghost-selected
+   inspector card is headed "Not in the main file" and offers only Copy up.
+5. **Copy up** (the only mutation; button label is exactly "Copy up" — the
+   design's ↑ glyph was dropped by Bella's M3 sketch): verbatim copy
+   reference → main. Destination exists → set; missing → add; missing
+   ancestors → created in the same command. **One undo entry** always. Section
+   pull = one batch entry. Copy up commits immediately and replaces any
+   uncommitted card draft (undoable). Same-key different-shape copies
+   verbatim; row + card re-classify from the new shape. **Disabled when the
+   values are already equal** (a verbatim copy would be a no-op). One-way
+   only — the reference is never a target.
 6. **Validation**: reference validated once at load; issues shown on its
    Workspace tile only, never the Diagnostics page. Pulling from an invalid
    reference is allowed. **5c rule (Bella): dangling name-references (e.g.
@@ -81,11 +103,28 @@ is missing from the venv; two `PyparsingDeprecationWarning`s from bpx are expect
     backs out of the whole surrounding flow (e.g. a pending switch).
 11. **Stale reference on disk**: no file-watching; on notice (mtime check),
     a quiet "changed on disk · Reload" band. Never silent refresh.
-12. **Editor comparison (Concept 1)**: tree gets per-section difference counts
-    (text-append, like the ⚠ marker) + dashed ghost nodes; parameter list gets
-    row states inline + ghost rows + differences-only filter + comparison strip
-    (ref name, counts, prev/next, hide); inspector gets the reference block
-    under the editing card (main value above, reference below, ↑ Copy up).
+12. **Editor comparison — REVISED by the workflow rethink (rev 3 wireframes,
+    signed 2026-07-21, built as M2)**: the Editor keeps only edit-time aids;
+    everything about *surveying* differences is Compare-page-only (M5).
+    - Tree: per-section "≠ N" difference counts (text-append, like the ⚠
+      marker). **No ghost tree nodes** — a section the main lacks is Compare's
+      business.
+    - List: row tints (differs/fillable, warning tint) + ghost rows (purple
+      dashed + tint + italic value + "◇ REF ONLY" tag, read-only). **Merge
+      rule (Bella): a key the main lacks that the reference has is a ghost
+      row, absorbing its fields-to-add row; fields-to-add remains only for
+      keys the reference lacks too. One key, one row.** No differences-only
+      filter, no ‹ › walker in the Editor.
+    - Comparison strip above the list: "◇ {filename} · {model}" + whole-file
+      counts. **No hide control (Bella, 2026-07-21): a docked reference means
+      comparison is wanted; the M2-built hide toggle is removed in M3.**
+    - Inspector in comparison mode — **Bella's stacked layout (sketch,
+      2026-07-21)**: a "Main file" heading over today's editable value row,
+      then a "Reference file" heading over a purple-tinted read-only value row
+      (units shown as in the main row) with the **Copy up** button beside it.
+      Headings appear only while a reference is docked; with none, the card
+      is exactly today's. Ghost card: "Not in the main file" + the Reference
+      file section + Copy up only.
 13. **Compare page (round 3–4)**: a separate page, enabled when a reference is
     docked. Body is **one long collapsible tree, starting fully collapsed** —
     the landing view is the structural diff. Columns: Parameter | Main | ↑ |
@@ -146,19 +185,43 @@ purple "Read-only" tag on its title row -- no side bar, no caps tag. Later
 milestones reusing the reference colour (ghost rows, comparison strip)
 inherit purple.*
 
-**M2 — diff engine + comparison-aware Editor.** `app/core/compare.py` (pure
-core): keyed matching, per-kind raw equality, per-section counts, ghost
-sections; order-independence and 2h asymmetry pinned by unit tests. UI: list
-row tints + ghost rows + differences-only filter + comparison strip; tree
-counts + ghost nodes. Recompute lazily (visible section + counts) on document
-change.
+**M2 — diff engine + comparison-aware Editor.** *Built 2026-07-21 per the
+revised decision 12 (rev 3 wireframes).* `app/core/compare.py` (pure core):
+keyed matching, typed raw equality (bool ≠ int, 1 ≠ 1.0), FILLABLE via the
+completion machinery's None-only emptiness, sections = `core.tree_model`
+object nodes; order-independence and 2h asymmetry pinned by unit tests. UI:
+row tints + ghost rows (with the merge rule) + slim comparison strip; tree
+"≠ N" appends; read-only inspector reference block + ghost card (pulled
+forward from M3). Lazy recompute via `_refresh_all`. *As-built note: list
+tints must be painted by the delegate — `QListWidgetItem.setBackground` is
+silently ignored under a stylesheet that styles `::item` (pixel-tested).
+The strip shipped with a hide toggle, since removed by decision 12.*
 
-**M3 — ↑ Copy up + inspector reference block.** Core commands `pull_parameter`
-/ `pull_section` (verbatim, ancestor-creating, one undo entry each). Inspector
-reference block (populate-before-connect; must never trip `_touched`);
-ghost-card variant; draft-replacement rule; 2g re-classification. **Live
-validator pin for 5c** (dangling particle name): record what bpx actually
-reports; the app surfaces exactly that.
+**M3 — Copy up + Bella's inspector layout.** *Signed 2026-07-21 (wireframes
+linked in Status above); to be built by a separate session. Precondition:
+land the uncommitted M2 + restyle work as commits first so this milestone
+starts on a clean tree.* Order of work:
+1. **Remove the hide toggle entirely** — the control, the collapsed
+   "◇ show comparison" affordance, the hidden-state plumbing and its tests.
+   The strip becomes a plain indicator: "◇ {filename} · {model}" + counts.
+2. **Restyle the comparison card** to decision 12's stacked layout: "Main
+   file" heading over today's editable value row; "Reference file" heading
+   over a purple-tinted read-only value row (units shown as in the main
+   row); **Copy up** as a solid purple (`style.REFERENCE`) button beside the
+   reference row. Headings only while a reference is docked. Ghost card =
+   "Not in the main file" + parameter name + Reference file row + Copy up.
+3. **Core commands** `pull_parameter` / `pull_section` (verbatim,
+   ancestor-creating, one undo entry each, decision 5 in full) wired to Copy
+   up on both card variants (populate-before-connect; must never trip
+   `_touched`); disabled when values equal; draft-replacement rule; 2g
+   re-classification follows the new shape.
+4. **Live validator pin for 5c** (dangling particle name): record what bpx
+   actually reports; the app surfaces exactly that, or nothing.
+Tests at minimum: command round-trip + single-entry undo (including created
+ancestors), draft replacement inside the same undo step, `_touched` pin
+(bare Enter never commits after docking), disabled-when-equal, ghost pull,
+shape-change re-classification, hide fully gone, real-window verification
+per the working agreements.
 
 **M4 — Make main.** Clean swap + toast (3a); dirty dialog Save & switch /
 Discard & switch / Cancel (3b); never-saved → Save As routing with the
@@ -173,8 +236,9 @@ shares the undo stack, no-edit invariant, navigation jump.
 
 ## 5. Risks / watch items
 
-- Ghost tree nodes (M2) touch `BpxTreeModel`'s contract with navigation and
-  the ⚠ refresh path — do this deliberately, not as a bolt-on.
+- Ghost tree nodes were cut from the Editor by the rev 3 rethink; if the
+  Compare page (M5) reuses `BpxTreeModel`, its contract with navigation and
+  the ⚠ refresh path is still the risk to respect.
 - The inspector reference block sits next to the card commit machinery; the
   Qt pitfalls in the project guide (populate-before-connect, `_reset_draft` ordering)
   are the live hazards.
