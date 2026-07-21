@@ -112,14 +112,17 @@ class WorkspacePanel(QWidget):
         layout.setSpacing(24)
 
         # The actions card floats centred in its half (explicit user call:
-        # top-left hugging read as awkward) -- stretches above and below,
-        # card horizontally centred between them.
+        # top-left hugging read as awkward), and is deliberately TALL -- it
+        # takes 4/6 of the column's height (the 1:4:1 stretch split below)
+        # rather than hugging its content, which read as a small box adrift
+        # in empty canvas. Its own layout spreads the button groups through
+        # that height (see _build_actions_card).
         # No width cap here (unlike the info cards): the card is centred, and
-        # its natural size is what keeps the model descriptors unclipped.
+        # its natural width is what keeps the model descriptors unclipped.
         left = QVBoxLayout()
         actions_card = self._build_actions_card()
         left.addStretch(1)
-        left.addWidget(actions_card, 0, Qt.AlignHCenter)
+        left.addWidget(actions_card, 4, Qt.AlignHCenter)
         left.addStretch(1)
         layout.addLayout(left, 1)
 
@@ -162,6 +165,10 @@ class WorkspacePanel(QWidget):
         card_layout.setContentsMargins(24, 24, 24, 24)
         card_layout.setSpacing(14)
 
+        # The card is stretched tall by the page layout; interior stretches
+        # spread the two groups (open buttons, New chooser) evenly through
+        # that height instead of leaving a content clump over empty card.
+        card_layout.addStretch(1)
         self._open_button = QPushButton("Open File…")
         self._open_button.setObjectName("WorkspaceOpen")
         self._open_button.clicked.connect(self.open_requested)
@@ -170,8 +177,9 @@ class WorkspacePanel(QWidget):
         self._open_reference_button.setObjectName("WorkspaceOpenReference")
         self._open_reference_button.clicked.connect(self.open_reference_requested)
         card_layout.addWidget(self._open_reference_button, 0, Qt.AlignLeft)
-        card_layout.addSpacing(8)
+        card_layout.addStretch(1)
         card_layout.addWidget(self._build_new_chooser(), 0)
+        card_layout.addStretch(1)
         return card
 
     @staticmethod
