@@ -191,13 +191,24 @@ class WorkspacePanel(QWidget):
 
         return row
 
-    def refresh(self, document: BPXDocument | None, filename: str | None, dirty: bool) -> None:
+    def refresh(
+        self,
+        document: BPXDocument | None,
+        filename: str | None,
+        dirty: bool,
+        error_count: int = 0,
+        warning_count: int = 0,
+    ) -> None:
         """Update the info card from the active document's identity and state.
 
         Identity (Title/Model/BPX version) and the section/parameter counts are
         read only through the document's own properties; ``filename``/``dirty``
         are caller-supplied facts derived from the active session, never from
-        the raw dict.
+        the raw dict. ``error_count``/``warning_count`` are likewise supplied
+        by the caller -- the already-computed ``PartitionedIssues`` totals
+        (decision G in ``main_window._refresh_all``), not re-derived here from
+        ``document.error_count``/``warning_count``, so the pill can never
+        disagree with the Diagnostics rail badge over an absorbed diagnostic.
         """
         if document is None:
             self._info_title.setText(_INFO_PANEL_EMPTY_STATE_TEXT)
@@ -219,11 +230,10 @@ class WorkspacePanel(QWidget):
         self._info_fields["Contents"].setText(
             f"{document.section_count} sections · {document.parameter_count} parameters"
         )
-        self._set_validity_badge(document)
+        self._set_validity_badge(error_count, warning_count)
 
-    def _set_validity_badge(self, document: BPXDocument) -> None:
-        errors, warnings = document.error_count, document.warning_count
-        if document.is_valid and not warnings:
+    def _set_validity_badge(self, errors: int, warnings: int) -> None:
+        if not errors and not warnings:
             text, colour = "Valid", OK
         elif errors:
             parts = [f"{errors} error" + ("s" if errors != 1 else "")]

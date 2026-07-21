@@ -105,6 +105,9 @@ class MainWindow(QMainWindow):
         self.resize(1200, 760)
         self._state = AppState()
         self._navigation = NavigationService(self._state)
+        # Cached by _refresh_all, read by _update_workspace_info -- see there.
+        self._workspace_error_count = 0
+        self._workspace_warning_count = 0
 
         self._tree = TreePanel()
         self._params = ParameterListPanel()
@@ -845,12 +848,21 @@ class MainWindow(QMainWindow):
         self._identity_label.set_full_text(self._compose_identity_text())
 
     def _update_workspace_info(self) -> None:
-        """Sync the Workspace page's info panel with the active session."""
+        """Sync the Workspace page's info panel with the active session.
+
+        Error/warning counts come from ``self._workspace_error_count``/
+        ``_workspace_warning_count``, cached by ``_refresh_all`` from the same
+        ``PartitionedIssues`` the Diagnostics rail badge uses (decision G) --
+        never recomputed here and never read from ``document.error_count``/
+        ``warning_count``, so the pill can't disagree with the rest of the app.
+        """
         session = self._state.active
         document = session.document if session else None
         filename = self._fallback_filename(session) if document is not None else None
         dirty = session.dirty if session else False
-        self._workspace.refresh(document, filename, dirty)
+        self._workspace.refresh(
+            document, filename, dirty, self._workspace_error_count, self._workspace_warning_count
+        )
 
     def _update_actions_enabled(self) -> None:
         """Save/Export are only enabled once a document is loaded (a session
@@ -885,11 +897,13 @@ class MainWindow(QMainWindow):
         """Refresh every view from one document snapshot.
 
         ``tasks``/``partition`` are computed exactly once here (decision G):
-        the Diagnostics page's Outstanding section and the rail badge both
-        derive from this single ``PartitionedIssues``, so they can never
-        disagree about what counts as an error. Pre-absorption
-        ``document.error_count``/``warning_count`` is deliberately not used
-        for the badge any more -- see ``core.completion.partition_issues``.
+        the Diagnostics page's Outstanding section, the rail badge and the
+        Workspace pill (via the cached ``_workspace_error_count``/
+        ``_workspace_warning_count``) all derive from this single
+        ``PartitionedIssues``, so they can never disagree about what counts
+        as an error. Pre-absorption ``document.error_count``/``warning_count``
+        is deliberately not used for any of them -- see
+        ``core.completion.partition_issues``.
         """
         document = self._state.active.document if self._state.active else None
         self._editor_page.set_has_document(document is not None)
@@ -913,6 +927,11 @@ class MainWindow(QMainWindow):
         self._search.index_document(document)
         errors = partition.error_count if partition is not None else 0
         warnings = partition.warning_count if partition is not None else 0
+        # Cached so _update_workspace_info (also called after Save, which
+        # doesn't re-validate) reuses this one partition instead of deriving
+        # its own count -- resets to 0/0 whenever there's no document.
+        self._workspace_error_count = errors
+        self._workspace_warning_count = warnings
         severity = "error" if errors else ("warning" if warnings else None)
         self._btn_diagnostics.set_badge(errors + warnings, severity)
         self._btn_diagnostics.setToolTip(self._diagnostics_tooltip(errors, warnings))

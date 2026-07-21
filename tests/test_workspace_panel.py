@@ -172,7 +172,34 @@ def test_document_card_badge_reports_errors(app_driver, invalid_bpx_path):
     ws = app_driver._w._workspace
     doc = app_driver._w._state.active.document
     assert not doc.is_valid
-    assert "error" in ws._info_badge.text()
+    assert ws._info_badge.text() == "1 error"
+
+
+def test_document_card_badge_matches_partitioned_count_not_raw_diagnostics(
+    warning_only_bpx_path, tmp_path, app_driver
+):
+    """The pill must report the same counts as the Diagnostics rail badge.
+
+    ``warning_legacy_bpx_float.json`` with its Electrolyte conductivity
+    corrupted to a string carries 4 raw diagnostics on that one field (one
+    per failed union branch: float, int, function-expression, table) plus
+    the fixture's pre-existing Header warning, but ``partition_issues``
+    merges the field's float/int union pair into a single displayed error
+    (decision Q), so the rest of the app shows 3 errors, 1 warning. The pill
+    must match, not the raw ``document.error_count``/``warning_count`` (4/1).
+    """
+    import json
+
+    raw = json.loads(warning_only_bpx_path.read_text("utf-8"))
+    raw["Parameterisation"]["Electrolyte"]["Conductivity [S.m-1]"] = "not-a-number"
+    workfile = tmp_path / "union_pair.json"
+    workfile.write_text(json.dumps(raw), encoding="utf-8")
+
+    app_driver.open(workfile)
+    ws = app_driver._w._workspace
+    doc = app_driver._w._state.active.document
+    assert (doc.error_count, doc.warning_count) == (4, 1), "premise: raw counts are 4/1"
+    assert ws._info_badge.text() == "3 errors, 1 warning"
 
 
 def test_document_card_is_blank_with_no_document(app_driver):
