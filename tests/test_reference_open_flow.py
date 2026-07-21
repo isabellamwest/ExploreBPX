@@ -49,10 +49,11 @@ def test_clicking_open_as_reference_docks_and_shows_the_tile(
     assert d.reference_heading_visible()
     assert d.reference_tile_visible()
     text = d.reference_tile_text()
-    assert "◇ REFERENCE · read-only" in text
+    assert "Read-only" in text
     assert valid_spm_path.name in text
-    assert "SPM · 11 sections · 44 parameters" in text
-    assert "valid" in text
+    assert "Model: SPM" in text
+    assert "Contents: 11 sections · 44 parameters" in text
+    assert "Validity: Valid" in text
 
 
 def test_removing_the_reference_hides_the_heading_and_tile(

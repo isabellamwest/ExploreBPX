@@ -14,11 +14,13 @@ OK = "#2e7d32"
 ERROR = "#c62828"
 WARNING = "#ef6c00"
 ACCENT = "#1f6feb"
-#: The docked reference file's own accent -- distinct from ``ACCENT`` (the
-#: app's general blue) so a reference tile/tag never reads as an ordinary
-#: suggestion or link. Used only by the Workspace reference tile (M1); ghost
-#: rows/sections (a later milestone) are expected to reuse it.
-REFERENCE = "#3f7d9a"
+#: The reference-file feature's own accent: purple, by explicit user
+#: decision -- everything reference-specific carries this one hue so it is
+#: visually unmistakable, and it can never be confused with ``ACCENT`` (the
+#: app's general blue) or any severity colour. Used by the Workspace
+#: reference card's tag (M1); ghost rows/sections (a later milestone) are
+#: expected to reuse it.
+REFERENCE = "#6f42c1"
 #: A required-but-absent/required-parameter tint -- distinct from both
 #: ``ERROR`` (invalid) and ``ACCENT`` (a merely-suggested field), so a
 #: schema-required parameter reads as its own, readable, amber category in
@@ -138,12 +140,6 @@ def counts_tooltip(error_count: int, warning_count: int, outstanding_count: int)
     return " · ".join(parts)
 
 
-#: F8 (Diagnostics page filters, phase B): the filter text field's tooltip.
-#: Not enum/count-derived like the rest of this vocabulary -- it is a fixed
-#: sentence about the *feature*, not about any particular diagnostic/task --
-#: kept here anyway so the whole tooltip vocabulary has one home.
-FILTER_FIELD_TOOLTIP = "Filters the view - counts stay unchanged"
-
 #: Shown on a value editor's unit label when the *parameter's own name* is a
 #: fixed BPX schema property (``not core.structure.can_rename_parameter(path,
 #: value)``) -- never on a user-owned or schema-undefined custom parameter's
@@ -205,21 +201,24 @@ QLabel#CardSymbol { margin-left: 8px; }
 QLabel#Heading { color: #57606a; font-weight: 600; }
 QLabel#CardDescription { color: #57606a; padding-top: 4px; }
 QFrame#Card { border: 1px solid #d0d7de; }
-/* Workspace page: the current-document card and its field rows. */
-QFrame#DocInfoCard { border: 1px solid #d0d7de; border-radius: 6px; background: #f6f8fa; }
-QLabel#DocInfoTitle { font-size: 15px; font-weight: 600; }
-QLabel#DocInfoTitle:disabled { color: #8c959f; font-weight: 400; }
-QLabel#DocInfoKey { color: #57606a; }
+/* Workspace page (Concept A revised, signed off): a canvas one step darker
+   than the app chrome, with one shared white-card treatment for the three
+   regions (actions, current document, reference) -- the same surface
+   inversion the Diagnostics page already uses (shaded rail, white pane).
+   The document and reference cards share the full anatomy (title row,
+   validity pill, key/value rows); the reference card carries the feature's
+   purple (style.REFERENCE) as a very subtle fill/border tint plus its
+   heading and the small Read-only tag -- never louder than the document
+   card (no bar, no caps). */
+QWidget#WorkspacePage { background: #eef1f4; }
+QFrame#WorkspaceCard { background: #ffffff; border: 1px solid #c4cdd5; border-radius: 6px; }
+QFrame#ReferenceCard { background: #fbfafe; border: 1px solid #d5cde6; border-radius: 6px; }
+QLabel#WorkspaceCardTitle { font-size: 15px; font-weight: 600; }
+QLabel#WorkspaceCardTitle:disabled { color: #8c959f; font-weight: 400; }
+QLabel#WorkspaceCardKey { color: #57606a; }
 QLabel#NewChooserHeading { color: #57606a; font-weight: 600; }
-/* Workspace page: the docked reference tile (M1). Lighter/narrower than
-   QFrame#DocInfoCard -- no shaded fill, just a thin border plus the 3px
-   left accent bar that marks it as the reference's own colour family. */
-QFrame#ReferenceTile {
-    border: 1px solid #d0d7de; border-left: 3px solid #3f7d9a; border-radius: 6px;
-    background: #ffffff;
-}
-QLabel#ReferenceTileTag { color: #3f7d9a; font-weight: 600; }
-QLabel#ReferenceTileFilename { font-weight: 600; }
+QLabel#ReferenceHeading { color: #7a63ad; font-weight: 600; }
+QLabel#ReferenceReadOnlyTag { color: #6f42c1; font-size: 11px; font-weight: 600; margin-top: 3px; }
 QStatusBar { background: #f6f8fa; border-top: 1px solid #d0d7de; font-size: 12px; color: #57606a; }
 QWidget#ActivityBar { background: #f6f8fa; border-right: 1px solid #d0d7de; }
 QToolButton#ActivityButton { background: transparent; border: none; border-left: 2px solid transparent; }
@@ -273,12 +272,6 @@ QLabel#DiagnosticsChip {
     background: #ffffff; border: 1px solid #c4cdd5; border-radius: 6px; padding: 4px 10px;
 }
 QLabel#DiagnosticsChip[chipOff="true"] { background: #eef0f2; border: 1px solid #d9dee5; }
-/* F8's text filter: compact, right-aligned on the strip. */
-QLineEdit#DiagnosticsFilterField {
-    background: #ffffff; border: 1px solid #c4cdd5; border-radius: 6px;
-    padding: 4px 8px; font-size: 12px; selection-background-color: #ddeeff;
-}
-QLineEdit#DiagnosticsFilterField:focus { border: 1px solid #1f6feb; }
 QListWidget#DiagnosticsRail { background: #f3f4f6; border: none; border-right: 1px solid #c4cdd5; outline: none; }
 QListWidget#DiagnosticsRail::item { padding: 0; border: none; }
 QLabel#DiagnosticsPaneHeader { font-size: 14px; padding-bottom: 2px; }

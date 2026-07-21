@@ -138,6 +138,13 @@ validity note, Remove), "Open as reference…" button, 4a dialog, 4b dedupe
 toast, one-reference replace toast, 6b close behaviour, 4c New from source.
 Tests: state snapshot round-trip, tile lifecycle via `AppDriver`, boundary
 suite stays green. Usable alone: "keep a second file at hand".
+*Amendment (2026-07-21, signed off with the Workspace Concept A restyle):
+the reference feature's colour is **purple** (`style.REFERENCE`, #6f42c1),
+not teal, and the tile is now a card with the exact anatomy of the document
+card (title row + validity pill + key/value rows) marked only by a small
+purple "Read-only" tag on its title row -- no side bar, no caps tag. Later
+milestones reusing the reference colour (ghost rows, comparison strip)
+inherit purple.*
 
 **M2 — diff engine + comparison-aware Editor.** `app/core/compare.py` (pure
 core): keyed matching, per-kind raw equality, per-section counts, ghost

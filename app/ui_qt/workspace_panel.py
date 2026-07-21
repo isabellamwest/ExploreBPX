@@ -67,19 +67,19 @@ _MODEL_DESCRIPTORS: dict[str, str] = {
 
 
 def _reference_validity_text(errors: int, warnings: int) -> tuple[str, str]:
-    """The reference tile's validity line and colour.
-
-    Only two colours are used here (never ``ERROR``): a docked reference is
-    read-only and never blocks anything, so its tile never needs the same
-    alarm colour as the main document's own invalid state."""
+    """The reference card's validity-pill text and colour, matching the
+    document badge's own wording and format exactly ("Valid", "2 errors,
+    1 warning") with one deliberate exception: never ``ERROR`` red -- a
+    docked reference is read-only and never blocks anything, so amber is
+    as loud as its pill gets."""
     if not errors and not warnings:
-        return "valid", OK
+        return "Valid", OK
     parts = []
     if errors:
         parts.append(f"{errors} error" + ("s" if errors != 1 else ""))
     if warnings:
         parts.append(f"{warnings} warning" + ("s" if warnings != 1 else ""))
-    return " · ".join(parts), WARNING
+    return ", ".join(parts), WARNING
 
 
 class WorkspacePanel(QWidget):
@@ -93,7 +93,14 @@ class WorkspacePanel(QWidget):
 
     def __init__(self) -> None:
         super().__init__()
-        self.setObjectName("Panel")
+        # Concept A (revised, signed off): a canvas two steps darker than
+        # the app chrome with white cards on it -- see QWidget#WorkspacePage
+        # in style.py. A plain QWidget subclass ignores stylesheet
+        # backgrounds unless told to paint them (same note as the
+        # Diagnostics strip), so without WA_StyledBackground the canvas
+        # tone silently never draws.
+        self.setObjectName("WorkspacePage")
+        self.setAttribute(Qt.WA_StyledBackground, True)
         self.setAcceptDrops(True)
 
         # Two columns: actions on the left (open + new-from-model), the current
@@ -104,17 +111,15 @@ class WorkspacePanel(QWidget):
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(24)
 
+        # The actions card floats centred in its half (explicit user call:
+        # top-left hugging read as awkward) -- stretches above and below,
+        # card horizontally centred between them.
+        # No width cap here (unlike the info cards): the card is centred, and
+        # its natural size is what keeps the model descriptors unclipped.
         left = QVBoxLayout()
-        left.setSpacing(16)
-        self._open_button = QPushButton("Open File…")
-        self._open_button.setObjectName("WorkspaceOpen")
-        self._open_button.clicked.connect(self.open_requested)
-        left.addWidget(self._open_button, 0, Qt.AlignLeft)
-        self._open_reference_button = QPushButton("Open File as Reference…")
-        self._open_reference_button.setObjectName("WorkspaceOpenReference")
-        self._open_reference_button.clicked.connect(self.open_reference_requested)
-        left.addWidget(self._open_reference_button, 0, Qt.AlignLeft)
-        left.addWidget(self._build_new_chooser(), 0)
+        actions_card = self._build_actions_card()
+        left.addStretch(1)
+        left.addWidget(actions_card, 0, Qt.AlignHCenter)
         left.addStretch(1)
         layout.addLayout(left, 1)
 
@@ -122,7 +127,7 @@ class WorkspacePanel(QWidget):
         # panel: its height follows its content and its width is capped. The
         # future multi-document Workspace stacks one tile per document in this
         # column, so the single tile today already has that shape. The
-        # reference heading/tile sit below it, both hidden when no reference
+        # reference heading/card sit below it, both hidden when no reference
         # is docked -- no empty-state placeholder (explicit user decision).
         right = QVBoxLayout()
         right.setSpacing(8)
@@ -134,9 +139,9 @@ class WorkspacePanel(QWidget):
         right.addWidget(self._info_card, 0, Qt.AlignTop)
 
         self._reference_heading = QLabel("Reference")
-        self._reference_heading.setObjectName("Heading")
+        self._reference_heading.setObjectName("ReferenceHeading")
         right.addWidget(self._reference_heading)
-        self._reference_tile = self._build_reference_tile()
+        self._reference_tile = self._build_reference_card()
         self._reference_tile.setMaximumWidth(420)
         right.addWidget(self._reference_tile, 0, Qt.AlignTop)
 
@@ -145,16 +150,66 @@ class WorkspacePanel(QWidget):
 
         self.refresh(None, None, False)
 
+    def _build_actions_card(self) -> QWidget:
+        """The left-hand actions card: Open/Open-as-reference plus the New
+        chooser, on the same white card treatment as the document card so
+        nothing on the page floats directly on the canvas. No heading --
+        the buttons name themselves (explicit user call: an "Actions" label
+        over buttons is noise)."""
+        card = QFrame()
+        card.setObjectName("WorkspaceCard")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(24, 24, 24, 24)
+        card_layout.setSpacing(14)
+
+        self._open_button = QPushButton("Open File…")
+        self._open_button.setObjectName("WorkspaceOpen")
+        self._open_button.clicked.connect(self.open_requested)
+        card_layout.addWidget(self._open_button, 0, Qt.AlignLeft)
+        self._open_reference_button = QPushButton("Open File as Reference…")
+        self._open_reference_button.setObjectName("WorkspaceOpenReference")
+        self._open_reference_button.clicked.connect(self.open_reference_requested)
+        card_layout.addWidget(self._open_reference_button, 0, Qt.AlignLeft)
+        card_layout.addSpacing(8)
+        card_layout.addWidget(self._build_new_chooser(), 0)
+        return card
+
+    @staticmethod
+    def _build_kv_form(keys: tuple[str, ...]) -> tuple[QFormLayout, dict[str, QLabel]]:
+        """A card's keyed record rows -- one shared recipe so the document
+        and reference cards can never drift apart. Explicit left alignment
+        throughout: macOS's native form style centres the rows and
+        right-aligns the labels, which reads as scattered text rather than
+        a keyed record. Growing fields keep a long value ("11 sections · 44
+        parameters") fully visible instead of squeezed."""
+        form = QFormLayout()
+        form.setContentsMargins(0, 4, 0, 0)
+        form.setHorizontalSpacing(12)
+        form.setVerticalSpacing(6)
+        form.setFormAlignment(Qt.AlignLeft | Qt.AlignTop)
+        form.setLabelAlignment(Qt.AlignLeft)
+        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        fields: dict[str, QLabel] = {}
+        for key in keys:
+            value = QLabel()
+            value.setObjectName("WorkspaceCardValue")
+            value.setWordWrap(True)
+            label = QLabel(f"{key}:")
+            label.setObjectName("WorkspaceCardKey")
+            form.addRow(label, value)
+            fields[key] = value
+        return form, fields
+
     def _build_info_card(self) -> QWidget:
         """The right-hand current-document card: identity, validity, contents."""
         card = QFrame()
-        card.setObjectName("DocInfoCard")
+        card.setObjectName("WorkspaceCard")
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(16, 16, 16, 16)
         card_layout.setSpacing(10)
 
         self._info_title = QLabel()
-        self._info_title.setObjectName("DocInfoTitle")
+        self._info_title.setObjectName("WorkspaceCardTitle")
         self._info_title.setWordWrap(True)
         card_layout.addWidget(self._info_title)
 
@@ -162,60 +217,51 @@ class WorkspacePanel(QWidget):
         self._info_badge.setObjectName("DocInfoBadge")
         card_layout.addWidget(self._info_badge, 0, Qt.AlignLeft)
 
-        self._info_form = QFormLayout()
-        self._info_form.setContentsMargins(0, 4, 0, 0)
-        self._info_form.setHorizontalSpacing(12)
-        self._info_form.setVerticalSpacing(6)
-        # Explicit left alignment throughout: macOS's native form style centres
-        # the rows and right-aligns the labels, which reads as scattered text
-        # rather than a keyed record. Growing fields keep a long value ("11
-        # sections · 44 parameters") fully visible instead of squeezed.
-        self._info_form.setFormAlignment(Qt.AlignLeft | Qt.AlignTop)
-        self._info_form.setLabelAlignment(Qt.AlignLeft)
-        self._info_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-        self._info_fields: dict[str, QLabel] = {}
-        for key in ("Model", "BPX version", "File", "State", "Contents"):
-            value = QLabel()
-            value.setObjectName("DocInfoValue")
-            value.setWordWrap(True)
-            label = QLabel(f"{key}:")
-            label.setObjectName("DocInfoKey")
-            self._info_form.addRow(label, value)
-            self._info_fields[key] = value
+        self._info_form, self._info_fields = self._build_kv_form(
+            ("Model", "BPX version", "File", "State", "Contents")
+        )
         card_layout.addLayout(self._info_form)
         return card
 
-    def _build_reference_tile(self) -> QWidget:
-        """The docked-reference tile: a compact, lighter-weight sibling of
-        the current-document card (see ``QFrame#ReferenceTile`` in
-        ``style.py`` for the deliberately narrower visual treatment)."""
-        tile = QFrame()
-        tile.setObjectName("ReferenceTile")
-        tile_layout = QVBoxLayout(tile)
-        tile_layout.setContentsMargins(12, 10, 12, 10)
-        tile_layout.setSpacing(4)
+    def _build_reference_card(self) -> QWidget:
+        """The docked-reference card (Concept A revised, marker A1): the
+        exact anatomy of the current-document card -- title row, validity
+        pill, key/value rows -- so the two read as the same component. The
+        only reference-specific marks are the "Reference" heading above the
+        card and the small purple Read-only tag on the title row (the
+        reference feature's own hue, ``style.REFERENCE``); the card must
+        never read louder than the document's own. Its fill/border carry a
+        very subtle purple tint (``QFrame#ReferenceCard``), the one place
+        the card itself wears the feature colour."""
+        card = QFrame()
+        card.setObjectName("ReferenceCard")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(16, 16, 16, 16)
+        card_layout.setSpacing(10)
 
-        self._reference_tag = QLabel("◇ REFERENCE · read-only")
-        self._reference_tag.setObjectName("ReferenceTileTag")
-        tile_layout.addWidget(self._reference_tag)
-
+        title_row = QHBoxLayout()
+        title_row.setSpacing(10)
         self._reference_filename = QLabel()
-        self._reference_filename.setObjectName("ReferenceTileFilename")
+        self._reference_filename.setObjectName("WorkspaceCardTitle")
         self._reference_filename.setWordWrap(True)
-        tile_layout.addWidget(self._reference_filename)
+        title_row.addWidget(self._reference_filename, 1)
+        self._reference_tag = QLabel("Read-only")
+        self._reference_tag.setObjectName("ReferenceReadOnlyTag")
+        title_row.addWidget(self._reference_tag, 0, Qt.AlignTop)
+        card_layout.addLayout(title_row)
 
-        self._reference_meta = QLabel()
-        tile_layout.addWidget(self._reference_meta)
+        self._reference_badge = QLabel()
+        card_layout.addWidget(self._reference_badge, 0, Qt.AlignLeft)
 
-        self._reference_validity = QLabel()
-        tile_layout.addWidget(self._reference_validity)
+        self._reference_form, self._reference_fields = self._build_kv_form(("Model", "Contents"))
+        card_layout.addLayout(self._reference_form)
 
         self._reference_remove_button = QPushButton("Remove")
         self._reference_remove_button.setObjectName("ReferenceTileRemove")
         self._reference_remove_button.clicked.connect(self.remove_reference_requested)
-        tile_layout.addWidget(self._reference_remove_button, 0, Qt.AlignLeft)
+        card_layout.addWidget(self._reference_remove_button, 0, Qt.AlignLeft)
 
-        return tile
+        return card
 
     def _build_new_chooser(self) -> QWidget:
         """Inline "New" surface: one labelled button per supported model.
@@ -305,7 +351,7 @@ class WorkspacePanel(QWidget):
         self._set_validity_badge(error_count, warning_count)
 
     def _set_reference(self, reference: ReferenceSnapshot | None) -> None:
-        """Show/populate or hide the reference heading + tile.
+        """Show/populate or hide the reference heading + card.
 
         Both are hidden together when no reference is docked -- no
         empty-state placeholder (explicit user decision)."""
@@ -316,13 +362,13 @@ class WorkspacePanel(QWidget):
         self._reference_heading.show()
         self._reference_tile.show()
         self._reference_filename.setText(reference.filename)
-        self._reference_meta.setText(
-            f"{reference.model or '-'} · {reference.section_count} sections · "
-            f"{reference.parameter_count} parameters"
+        self._reference_fields["Model"].setText(reference.model or "-")
+        self._reference_fields["Contents"].setText(
+            f"{reference.section_count} sections · {reference.parameter_count} parameters"
         )
         text, colour = _reference_validity_text(reference.error_count, reference.warning_count)
-        self._reference_validity.setText(text)
-        self._reference_validity.setStyleSheet(f"color: {colour};")
+        self._reference_badge.setText(text)
+        self._reference_badge.setStyleSheet(style.validity_pill_qss(colour))
 
     def _set_validity_badge(self, errors: int, warnings: int) -> None:
         if not errors and not warnings:

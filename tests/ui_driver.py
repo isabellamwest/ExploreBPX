@@ -419,24 +419,6 @@ class AppDriver:
         strip = self._w._diagnostics._strip
         return {"errors": strip._errors, "warnings": strip._warnings, "outstanding": strip._outstanding}[name]
 
-    def diagnostics_filter_text(self) -> str:
-        return self._w._diagnostics._strip._filter_edit.text()
-
-    def diagnostics_set_filter_text(self, text: str) -> "AppDriver":
-        """Type *text* into the strip's filter field, as the user would --
-        fires ``textChanged`` per keystroke, matching the live filter (F8)."""
-        field = self._w._diagnostics._strip._filter_edit
-        field.setFocus()
-        field.clear()
-        self._qtbot.keyClicks(field, text)
-        return self
-
-    def diagnostics_press_escape_in_filter(self) -> "AppDriver":
-        field = self._w._diagnostics._strip._filter_edit
-        field.setFocus()
-        self._qtbot.keyClick(field, Qt.Key_Escape)
-        return self
-
     def diagnostics_section_hidden_line_text(self) -> str | None:
         """The selected section pane's own "N hidden by filters" line, or
         None if nothing is hidden there. Reads ``isHidden()`` rather than
@@ -563,17 +545,16 @@ class AppDriver:
         return not self._w._workspace._reference_tile.isHidden()
 
     def reference_tile_text(self) -> str:
-        """Text of the reference tile, flattened -- tag/filename/meta/validity
-        lines, one per line (mirrors :meth:`workspace_info_text`)."""
+        """Text of the reference card, flattened -- tag/filename/validity
+        pill/key-value lines, one per line (mirrors :meth:`workspace_info_text`)."""
         ws = self._w._workspace
-        return "\n".join(
-            [
-                ws._reference_tag.text(),
-                ws._reference_filename.text(),
-                ws._reference_meta.text(),
-                ws._reference_validity.text(),
-            ]
-        )
+        lines = [
+            ws._reference_tag.text(),
+            ws._reference_filename.text(),
+            f"Validity: {ws._reference_badge.text()}",
+        ]
+        lines.extend(f"{key}: {ws._reference_fields[key].text()}" for key in ws._reference_fields)
+        return "\n".join(lines)
 
     def toast_text(self) -> str | None:
         """The toast's current message, or None while it is hidden."""
