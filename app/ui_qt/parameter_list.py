@@ -137,14 +137,15 @@ class ParameterListPanel(QWidget):
         #: navigating to a different section reads a fresh (default-collapsed)
         #: entry.
         self._expanded: dict[tuple[str, ...], bool] = {}
-        #: Parameter paths with a *page-visible* issue (decision P), set by
+        #: Parameter paths with a *page-visible* issue, mapped to the row's
+        #: worst severity ("error"/"warning") -- decision P, set by
         #: ``MainWindow._refresh_all`` from ``core.completion.partition_issues``
-        #: alongside ``show_node``/``reveal`` -- never computed here. The ⚠
+        #: alongside ``show_node``/``reveal`` -- never computed here. The dot
         #: marker reads this instead of ``parameter.has_errors`` (validator-
         #: verbatim), so an absorbed diagnostic's own parameter shows calm
-        #: (grey, no ⚠) here even though the card badge/Issues tab still
+        #: (grey, no dot) here even though the card badge/Issues tab still
         #: report it verbatim.
-        self._visible_issue_paths: frozenset[tuple[str, ...]] = frozenset()
+        self._visible_issue_severities: dict[tuple[str, ...], str] = {}
 
         self._add_button = QPushButton("+ Add parameter")
         self._add_button.setObjectName("AddParameterButton")
@@ -184,8 +185,9 @@ class ParameterListPanel(QWidget):
         self._popup = AddParameterPopup(self)
         self._popup.custom_parameter_requested.connect(self._on_custom_parameter_requested)
 
-    def set_visible_issue_paths(self, paths: frozenset[tuple[str, ...]]) -> None:
-        """Set the page-visible-issue parameter paths (decision P).
+    def set_visible_issue_severities(self, severities: dict[tuple[str, ...], str]) -> None:
+        """Set the page-visible-issue parameter paths, mapped to severity
+        (decision P).
 
         Call from ``_refresh_all`` before ``show_node``/``reveal`` render any
         rows -- stored, not applied immediately, since the panel is usually
@@ -194,7 +196,7 @@ class ParameterListPanel(QWidget):
         ``self._model``) rather than an extra ``show_node``/``reveal``
         parameter every caller must thread through.
         """
-        self._visible_issue_paths = paths
+        self._visible_issue_severities = severities
 
     def show_node(self, node: TreeNode | None, model: str | None = None) -> None:
         self._node = node
@@ -204,15 +206,14 @@ class ParameterListPanel(QWidget):
         if node is None:
             return
         for parameter in node.parameters:
-            is_visible_issue = parameter.path in self._visible_issue_paths
+            severity = self._visible_issue_severities.get(parameter.path)
             is_empty = parameter.value is None
-            marker = "  ⚠" if is_visible_issue else ""
-            item = QListWidgetItem(f"{parameter.label}{marker}")
+            item = QListWidgetItem(parameter.label)
             item.setData(256, parameter.path)
             item.setData(
                 parameter_row.HTML_ROLE,
                 parameter_row.build_parameter_row_html(
-                    parameter.label, has_errors=is_visible_issue, is_empty=is_empty
+                    parameter.label, severity=severity, is_empty=is_empty
                 ),
             )
             # Right-aligned value preview (raw-verbatim, delegate-elided);

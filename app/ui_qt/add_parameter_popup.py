@@ -185,7 +185,7 @@ def suggestion_row_html(alias: str, meta, tier: str, required: bool) -> str:
     is a suggested one, and recolouring its name would split the suggested
     group into two visual tiers when it is one."""
     name, unit = parameter_row.split_name_and_unit(alias)
-    name_color = style.ACCENT if tier == "suggested" else parameter_row.DEFAULT_TEXT
+    name_color = style.ACCENT if tier == "suggested" else style.DEFAULT_TEXT
     hints: list[tuple[str, str]] = []
     kind = _kind_label(meta)
     if kind:

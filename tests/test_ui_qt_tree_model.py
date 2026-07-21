@@ -15,6 +15,7 @@ from PySide6.QtCore import Qt
 from core.parameter_types import ParameterKind
 from core.tree_model import ParameterItem, TreeNode
 from core.validation import PydanticErrorDiagnostic
+from ui_qt.parameter_row import SEVERITY_ROLE
 from ui_qt.tree_model import BpxTreeModel
 
 
@@ -35,6 +36,10 @@ def _display(model: BpxTreeModel, index) -> str:
     return model.data(index, Qt.DisplayRole)
 
 
+def _severity(model: BpxTreeModel, index) -> str | None:
+    return model.data(index, SEVERITY_ROLE)
+
+
 def test_collapsed_node_marks_hidden_descendant_error():
     parameter = ParameterItem(
         label="Voltage",
@@ -53,7 +58,8 @@ def test_collapsed_node_marks_hidden_descendant_error():
 
     parameterisation_index = model.index(0, 0)
 
-    assert _display(model, parameterisation_index) == "Parameterisation ⚠"
+    assert _display(model, parameterisation_index) == "Parameterisation"
+    assert _severity(model, parameterisation_index) == "error"
 
 
 def test_expanded_node_defers_descendant_marker_to_visible_child():
@@ -76,7 +82,9 @@ def test_expanded_node_defers_descendant_marker_to_visible_child():
     cell_index = model.index(0, 0, parameterisation_index)
 
     assert _display(model, parameterisation_index) == "Parameterisation"
-    assert _display(model, cell_index) == "Cell ⚠"
+    assert _severity(model, parameterisation_index) is None
+    assert _display(model, cell_index) == "Cell"
+    assert _severity(model, cell_index) == "error"
 
 
 def test_expanded_object_with_direct_parameter_error_keeps_marker():
@@ -92,7 +100,8 @@ def test_expanded_object_with_direct_parameter_error_keeps_marker():
 
     cell_index = model.index(0, 0)
 
-    assert _display(model, cell_index) == "Cell ⚠"
+    assert _display(model, cell_index) == "Cell"
+    assert _severity(model, cell_index) == "error"
 
 
 def test_expanded_object_with_direct_object_error_keeps_marker():
@@ -102,7 +111,8 @@ def test_expanded_object_with_direct_object_error_keeps_marker():
 
     cell_index = model.index(0, 0)
 
-    assert _display(model, cell_index) == "Cell ⚠"
+    assert _display(model, cell_index) == "Cell"
+    assert _severity(model, cell_index) == "error"
 
 
 # ----------------------------------------------------------------------
@@ -140,7 +150,8 @@ def test_user_defined_subsection_is_tagged_custom():
 
 def test_custom_tag_and_error_marker_coexist():
     model, _bucket_index, sub_index = _user_defined_model(sub_issue=True)
-    assert _display(model, sub_index) == "Thermal tweaks · custom ⚠"
+    assert _display(model, sub_index) == "Thermal tweaks · custom"
+    assert _severity(model, sub_index) == "error"
 
 
 def test_material_is_not_tagged_custom():

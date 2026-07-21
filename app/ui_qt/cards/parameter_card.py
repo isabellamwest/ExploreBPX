@@ -48,6 +48,7 @@ from core.parameter_metadata import resolve_parameter_metadata
 from core.parameter_types import split_name_and_unit
 from core.tree_model import ParameterItem
 
+from .. import style
 from ..icons import PENCIL, hover_icon
 from ..latex import symbol_label
 from ..parameter_info_popover import ParameterInfoPopover
@@ -193,9 +194,7 @@ class ParameterCard(QWidget):
     def set_validity(self, text: str, colour: str) -> None:
         """Drive the header badge; validity decisions stay in the Inspector."""
         self._badge.setText(text)
-        self._badge.setStyleSheet(
-            f"color: white; background: {colour}; padding: 2px 8px; border-radius: 3px;"
-        )
+        self._badge.setStyleSheet(style.validity_pill_qss(colour))
 
     def _toggle_info_popover(self) -> None:
         """Open the info popover on the first click, close it on the second."""

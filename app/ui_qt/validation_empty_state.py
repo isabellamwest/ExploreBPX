@@ -99,7 +99,7 @@ class ValidationEmptyState(QWidget):
         actions = QHBoxLayout()
         actions.setSpacing(8)
         actions.addStretch(1)
-        self._add_button = QPushButton("＋ Add experiment")
+        self._add_button = QPushButton("+ Add experiment")
         self._add_button.setObjectName("ValidationEmptyStateAdd")
         self._add_button.clicked.connect(self._open_add_experiment_popup)
         actions.addWidget(self._add_button)

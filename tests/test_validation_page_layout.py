@@ -755,11 +755,12 @@ def test_severity_dots_carry_no_inner_glyph_text_in_the_delegate(app_driver, man
 
 
 def test_task_glyph_is_muted_grey_not_bold(app_driver):
-    """Harmonisation ask: the ○/◐ glyph must render in the same grey
-    (#57606a) family as the dots, at regular weight -- not swept into the
-    bold name span the way it used to be."""
+    """Harmonisation ask: a task row's ring/half-filled mark must render in
+    the same grey (#57606a) family as the issue dots -- the shared dot
+    family (unified symbol system, Concept A), rendered muted rather than
+    swept into the bold name span the way a text glyph used to be."""
     from ui_qt import diagnostics_panel as dp
-    from ui_qt import parameter_row, style
+    from ui_qt import icons, parameter_row, style
 
     d = app_driver
     d._w._new("SPM")
@@ -767,7 +768,7 @@ def test_task_glyph_is_muted_grey_not_bold(app_driver):
     lst = d._w._diagnostics._section_view._outstanding_box.list
     task_item = next(lst.item(i) for i in range(lst.count()) if lst.item(i).data(dp._KIND_ROLE) == "task")
     html = task_item.data(parameter_row.HTML_ROLE)
+    task = task_item.data(dp._TASK_ROLE)
 
-    glyph_span = html.split("</span>")[0] + "</span>"
-    assert style.MUTED in glyph_span
-    assert "font-weight:400" in glyph_span
+    expected_glyph = icons.html_img(dp._task_glyph_svg(task), color=style.MUTED, size=parameter_row.MARK_BOX)
+    assert html.startswith(expected_glyph)

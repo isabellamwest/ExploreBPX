@@ -28,6 +28,8 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
+from ..style import ACCENT
+
 try:  # QtCharts is part of PySide6 but absent from some minimal builds.
     from PySide6.QtCharts import (
         QChart,
@@ -41,7 +43,7 @@ try:  # QtCharts is part of PySide6 but absent from some minimal builds.
 except ImportError:  # pragma: no cover - depends on the PySide6 build
     _CHARTS_AVAILABLE = False
 
-_LINE = "#1f6feb"
+_LINE = ACCENT
 _GRID = "#eaeef2"
 
 

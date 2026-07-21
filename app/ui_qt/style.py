@@ -36,6 +36,15 @@ NEUTRAL_TINT = "#eef0f2"
 #: alias" suggestion tier (aliases the section doesn't expect), so grey rows
 #: draw from the same palette rather than a one-off colour.
 MUTED = "#57606a"
+#: The app's default (untinted) text colour -- matches the base ``QWidget``
+#: rule in the stylesheet below; named here so a "plain" row's name can be
+#: coloured explicitly, the same as every other tier, rather than left to
+#: whatever the delegate happens to inherit.
+DEFAULT_TEXT = "#1f2328"
+#: Ghosted value-preview text (matches the disabled-button foreground in
+#: the stylesheet below): quieter than ``MUTED`` so a placeholder reads as
+#: "nothing here", not as a value.
+GHOST_TEXT = "#8c959f"
 #: Diagnostics page rail (F2): background distinct from the white detail
 #: pane, and the selected entry's accent-tinted background/hover wash.
 RAIL_BG = "#f3f4f6"
@@ -137,6 +146,23 @@ FILTER_FIELD_TOOLTIP = "Filters the view - counts stay unchanged"
 #: unit is still shown plainly, this only explains why it cannot be edited
 #: here.
 FIXED_UNIT_TOOLTIP = "Fixed by the BPX schema"
+
+
+def all_clear(text: str) -> str:
+    """Prefix *text* with the app's one "all clear" glyph (a plain check),
+    used by every "nothing outstanding" empty-row message (Diagnostics'
+    Issues/Outstanding lists, the Inspector's Issues tab) so the three
+    surfaces never drift onto their own check-mark spelling."""
+    return "✓ " + text
+
+
+def validity_pill_qss(background: str) -> str:
+    """Inline stylesheet for a document-validity pill (white text on
+    *background*) -- shared by the parameter card's per-card badge and the
+    workspace panel's document-info badge, which used to each hand-roll a
+    slightly different padding."""
+    return f"color: white; background: {background}; padding: 2px 9px; border-radius: 3px;"
+
 
 STYLESHEET = """
 QWidget { font-size: 13px; color: #1f2328; }

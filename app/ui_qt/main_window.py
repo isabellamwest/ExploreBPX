@@ -39,6 +39,7 @@ from core.commands import (
 )
 from core.completion import TaskKind
 from core.tree_model import build_parameter_path_map
+from core.validation import Severity
 from state.app_state import AppState
 from state.document_session import DocumentSession
 
@@ -903,9 +904,9 @@ class MainWindow(QMainWindow):
         partition = completion.partition_issues(document, tasks) if document is not None else None
         # Decision P: stored before any subsequent show_node/reveal renders
         # real rows (those happen later, via a navigation reveal -- show_node
-        # above is always called with None here) so the parameter list's ⚠
+        # above is always called with None here) so the parameter list's dot
         # marker reflects *page-visible* issues, not the validator verbatim.
-        self._params.set_visible_issue_paths(self._visible_issue_paths(document, partition))
+        self._params.set_visible_issue_severities(self._visible_issue_severities(document, partition))
 
         buckets = page_buckets.bucket_page_content(raw, model, partition, tasks) if document is not None else None
         self._diagnostics.refresh(buckets, partition, model)
@@ -921,10 +922,12 @@ class MainWindow(QMainWindow):
         self._update_actions_enabled()
 
     @staticmethod
-    def _visible_issue_paths(document, partition) -> frozenset[tuple[str, ...]]:
+    def _visible_issue_severities(document, partition) -> dict[tuple[str, ...], str]:
         """Parameter paths carrying at least one *page-visible* diagnostic
-        (decision P) -- i.e. one still in ``partition.visible`` after
-        absorption, not one merely present in ``parameter.issues``.
+        (decision P), mapped to the row's worst severity ("error" if any
+        page-visible issue there is an error, else "warning") -- i.e. one
+        still in ``partition.visible`` after absorption, not one merely
+        present in ``parameter.issues``.
 
         Built from ``parameter.issues`` (already correctly attached by
         ``BPXDocument`` -- including the message-recovery fallback for
@@ -934,11 +937,14 @@ class MainWindow(QMainWindow):
         unhashable (no set of diagnostics; ``id()`` stands in).
         """
         if document is None or partition is None:
-            return frozenset()
-        visible_ids = {id(diagnostic) for diagnostic, _ in partition.visible}
+            return {}
+        visible_severity = {id(diagnostic): diagnostic.severity for diagnostic, _ in partition.visible}
         parameter_map = build_parameter_path_map(document.tree)
-        return frozenset(
-            path
-            for path, parameter in parameter_map.items()
-            if any(id(issue) in visible_ids for issue in parameter.issues)
-        )
+        result: dict[tuple[str, ...], str] = {}
+        for path, parameter in parameter_map.items():
+            severities = [
+                visible_severity[id(issue)] for issue in parameter.issues if id(issue) in visible_severity
+            ]
+            if severities:
+                result[path] = "error" if Severity.ERROR in severities else "warning"
+        return result

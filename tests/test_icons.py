@@ -24,8 +24,7 @@ _ICON_SIZE = 24
 def _ink_bbox(svg: str, size: int = _ICON_SIZE) -> tuple[int, int, int, int]:
     """The alpha bounding box (x_min, x_max, y_min, y_max) of *svg*'s ink."""
     QApplication.instance() or QApplication([])
-    icon = icons.tinted_icon(svg, "#000000", size=size)
-    image = icon.pixmap(size, size).toImage()
+    image = icons._render_pixmap(svg, "#000000", size).toImage()
 
     xs: list[int] = []
     ys: list[int] = []

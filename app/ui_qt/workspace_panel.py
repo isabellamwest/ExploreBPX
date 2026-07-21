@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
 from core.document import BPXDocument
 from core.document_factory import SUPPORTED_MODELS
 
+from . import style
 from .style import ERROR, OK, WARNING
 
 _INFO_PANEL_EMPTY_STATE_TEXT = "No document open"
@@ -235,9 +236,7 @@ class WorkspacePanel(QWidget):
                 WARNING,
             )
         self._info_badge.setText(text)
-        self._info_badge.setStyleSheet(
-            f"color: white; background: {colour}; padding: 2px 10px; border-radius: 3px;"
-        )
+        self._info_badge.setStyleSheet(style.validity_pill_qss(colour))
         self._info_badge.show()
 
     def _set_form_visible(self, visible: bool) -> None:

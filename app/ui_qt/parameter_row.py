@@ -19,7 +19,7 @@ from __future__ import annotations
 import html as _html
 import json
 
-from PySide6.QtCore import QRect, QSize, Qt
+from PySide6.QtCore import QRect, QRectF, QSize, Qt
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QFontMetrics, QPainter, QTextDocument
 from PySide6.QtWidgets import (
     QApplication,
@@ -33,7 +33,7 @@ from core.parameter_types import ParameterKind, looks_like_table
 # e.g. core.editing); re-exported here so existing ``parameter_row.``
 # call sites (this module's own rows, the add-parameter popup) are unchanged.
 from core.parameter_types import split_name_and_unit
-from ui_qt import style
+from ui_qt import icons, style
 
 #: Item-data role carrying the HTML fragment :class:`ParameterRowDelegate`
 #: paints. A row without it (e.g. a group header) falls back to the base
@@ -67,22 +67,35 @@ SEVERITY_ROLE = Qt.UserRole + 103
 #: :data:`VALUE_ROLE` already established for a row's right edge.
 ACTION_ROLE = Qt.UserRole + 104
 
-#: The app's default (untinted) text colour -- matches the base ``QWidget``
-#: rule in this module's stylesheet (``ui_qt/style.py``); named here so a
-#: "plain" row's name can be coloured explicitly, the same as every other
-#: tier, rather than left to whatever the delegate happens to inherit.
-DEFAULT_TEXT = "#1f2328"
-#: Ghosted value-preview text (matches the disabled-button foreground in
-#: the stylesheet): quieter than ``style.MUTED`` so a placeholder reads as
-#: "nothing here", not as a value.
-GHOST_TEXT = "#8c959f"
-
 _MIN_WIDTH = 40
 #: The value preview never claims more than this share of the row, however
 #: long the raw value is -- the name keeps priority, the value elides.
 _VALUE_MAX_SHARE = 0.45
 #: Gap between the (wrapped) name fragment and the value preview.
 _VALUE_GAP = 12
+
+#: The app's one painted severity mark (unified symbol system, Concept A):
+#: an 8px filled dot centred in a 13px box. ``MARK_BOX`` is the box a caller
+#: sizes its own paint rect to; ``MARK_DOT`` is the fixed dot diameter
+#: :func:`paint_severity_dot` centres inside whatever box it is given.
+MARK_BOX = 13
+MARK_DOT = 8
+
+
+def paint_severity_dot(painter: QPainter, box: QRect, color: str) -> None:
+    """Paint one filled *color* dot, :data:`MARK_DOT` wide, centred in
+    *box* -- the single painted-mark helper every red/amber circle in the
+    app shares: this delegate's own left-gutter issue icon
+    (:meth:`ParameterRowDelegate._paint_severity_icon`) and the navigation
+    tree's after-label error dot (:mod:`ui_qt.tree_panel`)."""
+    offset = (box.width() - MARK_DOT) / 2
+    dot = QRectF(box).adjusted(offset, offset, -offset, -offset)
+    painter.save()
+    painter.setRenderHint(QPainter.Antialiasing)
+    painter.setPen(Qt.NoPen)
+    painter.setBrush(QColor(color))
+    painter.drawEllipse(dot)
+    painter.restore()
 
 
 def value_preview(value: object, kind: ParameterKind) -> tuple[str, bool]:
@@ -177,23 +190,25 @@ def compose_issue_row_html(location: str, message: str) -> str:
     if not location:
         return detail
     name, unit = split_name_and_unit(location)
-    head = _span(name, color=DEFAULT_TEXT, bold=True)
+    head = _span(name, color=style.DEFAULT_TEXT, bold=True)
     if unit:
         head += _span(f" [{unit}]", color=style.MUTED)
     return head + "<br>" + detail
 
 
-def build_parameter_row_html(label: str, *, has_errors: bool, is_empty: bool = False) -> str:
+def build_parameter_row_html(label: str, *, severity: str | None = None, is_empty: bool = False) -> str:
     """Compose a parameter-list row's rich-text fragment: bold name, a muted
-    non-bold unit, and -- for a parameter with a *page-visible* issue -- an
-    ``style.ERROR``-coloured "⚠" marker.
+    non-bold unit, and -- for a parameter with a *page-visible* issue -- a
+    trailing dot mark (:data:`icons.DOT`) after the label text, coloured by
+    *severity*.
 
-    ``has_errors`` means *page-visible* (decision P), not validator-verbatim:
-    the caller passes whether this parameter has an issue that survived
-    absorption (``core.completion.partition_issues``'s ``visible``), not
+    ``severity`` is ``"error"``/``"warning"``/``None`` and means *page-
+    visible* (decision P), not validator-verbatim: the caller passes the
+    worst severity among this parameter's issues that survived absorption
+    (``core.completion.partition_issues``'s ``visible``), not
     ``parameter.has_errors``. The card's own inline badge and the Issues tab
-    still mirror the validator verbatim (decision D) -- only this row marker's
-    meaning changed.
+    still mirror the validator verbatim (decision D) -- only this row
+    marker's meaning changed.
 
     ``is_empty`` (a committed ``null`` value) renders the name/unit muted
     instead of the normal text colour -- emptiness visible at a glance,
@@ -206,12 +221,13 @@ def build_parameter_row_html(label: str, *, has_errors: bool, is_empty: bool = F
     present, so colouring it by requiredness would tint most of a document
     amber for no actionable reason."""
     name, unit = split_name_and_unit(label)
-    name_color = style.MUTED if is_empty else DEFAULT_TEXT
+    name_color = style.MUTED if is_empty else style.DEFAULT_TEXT
     fragment = _span(name, color=name_color, bold=True)
     if unit:
         fragment += _span(f" [{unit}]", color=style.MUTED)
-    if has_errors:
-        fragment += _span("  ⚠", color=style.ERROR)
+    if severity:
+        color = style.ERROR if severity == "error" else style.WARNING
+        fragment += "  " + icons.html_img(icons.DOT, color=color, size=MARK_BOX)
     return fragment
 
 
@@ -228,9 +244,9 @@ class ParameterRowDelegate(QStyledItemDelegate):
     ``sizeHint`` can reliably reason about before the row exists on screen.
     """
 
-    #: Diameter of the delegate-painted severity icon (:data:`SEVERITY_ROLE`),
-    #: plus the gap before the row's own text starts.
-    _ICON_SIZE = 14
+    #: Box the delegate-painted severity icon (:data:`SEVERITY_ROLE`) occupies
+    #: (:data:`MARK_BOX`), plus the gap before the row's own text starts.
+    _ICON_SIZE = MARK_BOX
     _ICON_GUTTER = _ICON_SIZE + 8
 
     def __init__(self, parent=None, *, h_pad: int = 8, v_pad: int = 6) -> None:
@@ -367,28 +383,23 @@ class ParameterRowDelegate(QStyledItemDelegate):
         painter.restore()
 
     def _paint_severity_icon(self, painter, option: QStyleOptionViewItem, index) -> None:
-        """Paint a flat filled-circle severity dot in the row's left gutter
-        (F5, polish round): red = error, amber = warning, no inner glyph --
-        a plain dot reads better at row size than the earlier icon-in-circle
-        (a bracketed ``[ERROR]``/``[WARN]`` text tag before that). Part of
-        the app's four-symbol vocabulary alongside a task row's own ``○``/
-        ``◐`` glyphs (:mod:`ui_qt.diagnostics_panel`); see
-        ``style.severity_tooltip``/``style.task_kind_tooltip`` for the
+        """Paint the shared severity dot (:func:`paint_severity_dot`) in the
+        row's left gutter (F5, polish round): red = error, amber = warning,
+        no inner glyph -- a plain dot reads better at row size than the
+        earlier icon-in-circle (a bracketed ``[ERROR]``/``[WARN]`` text tag
+        before that). Part of the app's unified dot vocabulary alongside a
+        task row's own ring/half-filled marks (:mod:`ui_qt.diagnostics_panel`);
+        see ``style.severity_tooltip``/``style.task_kind_tooltip`` for the
         matching, drift-safe tooltip text."""
         severity = index.data(SEVERITY_ROLE)
         is_error = severity == "error"
-        rect = QRect(
+        box = QRect(
             option.rect.left() + self._h_pad,
             option.rect.top() + self._v_pad,
             self._ICON_SIZE,
             self._ICON_SIZE,
         )
-        painter.save()
-        painter.setRenderHint(QPainter.Antialiasing)
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor(style.ERROR if is_error else style.WARNING))
-        painter.drawEllipse(rect)
-        painter.restore()
+        paint_severity_dot(painter, box, style.ERROR if is_error else style.WARNING)
 
     def _paint_value(self, painter, option, index, reserved: int) -> None:
         """Right-aligned, top-anchored value preview, elided with "…" to the
@@ -404,7 +415,7 @@ class ParameterRowDelegate(QStyledItemDelegate):
         )
         painter.save()
         painter.setFont(font)
-        painter.setPen(QColor(GHOST_TEXT if ghost else style.MUTED))
+        painter.setPen(QColor(style.GHOST_TEXT if ghost else style.MUTED))
         rect = option.rect.adjusted(0, self._v_pad, -self._h_pad, -self._v_pad)
         painter.drawText(rect, Qt.AlignRight | Qt.AlignTop, elided)
         painter.restore()

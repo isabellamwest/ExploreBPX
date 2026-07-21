@@ -16,11 +16,13 @@ from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QSize, Qt
 from PySide6.QtGui import QGuiApplication, QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 
+from ui_qt import style
+
 #: Unselected / selected stroke colours. The icon glyph never changes --
 #: only its colour -- so severity/emphasis is always carried by tone, never
 #: by shape (see the Diagnostics icon: no tick, no warning triangle).
-_MUTED = "#57606a"
-_STRONG = "#1f2328"
+_MUTED = style.MUTED
+_STRONG = style.DEFAULT_TEXT
 
 #: Folder outline -- Workspace. Ink centred on (12, 12) alongside the other
 #: two rail icons so the set reads as one optical family.
@@ -100,6 +102,41 @@ PENCIL = """
 """.strip()
 
 
+#: The app's one status-dot family (unified symbol system, Concept A):
+#: a filled circle (error/warning), a hollow ring (a task not yet started),
+#: and a half-filled circle (a task started but not yet given a value).
+#: Sized so every mark reads as the same "8px mark in a 13px box" as the
+#: delegate-painted severity dot (``ui_qt.parameter_row.paint_severity_dot``)
+#: -- at the family's usual render size of 13 (:func:`html_img`'s default),
+#: the circle occupies 15 of the 24 viewBox units, i.e. 15/24 * 13 ≈ 8px.
+#: Unlike the outline family above, colour here is a fill/stroke on a
+#: circle, not the ``{color}`` stroke of a line glyph -- these three are
+#: never combined with that family in one place.
+DOT = """
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <circle cx="12" cy="12" r="7.5" fill="{color}"/>
+</svg>
+""".strip()
+
+#: Hollow ring -- same 15/24 outer diameter as :data:`DOT`, so a task's
+#: "nothing committed yet" mark reads the same size as an issue's dot.
+RING = """
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+     stroke="{color}" stroke-width="3">
+  <circle cx="12" cy="12" r="6"/>
+</svg>
+""".strip()
+
+#: Half-filled circle -- the same ring as :data:`RING` with its left half
+#: additionally filled solid, for a task that is "committed, but null".
+HALF = """
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <circle cx="12" cy="12" r="6" fill="none" stroke="{color}" stroke-width="3"/>
+  <path d="M12 4.5a7.5 7.5 0 0 0 0 15z" fill="{color}"/>
+</svg>
+""".strip()
+
+
 def _device_pixel_ratio() -> float:
     """The primary screen's device-pixel-ratio, or 1.0 with no QApplication."""
     app = QGuiApplication.instance()
@@ -123,11 +160,6 @@ def _render_pixmap(svg: str, color: str, size: int) -> QPixmap:
     renderer.render(painter)
     painter.end()
     return pixmap
-
-
-def tinted_icon(svg: str, color: str, size: int = 20) -> QIcon:
-    """Render *svg* in a single flat *color* as a standalone QIcon."""
-    return QIcon(_render_pixmap(svg, color, size))
 
 
 _HTML_IMG_CACHE: dict[tuple[str, str, int], str] = {}

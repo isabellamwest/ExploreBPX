@@ -29,7 +29,7 @@ from .parameter_row import ParameterRowDelegate
 _PATH_ROLE = 256  # Qt.UserRole
 
 _MSG_NO_SELECTION = "Select a parameter to view its issues."
-_MSG_NO_ISSUES = "\u2713\u2002No validation issues for this parameter."
+_MSG_NO_ISSUES = style.all_clear("No validation issues for this parameter.")
 
 
 def issue_count(issues) -> int:

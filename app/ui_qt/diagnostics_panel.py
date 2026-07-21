@@ -96,12 +96,12 @@ from core.page_buckets import (
 )
 from core.validation import Severity, merge_union_pair
 
-from . import parameter_row, style
+from . import badges, icons, parameter_row, style
 from .parameter_row import ParameterRowDelegate
 
 _MSG_NO_DOCUMENT = "No document open"
-_MSG_NO_ISSUES = "✓ No issues"
-_MSG_NOTHING_OUTSTANDING = "✓ Nothing outstanding"
+_MSG_NO_ISSUES = style.all_clear("No issues")
+_MSG_NOTHING_OUTSTANDING = style.all_clear("Nothing outstanding")
 #: Decision C's pinned Partial-model notice. A bucket alone cannot tell
 #: "Partial, so nothing is ever tracked" apart from "concrete model, fully
 #: filled, nothing remaining" -- both look identical from bucket data (zero
@@ -121,7 +121,11 @@ _ACTION_CHOOSE = "Choose…"
 #: Task-row glyphs (F5): a hollow circle for "nothing committed yet"
 #: (MISSING_FIELD/MISSING_SECTION/DECLARE_MODEL), a half-filled circle for
 #: "committed, but null" (NULL_FIELD) -- the same missing/added-no-value
-#: distinction decision D draws in prose, made visible at a glance.
+#: distinction decision D draws in prose, made visible at a glance. Plain
+#: Unicode glyphs, used only for a task item's underlying (non-painted)
+#: ``QListWidgetItem`` text -- the delegate always paints the row's
+#: :data:`parameter_row.HTML_ROLE` fragment instead (see :func:`_task_glyph_svg`
+#: for that rich-text counterpart, the shared dot family from :mod:`ui_qt.icons`).
 _GLYPH_MISSING = "○"
 _GLYPH_NULL = "◐"
 
@@ -165,9 +169,9 @@ def _issue_badge_specs(bucket: SectionBucket) -> list[tuple[str, str, str]]:
     can never drift apart on what "an issue badge" means."""
     specs: list[tuple[str, str, str]] = []
     if bucket.error_count:
-        specs.append((str(bucket.error_count), style.ERROR_TINT, style.ERROR))
+        specs.append((str(bucket.error_count), *badges.badge_colors("error")))
     if bucket.warning_count:
-        specs.append((str(bucket.warning_count), style.WARNING_TINT, style.WARNING))
+        specs.append((str(bucket.warning_count), *badges.badge_colors("warning")))
     return specs
 
 
@@ -176,46 +180,30 @@ def _bucket_badge_specs(bucket: SectionBucket) -> list[tuple[str, str, str]]:
     bucket (all counts zero) yields no specs at all -- the quiet rail."""
     specs = list(_issue_badge_specs(bucket))
     if bucket.outstanding_count:
-        specs.append((str(bucket.outstanding_count), style.NEUTRAL_TINT, style.MUTED))
+        specs.append((str(bucket.outstanding_count), *badges.badge_colors(None)))
     return specs
 
 
-def _measure_badge_specs(painter: QPainter, specs: list[tuple[str, str, str]]) -> int:
+def _measure_badge_specs(specs: list[tuple[str, str, str]]) -> int:
     """Total width *specs* will occupy when painted (see :func:`_paint_badges`),
     used to reserve label space before drawing -- 0 for an empty list."""
     if not specs:
         return 0
-    font = QFont(painter.font())
-    font.setPixelSize(10)
-    font.setBold(True)
-    metrics = QFontMetrics(font)
     total = 0
     for text, _bg, _fg in specs:
-        total += max(15, metrics.horizontalAdvance(text) + 8) + 6
+        total += badges.badge_width(text) + 6
     return total
 
 
 def _paint_one_badge(painter: QPainter, right_x: int, y_mid: int, text: str, bg: str, fg: str) -> int:
     """Paint one small rounded count badge ending at *right_x*, vertically
     centred on *y_mid*; returns the left edge to place the next badge at."""
-    font = QFont(painter.font())
-    font.setPixelSize(10)
-    font.setBold(True)
-    metrics = QFontMetrics(font)
-    height = 15
-    width = max(height, metrics.horizontalAdvance(text) + 8)
+    height = badges.HEIGHT
+    width = badges.badge_width(text)
     rect = QRect(0, 0, width, height)
     rect.moveRight(right_x)
     rect.moveTop(int(y_mid - height / 2))
-    painter.save()
-    painter.setRenderHint(QPainter.Antialiasing)
-    painter.setPen(Qt.NoPen)
-    painter.setBrush(QColor(bg))
-    painter.drawRoundedRect(rect, height / 2, height / 2)
-    painter.setFont(font)
-    painter.setPen(QColor(fg))
-    painter.drawText(rect, Qt.AlignCenter, text)
-    painter.restore()
+    badges.paint_badge(painter, rect, text, bg, fg)
     return rect.left() - 6
 
 
@@ -392,6 +380,13 @@ def _task_glyph(task: CompletionTask) -> str:
     return _GLYPH_NULL if task.kind is TaskKind.NULL_FIELD else _GLYPH_MISSING
 
 
+def _task_glyph_svg(task: CompletionTask) -> str:
+    """The rich-text counterpart of :func:`_task_glyph`, painted by
+    :func:`_task_row_html`: the same NULL_FIELD/other split, a mark from the
+    shared dot family (:mod:`ui_qt.icons`) instead of a bare Unicode glyph."""
+    return icons.HALF if task.kind is TaskKind.NULL_FIELD else icons.RING
+
+
 def _task_label(task: CompletionTask) -> tuple[str, str | None, str]:
     """Return ``(name, note, action)`` for one task, per the pinned copy table."""
     if task.kind is TaskKind.MISSING_FIELD:
@@ -423,19 +418,17 @@ def _task_row_html(task: CompletionTask, absorbed_messages: tuple[str, ...]) -> 
     set by :func:`_add_task_row`) so it never competes with a long name for
     the same line.
 
-    Polish round: the ``○``/``◐`` glyph is its own span, styled to
-    harmonise with the issue rows' flat severity dots -- ``style.MUTED``
-    (the same grey #57606a family) at regular weight, not swept up in the
-    bold name span the way it used to be."""
-    glyph = _task_glyph(task)
+    Polish round: the ring/half-filled mark is painted in ``style.MUTED``
+    (the same grey #57606a family) to harmonise with the issue rows' flat
+    severity dots, not swept up in the bold name span the way it used to be."""
+    glyph_img = icons.html_img(_task_glyph_svg(task), color=style.MUTED, size=parameter_row.MARK_BOX)
     name, note, action = _task_label(task)
     label = f"{name} - {note}" if note else name
     hints: list[tuple[str, str]] = []
     if task.required:
         hints.append(("REQUIRED", style.REQUIRED))
-    glyph_span = f'<span style="color:{style.MUTED}; font-weight:400;">{glyph}</span>'
-    name_fragment = parameter_row.compose_row_html(label, hints, name_color=parameter_row.DEFAULT_TEXT)
-    fragment = f"{glyph_span}  {name_fragment}"
+    name_fragment = parameter_row.compose_row_html(label, hints, name_color=style.DEFAULT_TEXT)
+    fragment = f"{glyph_img}  {name_fragment}"
     if absorbed_messages:
         secondary = "<br>".join(
             f'<span style="color:{style.MUTED}; font-size:90%;">{_html.escape(message)}</span>'
@@ -556,7 +549,7 @@ class _DiagnosticsRowDelegate(ParameterRowDelegate):
         painter.restore()
 
         specs = _bucket_badge_specs(bucket)
-        badge_width = _measure_badge_specs(painter, specs)
+        badge_width = _measure_badge_specs(specs)
         chevron = "▸" if collapsed else "▾"
         text_rect = option.rect.adjusted(self._h_pad, 0, -(self._h_pad + badge_width), 0)
 
@@ -571,20 +564,6 @@ class _DiagnosticsRowDelegate(ParameterRowDelegate):
         if specs:
             badge_rect = option.rect.adjusted(0, 0, -self._h_pad, 0)
             _paint_badges(painter, badge_rect, specs)
-
-
-def _make_badge_label(text: str, bg: str, fg: str) -> QLabel:
-    """One group-box header's small rounded count badge -- native QLabel
-    with a per-instance stylesheet (colour depends on severity, chosen by
-    the caller), unlike everything else in this module, which draws from
-    the shared QSS. Callers only ever build one of these per nonzero count
-    (see :func:`_issue_badge_specs`) -- there is no "0" badge to hide."""
-    label = QLabel(text)
-    label.setStyleSheet(
-        f"background:{bg}; color:{fg}; border-radius:7px; padding:1px 7px; "
-        "font-size:11px; font-weight:600;"
-    )
-    return label
 
 
 class _ContentSizedList(QListWidget):
@@ -671,7 +650,7 @@ class _GroupBox(QFrame):
             if widget is not None:
                 widget.deleteLater()
         for text, bg, fg in specs:
-            self._badge_layout.addWidget(_make_badge_label(text, bg, fg))
+            self._badge_layout.addWidget(badges.make_badge_label(text, bg, fg))
 
 
 class _SectionDetailView(QWidget):
@@ -962,9 +941,9 @@ class _RailDelegate(ParameterRowDelegate):
         painter.restore()
 
         absent = bool(index.data(_RAIL_ABSENT_ROLE))
-        badges = index.data(_RAIL_BADGE_ROLE) or []
+        badge_specs = index.data(_RAIL_BADGE_ROLE) or []
         text = index.data(Qt.DisplayRole) or ""
-        badge_width = _measure_badge_specs(painter, badges)
+        badge_width = _measure_badge_specs(badge_specs)
         label_rect = option.rect.adjusted(self._ACCENT_BAR + 10, 0, -(10 + badge_width), 0)
 
         painter.save()
@@ -974,13 +953,13 @@ class _RailDelegate(ParameterRowDelegate):
         painter.setFont(font)
         metrics = QFontMetrics(font)
         elided = metrics.elidedText(text, Qt.ElideRight, max(label_rect.width(), 0))
-        painter.setPen(QColor(style.MUTED if absent else parameter_row.DEFAULT_TEXT))
+        painter.setPen(QColor(style.MUTED if absent else style.DEFAULT_TEXT))
         painter.drawText(label_rect, Qt.AlignVCenter | Qt.AlignLeft, elided)
         painter.restore()
 
-        if badges:
+        if badge_specs:
             badge_rect = option.rect.adjusted(0, 0, -10, 0)
-            _paint_badges(painter, badge_rect, badges)
+            _paint_badges(painter, badge_rect, badge_specs)
 
     def _paint_separator(self, painter, option) -> None:
         painter.save()
@@ -996,8 +975,8 @@ def _add_rail_entry_all(rail: QListWidget, buckets: PageBuckets) -> None:
     item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
     item.setData(_RAIL_KIND_ROLE, "all")
     item.setData(_RAIL_ABSENT_ROLE, False)
-    badges = [(str(total), style.NEUTRAL_TINT, parameter_row.DEFAULT_TEXT)] if total else []
-    item.setData(_RAIL_BADGE_ROLE, badges)
+    badge_specs = [(str(total), style.NEUTRAL_TINT, style.DEFAULT_TEXT)] if total else []
+    item.setData(_RAIL_BADGE_ROLE, badge_specs)
     item.setToolTip(style.counts_tooltip(buckets.error_count, buckets.warning_count, buckets.outstanding_count))
     rail.addItem(item)
 
@@ -1046,17 +1025,15 @@ class _RailList(QListWidget):
             self.selection_changed.emit(current.data(_RAIL_PATH_ROLE))
 
 
-def _chip_html(icon: str, color: str, text: str, *, on: bool) -> str:
-    """*on* controls the chip's own text colours (F8) -- when a chip is
-    toggled off, both its icon and its count text go ``style.MUTED``, on
-    top of the "off" QSS state (:data:`_FilterChip`) that greys its card
-    background: visibly muted/pressed-out, never merely relabelled."""
+def _chip_html(svg: str, color: str, text: str, *, on: bool) -> str:
+    """*on* controls the chip's own colours (F8) -- when a chip is toggled
+    off, both its dot and its count text go ``style.MUTED``, on top of the
+    "off" QSS state (:data:`_FilterChip`) that greys its card background:
+    visibly muted/pressed-out, never merely relabelled."""
     icon_color = color if on else style.MUTED
-    text_color = parameter_row.DEFAULT_TEXT if on else style.MUTED
-    return (
-        f'<span style="color:{icon_color}; font-weight:700;">{icon}</span>'
-        f'<span style="color:{text_color};">  {_html.escape(text)}</span>'
-    )
+    text_color = style.DEFAULT_TEXT if on else style.MUTED
+    icon = icons.html_img(svg, color=icon_color, size=parameter_row.MARK_BOX)
+    return f'{icon}<span style="color:{text_color};">  {_html.escape(text)}</span>'
 
 
 class _FilterChip(QLabel):
@@ -1189,15 +1166,20 @@ class _SummaryStrip(QWidget):
     def _refresh_chip_text(self) -> None:
         errors, warnings, outstanding = self._counts
         self._errors.setText(
-            _chip_html("●", style.ERROR, f"{errors} error{'s' if errors != 1 else ''}", on=self._errors.is_on())
+            _chip_html(
+                icons.DOT, style.ERROR, f"{errors} error{'s' if errors != 1 else ''}", on=self._errors.is_on()
+            )
         )
         self._warnings.setText(
             _chip_html(
-                "●", style.WARNING, f"{warnings} warning{'s' if warnings != 1 else ''}", on=self._warnings.is_on()
+                icons.DOT,
+                style.WARNING,
+                f"{warnings} warning{'s' if warnings != 1 else ''}",
+                on=self._warnings.is_on(),
             )
         )
         self._outstanding.setText(
-            _chip_html("○", style.MUTED, f"{outstanding} outstanding", on=self._outstanding.is_on())
+            _chip_html(icons.RING, style.MUTED, f"{outstanding} outstanding", on=self._outstanding.is_on())
         )
 
     def _on_chip_toggled(self, _on: bool) -> None:

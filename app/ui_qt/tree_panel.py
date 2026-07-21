@@ -31,14 +31,47 @@ names, and the window turns them into commands.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QModelIndex, QPoint, Qt, Signal
-from PySide6.QtWidgets import QMenu, QTreeView, QVBoxLayout, QWidget
+from PySide6.QtCore import QModelIndex, QPoint, QRect, Qt, Signal
+from PySide6.QtGui import QFontMetrics
+from PySide6.QtWidgets import QMenu, QStyledItemDelegate, QTreeView, QVBoxLayout, QWidget
 
 from core import structure
 from core.tree_model import TreeNode
 
+from . import style
 from .name_popup import NamePopup
+from .parameter_row import MARK_BOX, SEVERITY_ROLE, paint_severity_dot
 from .tree_model import BpxTreeModel
+
+
+class _TreeItemDelegate(QStyledItemDelegate):
+    """Paints a tree row's default content untouched, then -- for a node
+    flagged via :data:`ui_qt.parameter_row.SEVERITY_ROLE` (errors only,
+    ``core.tree_model.has_direct_errors``/``has_direct_parameter_errors``
+    semantics, unchanged) -- a small red dot after its label text.
+
+    Replaces the bare "⚠" the model used to append to the display string;
+    the mark itself is the app's one shared severity spec
+    (:func:`ui_qt.parameter_row.paint_severity_dot`), the same painted mark
+    the parameter list's issue rows use.
+    """
+
+    #: Gap between the end of the label text and the dot's box.
+    _GAP = 6
+
+    def paint(self, painter, option, index) -> None:
+        super().paint(painter, option, index)
+        if index.data(SEVERITY_ROLE) != "error":
+            return
+        text = index.data(Qt.DisplayRole) or ""
+        text_width = QFontMetrics(option.font).horizontalAdvance(text)
+        box = QRect(
+            option.rect.left() + text_width + self._GAP,
+            int(option.rect.center().y() - MARK_BOX / 2),
+            MARK_BOX,
+            MARK_BOX,
+        )
+        paint_severity_dot(painter, box, style.ERROR)
 
 
 class TreePanel(QWidget):
@@ -61,6 +94,7 @@ class TreePanel(QWidget):
         self._view = QTreeView()
         self._view.setObjectName("StructureTree")
         self._view.setHeaderHidden(True)
+        self._view.setItemDelegate(_TreeItemDelegate(self._view))
         self._view.clicked.connect(self._on_clicked)
         self._view.expanded.connect(self._refresh_warning_markers)
         self._view.collapsed.connect(self._refresh_warning_markers)

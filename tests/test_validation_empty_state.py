@@ -88,7 +88,7 @@ def test_zero_run_container_shows_the_guided_empty_state(
     assert d.validation_empty_state_shown() is True
     assert d.showing_placeholder() is False
     widget = d._validation_empty_state()
-    assert widget._add_button.text() == "＋ Add experiment"
+    assert widget._add_button.text() == "+ Add experiment"
     assert widget._import_button.text() == "Import CSV as new experiment…"
 
 

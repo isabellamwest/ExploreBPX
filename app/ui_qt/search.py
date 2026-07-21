@@ -50,7 +50,7 @@ def _entry_html(entry: "_Entry") -> str:
         icons.SECTION if entry.kind == "object" else icons.PARAMETER
     )
     name = (
-        f'<span style="font-weight:600; color:{parameter_row.DEFAULT_TEXT};">'
+        f'<span style="font-weight:600; color:{style.DEFAULT_TEXT};">'
         f"{_html.escape(entry.name)}</span>"
     )
     path = (

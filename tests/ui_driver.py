@@ -1038,14 +1038,22 @@ class AppDriver:
         raise AssertionError(f"No real parameter row starting with {label!r}.")
 
     def parameter_row_has_warning_marker(self, label: str) -> bool:
-        """True when the real parameter row starting with *label* shows the
-        ⚠ marker (decision P: page-visible issues only, not validator-
-        verbatim)."""
+        """True when the real parameter row starting with *label* shows its
+        severity dot (decision P: page-visible issues only, not validator-
+        verbatim). The row's own ``text()`` carries only the label now (the
+        marker is a painted ``<img>`` in :data:`~ui_qt.parameter_row.HTML_ROLE`,
+        unified symbol system Concept A), so this checks the HTML for either
+        severity colour's dot rather than a plain-text glyph."""
+        from ui_qt import icons, parameter_row, style
+
         lst = self._w._params._list
         for i in range(lst.count()):
             item = lst.item(i)
             if item.data(256) is not None and item.text().startswith(label):
-                return "⚠" in item.text()
+                html = item.data(parameter_row.HTML_ROLE) or ""
+                error_dot = icons.html_img(icons.DOT, color=style.ERROR, size=parameter_row.MARK_BOX)
+                warning_dot = icons.html_img(icons.DOT, color=style.WARNING, size=parameter_row.MARK_BOX)
+                return error_dot in html or warning_dot in html
         raise AssertionError(f"No real parameter row starting with {label!r}.")
 
     def add_parameter_button_enabled(self) -> bool:

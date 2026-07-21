@@ -9,13 +9,10 @@ addWidget call on the stack and one call to ``add_view`` here.
 from __future__ import annotations
 
 from PySide6.QtCore import QPoint, QRect, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QFontMetrics, QIcon, QPainter
+from PySide6.QtGui import QIcon, QPainter
 from PySide6.QtWidgets import QButtonGroup, QSizePolicy, QToolButton, QVBoxLayout, QWidget
 
-#: Badge fill colours by severity. Text is always white; anything not
-#: "error" or "warning" (i.e. ``None``) never reaches paintEvent because
-#: ``set_badge`` clears the badge for a non-positive count.
-_BADGE_COLORS = {"error": "#cf222e", "warning": "#bf8700"}
+from ui_qt import badges
 
 
 class ActivityButton(QToolButton):
@@ -65,12 +62,8 @@ class ActivityButton(QToolButton):
             return
 
         text = self.badge_text()
-        font = QFont(self.font())
-        font.setPixelSize(9)
-        font.setBold(True)
-        metrics = QFontMetrics(font)
-        height = 13
-        width = max(height, metrics.horizontalAdvance(text) + 6)
+        width = badges.badge_width(text)
+        height = badges.HEIGHT
 
         # Anchor to the icon's own rect, not the (much wider) button rect,
         # so the badge reads as attached to the glyph rather than floating
@@ -92,14 +85,9 @@ class ActivityButton(QToolButton):
         if badge_rect.top() < inset.top():
             badge_rect.moveTop(inset.top())
 
+        bg, fg = badges.badge_colors(self.badge_severity, solid=True)
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor(_BADGE_COLORS.get(self.badge_severity, "#57606a")))
-        painter.drawRoundedRect(badge_rect, height / 2, height / 2)
-        painter.setFont(font)
-        painter.setPen(QColor("#ffffff"))
-        painter.drawText(badge_rect, Qt.AlignCenter, text)
+        badges.paint_badge(painter, badge_rect, text, bg, fg)
         painter.end()
 
 
