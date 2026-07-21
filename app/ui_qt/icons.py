@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import base64
 
-from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QSize, Qt
+from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QRectF, QSize, Qt
 from PySide6.QtGui import QGuiApplication, QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 
@@ -144,11 +144,14 @@ def _device_pixel_ratio() -> float:
     return screen.devicePixelRatio() if screen is not None else 1.0
 
 
-def _render_pixmap(svg: str, color: str, size: int) -> QPixmap:
+def _render_pixmap(svg: str, color: str, size: int, *, lift: int = 0) -> QPixmap:
     """Render *svg* (with ``{color}`` substituted) into a transparent pixmap.
 
     Rendered at the primary screen's device-pixel-ratio and tagged with it
-    so the icon stays crisp on HiDPI displays.
+    so the icon stays crisp on HiDPI displays. *lift* shifts the ink up by
+    that many logical pixels within the (unchanged) canvas -- see
+    :data:`_INLINE_LIFT`; every glyph carries enough viewBox padding that a
+    small lift never clips.
     """
     dpr = _device_pixel_ratio()
     pixel_size = max(1, round(size * dpr))
@@ -157,12 +160,23 @@ def _render_pixmap(svg: str, color: str, size: int) -> QPixmap:
     pixmap.setDevicePixelRatio(dpr)
     renderer = QSvgRenderer(QByteArray(svg.format(color=color).encode("utf-8")))
     painter = QPainter(pixmap)
-    renderer.render(painter)
+    if lift:
+        renderer.render(painter, QRectF(0, -lift, size, size))
+    else:
+        renderer.render(painter)
     painter.end()
     return pixmap
 
 
 _HTML_IMG_CACHE: dict[tuple[str, str, int], str] = {}
+
+#: Ink lift (logical px) applied to every :func:`html_img` glyph. Qt's rich
+#: text centres an inline image's *box* on the x-height midline
+#: (``vertical-align: middle``), but these glyphs all sit beside
+#: Capitalised/digit-led label text whose optical midline is the *cap*
+#: midline -- about 2px higher at the app's 12-13px fonts -- so an unlifted
+#: mark reads as hanging low (most visibly the red severity dot).
+_INLINE_LIFT = 2
 
 
 def html_img(svg: str, *, color: str = _MUTED, size: int = 13) -> str:
@@ -179,7 +193,7 @@ def html_img(svg: str, *, color: str = _MUTED, size: int = 13) -> str:
     cached = _HTML_IMG_CACHE.get(key)
     if cached is not None:
         return cached
-    pixmap = _render_pixmap(svg, color, size)
+    pixmap = _render_pixmap(svg, color, size, lift=_INLINE_LIFT)
     buffer = QBuffer()
     buffer.open(QIODevice.WriteOnly)
     pixmap.save(buffer, "PNG")

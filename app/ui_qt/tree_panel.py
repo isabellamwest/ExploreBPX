@@ -33,7 +33,16 @@ from __future__ import annotations
 
 from PySide6.QtCore import QModelIndex, QPoint, QRect, Qt, Signal
 from PySide6.QtGui import QFontMetrics
-from PySide6.QtWidgets import QMenu, QStyledItemDelegate, QTreeView, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QApplication,
+    QMenu,
+    QStyle,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
+    QTreeView,
+    QVBoxLayout,
+    QWidget,
+)
 
 from core import structure
 from core.tree_model import TreeNode
@@ -63,11 +72,22 @@ class _TreeItemDelegate(QStyledItemDelegate):
         super().paint(painter, option, index)
         if index.data(SEVERITY_ROLE) != "error":
             return
-        text = index.data(Qt.DisplayRole) or ""
-        text_width = QFontMetrics(option.font).horizontalAdvance(text)
+        # Position off the style's own text sub-rect, not option.rect: the
+        # stylesheet's ::item padding shifts where the label actually starts,
+        # and ignoring it left the dot touching the last glyph. Vertically
+        # the dot centres on the label's cap midline (baseline minus half the
+        # cap height) -- the row rect's geometric centre sits below the text's
+        # optical centre, which read as the dot riding high.
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        widget = opt.widget
+        widget_style = widget.style() if widget is not None else QApplication.style()
+        text_rect = widget_style.subElementRect(QStyle.SE_ItemViewItemText, opt, widget)
+        metrics = QFontMetrics(opt.font)
+        baseline = text_rect.y() + (text_rect.height() + metrics.ascent() - metrics.descent()) // 2
         box = QRect(
-            option.rect.left() + text_width + self._GAP,
-            int(option.rect.center().y() - MARK_BOX / 2),
+            text_rect.x() + metrics.horizontalAdvance(opt.text) + self._GAP,
+            round(baseline - metrics.capHeight() / 2 - MARK_BOX / 2),
             MARK_BOX,
             MARK_BOX,
         )
