@@ -7,7 +7,11 @@ Top to bottom, a ``ParameterCard`` holds:
      the quick glance; the long-form prose lives in the Inspector's
      Documentation tab),
   2. the per-kind value editor, produced by :func:`create_card`,
-  3. the parameter's summary description, when present.
+  3. the parameter's summary description, when present,
+  4. a docked reference's value for this parameter (multi-file track M2/M3,
+     :meth:`set_reference`), when one exists -- a purple-framed, read-only
+     :class:`~.reference_block.ReferenceValueBlock`, subordinate to
+     everything above it and absent entirely with no reference docked.
 
 ``ParameterCard`` is a pure composition container. It forwards the inner
 editor's ``draft_changed`` / ``draft_reset`` / ``commit_requested`` signals
@@ -44,15 +48,18 @@ from PySide6.QtWidgets import (
 
 from core import structure
 from core.bpx_gateway import FieldMeta
+from core.compare import RowState
 from core.parameter_metadata import resolve_parameter_metadata
-from core.parameter_types import split_name_and_unit
+from core.parameter_types import ParameterKind, split_name_and_unit
 from core.tree_model import ParameterItem
 
 from .. import style
 from ..icons import PENCIL, hover_icon
 from ..latex import symbol_label
 from ..parameter_info_popover import ParameterInfoPopover
+from ..parameter_row import value_preview
 from ..style import ERROR, MUTED
+from .reference_block import ReferenceValueBlock
 from .registry import create_card
 
 
@@ -138,11 +145,6 @@ class ParameterCard(QWidget):
         self._editor.expand_toggled.connect(self.expand_toggled)
         self._editor.expand_toggled.connect(self._on_expand_toggled)
         self._editor.bulk_commit_requested.connect(self.bulk_commit_requested)
-        # Value row: the editor plus a trailing slot. The trailing slot is
-        # reserved -- not built -- for a future Reference document's value
-        # and delta once multi-document lands (docs/05-future.md); no
-        # widget or API for it exists yet, so today's layout is visually
-        # identical to the editor sitting alone.
         value_row = QHBoxLayout()
         value_row.addWidget(self._editor, 1)
         layout.addLayout(value_row)
@@ -161,10 +163,47 @@ class ParameterCard(QWidget):
             layout.addWidget(desc)
             self._description_widgets = [desc]
 
+        # Reference block (multi-file track M2/M3): built lazily, only once
+        # ``set_reference`` is first called with real content -- with no
+        # reference docked this never runs, so the card stays exactly
+        # today's, no extra widget instantiated at all.
+        self._reference_block: ReferenceValueBlock | None = None
+
+    def set_reference(
+        self,
+        ref_value: object,
+        ref_state: RowState | None,
+        filename: str | None,
+        kind: ParameterKind | None,
+    ) -> None:
+        """Show/refresh/hide the reference block (multi-file track M2/M3).
+
+        *ref_state* is ``None`` when there is nothing to show (no reference
+        docked, comparison hidden, or the reference lacks this key --
+        MAIN_ONLY) -- the block hides in every such case. Populate-only:
+        this never touches ``self._editor`` or any of its draft/commit
+        signals (known Qt pitfall), so calling it can never trip
+        ``_touched``, whatever order it is called relative to construction.
+        """
+        if ref_state is None or ref_state is RowState.MAIN_ONLY:
+            if self._reference_block is not None:
+                self._reference_block.hide()
+            return
+        if self._reference_block is None:
+            self._reference_block = ReferenceValueBlock()
+            self.layout().addWidget(self._reference_block)
+        text, _ghost = value_preview(ref_value, kind)
+        same = ref_state is RowState.EQUAL
+        self._reference_block.set_content(filename, text, same)
+        self._reference_block.show()
+
     def _on_expand_toggled(self, expanded: bool) -> None:
-        """Hide the description while the grid is expanded, restore on collapse."""
+        """Hide the description (and reference block) while the grid is
+        expanded, restore on collapse."""
         for widget in self._description_widgets:
             widget.setVisible(not expanded)
+        if self._reference_block is not None:
+            self._reference_block.setVisible(not expanded)
 
     def value(self) -> object:
         """Return the inner editor's current draft value in raw-dict form."""

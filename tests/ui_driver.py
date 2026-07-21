@@ -561,6 +561,157 @@ class AppDriver:
         toast = self._w._toast
         return toast.text() if not toast.isHidden() else None
 
+    # ------------------------------------------------------------------
+    # Comparison (multi-file track M2): strip, row decoration, ghost rows,
+    # tree marks, reference block, ghost card.
+    # ------------------------------------------------------------------
+
+    def comparison_strip_visible(self) -> bool:
+        return not self._w._params._strip.isHidden()
+
+    def comparison_strip_identity_text(self) -> str:
+        return self._w._params._strip._identity.text()
+
+    def comparison_strip_counts_text(self) -> str:
+        return self._w._params._strip._counts.text()
+
+    def comparison_strip_toggle_text(self) -> str:
+        return self._w._params._strip._toggle.text()
+
+    def comparison_strip_counts_visible(self) -> bool:
+        return not self._w._params._strip._counts.isHidden()
+
+    def click_comparison_strip_toggle(self) -> "AppDriver":
+        self._qtbot.mouseClick(self._w._params._strip._toggle, Qt.LeftButton)
+        return self
+
+    def parameter_row_tint(self, label: str) -> str | None:
+        """The real parameter row starting with *label*'s own
+        :data:`~ui_qt.parameter_row.TINT_ROLE` hex colour, or ``None`` if it
+        carries none. This is the data the delegate actually paints from
+        (see ``ParameterRowDelegate._paint_tint``) -- ``QListWidgetItem``'s
+        own ``background()``/``setBackground`` is a dead read once a
+        stylesheet styles ``::item`` (a real Qt/QSS gotcha; see
+        ``test_parameter_row.py``'s pixel-level regression pin)."""
+        from ui_qt import parameter_row
+
+        lst = self._w._params._list
+        for i in range(lst.count()):
+            item = lst.item(i)
+            if item.data(256) is not None and item.text().startswith(label):
+                return item.data(parameter_row.TINT_ROLE)
+        raise AssertionError(f"No real parameter row starting with {label!r}.")
+
+    def ghost_row_keys(self) -> list[str]:
+        """Every REF_ONLY ghost row's key, in list order."""
+        panel = self._w._params
+        lst = panel._list
+        return [
+            lst.item(i).data(panel._GHOST_KEY_ROLE)
+            for i in range(lst.count())
+            if lst.item(i).data(panel._GROUP_ROW_KIND_ROLE) == "ghost"
+        ]
+
+    def ghost_row_tint(self, key: str) -> str | None:
+        from ui_qt import parameter_row
+
+        panel = self._w._params
+        lst = panel._list
+        for i in range(lst.count()):
+            item = lst.item(i)
+            if item.data(panel._GROUP_ROW_KIND_ROLE) == "ghost" and item.data(panel._GHOST_KEY_ROLE) == key:
+                return item.data(parameter_row.TINT_ROLE)
+        raise AssertionError(f"No ghost row for {key!r}.")
+
+    def parameter_list_row_painted_colour(self, item_index: int, dx: int = 6, dy: int = 6) -> str:
+        """The actual rendered pixel colour near the top-left of the row at
+        *item_index* in the parameter list, real widths/window shown first.
+
+        Proves the delegate genuinely painted a colour, not merely that an
+        item carries data a headless read could misreport (see
+        ``parameter_row_tint``/``ghost_row_tint`` and
+        ``test_parameter_row.py``'s pixel-level regression pin)."""
+        lst = self._w._params._list
+        self._w.show()
+        self._qtbot.waitExposed(lst)
+        rect = lst.visualItemRect(lst.item(item_index))
+        image = lst.viewport().grab().toImage()
+        return image.pixelColor(rect.left() + dx, rect.top() + dy).name()
+
+    def select_ghost_row(self, key: str) -> "AppDriver":
+        """Click the ghost row for *key* -- the same ``itemClicked`` path a
+        real click uses, made current first (as a real click also does)."""
+        panel = self._w._params
+        lst = panel._list
+        for i in range(lst.count()):
+            item = lst.item(i)
+            if item.data(panel._GROUP_ROW_KIND_ROLE) == "ghost" and item.data(panel._GHOST_KEY_ROLE) == key:
+                lst.setCurrentItem(item)
+                lst.itemClicked.emit(item)
+                return self
+        raise AssertionError(f"No ghost row for {key!r}.")
+
+    def right_click_ghost_row(self, key: str) -> "AppDriver":
+        """Right-click the ghost row for *key*: proves it opens no menu
+        (read-only everywhere)."""
+        panel = self._w._params
+        lst = panel._list
+        for i in range(lst.count()):
+            item = lst.item(i)
+            if item.data(panel._GROUP_ROW_KIND_ROLE) == "ghost" and item.data(panel._GHOST_KEY_ROLE) == key:
+                lst.setCurrentItem(item)
+                pos = lst.visualItemRect(item).center()
+                panel._on_context_menu_requested(pos)
+                return self
+        raise AssertionError(f"No ghost row for {key!r}.")
+
+    def tree_node_display_text(self, path: tuple[str, ...]) -> str:
+        """The tree's own painted DisplayRole text for the node at *path*
+        (e.g. carries the "≠ N" mark, multi-file track M2)."""
+        view = self._w._tree._view
+        model = view.model()
+        index = model.index_for_path(tuple(path))
+        assert index.isValid(), f"No tree node at {path!r}"
+        return model.data(index, Qt.DisplayRole)
+
+    def reference_block_visible(self) -> bool:
+        card = self._w._inspector._card
+        block = getattr(card, "_reference_block", None) if card is not None else None
+        return block is not None and not block.isHidden()
+
+    def reference_block_heading_text(self) -> str:
+        return self._w._inspector._card._reference_block._heading.text()
+
+    def reference_block_value_text(self) -> str:
+        return self._w._inspector._card._reference_block._value.text()
+
+    def reference_block_is_same(self) -> bool:
+        return bool(self._w._inspector._card._reference_block._value.property("same"))
+
+    def ghost_card_shown(self) -> bool:
+        from ui_qt.cards.ghost_card import GhostParameterCard
+
+        return isinstance(self._w._inspector._card, GhostParameterCard)
+
+    def ghost_card_heading_text(self) -> str:
+        return self._w._inspector._card._heading.text()
+
+    def ghost_card_title_text(self) -> str:
+        return self._w._inspector._card._title.text()
+
+    def ghost_card_value_text(self) -> str:
+        return self._w._inspector._card._value.text()
+
+    def ghost_card_has_input_widget(self) -> bool:
+        from PySide6.QtWidgets import QAbstractSpinBox, QComboBox
+
+        card = self._w._inspector._card
+        return bool(
+            card.findChildren(QLineEdit)
+            or card.findChildren(QComboBox)
+            or card.findChildren(QAbstractSpinBox)
+        )
+
     def drop_file_on_workspace(self, path: Path | str) -> "AppDriver":
         """Simulate the user dropping *path* onto the Workspace page.
 

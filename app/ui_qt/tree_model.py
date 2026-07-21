@@ -13,6 +13,7 @@ from collections.abc import Callable
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt
 
 from core import structure
+from core.compare import ComparisonResult
 from core.tree_model import TreeNode
 
 from .parameter_row import SEVERITY_ROLE
@@ -37,10 +38,19 @@ class BpxTreeModel(QAbstractItemModel):
         self,
         root: TreeNode,
         is_expanded: Callable[[QModelIndex], bool] | None = None,
+        comparison: ComparisonResult | None = None,
     ) -> None:
         super().__init__()
         self._root = root
         self._is_expanded = is_expanded or (lambda _index: False)
+        #: Reference comparison (multi-file track M2), or ``None`` with no
+        #: reference docked (or its decoration hidden). See ``set_comparison``.
+        self._comparison = comparison
+
+    def set_comparison(self, comparison: ComparisonResult | None) -> None:
+        """Update the comparison result and repaint every node's label."""
+        self._comparison = comparison
+        self._emit_data_changed(QModelIndex())
 
     def node_at(self, index: QModelIndex) -> TreeNode | None:
         if not index.isValid():
@@ -100,6 +110,9 @@ class BpxTreeModel(QAbstractItemModel):
             label = node.label
             if _is_user_defined_content(node):
                 label = f"{label} · custom"
+            differ_count = self._differ_count(node)
+            if differ_count:
+                label = f"{label} ≠ {differ_count}"
             return label
         if role == SEVERITY_ROLE:
             return "error" if self._shows_error_marker(index, node) else None
@@ -125,6 +138,16 @@ class BpxTreeModel(QAbstractItemModel):
         if not self._is_expanded(index):
             return any(child.has_errors for child in node.children)
         return False
+
+    def _differ_count(self, node: TreeNode) -> int:
+        """This section's own DIFFERS+FILLABLE row count (multi-file track
+        M2), or 0 with no comparison docked/visible. Text-appended to the
+        label the same way the "· custom" tag is (decision 12) -- no ghost
+        counts here, and no new widget/delegate."""
+        if self._comparison is None:
+            return 0
+        section = self._comparison.section(node.path)
+        return section.differ_count if section is not None else 0
 
     def _emit_data_changed(self, parent: QModelIndex) -> None:
         for row in range(self.rowCount(parent)):

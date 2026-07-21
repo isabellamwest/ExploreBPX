@@ -38,6 +38,7 @@ from core.commands import (
     RemoveSection,
     RenameKey,
 )
+from core.compare import ComparisonResult, compare
 from core.completion import TaskKind
 from core.tree_model import build_parameter_path_map
 from core.validation import Severity
@@ -119,6 +120,13 @@ class MainWindow(QMainWindow):
         # Cached by _refresh_all, read by _update_workspace_info -- see there.
         self._workspace_error_count = 0
         self._workspace_warning_count = 0
+        #: Reference comparison state (multi-file track M2): the whole-
+        #: document diff (``None`` with no reference docked or no document
+        #: open) and the strip's own collapse toggle -- UI-session state,
+        #: not persisted, reset whenever a reference docks or undocks (see
+        #: ``_open_reference_path``/``_on_remove_reference_requested``).
+        self._comparison: ComparisonResult | None = None
+        self._comparison_hidden = False
 
         self._tree = TreePanel()
         self._params = ParameterListPanel()
@@ -299,6 +307,10 @@ class MainWindow(QMainWindow):
         self._params.rename_parameter_requested.connect(self._on_rename_parameter_requested)
         self._params.duplicate_parameter_requested.connect(self._on_duplicate_parameter_requested)
         self._params.move_parameter_requested.connect(self._on_move_parameter_requested)
+        self._params.ghost_selected.connect(self._on_ghost_selected)
+        self._params.comparison_hide_toggle_requested.connect(
+            self._on_comparison_hide_toggle_requested
+        )
         self._diagnostics.issue_activated.connect(self._navigation.navigate)
         self._diagnostics.task_activated.connect(self._on_task_activated)
         self._inspector.issue_activated.connect(self._navigation.navigate)
@@ -803,7 +815,10 @@ class MainWindow(QMainWindow):
         """Dock *path* as the reference, showing a toast for the outcome.
 
         Load failure surfaces through the same error-dialog pattern as the
-        main Open flow.
+        main Open flow. A genuine dock/replace (``ADDED``) resets the
+        comparison strip's hide toggle and recomputes the comparison
+        (multi-file track M2) -- a no-op outcome (already docked/is-main)
+        changes nothing to recompute.
         """
         try:
             outcome = self._state.open_reference(path)
@@ -816,11 +831,56 @@ class MainWindow(QMainWindow):
             OpenReferenceOutcome.IS_MAIN: "Already open as the main file",
         }[outcome]
         self._toast.show_message(message)
+        if outcome is OpenReferenceOutcome.ADDED:
+            self._comparison_hidden = False
+            self._recompute_comparison()
         self._update_workspace_info()
 
     def _on_remove_reference_requested(self) -> None:
         self._state.remove_reference()
+        self._comparison_hidden = False
+        self._recompute_comparison()
         self._update_workspace_info()
+
+    # --- comparison (multi-file track M2) --------------------------------
+
+    def _recompute_comparison(self) -> None:
+        """Recompute the reference comparison from the current document +
+        docked reference and push it to every view.
+
+        Called once per document change (via ``_refresh_all``) and once
+        whenever the reference docks/undocks/replaces -- never
+        incrementally (``core.compare.compare`` re-walks both raw dicts).
+        """
+        document = self._state.active.document if self._state.active else None
+        reference = self._state.reference
+        self._comparison = (
+            compare(document.raw, reference.raw)
+            if document is not None and reference is not None
+            else None
+        )
+        self._apply_comparison()
+
+    def _apply_comparison(self) -> None:
+        """Push the current comparison to the tree/list/inspector, honouring
+        the strip's hide toggle -- decoration sees ``None`` while hidden,
+        but the strip itself still needs the docked reference's identity to
+        offer its collapsed "show comparison" affordance."""
+        reference = self._state.reference
+        decoration = None if self._comparison_hidden else self._comparison
+        self._tree.set_comparison(decoration)
+        self._params.set_comparison(decoration, reference, self._comparison_hidden)
+        self._inspector.set_comparison(decoration, reference)
+
+    def _on_comparison_hide_toggle_requested(self) -> None:
+        self._comparison_hidden = not self._comparison_hidden
+        self._apply_comparison()
+
+    def _on_ghost_selected(self, section_path: tuple, key: str) -> None:
+        """A REF_ONLY ghost row was selected in the parameter list: show its
+        read-only ghost card, bypassing ``NavigationService`` entirely (a
+        ghost row names no real document parameter for it to resolve)."""
+        self._inspector.show_ghost_parameter(tuple(section_path), key)
 
     def _on_file_dropped(self, path: str) -> None:
         """Open a file dropped onto the Workspace page.
@@ -1042,6 +1102,10 @@ class MainWindow(QMainWindow):
         self._update_identity_label()
         self._update_workspace_info()
         self._update_actions_enabled()
+        # Multi-file track M2: recompute once per document change (the
+        # reference's own dock/undock/replace recomputes separately -- see
+        # _open_reference_path/_on_remove_reference_requested).
+        self._recompute_comparison()
 
     @staticmethod
     def _visible_issue_severities(document, partition) -> dict[tuple[str, ...], str]:

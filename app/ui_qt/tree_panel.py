@@ -45,6 +45,7 @@ from PySide6.QtWidgets import (
 )
 
 from core import structure
+from core.compare import ComparisonResult
 from core.tree_model import TreeNode
 
 from . import style
@@ -123,6 +124,11 @@ class TreePanel(QWidget):
         layout.addWidget(self._view)
 
         self._root: TreeNode | None = None
+        #: Reference comparison (multi-file track M2), remembered across a
+        #: ``set_root`` rebuild so a freshly-opened document immediately
+        #: shows the still-docked reference's "≠ N" marks. See
+        #: ``set_comparison``.
+        self._comparison: ComparisonResult | None = None
         self._popup = NamePopup(self)
         self._popup.name_chosen.connect(self._on_name_chosen)
         #: What the open popup will do with its name: ("add", container_path)
@@ -132,10 +138,19 @@ class TreePanel(QWidget):
 
     def set_root(self, root: TreeNode) -> None:
         self._root = root
-        model = BpxTreeModel(root, is_expanded=self._view.isExpanded)
+        model = BpxTreeModel(root, is_expanded=self._view.isExpanded, comparison=self._comparison)
         self._view.setModel(model)
         self._view.expandToDepth(1)
         model.refresh_warning_markers()
+
+    def set_comparison(self, comparison: ComparisonResult | None) -> None:
+        """Set the reference comparison (multi-file track M2) and repaint
+        every section's "≠ N" mark -- called by ``MainWindow`` on every
+        document change and every reference dock/undock/hide toggle."""
+        self._comparison = comparison
+        model = self._view.model()
+        if isinstance(model, BpxTreeModel):
+            model.set_comparison(comparison)
 
     def reveal(self, path: tuple[str, ...]) -> None:
         """Expand ancestors of, select, and scroll to the node at *path*.

@@ -13,6 +13,7 @@ from ui_qt import icons, style
 from ui_qt.parameter_row import (
     HTML_ROLE,
     MARK_BOX,
+    TINT_ROLE,
     ParameterRowDelegate,
     build_parameter_row_html,
     compose_row_html,
@@ -121,3 +122,30 @@ def test_row_without_html_role_falls_back_to_plain_rendering(rich_list):
     plain = QListWidgetItem("A header row")
     rich_list.addItem(plain)
     assert rich_list.sizeHintForRow(0) > 0
+
+
+def test_tint_role_actually_paints_the_row_background(rich_list, qtbot):
+    """Regression pin (multi-file track M2): ``TINT_ROLE`` must produce a
+    real painted pixel, not just item data a headless test can read back.
+
+    A styled ``QListWidget::item`` (this app's global stylesheet declares
+    one) silently ignores ``QListWidgetItem.setBackground``'s
+    ``Qt.BackgroundRole`` -- a genuine Qt/QSS gotcha caught only by grabbing
+    the actual rendered pixmap (an offscreen-suite-misses-native-window-bugs
+    case, the project guide); reading the item's own background data back would
+    have looked correct while painting nothing at all.
+    """
+    item = QListWidgetItem("Tinted row")
+    item.setData(HTML_ROLE, build_parameter_row_html("Tinted row", severity=None))
+    item.setData(TINT_ROLE, style.WARNING_TINT)
+    rich_list.addItem(item)
+    rich_list.show()
+    qtbot.waitExposed(rich_list)
+
+    image = rich_list.grab().toImage()
+    colours = {
+        image.pixelColor(x, y).name()
+        for x in range(0, rich_list.width(), 4)
+        for y in range(0, min(30, rich_list.height()), 3)
+    }
+    assert style.WARNING_TINT in colours

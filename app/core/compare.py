@@ -1,0 +1,260 @@
+"""Pure comparison engine between a main document's raw dict and a reference
+snapshot's raw dict (multi-file track, ``PLAN-multi-file.md`` M2).
+
+Frontend-agnostic and side-effect-free: :func:`compare` never mutates its
+inputs, imports nothing from ``state``/``ui_qt``, and knows no BPX spec logic
+beyond structural traversal -- it walks the raw dict exactly the way
+:mod:`core.tree_model` builds the explorer tree (:func:`tree_model.is_object_node`
+decides section vs. leaf), so its sections line up with the app's own tree
+sections without hardcoding a single section name.
+
+Matching is by full literal key at each nesting level (locked decision 1):
+``"Thickness [m]"`` and ``"Thickness [micron]"`` are two different keys, never
+unit-converted or fuzzy-matched. Difference is raw inequality of the committed
+value (locked decision 2), via :func:`raw_equal` -- structural equality on the
+parsed JSON, but type-aware at the leaves (:func:`core.values.values_equal`)
+so ``true`` (a ``bool``) never counts as equal to ``1`` (an ``int``), and
+``1`` (an ``int``) never counts as equal to ``1.0`` (a ``float``): both are
+real, type-changing edits in the app's own convention, not a no-op. No
+numeric tolerance, no normalisation.
+
+"Empty" reuses the app's existing notion from :mod:`core.completion` (its
+``NULL_FIELD`` rule): a committed literal ``None``. Nothing new is invented.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from enum import Enum
+
+from . import bpx_gateway
+from .tree_model import is_object_node
+from .values import values_equal
+
+
+class RowState(str, Enum):
+    """The comparison outcome of one key within a section."""
+
+    EQUAL = "equal"
+    DIFFERS = "differs"
+    FILLABLE = "fillable"
+    MAIN_ONLY = "main_only"
+    REF_ONLY = "ref_only"
+
+
+_DIFFER_STATES = (RowState.DIFFERS, RowState.FILLABLE)
+
+
+def raw_equal(main_value: object, ref_value: object) -> bool:
+    """Structural equality on two raw JSON values, type-aware at the leaves."""
+    if isinstance(main_value, dict) and isinstance(ref_value, dict):
+        if main_value.keys() != ref_value.keys():
+            return False
+        return all(raw_equal(main_value[key], ref_value[key]) for key in main_value)
+    if isinstance(main_value, list) and isinstance(ref_value, list):
+        return len(main_value) == len(ref_value) and all(
+            raw_equal(a, b) for a, b in zip(main_value, ref_value)
+        )
+    return values_equal(main_value, ref_value)
+
+
+def _is_empty(value: object) -> bool:
+    return value is None
+
+
+@dataclass(frozen=True)
+class RowDiff:
+    """One key's comparison outcome within a SectionDiff."""
+
+    state: RowState
+    #: The reference's raw value, when the key is present there
+    #: (EQUAL/DIFFERS/FILLABLE/REF_ONLY); ``None`` for MAIN_ONLY (the
+    #: reference has no such key at all -- a literal ``None`` there would be
+    #: indistinguishable from "the ref value is null", so callers must
+    #: branch on ``state``, never on this alone).
+    ref_value: object = None
+
+
+@dataclass(frozen=True)
+class SectionDiff:
+    """One section path's comparison outcome.
+
+    A "section" here is exactly a core.tree_model object node -- something
+    core.tree_model.is_object_node would render as a navigable tree section,
+    not a leaf parameter -- so a UI walking this result lines up with the
+    app's own explorer tree one-to-one.
+    """
+
+    #: Full path from the document root, e.g. ("Parameterisation", "Cell").
+    path: tuple[str, ...]
+    #: Whether this section exists (as an object node) in the main document.
+    in_main: bool
+    #: Whether this section exists (as an object node) in the reference.
+    in_reference: bool
+    #: Direct leaf keys owned by this section (child object nodes are their
+    #: own separate SectionDiff), union of both sides.
+    rows: dict[str, RowDiff] = field(default_factory=dict)
+
+    @property
+    def is_ghost(self) -> bool:
+        """Whole section absent from the main, present in the reference."""
+        return not self.in_main and self.in_reference
+
+    @property
+    def is_main_only(self) -> bool:
+        """Whole section present in the main, absent from the reference."""
+        return self.in_main and not self.in_reference
+
+    @property
+    def differ_count(self) -> int:
+        """Rows that differ, including fillable (locked decision 2/3)."""
+        return sum(1 for row in self.rows.values() if row.state in _DIFFER_STATES)
+
+    @property
+    def ref_only_count(self) -> int:
+        """Ghost rows directly in this section (every row, for a ghost
+        section whose main side is entirely absent)."""
+        return sum(1 for row in self.rows.values() if row.state is RowState.REF_ONLY)
+
+    @property
+    def main_only_count(self) -> int:
+        """Main-only rows directly in this section (every row, for a
+        main-only section whose reference side is entirely absent)."""
+        return sum(1 for row in self.rows.values() if row.state is RowState.MAIN_ONLY)
+
+    @property
+    def ghost_keys(self) -> tuple[str, ...]:
+        """Keys present only in the reference, in this section."""
+        return tuple(key for key, row in self.rows.items() if row.state is RowState.REF_ONLY)
+
+
+@dataclass(frozen=True)
+class ComparisonResult:
+    """The full comparison between a main raw dict and a reference raw dict.
+
+    Computed once by compare(); cheap to query section-by-section afterwards
+    (no incremental recompute -- a caller re-runs compare() after any edit
+    and reads whatever section/totals it currently needs).
+    """
+
+    sections: dict[tuple[str, ...], SectionDiff]
+
+    def section(self, path: tuple[str, ...]) -> SectionDiff | None:
+        """The comparison for the section at path, or None if path is an
+        object node in neither the main nor the reference."""
+        return self.sections.get(path)
+
+    def row(self, section_path: tuple[str, ...], key: str) -> RowDiff | None:
+        """The comparison for key directly inside the section at
+        section_path, or None if that section/key combination was never
+        seen on either side."""
+        section = self.sections.get(section_path)
+        return section.rows.get(key) if section is not None else None
+
+    @property
+    def ghost_sections(self) -> tuple[SectionDiff, ...]:
+        """Whole sections absent from the main, present in the reference."""
+        return tuple(section for section in self.sections.values() if section.is_ghost)
+
+    @property
+    def main_only_sections(self) -> tuple[SectionDiff, ...]:
+        """Whole sections present in the main, absent from the reference."""
+        return tuple(section for section in self.sections.values() if section.is_main_only)
+
+    @property
+    def differ_count(self) -> int:
+        """Whole-file count of DIFFERS + FILLABLE rows."""
+        return sum(section.differ_count for section in self.sections.values())
+
+    @property
+    def ref_only_count(self) -> int:
+        """Whole-file count of REF_ONLY rows, including every row inside a
+        ghost section."""
+        return sum(section.ref_only_count for section in self.sections.values())
+
+    @property
+    def main_only_count(self) -> int:
+        """Whole-file count of MAIN_ONLY rows, including every row inside a
+        main-only section."""
+        return sum(section.main_only_count for section in self.sections.values())
+
+
+def _collect_sections(raw: dict) -> dict[tuple[str, ...], dict[str, object]]:
+    """Every section path reachable in raw, mapped to the direct leaf
+    keys/values it owns.
+
+    Mirrors core.tree_model._build_node's own object-node/leaf split exactly
+    (core.tree_model.is_object_node, schema-metadata-first with a shape
+    fallback): a child that is itself an object node recurses into its own
+    entry instead of being listed as a leaf here, so a section's rows here
+    always match the app's own parameter-list rows for that section.
+    """
+    if not isinstance(raw, dict):
+        raw = {}
+    sections: dict[tuple[str, ...], dict[str, object]] = {}
+
+    def walk(path: tuple[str, ...], value: dict) -> None:
+        leaves: dict[str, object] = {}
+        for key, child_value in value.items():
+            child_path = path + (key,)
+            child_meta = bpx_gateway.field_meta(child_path)
+            if is_object_node(child_value, child_meta):
+                walk(child_path, child_value)
+            else:
+                leaves[key] = child_value
+        sections[path] = leaves
+
+    walk((), raw)
+    return sections
+
+
+def _diff_rows(main_leaves: dict[str, object], ref_leaves: dict[str, object]) -> dict[str, RowDiff]:
+    rows: dict[str, RowDiff] = {}
+    for key, main_value in main_leaves.items():
+        if key not in ref_leaves:
+            rows[key] = RowDiff(RowState.MAIN_ONLY)
+            continue
+        ref_value = ref_leaves[key]
+        if raw_equal(main_value, ref_value):
+            rows[key] = RowDiff(RowState.EQUAL, ref_value)
+        elif _is_empty(main_value) and not _is_empty(ref_value):
+            rows[key] = RowDiff(RowState.FILLABLE, ref_value)
+        else:
+            rows[key] = RowDiff(RowState.DIFFERS, ref_value)
+    for key, ref_value in ref_leaves.items():
+        if key not in main_leaves:
+            rows[key] = RowDiff(RowState.REF_ONLY, ref_value)
+    return rows
+
+
+def compare(main_raw: dict, ref_raw: dict) -> ComparisonResult:
+    """Compare a main document's raw dict against a reference snapshot's raw
+    dict. Pure: never mutates either input.
+
+    Traverses both independently into sections (_collect_sections), then
+    walks every section path either side has, in the main's own document
+    order followed by any reference-only section order -- dict iteration
+    order never affects the result itself (every state/count exposed here is
+    order-independent), only the presentation order a future caller might
+    read sections in.
+    """
+    main_sections = _collect_sections(main_raw)
+    ref_sections = _collect_sections(ref_raw)
+
+    order: list[tuple[str, ...]] = []
+    seen: set[tuple[str, ...]] = set()
+    for path in list(main_sections) + list(ref_sections):
+        if path not in seen:
+            seen.add(path)
+            order.append(path)
+
+    sections: dict[tuple[str, ...], SectionDiff] = {}
+    for path in order:
+        in_main = path in main_sections
+        in_reference = path in ref_sections
+        rows = _diff_rows(main_sections.get(path, {}), ref_sections.get(path, {}))
+        sections[path] = SectionDiff(
+            path=path, in_main=in_main, in_reference=in_reference, rows=rows
+        )
+
+    return ComparisonResult(sections=sections)

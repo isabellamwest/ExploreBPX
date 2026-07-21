@@ -157,16 +157,21 @@ def _build_node(
     for key, child_value in value.items():
         child_path = path + (key,)
         child_meta = bpx_gateway.field_meta(child_path)
-        if _is_object_node(child_value, child_meta):
+        if is_object_node(child_value, child_meta):
             node.children.append(_build_node(key, child_path, child_value))
         else:
             node.parameters.append(_build_parameter(key, child_path, child_value, child_meta))
     return node
 
 
-def _is_object_node(value: object, meta: bpx_gateway.FieldMeta | None) -> bool:
+def is_object_node(value: object, meta: bpx_gateway.FieldMeta | None) -> bool:
     """True if *value* should render as a navigable tree section rather than
     a leaf parameter.
+
+    Public (not module-private) so :mod:`core.compare` can mirror this exact
+    section/parameter split when walking a raw dict for comparison, rather
+    than duplicating the schema-vs-shape classification rule and risking the
+    two drifting apart.
 
     When metadata is known, the schema's declaration is authoritative: a
     field is an object node only if the schema declares it a container link

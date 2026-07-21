@@ -20,7 +20,7 @@ import html as _html
 import json
 
 from PySide6.QtCore import QRect, QRectF, QSize, Qt
-from PySide6.QtGui import QColor, QFont, QFontDatabase, QFontMetrics, QPainter, QTextDocument
+from PySide6.QtGui import QColor, QFont, QFontDatabase, QFontMetrics, QPainter, QPen, QTextDocument
 from PySide6.QtWidgets import (
     QApplication,
     QStyle,
@@ -66,6 +66,22 @@ SEVERITY_ROLE = Qt.UserRole + 103
 #: right-aligned-action row reuses the same reserved-width machinery
 #: :data:`VALUE_ROLE` already established for a row's right edge.
 ACTION_ROLE = Qt.UserRole + 104
+#: Item-data role marking a REF_ONLY ghost row (multi-file track M2): the
+#: delegate paints a dashed purple border (:data:`~ui_qt.style.REFERENCE`)
+#: around the row on top of its normal content. The "◇ REF ONLY" tag is not
+#: a delegate concern -- it is baked into the row's own :data:`HTML_ROLE`
+#: fragment (see :func:`build_ghost_row_html`).
+REF_ONLY_ROLE = Qt.UserRole + 105
+#: Item-data role carrying a row's background wash colour (a hex string,
+#: e.g. ``style.WARNING_TINT``/``style.REFERENCE_TINT``), painted directly
+#: by the delegate before the row's normal content -- **not**
+#: ``QListWidgetItem.setBackground``, whose ``Qt.BackgroundRole`` a
+#: stylesheet-styled ``::item`` silently ignores once any such rule exists
+#: for the view (a real Qt/QSS gotcha; a plain data read back from the item
+#: would look correct in an offscreen test while never actually painting).
+#: A selected row still shows its native selection colour: the delegate
+#: skips the tint fill for a row ``option.state`` reports as selected.
+TINT_ROLE = Qt.UserRole + 106
 
 _MIN_WIDTH = 40
 #: The value preview never claims more than this share of the row, however
@@ -231,6 +247,21 @@ def build_parameter_row_html(label: str, *, severity: str | None = None, is_empt
     return fragment
 
 
+def build_ghost_row_html(label: str) -> str:
+    """Compose a REF_ONLY ghost row's rich-text fragment (multi-file track
+    M2): bold name, muted unit -- the same plain-text styling as a real row
+    -- followed by the small "◇ REF ONLY" tag in the reference accent
+    (:data:`~ui_qt.style.REFERENCE`). The row's other two ghost signals (the
+    dashed border, the pale background wash) are not part of this fragment;
+    see :data:`REF_ONLY_ROLE`."""
+    name, unit = split_name_and_unit(label)
+    fragment = _span(name, color=style.DEFAULT_TEXT, bold=True)
+    if unit:
+        fragment += _span(f" [{unit}]", color=style.MUTED)
+    fragment += "  " + _span("◇ REF ONLY", color=style.REFERENCE)
+    return fragment
+
+
 class ParameterRowDelegate(QStyledItemDelegate):
     """Paints a row's :data:`HTML_ROLE` fragment via ``QTextDocument``,
     word-wrapped to the view's available width rather than elided.
@@ -354,6 +385,9 @@ class ParameterRowDelegate(QStyledItemDelegate):
         opt.text = ""
         widget = opt.widget
         style_obj = widget.style() if widget is not None else QApplication.style()
+        tint = index.data(TINT_ROLE)
+        if tint and not (option.state & QStyle.State_Selected):
+            self._paint_tint(painter, option, tint)
         style_obj.drawControl(QStyle.CE_ItemViewItem, opt, painter, widget)
 
         if icon_reserved:
@@ -370,6 +404,29 @@ class ParameterRowDelegate(QStyledItemDelegate):
             self._paint_action(painter, option, index, action_reserved)
         if value_reserved:
             self._paint_value(painter, option, index, value_reserved)
+        if index.data(REF_ONLY_ROLE):
+            self._paint_ref_only_border(painter, option)
+
+    def _paint_tint(self, painter, option, colour: str) -> None:
+        """Fill the row's background wash (:data:`TINT_ROLE`) before its
+        normal content paints -- see that role's docstring for why this
+        cannot be a plain ``QListWidgetItem.setBackground`` call."""
+        painter.save()
+        painter.fillRect(option.rect, QColor(colour))
+        painter.restore()
+
+    def _paint_ref_only_border(self, painter, option) -> None:
+        """Dashed purple outline around a REF_ONLY ghost row (multi-file
+        track M2) -- one of its four signals; see :data:`REF_ONLY_ROLE`."""
+        painter.save()
+        pen = QPen(QColor(style.REFERENCE))
+        pen.setStyle(Qt.DashLine)
+        pen.setWidth(1)
+        painter.setPen(pen)
+        painter.setBrush(Qt.NoBrush)
+        rect = QRectF(option.rect).adjusted(1, 1, -1.5, -1.5)
+        painter.drawRoundedRect(rect, 4, 4)
+        painter.restore()
 
     def _paint_action(self, painter, option, index, reserved: int) -> None:
         """Right-aligned, top-anchored call-to-action text in accent

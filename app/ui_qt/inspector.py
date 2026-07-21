@@ -43,13 +43,16 @@ from PySide6.QtWidgets import (
 from core import bpx_gateway
 from core.command_service import CommandError
 from core.commands import RenameKey
+from core.compare import ComparisonResult, RowState
 from core.parameter_metadata import resolve_parameter_metadata
-from core.parameter_types import ParameterKind
+from core.parameter_types import ParameterKind, classify
 from core.tree_model import ParameterItem
 from core.validation import Severity
 from state.app_state import AppState
+from state.reference_snapshot import ReferenceSnapshot
 
 from .cards.experiment import ExperimentCard, is_validation_run_path
+from .cards.ghost_card import GhostParameterCard
 from .cards.parameter_card import ParameterCard
 from .documentation_tab import DocumentationTab
 from .issues_tab import IssuesTab, issue_count
@@ -71,6 +74,11 @@ class InspectorPanel(QWidget):
         self._state = state
         self._card = None
         self._panel_height = _DEFAULT_PANEL_HEIGHT
+        #: Reference comparison state (multi-file track M2), set only by
+        #: ``set_comparison`` -- ``None`` whenever no reference is docked or
+        #: its decoration is hidden.
+        self._comparison: ComparisonResult | None = None
+        self._reference: ReferenceSnapshot | None = None
         self._debounce = QTimer(self, singleShot=True, interval=200)
         self._debounce.timeout.connect(self._validate_draft)
         self._build()
@@ -165,6 +173,73 @@ class InspectorPanel(QWidget):
         self.show_placeholder()
         self._secondary.reset()
         self._panel_height = _DEFAULT_PANEL_HEIGHT
+
+    def set_comparison(
+        self, comparison: ComparisonResult | None, reference: ReferenceSnapshot | None
+    ) -> None:
+        """Set the reference comparison state (multi-file track M2).
+
+        Called by ``MainWindow`` -- the single place computing this state --
+        on every document change and every reference dock/undock/hide
+        toggle. Refreshes the *currently shown* card in place, without
+        rebuilding it: a ``ParameterCard`` gets its reference block
+        refreshed (never touching its own draft/commit machinery); a
+        ``GhostParameterCard`` -- which exists only because a comparison was
+        showing -- falls back to the placeholder once *comparison* goes
+        ``None`` (hidden, undocked, or no document).
+        """
+        self._comparison = comparison
+        self._reference = reference
+        if isinstance(self._card, ParameterCard):
+            self._apply_reference_block(self._card.parameter)
+        elif isinstance(self._card, GhostParameterCard) and comparison is None:
+            self.show_placeholder()
+
+    def _apply_reference_block(self, parameter: ParameterItem) -> None:
+        """Populate/hide the current card's reference block from *parameter*.
+
+        No-op-safe to call whenever the current card is a ``ParameterCard``,
+        whichever comparison state is active; hides the block outright with
+        no comparison, no docked reference, or a MAIN_ONLY row (the
+        reference has no such key at all).
+        """
+        if self._card is None:
+            return
+        if self._comparison is None or self._reference is None:
+            self._card.set_reference(None, None, None, None)
+            return
+        section_path = tuple(parameter.path[:-1])
+        row = self._comparison.row(section_path, parameter.path[-1])
+        if row is None or row.state is RowState.MAIN_ONLY:
+            self._card.set_reference(None, None, None, None)
+            return
+        meta = bpx_gateway.field_meta(parameter.path)
+        kind = classify(row.ref_value, meta)
+        self._card.set_reference(row.ref_value, row.state, self._reference.filename, kind)
+
+    def show_ghost_parameter(self, section_path: tuple[str, ...], key: str) -> None:
+        """Show the read-only ghost card for a REF_ONLY row (multi-file
+        track M2): a parameter the docked reference has and the main
+        document does not. Falls back to the placeholder if the comparison
+        has moved on since the row was selected (e.g. the reference was
+        just undocked)."""
+        if self._comparison is None or self._reference is None:
+            self.show_placeholder()
+            return
+        row = self._comparison.row(section_path, key)
+        if row is None or row.state is not RowState.REF_ONLY:
+            self.show_placeholder()
+            return
+        self._secondary.resume()
+        self._clear_content()
+        meta = bpx_gateway.field_meta(section_path + (key,))
+        kind = classify(row.ref_value, meta)
+        self._card = GhostParameterCard(key, row.ref_value, kind, self._reference.filename)
+        self._content_layout.addWidget(self._card)
+        self._content_layout.setAlignment(self._card, Qt.AlignTop)
+        self._issues_tab.show_parameter(None)
+        self._docs_tab.show_metadata(None)
+        self._secondary.set_count("issues", 0)
 
     def reveal(self, parameter: ParameterItem | None) -> None:
         """Show *parameter*'s work surface, or the placeholder for none.
@@ -304,6 +379,10 @@ class InspectorPanel(QWidget):
         count = self._issues_tab.show_parameter(parameter)
         self._secondary.set_count("issues", count)
         self._docs_tab.show_metadata(resolve_parameter_metadata(parameter.path, meta))
+        # Populate-after-build (multi-file track M2/M3): the reference block
+        # is entirely outside the draft/commit signals just wired above, so
+        # this can never trip the card's own _touched machinery.
+        self._apply_reference_block(parameter)
 
     def open_rename_editor(self) -> None:
         """Expand the current card's inline rename row, if it has one.
