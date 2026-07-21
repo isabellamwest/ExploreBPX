@@ -17,12 +17,14 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QPlainTextEdit,
     QSizePolicy,
     QStackedWidget,
     QStatusBar,
     QTextEdit,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -168,7 +170,8 @@ class MainWindow(QMainWindow):
         bar.addWidget(spacer)
 
         self._save_action = bar.addAction("Save", self._save)
-        self._export_action = bar.addAction("Export", self._export)
+        self._export_action = self._build_export_button()
+        bar.addWidget(self._export_action)
 
         # The button is a document command, like its neighbours Save and
         # Export: it never edits whatever widget happens to hold focus. The
@@ -217,6 +220,25 @@ class MainWindow(QMainWindow):
         bar.addWidget(self._search)
         for sequence in (QKeySequence.Find, QKeySequence("Ctrl+P")):
             QShortcut(sequence, self, activated=self._focus_search)
+
+    def _build_export_button(self) -> QToolButton:
+        """The toolbar's Export control: a flat button whose click opens a
+        two-item format menu ("Export as JSON...", "Export as YAML...")
+        rather than one combined save-dialog filter the user had to type an
+        extension into. ``InstantPopup`` makes the whole button, not just a
+        caret, open the menu -- there is no separate "default" export format
+        to warrant ``MenuButtonPopup``'s split behaviour.
+        """
+        button = QToolButton(self)
+        button.setText("Export")
+        button.setAutoRaise(True)
+        button.setPopupMode(QToolButton.InstantPopup)
+        button.setToolButtonStyle(Qt.ToolButtonTextOnly)
+        menu = QMenu(button)
+        menu.addAction("Export as JSON…", lambda: self._export_as("json"))
+        menu.addAction("Export as YAML…", lambda: self._export_as("yaml"))
+        button.setMenu(menu)
+        return button
 
     def _focus_search(self) -> None:
         """Focus the search box and select its text so it can be replaced."""
@@ -937,25 +959,28 @@ class MainWindow(QMainWindow):
         self._update_workspace_info()
         return True
 
-    def _export(self) -> None:
-        """Write a copy of the document to a user-chosen location.
+    def _export_as(self, fmt: str) -> None:
+        """Write a copy of the document to a user-chosen location in *fmt*
+        ("json" or "yaml"), the format the user picked from the Export menu.
 
-        Does not affect the backing file or dirty state.
+        Does not affect the backing file or dirty state. The default name
+        and dialog filter both reflect the chosen format, not whatever the
+        backing file happened to be saved as -- exporting a .json document
+        as YAML proposes "foo (copy).yaml", not "foo (copy).json".
         """
         if self._state.active is None or self._state.active.document is None:
             return
         session = self._state.active
+        suffix = ".yaml" if fmt == "yaml" else ".json"
         if session.backing_file is not None:
             backing = session.backing_file
-            default = str(backing.with_name(f"{backing.stem} (copy){backing.suffix}"))
+            default = str(backing.with_name(f"{backing.stem} (copy){suffix}"))
         else:
-            default = session.document.filename
-        name, _ = QFileDialog.getSaveFileName(
-            self, "Export BPX", default, "BPX (*.json *.yaml *.yml)"
-        )
+            default = str(Path(session.document.filename).with_suffix(suffix))
+        filt = "YAML (*.yaml *.yml)" if fmt == "yaml" else "JSON (*.json)"
+        name, _ = QFileDialog.getSaveFileName(self, "Export BPX", default, filt)
         if not name:
             return
-        fmt = "yaml" if name.lower().endswith((".yml", ".yaml")) else "json"
         try:
             Path(name).write_bytes(export.to_bytes(session.document.raw, fmt))
         except OSError as exc:
