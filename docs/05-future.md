@@ -3,11 +3,12 @@
 This document collects speculative ideas and unresolved decisions that are **not
 yet accepted design**. Nothing here is an implementation requirement. Items here
 must never influence implementation until they are explicitly promoted into the
-specification ([00-project.md](00-project.md) through [04-roadmap.md](04-roadmap.md)).
+reference docs ([00-project.md](00-project.md), [01-architecture.md](01-architecture.md),
+[02-ui.md](02-ui.md)) or an active PLAN.
 
 Promotion means: the idea is designed, accepted, and moved into the owning
-specification document, with any implementation sequencing added to
-[04-roadmap.md](04-roadmap.md). Until then, treat everything below as exploratory.
+reference doc, with any implementation sequencing captured in an active PLAN.
+Until then, treat everything below as exploratory.
 
 ## Data sources and import
 
@@ -102,8 +103,8 @@ solved now:
 
 ## Authoring — speculative extensions
 
-Extend the accepted Authoring feature ([03-features.md](03-features.md)), not yet
-designed: organisation/lab/chemistry/workflow-specific templates; session change
+Extend the accepted Authoring model ([01-architecture.md](01-architecture.md)),
+not yet designed: organisation/lab/chemistry/workflow-specific templates; session change
 awareness (diff against last loaded/saved baseline, not user actions) with subtle
 modified indicators in Tree/Parameter list/Inspector and a dedicated Changes
 workspace navigating via `NavigationService`; parameter authoring states beyond

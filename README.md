@@ -18,14 +18,15 @@ files continuously, edit every declared parameter kind (scalar, integer, enum,
 text, boolean, function, table, map, series) through dedicated editing cards with
 command-based undo/redo, author new documents from a model scaffold, add/remove/
 rename structure, and export as JSON or YAML. See
-[docs/04-roadmap.md](docs/04-roadmap.md) for open items and direction.
+[docs/05-future.md](docs/05-future.md) for speculative direction, or the active
+`PLAN-*.md` at the repo root for in-flight work.
 
 ## Quick start
 
-> **Requires Python 3.10 or newer.** The pinned `bpx==1.1.0` dependency does not
+> **Requires Python 3.10 or newer.** The pinned `bpx==1.1.1` dependency does not
 > support Python 3.9 or earlier. If you try to install on an older Python you
 > will see a confusing error like
-> `Could not find a version that satisfies the requirement bpx==1.1.0`.
+> `Could not find a version that satisfies the requirement bpx==1.1.1`.
 
 ### 1. Check your Python version first
 
@@ -128,7 +129,7 @@ rationale.
 
 ## BPX dependency
 
-The `bpx` package is pinned exactly (`bpx==1.1.0`) and all coupling to it lives
+The `bpx` package is pinned exactly (`bpx==1.1.1`) and all coupling to it lives
 in [app/core/bpx_gateway.py](app/core/bpx_gateway.py). The UI is driven by BPX's
 own schema metadata, so new parameters in future BPX versions appear
 automatically.

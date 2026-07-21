@@ -270,7 +270,7 @@ def test_known_alias_with_none_value_opens_proper_editor_end_to_end():
 # ---------------------------------------------------------------------------
 # Registry routing for the declared TEXT/BOOLEAN/SERIES kinds, the interim card
 # shim for the still-unbuilt MAP kind, and the FUNCTION/MAP value-dependent
-# dispatch -- see docs/03-features.md §4 "Input system". These lock today's
+# dispatch -- see docs/01-architecture.md "Editing Architecture". These lock today's
 # behaviour so a later real card (Phase 4c/5) is a deliberate, visible change
 # rather than a silent one.
 # ---------------------------------------------------------------------------
@@ -381,8 +381,8 @@ def test_integer_none_value_uses_fallback_and_can_be_typed():
 
 
 # ---------------------------------------------------------------------------
-# is_dirty: type-aware dirty-checking (docs/03-features.md §4 "commit only
-# when the draft differs").
+# is_dirty: type-aware dirty-checking (docs/01-architecture.md "Editing
+# Architecture" -- commit only when the draft differs).
 # ---------------------------------------------------------------------------
 
 

@@ -1,5 +1,10 @@
 # PLAN — Authoring/completion track
 
+> **⚠ This is a plan, not a spec — a proposal that can change, not a locked
+> requirement.** Where it and the running app differ, the app is correct. Read it
+> as context for the decisions taken, not a mandate to implement verbatim; re-check
+> against the code and confirm with Bella before acting on anything still open.
+
 **Audience: a future working session (or the user), executing without this
 conversation's context.** Read top-to-bottom before touching code; do not re-derive
 or relitigate. Design discussed and locked with the user 2026-07-13; every deferred

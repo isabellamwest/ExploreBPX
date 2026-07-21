@@ -1,4 +1,4 @@
-"""Value preview in the parameter list (docs/03-features.md §3).
+"""Value preview in the parameter list (docs/02-ui.md "Parameter list pane").
 
 Rows carry a right-aligned, delegate-elided preview of the committed value:
 raw-verbatim for simple kinds, a ghosted "—" for committed null, a ghosted

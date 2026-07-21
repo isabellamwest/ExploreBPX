@@ -139,7 +139,7 @@ class ParameterCard(QWidget):
         self._editor.bulk_commit_requested.connect(self.bulk_commit_requested)
         # Value row: the editor plus a trailing slot. The trailing slot is
         # reserved -- not built -- for a future Reference document's value
-        # and delta once multi-document lands (docs/03-features.md §4); no
+        # and delta once multi-document lands (docs/05-future.md); no
         # widget or API for it exists yet, so today's layout is visually
         # identical to the editor sitting alone.
         value_row = QHBoxLayout()

@@ -1,17 +1,13 @@
-# Explore_BPX — Project
+# Explore_BPX — Principles
 
-This is the first document in the Explore_BPX specification: accepted product
-principles, scope and non-goals. Everything that follows — architecture, UI,
-features and roadmap — serves the intent described here.
+Accepted product principles, scope and non-goals. These are the stable
+commitments that constrain every architectural, UI and feature decision.
 
-Read the specification in order:
-
-1. **00-project.md** — principles, scope (this document).
-2. [01-architecture.md](01-architecture.md) — domain model, architecture, state, seams.
-3. [02-ui.md](02-ui.md) — application-wide UI framework.
-4. [03-features.md](03-features.md) — authoritative specification of every feature.
-5. [04-roadmap.md](04-roadmap.md) — remaining implementation work and acceptance criteria.
-6. [05-future.md](05-future.md) — speculative ideas not yet accepted as design.
+`docs/` is a **compact reference kept in sync with the code, not a spec** —
+where a doc contradicts the running app, the app is correct. The companion
+references are [01-architecture.md](01-architecture.md) (domain model, layers,
+seams) and [02-ui.md](02-ui.md) (application-wide UI framework); speculative,
+not-yet-accepted ideas live in [05-future.md](05-future.md).
 
 ## Workspace philosophy
 
@@ -23,9 +19,6 @@ document; multi-document support is an additive evolution, not a different
 application.
 
 ## Accepted Product Principles
-
-These principles are accepted product-level commitments. They constrain every
-architectural, UI and feature decision in the documents that follow.
 
 1. **Four core activities.** Explore_BPX exists to explore, edit, validate and
    author BPX documents. All four are first-class; none is an optional add-on.
@@ -55,10 +48,9 @@ architectural, UI and feature decision in the documents that follow.
    package and must be surfaced faithfully, without modification.
 
 7. **The unit of work is a Workspace.** Components render the Workspace they are
-   given; the number of documents is data, not an application mode. The current
-   single-document application is the degenerate one-document Workspace, so
-   multi-document support is additive, not a new architecture (see
-   [01-architecture.md](01-architecture.md)).
+   given; the number of documents is data, not an application mode (see
+   Workspace philosophy above). The current single-document application is the
+   degenerate one-document Workspace, so multi-document support is additive.
 
 ## Scope
 
@@ -74,9 +66,6 @@ JSON/YAML export; authoring from model skeletons and templates with completion �
 a stateless read of what the schema still expects, never a persisted status,
 kept separate from validation; and visualisation of function/table parameters.
 
-Precise per-capability status is in [03-features.md](03-features.md);
-implementation order is in [04-roadmap.md](04-roadmap.md).
-
 ### Non-goals
 
 - **Reimplementing BPX.** Schema, parsing and validation semantics stay with the
@@ -91,4 +80,4 @@ implementation order is in [04-roadmap.md](04-roadmap.md).
 
 Speculative ideas that are not yet accepted design live only in
 [05-future.md](05-future.md) and must never be treated as implementation
-requirements until promoted into this specification.
+requirements until promoted.
