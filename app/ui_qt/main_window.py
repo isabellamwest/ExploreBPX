@@ -247,6 +247,17 @@ class MainWindow(QMainWindow):
     def _build_statusbar(self) -> None:
         bar = QStatusBar()
         bar.addPermanentWidget(self._status_label, 1)
+        # The installed validator's version, permanently visible: every
+        # verdict this app shows is that package's, and an environment that
+        # drifts from the tested pin should be spottable at a glance rather
+        # than silent (the document's own Header.BPX is a separate fact,
+        # shown on the Workspace info card).
+        version_label = QLabel(f"bpx {BPX_VERSION}")
+        version_label.setToolTip(
+            "Installed bpx package — the validator every verdict in "
+            "this app comes from"
+        )
+        bar.addPermanentWidget(version_label)
         self.setStatusBar(bar)
 
     def _connect(self) -> None:
