@@ -322,7 +322,7 @@ def test_diagnostic_on_an_array_tints_its_own_column(app_driver, tmp_path, valid
 def test_csv_import_fills_all_mapped_columns_in_one_undo_step(
     app_driver, main_window, spm_with_validation_path
 ):
-    from ui_qt.cards.csv_import import read_csv_text
+    from core.csv_import import read_csv_text
 
     d = app_driver
     d.open(spm_with_validation_path).go_to(_RUN)

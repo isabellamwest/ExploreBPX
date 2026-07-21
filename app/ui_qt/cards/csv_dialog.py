@@ -39,10 +39,11 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from core.csv_import import CsvData, auto_map
+from core.values import format_value
+
 from ..style import ERROR, MUTED
-from .csv_import import CsvData, auto_map
 from .paste_dialog import PastePreviewResult
-from .values import format_value
 
 #: Rows shown in the preview; the parse itself is complete (same convention as
 #: the paste preview).
@@ -241,7 +242,7 @@ def _preview_table(data: CsvData) -> QTableWidget:
         for row_index in range(shown):
             value = column[row_index]
             item = QTableWidgetItem(format_value(value))
-            item.setTextAlignment(int(Qt.AlignRight | Qt.AlignVCenter))
+            item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             # Flag a non-numeric (kept-as-text) cell so the user spots it.
             if value is not None and not isinstance(value, (int, float)):
                 item.setForeground(Qt.red)

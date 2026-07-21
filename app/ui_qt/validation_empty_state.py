@@ -46,9 +46,9 @@ from PySide6.QtWidgets import (
 )
 
 from core.commands import AddSection, SetValues
+from core.csv_import import CsvData, read_csv_file
 
 from .cards.csv_dialog import CsvImportDialog
-from .cards.csv_import import CsvData, read_csv_file
 from .cards.experiment import KNOWN_ALIASES
 from .name_popup import NamePopup
 from .style import MUTED

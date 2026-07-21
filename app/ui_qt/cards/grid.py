@@ -46,12 +46,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from core.csv_import import positional_map, read_csv_file
+from core.paste import parse_clipboard
+from core.values import format_value, parse_value, values_equal
+
 from ..style import ERROR_TINT, MUTED
 from .csv_dialog import CsvImportDialog
-from .csv_import import positional_map, read_csv_file
-from .paste import parse_clipboard
 from .paste_dialog import PastePreviewDialog, PastePreviewResult
-from .values import format_value, parse_value, values_equal
 
 #: Rows shown before the grid scrolls. The grid keeps this height whatever it
 #: holds, so adding a row never reflows the Inspector around it.

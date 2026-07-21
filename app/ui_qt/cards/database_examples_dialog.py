@@ -49,28 +49,31 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from core.bpx_gateway import LoadError
+from core.bpx_gateway import LoadError, expected_fields
 from core.example_library import (
     ExampleRun,
     list_example_runs,
     load_example_run,
     load_reference_document,
 )
+from core.values import format_value
 
 from ..style import ACCENT, BORDER, ERROR, MUTED
 from .modal import ModeStrip
 from .multi_series_chart import MultiSeriesChart
-from .values import format_value
 
 _TIME = "Time [s]"
 _TEMPERATURE = "Temperature [K]"
-#: Table/chart column order. Deliberately a private copy of
-#: ``experiment.KNOWN_ALIASES`` rather than an import of it: this dialog is
-#: imported *by* ``experiment.py`` (it opens this dialog), so importing the
-#: other way round would be a circular import -- and the two lists mean
-#: different things anyway (one is bpx.schema field order, this one is
-#: display order for a viewer with no schema of its own).
-_KNOWN_ALIASES = (_TIME, "Current [A]", "Voltage [V]", _TEMPERATURE)
+#: Table/chart column order: the Experiment schema's own field order, derived
+#: through the gateway -- the same derivation as ``experiment.KNOWN_ALIASES``,
+#: repeated here rather than imported because this dialog is imported *by*
+#: ``experiment.py`` (it opens this dialog), so importing the other way round
+#: would be a circular import. ``_TIME``/``_TEMPERATURE`` stay literal: they
+#: are this viewer's display choices (x-axis, optional column), not a schema
+#: restatement.
+_KNOWN_ALIASES = tuple(
+    f.alias for f in expected_fields(("Validation", "<run>"))
+)
 
 #: The sentinel id for "You" (the card's own live draft) in every dict here
 #: keyed by series id -- distinct from any real ``ExampleRun.id``, which

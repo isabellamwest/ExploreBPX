@@ -5,6 +5,7 @@ from __future__ import annotations
 from core.bpx_gateway import FieldMeta
 from core.parameter_types import ParameterKind
 from core.tree_model import ParameterItem
+from core.values import is_grid_cell
 
 from .base import EditorCard
 from .boolean import BooleanCard
@@ -19,7 +20,6 @@ from .series import SeriesCard
 from .table import TableCard
 from .text import TextCard
 from .unknown import ReadOnlyCard
-from .values import is_grid_cell
 
 # Kinds with one fixed card. The union kinds (FUNCTION, MAP) own their own mode
 # dispatch -- each is a strip that opens on whichever representation the

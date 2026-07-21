@@ -37,13 +37,13 @@ from PySide6.QtWidgets import (
 )
 
 from core import bpx_gateway
+from core.values import format_value, parse_value
 
 from ..style import ERROR, MUTED
 from .cell_issues import table_cells
 from .grid import NumericGrid
 from .hint import GridHint
 from .table_preview import TablePreview
-from .values import format_value, parse_value
 
 
 class ModeBody(QWidget):

@@ -19,11 +19,11 @@ for which materials are legal.
 from __future__ import annotations
 
 from core import structure
+from core.values import is_grid_cell
 
 from ..style import FIXED_UNIT_TOOLTIP
 from .bodies import MaterialMapBody, NumberBody, RawJsonBody
 from .modal import RAW_MODE, Mode, ModalCard
-from .values import is_grid_cell
 
 FLOAT_INT = "FloatInt"
 DICT_STR_FLOAT_INT = "dict[str, FloatInt]"

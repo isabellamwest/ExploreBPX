@@ -20,10 +20,10 @@ from PySide6.QtCore import Qt
 
 from core.parameter_types import ParameterKind
 from core.tree_model import ParameterItem, SiblingSeries
+from core.values import format_value, parse_value, values_equal
 from ui_qt.cards.grid import NumericGrid
 from ui_qt.cards.registry import create_card, series_is_representable
 from ui_qt.cards.series import SeriesCard
-from ui_qt.cards.values import format_value, parse_value, values_equal
 
 
 @pytest.fixture(autouse=True)

@@ -22,9 +22,10 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from core.paste import ParsedPaste
+from core.values import format_value
+
 from ..style import MUTED
-from .paste import ParsedPaste
-from .values import format_value
 
 #: Rows shown in the preview before it notes "and N more". The parse itself is
 #: complete; only the preview is capped, so a thousand-row paste stays instant.

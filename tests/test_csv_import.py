@@ -17,15 +17,15 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 pytest.importorskip("PySide6")
 
-from core.parameter_types import ParameterKind
-from core.tree_model import ParameterItem, SiblingSeries
-from ui_qt.cards.csv_import import (
+from core.csv_import import (
     CsvData,
     auto_map,
     positional_map,
     read_csv_file,
     read_csv_text,
 )
+from core.parameter_types import ParameterKind
+from core.tree_model import ParameterItem, SiblingSeries
 
 _TARGETS = ("Time [s]", "Current [A]", "Voltage [V]", "Temperature [K]")
 

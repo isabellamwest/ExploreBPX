@@ -20,11 +20,11 @@ from __future__ import annotations
 from PySide6.QtWidgets import QFileDialog, QToolButton, QVBoxLayout
 
 from core.commands import SetValues
+from core.csv_import import read_csv_file
 
 from .base import EditorCard
 from .cell_issues import series_cells
 from .csv_dialog import CsvImportDialog
-from .csv_import import read_csv_file
 from .grid import NumericGrid
 from .hint import GridHint
 from .table_preview import TablePreview

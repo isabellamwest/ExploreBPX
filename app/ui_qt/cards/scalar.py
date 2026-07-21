@@ -5,10 +5,10 @@ from __future__ import annotations
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit
 
 from core import structure
+from core.values import format_value, parse_value
 
 from ..style import FIXED_UNIT_TOOLTIP
 from .base import EditorCard
-from .values import format_value, parse_value
 
 
 class ScalarCard(EditorCard):

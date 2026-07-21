@@ -20,7 +20,7 @@ from PySide6.QtWidgets import QApplication, QComboBox, QLineEdit, QSpinBox
 from core.bpx_gateway import FieldMeta
 from core.parameter_types import ParameterKind, classify
 from core.tree_model import ParameterItem
-from ui_qt.cards.values import values_equal
+from core.values import values_equal
 from ui_qt.cards.registry import create_card
 
 

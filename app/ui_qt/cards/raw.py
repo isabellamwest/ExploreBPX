@@ -19,8 +19,9 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QHBoxLayout, QLineEdit
 
+from core.values import format_value, parse_value
+
 from .base import EditorCard
-from .values import format_value, parse_value
 
 
 class RawCard(EditorCard):

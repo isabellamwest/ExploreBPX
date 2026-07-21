@@ -35,8 +35,7 @@ from PySide6.QtWidgets import QWidget
 
 from core.bpx_gateway import FieldMeta
 from core.tree_model import ParameterItem
-
-from .values import values_equal
+from core.values import values_equal
 
 
 class EditorCard(QWidget):

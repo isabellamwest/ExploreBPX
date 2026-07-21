@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ui_qt.cards.paste import detect_delimiter, parse_clipboard
+from core.paste import detect_delimiter, parse_clipboard
 
 
 def test_detects_tab_comma_semicolon_whitespace_and_single():

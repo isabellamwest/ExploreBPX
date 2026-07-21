@@ -259,7 +259,7 @@ def test_value_removed_flow_turns_the_row_grey_and_calms_the_page(app_driver, va
     assert not any(t.path == _LOWER_CUTOFF for t in d.outstanding_tasks())
 
     d.go_to(_LOWER_CUTOFF)
-    d.edit_field("").commit()  # empty text commits None (core.cards.values.parse_value)
+    d.edit_field("").commit()  # empty text commits None (core.values.parse_value)
 
     d.select_object(_CELL)
     assert d.parameter_row_is_grey("Lower voltage cut-off [V]")

@@ -46,27 +46,30 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from core.bpx_gateway import expected_fields
 from core.commands import AddParameter, SetValues
+from core.csv_import import read_csv_file
 from core.parameter_types import ParameterKind
 from core.tree_model import ParameterItem, TreeNode
+from core.values import values_equal
 
 from ..style import MUTED
 from .cell_issues import experiment_cells
 from .csv_dialog import CsvImportDialog
-from .csv_import import read_csv_file
 from .database_examples_dialog import DatabaseExamplesDialog
 from .grid import MultiColumnGrid
-from .values import values_equal
 
-#: The known Experiment array aliases, in ``bpx.schema.Experiment``'s own
-#: field order. Time/Current/Voltage are schema-required; Temperature alone
-#: is declared optional (confirmed against ``bpx.schema`` -- its ``Field``
-#: default is ``None``, the other three have none), which is why it is the
-#: only column offered a "+" affordance below.
-KNOWN_ALIASES = ("Time [s]", "Current [A]", "Voltage [V]", "Temperature [K]")
+#: The Experiment array aliases in the schema's own field order, derived
+#: live through the gateway (every Validation run is typed ``Experiment``,
+#: so any run-name path resolves it) rather than restated here.
+_EXPERIMENT_FIELDS = expected_fields(("Validation", "<run>"))
 
-#: The sole optional column -- see ``KNOWN_ALIASES``.
-_OPTIONAL_ALIAS = "Temperature [K]"
+KNOWN_ALIASES = tuple(f.alias for f in _EXPERIMENT_FIELDS)
+
+#: The sole schema-optional column (currently ``Temperature [K]``), the only
+#: one offered a "+" affordance below. This card's layout assumes exactly one
+#: such column; :mod:`tests.test_spec_literals_contract` pins that soleness.
+_OPTIONAL_ALIAS = next(f.alias for f in _EXPERIMENT_FIELDS if not f.required)
 
 
 def is_validation_run_path(path: tuple[str, ...]) -> bool:

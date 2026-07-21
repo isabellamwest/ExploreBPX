@@ -25,10 +25,10 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel
 
 from core import bpx_gateway
+from core.csv_import import read_csv_text
 from core.parameter_types import ParameterKind
 from core.tree_model import ParameterItem
 from ui_qt.cards.bodies import ExpressionBody, MaterialMapBody, NumberBody
-from ui_qt.cards.csv_import import read_csv_text
 from ui_qt.cards.function import (
     FLOAT_INT,
     FUNCTION,
