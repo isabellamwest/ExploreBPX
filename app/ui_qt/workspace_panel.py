@@ -173,11 +173,21 @@ class WorkspacePanel(QWidget):
         self._open_button.setObjectName("WorkspaceOpen")
         self._open_button.clicked.connect(self.open_requested)
         card_layout.addWidget(self._open_button, 0, Qt.AlignLeft)
+        card_layout.addSpacing(10)
         self._open_reference_button = QPushButton("Open File as Reference…")
         self._open_reference_button.setObjectName("WorkspaceOpenReference")
         self._open_reference_button.clicked.connect(self.open_reference_requested)
         card_layout.addWidget(self._open_reference_button, 0, Qt.AlignLeft)
         card_layout.addStretch(1)
+        # Equal widths: two left-aligned buttons of different natural sizes
+        # read as ragged; sizing both to the wider one keeps their edges
+        # flush without stretching them across the whole card.
+        open_width = max(
+            self._open_button.sizeHint().width(),
+            self._open_reference_button.sizeHint().width(),
+        )
+        self._open_button.setMinimumWidth(open_width)
+        self._open_reference_button.setMinimumWidth(open_width)
         card_layout.addWidget(self._build_new_chooser(), 0)
         card_layout.addStretch(1)
         return card
