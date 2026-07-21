@@ -550,12 +550,10 @@ def test_no_two_window_shortcuts_answer_the_same_key_press(main_window, qtbot):
     """
     from PySide6.QtGui import QShortcut
     from PySide6.QtTest import QTest
-    from PySide6.QtWidgets import QApplication
 
     main_window.show()
     main_window.raise_()
     main_window.activateWindow()
-    QApplication.setActiveWindow(main_window)
     qtbot.waitActive(main_window)
 
     shortcuts = main_window.findChildren(QShortcut)
