@@ -738,18 +738,25 @@ class _SectionDetailView(QWidget):
         lst = self._outstanding_box.list
         lst.clear()
         if model == "Partial":
-            # decision C: nothing is ever Required under Partial, so a
-            # bucket's own required_tasks==()/required_total>0 shape is
-            # indistinguishable from "fully filled" -- only model says which.
+            # decision C (revised): nothing is ever Required under Partial,
+            # so there is no ratio to title with, and a bucket's own
+            # required_tasks==()/required_total>0 shape is indistinguishable
+            # from "fully filled" -- only model says which. But Partial does
+            # carry NULL_FIELD tasks now, and their absorbed diagnostics must
+            # stay reachable here (decision O: re-seated, never silenced), so
+            # only the no-tasks case pins the notice; with tasks present the
+            # shared rendering below runs unchanged.
             self._outstanding_box.set_title("Outstanding")
-            _add_message_row(lst, _MSG_PARTIAL_NO_TARGET)
-            self._outstanding_box.refresh_content_size()
-            return 0
-        self._outstanding_box.set_title(_outstanding_box_title(bucket))
-        if not bucket.required_tasks and not bucket.optional_tasks:
-            _add_message_row(lst, _MSG_NOTHING_OUTSTANDING)
-            self._outstanding_box.refresh_content_size()
-            return 0
+            if not bucket.optional_tasks:
+                _add_message_row(lst, _MSG_PARTIAL_NO_TARGET)
+                self._outstanding_box.refresh_content_size()
+                return 0
+        else:
+            self._outstanding_box.set_title(_outstanding_box_title(bucket))
+            if not bucket.required_tasks and not bucket.optional_tasks:
+                _add_message_row(lst, _MSG_NOTHING_OUTSTANDING)
+                self._outstanding_box.refresh_content_size()
+                return 0
 
         hidden = 0
         required_rows = []

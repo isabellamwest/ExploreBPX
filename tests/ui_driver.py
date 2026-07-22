@@ -677,6 +677,28 @@ class AppDriver:
         assert index.isValid(), f"No tree node at {path!r}"
         return model.data(index, Qt.DisplayRole)
 
+    def tree_error_marked_sections(self) -> list[tuple[str, ...]]:
+        """Paths of tree rows currently answering the error-dot query
+        (page-visible errors only), walking every node in document order --
+        including collapsed rollup marks, which real expansion state
+        determines exactly as on screen."""
+        from PySide6.QtCore import QModelIndex
+
+        from ui_qt.parameter_row import SEVERITY_ROLE
+
+        model = self._w._tree._view.model()
+        marked: list[tuple[str, ...]] = []
+
+        def walk(parent: QModelIndex) -> None:
+            for row in range(model.rowCount(parent)):
+                index = model.index(row, 0, parent)
+                if model.data(index, SEVERITY_ROLE) == "error":
+                    marked.append(model.node_at(index).path)
+                walk(index)
+
+        walk(QModelIndex())
+        return marked
+
     def reference_block_visible(self) -> bool:
         """Whether the current card's reference row is currently shown --
         works for both ``ParameterCard`` and ``GhostParameterCard``, which

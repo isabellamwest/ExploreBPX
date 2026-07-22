@@ -23,13 +23,17 @@ def _error(path: tuple[str, ...]) -> PydanticErrorDiagnostic:
     return PydanticErrorDiagnostic(raw_error={"loc": path, "msg": "Invalid"})
 
 
-def _model(root: TreeNode, expanded_paths: set[tuple[str, ...]] | None = None) -> BpxTreeModel:
+def _model(
+    root: TreeNode,
+    expanded_paths: set[tuple[str, ...]] | None = None,
+    visible_error_paths: frozenset[tuple[str, ...]] = frozenset(),
+) -> BpxTreeModel:
     expanded_paths = expanded_paths or set()
 
     def is_expanded(index):
         return index.isValid() and index.internalPointer().path in expanded_paths
 
-    return BpxTreeModel(root, is_expanded=is_expanded)
+    return BpxTreeModel(root, is_expanded=is_expanded, visible_error_paths=visible_error_paths)
 
 
 def _display(model: BpxTreeModel, index) -> str:
@@ -40,21 +44,21 @@ def _severity(model: BpxTreeModel, index) -> str | None:
     return model.data(index, SEVERITY_ROLE)
 
 
-def test_collapsed_node_marks_hidden_descendant_error():
-    parameter = ParameterItem(
-        label="Voltage",
-        path=("Parameterisation", "Cell", "Voltage"),
-        kind=ParameterKind.SCALAR,
-        issues=[_error(("Parameterisation", "Cell", "Voltage"))],
-    )
-    cell = TreeNode(label="Cell", path=("Parameterisation", "Cell"), parameters=[parameter])
+def _cell_under_parameterisation() -> TreeNode:
+    cell = TreeNode(label="Cell", path=("Parameterisation", "Cell"))
     parameterisation = TreeNode(
         label="Parameterisation",
         path=("Parameterisation",),
         children=[cell],
     )
-    root = TreeNode(label="BPX File", path=(), children=[parameterisation])
-    model = _model(root)
+    return TreeNode(label="BPX File", path=(), children=[parameterisation])
+
+
+_CELL_VISIBLE = frozenset({("Parameterisation", "Cell")})
+
+
+def test_collapsed_node_marks_hidden_descendant_error():
+    model = _model(_cell_under_parameterisation(), visible_error_paths=_CELL_VISIBLE)
 
     parameterisation_index = model.index(0, 0)
 
@@ -63,20 +67,11 @@ def test_collapsed_node_marks_hidden_descendant_error():
 
 
 def test_expanded_node_defers_descendant_marker_to_visible_child():
-    parameter = ParameterItem(
-        label="Voltage",
-        path=("Parameterisation", "Cell", "Voltage"),
-        kind=ParameterKind.SCALAR,
-        issues=[_error(("Parameterisation", "Cell", "Voltage"))],
+    model = _model(
+        _cell_under_parameterisation(),
+        expanded_paths={("Parameterisation",)},
+        visible_error_paths=_CELL_VISIBLE,
     )
-    cell = TreeNode(label="Cell", path=("Parameterisation", "Cell"), parameters=[parameter])
-    parameterisation = TreeNode(
-        label="Parameterisation",
-        path=("Parameterisation",),
-        children=[cell],
-    )
-    root = TreeNode(label="BPX File", path=(), children=[parameterisation])
-    model = _model(root, expanded_paths={("Parameterisation",)})
 
     parameterisation_index = model.index(0, 0)
     cell_index = model.index(0, 0, parameterisation_index)
@@ -87,32 +82,47 @@ def test_expanded_node_defers_descendant_marker_to_visible_child():
     assert _severity(model, cell_index) == "error"
 
 
-def test_expanded_object_with_direct_parameter_error_keeps_marker():
+def test_expanded_object_in_visible_set_keeps_marker():
+    cell = TreeNode(label="Cell", path=("Cell",))
+    root = TreeNode(label="BPX File", path=(), children=[cell])
+    model = _model(root, expanded_paths={("Cell",)}, visible_error_paths=frozenset({("Cell",)}))
+
+    cell_index = model.index(0, 0)
+
+    assert _display(model, cell_index) == "Cell"
+    assert _severity(model, cell_index) == "error"
+
+
+def test_verbatim_issues_alone_never_light_the_marker():
+    """The regression behind the change (user, 2026-07-22): attached issues
+    whose diagnostics were absorbed (e.g. every field merely empty) must NOT
+    paint the tree dot. The marker reads only the page-visible set the
+    partition derives -- the same truth as the parameter list and rail badge
+    -- never ``node.issues``/``parameter.has_errors`` directly."""
     parameter = ParameterItem(
         label="Voltage",
-        path=("Cell", "Voltage"),
+        path=("Parameterisation", "Cell", "Voltage"),
         kind=ParameterKind.SCALAR,
-        issues=[_error(("Cell", "Voltage"))],
+        issues=[_error(("Parameterisation", "Cell", "Voltage"))],
     )
-    cell = TreeNode(label="Cell", path=("Cell",), parameters=[parameter])
-    root = TreeNode(label="BPX File", path=(), children=[cell])
-    model = _model(root, expanded_paths={("Cell",)})
+    cell = TreeNode(
+        label="Cell",
+        path=("Parameterisation", "Cell"),
+        parameters=[parameter],
+        issues=[_error(("Parameterisation", "Cell"))],
+    )
+    parameterisation = TreeNode(
+        label="Parameterisation", path=("Parameterisation",), children=[cell]
+    )
+    root = TreeNode(label="BPX File", path=(), children=[parameterisation])
+    model = _model(root)  # empty visible set; issues attached everywhere
 
-    cell_index = model.index(0, 0)
-
-    assert _display(model, cell_index) == "Cell"
-    assert _severity(model, cell_index) == "error"
-
-
-def test_expanded_object_with_direct_object_error_keeps_marker():
-    cell = TreeNode(label="Cell", path=("Cell",), issues=[_error(("Cell",))])
-    root = TreeNode(label="BPX File", path=(), children=[cell])
-    model = _model(root, expanded_paths={("Cell",)})
-
-    cell_index = model.index(0, 0)
-
-    assert _display(model, cell_index) == "Cell"
-    assert _severity(model, cell_index) == "error"
+    parameterisation_index = model.index(0, 0)
+    assert _severity(model, parameterisation_index) is None  # collapsed rollup
+    model_expanded = _model(root, expanded_paths={("Parameterisation",)})
+    parameterisation_index = model_expanded.index(0, 0)
+    cell_index = model_expanded.index(0, 0, parameterisation_index)
+    assert _severity(model_expanded, cell_index) is None  # direct
 
 
 # ----------------------------------------------------------------------
@@ -124,17 +134,14 @@ _UD = ("Parameterisation", "User-defined")
 
 
 def _user_defined_model(sub_issue: bool = False):
-    sub = TreeNode(
-        label="Thermal tweaks",
-        path=_UD + ("Thermal tweaks",),
-        issues=[_error(_UD + ("Thermal tweaks",))] if sub_issue else [],
-    )
+    sub = TreeNode(label="Thermal tweaks", path=_UD + ("Thermal tweaks",))
     bucket = TreeNode(label="User-defined", path=_UD, children=[sub])
     parameterisation = TreeNode(
         label="Parameterisation", path=("Parameterisation",), children=[bucket]
     )
     root = TreeNode(label="BPX File", path=(), children=[parameterisation])
-    model = _model(root, expanded_paths={("Parameterisation",), _UD})
+    visible = frozenset({_UD + ("Thermal tweaks",)}) if sub_issue else frozenset()
+    model = _model(root, expanded_paths={("Parameterisation",), _UD}, visible_error_paths=visible)
     p_index = model.index(0, 0)
     bucket_index = model.index(0, 0, p_index)
     sub_index = model.index(0, 0, bucket_index)

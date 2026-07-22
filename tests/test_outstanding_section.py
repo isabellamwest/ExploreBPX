@@ -88,6 +88,9 @@ def test_state1_fresh_skeleton(app_driver, tmp_path):
     assert d.validation_outstanding_count() == 5 + 9 + 9
     tasks = d.outstanding_tasks()
     assert not any(t.path[:1] == ("State",) for t in tasks)
+    # Tree-dot consistency (user, 2026-07-22): a fresh skeleton's tree is as
+    # calm as its badge -- required-but-absent fields are outstanding, not red.
+    assert d.tree_error_marked_sections() == []
 
 
 # ---------------------------------------------------------------------------
@@ -112,6 +115,26 @@ def test_state2_working_document(app_driver, tmp_path, valid_spm_dict):
     assert any(t.kind is TaskKind.NULL_FIELD and t.path == _LOWER_CUTOFF for t in tasks)
     headers = d.validation_group_headers()
     assert "Cell - 2 of 5 remaining" in headers
+
+    # Tree-dot consistency (user, 2026-07-22): Cell's missing/null fields are
+    # outstanding, so Cell stays calm in the tree as in the badge. The one
+    # genuine error here shows no dot either -- the malformed-BPX diagnostic
+    # attaches to the document root (nav ``()``), which has no tree row; the
+    # badge and the Document bucket carry it (unchanged from the verbatim-era
+    # tree, which equally never surfaced root-attached issues).
+    assert d.tree_error_marked_sections() == []
+
+
+def test_state2b_bad_value_marks_its_section_in_the_tree(app_driver, tmp_path, valid_spm_dict):
+    """The positive half of tree-dot consistency: a genuinely wrong value
+    (not emptiness) keeps its section's red dot, on that section alone."""
+    raw = json.loads(json.dumps(valid_spm_dict))
+    raw["Parameterisation"]["Cell"]["Nominal cell capacity [A.h]"] = []
+    d = app_driver
+    d.open(_write(tmp_path, "bad_value.json", raw))
+
+    assert d.validation_badge_severity() == "error"
+    assert d.tree_error_marked_sections() == [("Parameterisation", "Cell")]
 
 
 # ---------------------------------------------------------------------------
@@ -141,6 +164,40 @@ def test_state3_partial_sparse_electrode(app_driver, tmp_path):
     # Terminology discipline (decision B): "valid"/"invalid" never appear in
     # the Outstanding notice.
     assert "valid" not in notice.lower() and "invalid" not in notice.lower()
+
+
+def test_state3b_partial_null_is_outstanding_not_error(app_driver, tmp_path, valid_spm_dict):
+    """Decision C (revised 2026-07-22): a committed null under Partial is
+    outstanding work, not a red error -- the same calm treatment a concrete
+    model gives it. The motivating scenario: a complete document flipped to
+    Partial with one field emptied used to go red everywhere (row dot, tree
+    dot, badge) while the identical SPM document stayed calm. The Partial
+    notice remains only in a section with no task rows to show."""
+    raw = json.loads(json.dumps(valid_spm_dict))
+    raw["Header"]["Model"] = "Partial"
+    raw["Parameterisation"]["Cell"]["Nominal cell capacity [A.h]"] = None
+    d = app_driver
+    d.open(_write(tmp_path, "partial_null.json", raw))
+
+    assert d.validation_issue_count() == 0
+    assert d.validation_badge_count() == 0
+    assert d.validation_badge_severity() is None
+
+    tasks = d.outstanding_tasks()
+    assert [t.kind for t in tasks] == [TaskKind.NULL_FIELD]
+    assert tasks[0].path == _CAPACITY
+    assert tasks[0].required is False  # nothing is Required under Partial
+    assert "Cell · optional - 1 unfilled" in d.validation_group_headers()
+    assert d.tree_error_marked_sections() == []  # calm tree too
+
+    d.diagnostics_select_rail("Cell")
+    assert d.diagnostics_section_outstanding_title() == "Outstanding"  # no ratio
+    assert d.diagnostics_section_outstanding_empty_text() is None
+    assert "capacity" in " ".join(d.diagnostics_section_task_texts()).lower()
+
+    d.diagnostics_select_rail("Header")
+    notice = d.diagnostics_section_outstanding_empty_text()
+    assert notice is not None and notice.startswith("Model is Partial")
 
 
 # ---------------------------------------------------------------------------

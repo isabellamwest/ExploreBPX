@@ -42,8 +42,6 @@ from core.commands import (
 )
 from core.compare import ComparisonResult, compare
 from core.completion import TaskKind
-from core.tree_model import build_parameter_path_map
-from core.validation import Severity
 from state.app_state import AppState, OpenReferenceOutcome
 from state.document_session import DocumentSession
 
@@ -1193,21 +1191,29 @@ class MainWindow(QMainWindow):
         ``core.completion.partition_issues``.
         """
         document = self._state.active.document if self._state.active else None
-        self._editor_page.set_has_document(document is not None)
-        if document is not None:
-            self._tree.set_root(document.tree)
-        self._params.show_node(None)
-        self._inspector.reset()
-
+        # One derivation point, computed before anything renders: the tree's
+        # dot and the parameter list's dot both carry *page-visible* truth
+        # (decisions P/G), so the partition must exist before set_root paints.
         raw = document.raw if document is not None else None
         model = structure.infer_model(raw) if raw is not None else None
         tasks = completion.document_completion(raw) if raw is not None else ()
         partition = completion.partition_issues(document, tasks) if document is not None else None
+
+        self._editor_page.set_has_document(document is not None)
+        if document is not None:
+            self._tree.set_root(
+                document.tree, completion.visible_error_section_paths(document, partition)
+            )
+        self._params.show_node(None)
+        self._inspector.reset()
+
         # Decision P: stored before any subsequent show_node/reveal renders
         # real rows (those happen later, via a navigation reveal -- show_node
         # above is always called with None here) so the parameter list's dot
         # marker reflects *page-visible* issues, not the validator verbatim.
-        self._params.set_visible_issue_severities(self._visible_issue_severities(document, partition))
+        self._params.set_visible_issue_severities(
+            completion.visible_issue_severities(document, partition)
+        )
 
         buckets = page_buckets.bucket_page_content(raw, model, partition, tasks) if document is not None else None
         self._diagnostics.refresh(buckets, partition, model)
@@ -1231,30 +1237,3 @@ class MainWindow(QMainWindow):
         # _open_reference_path/_on_remove_reference_requested).
         self._recompute_comparison()
 
-    @staticmethod
-    def _visible_issue_severities(document, partition) -> dict[tuple[str, ...], str]:
-        """Parameter paths carrying at least one *page-visible* diagnostic
-        (decision P), mapped to the row's worst severity ("error" if any
-        page-visible issue there is an error, else "warning") -- i.e. one
-        still in ``partition.visible`` after absorption, not one merely
-        present in ``parameter.issues``.
-
-        Built from ``parameter.issues`` (already correctly attached by
-        ``BPXDocument`` -- including the message-recovery fallback for
-        model-level checks, which a fresh nav_path-based lookup would miss)
-        matched against ``partition.visible`` by diagnostic identity, since a
-        ``PydanticErrorDiagnostic`` wraps a raw error dict and is therefore
-        unhashable (no set of diagnostics; ``id()`` stands in).
-        """
-        if document is None or partition is None:
-            return {}
-        visible_severity = {id(diagnostic): diagnostic.severity for diagnostic, _ in partition.visible}
-        parameter_map = build_parameter_path_map(document.tree)
-        result: dict[tuple[str, ...], str] = {}
-        for path, parameter in parameter_map.items():
-            severities = [
-                visible_severity[id(issue)] for issue in parameter.issues if id(issue) in visible_severity
-            ]
-            if severities:
-                result[path] = "error" if Severity.ERROR in severities else "warning"
-        return result

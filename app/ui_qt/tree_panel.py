@@ -57,8 +57,9 @@ from .tree_model import BpxTreeModel
 class _TreeItemDelegate(QStyledItemDelegate):
     """Paints a tree row's default content untouched, then -- for a node
     flagged via :data:`ui_qt.parameter_row.SEVERITY_ROLE` (errors only,
-    ``core.tree_model.has_direct_errors``/``has_direct_parameter_errors``
-    semantics, unchanged) -- a small red dot after its label text.
+    *page-visible* per ``core.completion.visible_error_section_paths`` --
+    absorbed/outstanding diagnostics never light it) -- a small red dot
+    after its label text.
 
     Replaces the bare "⚠" the model used to append to the display string;
     the mark itself is the app's one shared severity spec
@@ -136,9 +137,20 @@ class TreePanel(QWidget):
         #: a menu action opens it, consumed by ``_on_name_chosen``.
         self._popup_intent: tuple[str, tuple[str, ...]] | None = None
 
-    def set_root(self, root: TreeNode) -> None:
+    def set_root(
+        self, root: TreeNode, visible_error_paths: frozenset[tuple[str, ...]] = frozenset()
+    ) -> None:
+        """*visible_error_paths* is the post-absorption dot feed
+        (``core.completion.visible_error_section_paths``) -- always computed
+        alongside the tree it describes, so it is passed per call rather than
+        remembered across rebuilds the way ``_comparison`` is."""
         self._root = root
-        model = BpxTreeModel(root, is_expanded=self._view.isExpanded, comparison=self._comparison)
+        model = BpxTreeModel(
+            root,
+            is_expanded=self._view.isExpanded,
+            comparison=self._comparison,
+            visible_error_paths=visible_error_paths,
+        )
         self._view.setModel(model)
         self._view.expandToDepth(1)
         model.refresh_warning_markers()

@@ -61,7 +61,7 @@ from typing import TYPE_CHECKING
 
 from . import bpx_gateway
 from .bpx_gateway import FieldMeta
-from .tree_model import TreeNode, build_tree
+from .tree_model import TreeNode, build_parameter_path_map, build_tree
 from .validation import Severity, ValidatorDiagnostic, merge_union_pairs_by_location
 
 if TYPE_CHECKING:
@@ -196,8 +196,16 @@ def document_completion(raw: dict) -> tuple[CompletionTask, ...]:
       SPM/SPMe/DFN/Partial) -> exactly one task, ``DECLARE_MODEL`` at
       ``("Header", "Model")``. A garbage value also stays an Issue via the
       validator's own ``literal_error`` -- both are shown, deliberately (V6).
-    * ``Model == "Partial"`` -> no tasks (nothing is Required under Partial;
-      suggestions still come from :func:`completion_for` per section).
+    * ``Model == "Partial"`` -> ``NULL_FIELD`` tasks only (decision C,
+      REVISED 2026-07-22): nothing is Required under Partial, so no
+      ``MISSING_*``/``DECLARE_MODEL`` task can arise -- but decision D is
+      requiredness-independent, and without null tasks a Partial document
+      painted its committed-null fields as red errors while a concrete
+      model kept the very same fields calm. The walk below yields exactly
+      this by construction: under Partial every ``required`` flag
+      :func:`completion_for` computes is False, so the missing-field and
+      child-section branches of :func:`_walk_completion` never fire.
+      Suggestions still come from :func:`completion_for` per section.
     * A concrete model walks every existing section (schema-resolvable, top-
       level and nested -- including ``Particle/<material>`` and
       ``Validation/<run>`` instances) via :func:`completion_for`. A section's
@@ -224,7 +232,12 @@ def document_completion(raw: dict) -> tuple[CompletionTask, ...]:
 
     model = header.get("Model")
     if model == "Partial":
-        return ()
+        # Decision C (revised): no Parameterisation/DECLARE checks -- nothing
+        # is Required under Partial -- but the walk still runs for NULL_FIELD
+        # tasks (see the docstring rule; only nulls can produce tasks here).
+        partial_tasks: list[CompletionTask] = []
+        _walk_completion(build_tree(raw), model, partial_tasks)
+        return tuple(partial_tasks)
     if model not in CONCRETE_MODELS:
         return (CompletionTask(TaskKind.DECLARE_MODEL, ("Header", "Model"), "Model", True),)
 
@@ -337,8 +350,10 @@ def partition_issues(document: "BPXDocument", tasks: tuple[CompletionTask, ...])
         task.
 
     Everything else stays ``visible``, including Partial's union-branch
-    ``missing`` errors (no tasks exist under Partial, so nothing matches --
-    V9) and warning diagnostics (``PythonWarningDiagnostic`` carries neither
+    ``missing`` errors (Partial carries NULL_FIELD tasks only -- V9, narrowed
+    with decision C's 2026-07-22 revision -- and rule (a) needs a MISSING
+    task, so an *absent* field's errors never absorb there) and warning
+    diagnostics (``PythonWarningDiagnostic`` carries neither
     ``error_type`` nor ``loc`` -- read both via ``getattr``). The validator is
     never silenced, only re-seated -- every absorbed diagnostic is still
     retrievable via ``absorbed``/``absorbed_by_task`` (decision O).
@@ -389,3 +404,71 @@ def partition_issues(document: "BPXDocument", tasks: tuple[CompletionTask, ...])
         error_count,
         warning_count,
     )
+
+
+def visible_issue_severities(
+    document: "BPXDocument | None", partition: PartitionedIssues | None
+) -> dict[tuple[str, ...], str]:
+    """Parameter paths carrying at least one *page-visible* diagnostic
+    (decision P), mapped to the row's worst severity ("error" if any
+    page-visible issue there is an error, else "warning") -- i.e. one
+    still in ``partition.visible`` after absorption, not one merely
+    present in ``parameter.issues``. Feeds the parameter list's row dot.
+
+    Built from ``parameter.issues`` (already correctly attached by
+    ``BPXDocument`` -- including the message-recovery fallback for
+    model-level checks, which a fresh nav_path-based lookup would miss)
+    matched against ``partition.visible`` by diagnostic identity, since a
+    ``PydanticErrorDiagnostic`` wraps a raw error dict and is therefore
+    unhashable (no set of diagnostics; ``id()`` stands in).
+    """
+    if document is None or partition is None:
+        return {}
+    visible_severity = {id(diagnostic): diagnostic.severity for diagnostic, _ in partition.visible}
+    parameter_map = build_parameter_path_map(document.tree)
+    result: dict[tuple[str, ...], str] = {}
+    for path, parameter in parameter_map.items():
+        severities = [
+            visible_severity[id(issue)] for issue in parameter.issues if id(issue) in visible_severity
+        ]
+        if severities:
+            result[path] = "error" if Severity.ERROR in severities else "warning"
+    return result
+
+
+def visible_error_section_paths(
+    document: "BPXDocument | None", partition: PartitionedIssues | None
+) -> frozenset[tuple[str, ...]]:
+    """Section paths carrying at least one page-visible ERROR of their own:
+    a visible error diagnostic attached to the section node itself, or to a
+    parameter directly in that section. Feeds the navigation tree's dot
+    (errors only, matching that mark's existing scope).
+
+    The same post-absorption truth as :func:`visible_issue_severities` and
+    the rail badge (decisions P/G: red = "something is wrong", never
+    "something is unstarted") -- a section whose fields are merely absent or
+    committed null is outstanding work, not an error, and must read as calm
+    in the tree exactly as its rows do in the parameter list. Same
+    identity-matching approach as above, for the same unhashability reason.
+    """
+    if document is None or partition is None:
+        return frozenset()
+    visible_error_ids = {
+        id(diagnostic)
+        for diagnostic, _ in partition.visible
+        if diagnostic.severity == Severity.ERROR
+    }
+    result: set[tuple[str, ...]] = set()
+
+    def _walk(node: TreeNode) -> None:
+        direct = any(id(issue) in visible_error_ids for issue in node.issues) or any(
+            any(id(issue) in visible_error_ids for issue in parameter.issues)
+            for parameter in node.parameters
+        )
+        if direct:
+            result.add(node.path)
+        for child in node.children:
+            _walk(child)
+
+    _walk(document.tree)
+    return frozenset(result)

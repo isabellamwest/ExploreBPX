@@ -168,9 +168,22 @@ def test_union_pair_merges_in_issues_tab(app_driver, tmp_path):
     assert d.issues_tab_texts() == ["[ERROR] Input should be a valid number"]
 
 
+def _partial_bad_capacity_path(tmp_path):
+    """A wrong-typed (not null) FloatInt value: a committed null now absorbs
+    into a NULL_FIELD task even under Partial (decision C, revised
+    2026-07-22), so a *page-visible* union pair needs a value that is wrong
+    rather than empty -- a list raises the same ``float_type``/``int_type``
+    pair (V5) but stays a plain, uncalmed Issue."""
+    from core import document_factory
+
+    raw = document_factory.create("Partial", title="probe")
+    raw["Parameterisation"]["Cell"] = {"Nominal cell capacity [A.h]": []}
+    return _write(tmp_path, "partial_bad_capacity.json", raw)
+
+
 def test_union_pair_merges_on_the_page_and_in_the_badge(app_driver, tmp_path):
     d = app_driver
-    d.open(_partial_null_capacity_path(tmp_path))
+    d.open(_partial_bad_capacity_path(tmp_path))
 
     # 4 missing Cell fields + 1 merged capacity row (not 2) = 5.
     assert d.validation_issue_count() == 5
@@ -181,17 +194,18 @@ def test_union_pair_merges_on_the_page_and_in_the_badge(app_driver, tmp_path):
 def test_union_pair_does_not_merge_across_different_locations(app_driver, tmp_path):
     """m1 (reviewed gap): a float_type at one parameter's location and an
     int_type at a DIFFERENT parameter's location must NOT merge -- only an
-    exact pair at the SAME location does (V5/decision Q). Two distinct null
-    FloatInt parameters must render as two separate rows, not one."""
+    exact pair at the SAME location does (V5/decision Q). Two distinct
+    wrong-typed FloatInt parameters must render as two separate rows, not
+    one (wrong-typed, not null -- see ``_partial_bad_capacity_path``)."""
     from core import document_factory
 
     raw = document_factory.create("Partial", title="probe")
     raw["Parameterisation"]["Cell"] = {
-        "Nominal cell capacity [A.h]": None,
-        "Electrode area [m2]": None,
+        "Nominal cell capacity [A.h]": [],
+        "Electrode area [m2]": [],
     }
     d = app_driver
-    d.open(_write(tmp_path, "two_distinct_nulls.json", raw))
+    d.open(_write(tmp_path, "two_distinct_bad_values.json", raw))
 
     matching = [t for t in d.validation_issue_texts() if "should be a valid number" in t]
     assert len(matching) == 2

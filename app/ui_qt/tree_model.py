@@ -39,6 +39,7 @@ class BpxTreeModel(QAbstractItemModel):
         root: TreeNode,
         is_expanded: Callable[[QModelIndex], bool] | None = None,
         comparison: ComparisonResult | None = None,
+        visible_error_paths: frozenset[tuple[str, ...]] = frozenset(),
     ) -> None:
         super().__init__()
         self._root = root
@@ -46,6 +47,14 @@ class BpxTreeModel(QAbstractItemModel):
         #: Reference comparison (multi-file track M2), or ``None`` with no
         #: reference docked (or its decoration hidden). See ``set_comparison``.
         self._comparison = comparison
+        #: Section paths whose dot should show: page-visible errors only
+        #: (``core.completion.visible_error_section_paths``, decisions P/G).
+        #: The marker deliberately does NOT read ``node.has_direct_errors``/
+        #: ``parameter.has_errors`` -- those are validator-verbatim and
+        #: include absorbed (outstanding) diagnostics, so a merely-unfilled
+        #: section would read as broken while the parameter list and rail
+        #: badge call the same state calm.
+        self._visible_error_paths = frozenset(visible_error_paths)
 
     def set_comparison(self, comparison: ComparisonResult | None) -> None:
         """Update the comparison result and repaint every node's label."""
@@ -133,10 +142,13 @@ class BpxTreeModel(QAbstractItemModel):
         return None
 
     def _shows_error_marker(self, index: QModelIndex, node: TreeNode) -> bool:
-        if node.has_direct_errors or node.has_direct_parameter_errors:
+        if node.path in self._visible_error_paths:
             return True
         if not self._is_expanded(index):
-            return any(child.has_errors for child in node.children)
+            # Collapsed rollup: a hidden descendant's dot surfaces on the
+            # deepest visible ancestor (prefix match over section paths).
+            depth = len(node.path)
+            return any(path[:depth] == node.path for path in self._visible_error_paths)
         return False
 
     def _differ_count(self, node: TreeNode) -> int:

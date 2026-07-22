@@ -42,6 +42,40 @@ Anchored at commit `d6f4d9d` ("feat: redo"), working tree clean, **808 tests pas
 > `test_partition_null_function_table_field_absorbs_all_four_branches` and the
 > null-every-field walk in `test_completion.py`.
 
+> **AMENDMENT 2026-07-22 (Partial null fields, user-approved).** Decision C's
+> Partial rule ("`Partial` → no tasks") is **revised**: `document_completion`
+> now yields **NULL_FIELD tasks under Partial** (and still no
+> `MISSING_*`/`DECLARE_MODEL` tasks — nothing is Required there). Motivating
+> observation (user): the editor's red dots on non-filled values were
+> misleading — a committed-null field was calm/outstanding under a concrete
+> model but a page-visible red error under Partial, i.e. the *loosest* mode
+> painted the most red. Decision D was already requiredness-independent, so
+> the fix extends it to Partial rather than adding a new rule; the walk yields
+> exactly NULL_FIELD tasks by construction (every `required` flag is False
+> under Partial). **V9 narrows** accordingly: Partial's union-branch `missing`
+> errors for *absent* fields still stay fully visible (absorption rule (a)
+> needs a MISSING task); only committed nulls absorb. The section-scoped
+> Partial notice ("no completion target") now shows only when the section has
+> no task rows; with nulls present the shared task rendering runs (rows land
+> in the optional sub-group per R, title "Outstanding" with no ratio).
+> Pinned by `test_partial_null_field_becomes_task_and_absorbs`,
+> `test_partial_null_and_missing_split_cleanly` and
+> `test_state3b_partial_null_is_outstanding_not_error`.
+>
+> **Same day, the real fix behind the report:** the navigation tree's red dot
+> was still **validator-verbatim** (`TreeNode.has_direct_errors`), so a
+> document whose fields were merely empty grew dots on every section while
+> the list rows and badge stayed calm. Decision P's page-visible semantics
+> now extend to the tree: `core.completion.visible_error_section_paths`
+> (sibling of `visible_issue_severities`, both moved into core) feeds
+> `BpxTreeModel`, which no longer reads node/parameter issues directly;
+> collapsed rollup is a path-prefix match. Root-attached diagnostics (nav
+> `()`, e.g. malformed `Header.BPX`) have no tree row, as before — the badge
+> and Document bucket carry them. Pinned by
+> `test_visible_error_section_paths_*`, the rewritten marker tests in
+> `test_ui_qt_tree_model.py`, and states 1/2/2b/3b; windowed-screenshot
+> verified (empty sections calm, one bad value keeps its dot).
+
 ---
 
 ## 0. Working agreements (same as the input-system track)

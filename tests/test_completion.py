@@ -427,6 +427,105 @@ def test_partition_partial_sparse_electrode_stays_fully_visible():
     assert result.error_count == 8
 
 
+def test_partial_null_field_becomes_task_and_absorbs(valid_spm_dict):
+    """Decision C (revised 2026-07-22): Partial carries NULL_FIELD tasks --
+    an empty field is outstanding, not a red error, exactly as under a
+    concrete model. The scenario that motivated the revision: a complete
+    document flipped to Partial with one field emptied used to show that
+    field as a page-visible red error."""
+    raw = copy.deepcopy(valid_spm_dict)
+    raw["Header"]["Model"] = "Partial"
+    raw["Parameterisation"]["Cell"]["Nominal cell capacity [A.h]"] = None
+
+    tasks = completion.document_completion(raw)
+    assert tasks == (
+        CompletionTask(
+            TaskKind.NULL_FIELD,
+            ("Parameterisation", "Cell", "Nominal cell capacity [A.h]"),
+            "Nominal cell capacity [A.h]",
+            False,  # nothing is Required under Partial (decision C)
+        ),
+    )
+
+    doc = BPXDocument.from_raw(raw, filename="probe", fmt="json")
+    result = completion.partition_issues(doc, tasks)
+    assert result.visible == ()
+    assert result.error_count == 0
+    assert result.absorbed  # both union-branch nulls re-seated, not silenced
+
+
+def test_partial_null_and_missing_split_cleanly(valid_spm_dict):
+    """The boundary of the revision: in one Partial document, a committed
+    null absorbs into its NULL_FIELD task while a sparse electrode's own
+    union-branch ``missing`` errors stay fully visible (V9, narrowed)."""
+    raw = copy.deepcopy(valid_spm_dict)
+    raw["Header"]["Model"] = "Partial"
+    raw["Parameterisation"]["Cell"]["Nominal cell capacity [A.h]"] = None
+    raw["Parameterisation"]["Negative electrode"] = {"Thickness [m]": 1e-4}
+
+    tasks = completion.document_completion(raw)
+    assert [t.kind for t in tasks] == [TaskKind.NULL_FIELD]
+
+    doc = BPXDocument.from_raw(raw, filename="probe", fmt="json")
+    result = completion.partition_issues(doc, tasks)
+    assert result.visible  # the sparse electrode's own errors, untouched
+    assert all(getattr(d, "error_type", None) == "missing" for d, _ in result.visible)
+    assert all(nav[-2] == "Negative electrode" for _, nav in result.visible)
+    assert result.absorbed  # the null's union pair
+
+
+def _section_paths(raw):
+    doc = BPXDocument.from_raw(raw, filename="probe", fmt="json")
+    tasks = completion.document_completion(raw)
+    partition = completion.partition_issues(doc, tasks)
+    return completion.visible_error_section_paths(doc, partition)
+
+
+def test_visible_error_section_paths_calm_for_merely_empty_document():
+    """The tree-dot regression (user, 2026-07-22): a document whose only
+    'errors' are unfilled fields -- required fields absent (a fresh
+    scaffold) plus one committed null -- must mark NO section. Emptiness is
+    outstanding work everywhere else (list rows, badge); the tree dot must
+    agree."""
+    raw = document_factory.create("SPM", title="probe")
+    raw["Parameterisation"]["Cell"]["Nominal cell capacity [A.h]"] = None
+
+    assert _section_paths(raw) == frozenset()
+
+
+def test_visible_error_section_paths_marks_bad_value_section_only(valid_spm_dict):
+    """A genuinely wrong value stays a red dot -- on its own section, not on
+    ancestors (the collapsed-rollup prefix match is the Qt model's job)."""
+    raw = copy.deepcopy(valid_spm_dict)
+    raw["Parameterisation"]["Cell"]["Nominal cell capacity [A.h]"] = []
+
+    assert _section_paths(raw) == frozenset({("Parameterisation", "Cell")})
+
+
+def test_visible_error_section_paths_marks_extra_forbidden_custom(valid_spm_dict):
+    """Decision P's custom rule carries over to the tree: an
+    ``extra_forbidden`` custom parameter is name-rejection, never absorbed,
+    so its section keeps the dot."""
+    raw = copy.deepcopy(valid_spm_dict)
+    raw["Parameterisation"]["Cell"]["My bespoke thing"] = 3.0
+
+    assert ("Parameterisation", "Cell") in _section_paths(raw)
+
+
+def test_visible_error_section_paths_partial_sparse_electrode_still_marked(valid_spm_dict):
+    """The honest boundary: under Partial a *present but sparse* section's
+    union-branch ``missing`` errors stay visible (V9), so its dot stays --
+    while a committed-null field elsewhere marks nothing."""
+    raw = copy.deepcopy(valid_spm_dict)
+    raw["Header"]["Model"] = "Partial"
+    raw["Parameterisation"]["Cell"]["Nominal cell capacity [A.h]"] = None
+    raw["Parameterisation"]["Negative electrode"] = {"Thickness [m]": 1e-4}
+
+    paths = _section_paths(raw)
+    assert ("Parameterisation", "Negative electrode") in paths
+    assert ("Parameterisation", "Cell") not in paths
+
+
 def test_partition_null_field_absorbs_both_union_branch_diagnostics():
     """V5: a committed-null ``FloatInt`` field raises two diagnostics (one
     per union branch); both must absorb, not just one."""
