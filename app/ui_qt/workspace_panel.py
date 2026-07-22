@@ -8,6 +8,12 @@ other views.
 
 This is the activity-bar page shell (Step 7), the inline New model-chooser
 (Step 8) and drag-and-drop file opening (Step 9).
+
+Restyle (Concept A, signed 2026-07-22): the Diagnostics page's own anatomy,
+reused -- a shaded fixed-width actions rail (Open buttons + the New chooser)
+beside a white pane holding the document and reference as banded-header group
+boxes. The earlier floating-cards-on-a-canvas treatment is gone: no page
+background tint, no vertically centred actions card, no solid validity pill.
 """
 
 from __future__ import annotations
@@ -30,7 +36,7 @@ from core.document import BPXDocument
 from core.document_factory import SUPPORTED_MODELS
 from state.reference_snapshot import ReferenceSnapshot
 
-from . import style
+from . import icons
 from .style import ERROR, OK, WARNING
 
 _INFO_PANEL_EMPTY_STATE_TEXT = "No document open"
@@ -38,6 +44,10 @@ _INFO_PANEL_EMPTY_STATE_TEXT = "No document open"
 # Kept in sync with the Open/Export dialog filter ("BPX (*.json *.yaml *.yml)")
 # in main_window.py; both describe the same supported set of file extensions.
 SUPPORTED_BPX_EXTENSIONS = (".json", ".yaml", ".yml")
+
+#: The actions rail's fixed width -- sized so "Open File as Reference…" and
+#: the longest model descriptor fit on one line at the app's 13px base font.
+_RAIL_WIDTH = 248
 
 
 def _first_supported_local_file(mime_data: QMimeData) -> Path | None:
@@ -67,11 +77,11 @@ _MODEL_DESCRIPTORS: dict[str, str] = {
 
 
 def _reference_validity_text(errors: int, warnings: int) -> tuple[str, str]:
-    """The reference card's validity-pill text and colour, matching the
+    """The reference card's validity text and dot colour, matching the
     document badge's own wording and format exactly ("Valid", "2 errors,
     1 warning") with one deliberate exception: never ``ERROR`` red -- a
     docked reference is read-only and never blocks anything, so amber is
-    as loud as its pill gets."""
+    as loud as its mark gets."""
     if not errors and not warnings:
         return "Valid", OK
     parts = []
@@ -80,6 +90,17 @@ def _reference_validity_text(errors: int, warnings: int) -> tuple[str, str]:
     if warnings:
         parts.append(f"{warnings} warning" + ("s" if warnings != 1 else ""))
     return ", ".join(parts), WARNING
+
+
+def _validity_dot_label() -> QLabel:
+    """The small filled dot beside a validity line -- the shared dot family
+    (:mod:`ui_qt.icons`), rendered as a rich-text ``<img>`` exactly like the
+    Diagnostics strip chips, so the two surfaces can never drift. The text
+    itself lives in a separate plain ``QLabel`` (the ``_info_badge``/
+    ``_reference_badge`` the tests and driver read via ``text()``)."""
+    label = QLabel()
+    label.setObjectName("ValidityDot")
+    return label
 
 
 class WorkspacePanel(QWidget):
@@ -94,104 +115,80 @@ class WorkspacePanel(QWidget):
 
     def __init__(self) -> None:
         super().__init__()
-        # Concept A (revised, signed off): a canvas two steps darker than
-        # the app chrome with white cards on it -- see QWidget#WorkspacePage
-        # in style.py. A plain QWidget subclass ignores stylesheet
-        # backgrounds unless told to paint them (same note as the
-        # Diagnostics strip), so without WA_StyledBackground the canvas
-        # tone silently never draws.
+        # A plain QWidget subclass ignores stylesheet backgrounds unless told
+        # to paint them (same note as the Diagnostics strip), so without
+        # WA_StyledBackground the page's white ground silently never draws.
         self.setObjectName("WorkspacePage")
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setAcceptDrops(True)
 
-        # Two columns: actions on the left (open + new-from-model), the current
-        # document's details on the right. A single full-width Open button over
-        # a stack of everything read awkwardly; splitting actions from data
-        # makes each half legible on its own.
+        # Rail beside pane, edge to edge -- the Diagnostics page's structure.
+        # The rail is a full-height surface, so the page has no floating card
+        # and no dead field: empty space falls inside the two surfaces.
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(24, 24, 24, 24)
-        layout.setSpacing(24)
-
-        # The actions card floats centred in its half (explicit user call:
-        # top-left hugging read as awkward), and is deliberately TALL -- it
-        # takes 4/6 of the column's height (the 1:4:1 stretch split below)
-        # rather than hugging its content, which read as a small box adrift
-        # in empty canvas. Its own layout spreads the button groups through
-        # that height (see _build_actions_card).
-        # No width cap here (unlike the info cards): the card is centred, and
-        # its natural width is what keeps the model descriptors unclipped.
-        left = QVBoxLayout()
-        actions_card = self._build_actions_card()
-        left.addStretch(1)
-        left.addWidget(actions_card, 4, Qt.AlignHCenter)
-        left.addStretch(1)
-        layout.addLayout(left, 1)
-
-        # The document card is a compact, top-aligned tile, not a page-filling
-        # panel: its height follows its content and its width is capped. The
-        # future multi-document Workspace stacks one tile per document in this
-        # column, so the single tile today already has that shape. The
-        # reference heading/card sit below it, both hidden when no reference
-        # is docked -- no empty-state placeholder (explicit user decision).
-        right = QVBoxLayout()
-        right.setSpacing(8)
-        heading = QLabel("Current document")
-        heading.setObjectName("Heading")
-        right.addWidget(heading)
-        self._info_card = self._build_info_card()
-        self._info_card.setMaximumWidth(420)
-        right.addWidget(self._info_card, 0, Qt.AlignTop)
-
-        self._reference_heading = QLabel("Reference")
-        self._reference_heading.setObjectName("ReferenceHeading")
-        right.addWidget(self._reference_heading)
-        self._reference_tile = self._build_reference_card()
-        self._reference_tile.setMaximumWidth(420)
-        right.addWidget(self._reference_tile, 0, Qt.AlignTop)
-
-        right.addStretch(1)
-        layout.addLayout(right, 1)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(self._build_rail())
+        layout.addWidget(self._build_pane(), 1)
 
         self.refresh(None, None, False)
 
-    def _build_actions_card(self) -> QWidget:
-        """The left-hand actions card: Open/Open-as-reference plus the New
-        chooser, on the same white card treatment as the document card so
-        nothing on the page floats directly on the canvas. No heading --
-        the buttons name themselves (explicit user call: an "Actions" label
-        over buttons is noise)."""
-        card = QFrame()
-        card.setObjectName("WorkspaceCard")
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(24, 24, 24, 24)
-        card_layout.setSpacing(14)
+    def _build_rail(self) -> QWidget:
+        """The shaded actions rail: Open/Open-as-reference buttons over the
+        New chooser. No heading over the buttons -- they name themselves
+        (explicit user call: an "Actions" label over buttons is noise)."""
+        rail = QWidget()
+        rail.setObjectName("WorkspaceRail")
+        rail.setAttribute(Qt.WA_StyledBackground, True)
+        rail.setFixedWidth(_RAIL_WIDTH)
+        rail_layout = QVBoxLayout(rail)
+        rail_layout.setContentsMargins(12, 12, 12, 12)
+        rail_layout.setSpacing(6)
 
-        # The card is stretched tall by the page layout; interior stretches
-        # spread the two groups (open buttons, New chooser) evenly through
-        # that height instead of leaving a content clump over empty card.
-        card_layout.addStretch(1)
         self._open_button = QPushButton("Open File…")
         self._open_button.setObjectName("WorkspaceOpen")
         self._open_button.clicked.connect(self.open_requested)
-        card_layout.addWidget(self._open_button, 0, Qt.AlignLeft)
-        card_layout.addSpacing(10)
+        rail_layout.addWidget(self._open_button)
         self._open_reference_button = QPushButton("Open File as Reference…")
         self._open_reference_button.setObjectName("WorkspaceOpenReference")
         self._open_reference_button.clicked.connect(self.open_reference_requested)
-        card_layout.addWidget(self._open_reference_button, 0, Qt.AlignLeft)
-        card_layout.addStretch(1)
-        # Equal widths: two left-aligned buttons of different natural sizes
-        # read as ragged; sizing both to the wider one keeps their edges
-        # flush without stretching them across the whole card.
-        open_width = max(
-            self._open_button.sizeHint().width(),
-            self._open_reference_button.sizeHint().width(),
-        )
-        self._open_button.setMinimumWidth(open_width)
-        self._open_reference_button.setMinimumWidth(open_width)
-        card_layout.addWidget(self._build_new_chooser(), 0)
-        card_layout.addStretch(1)
-        return card
+        rail_layout.addWidget(self._open_reference_button)
+
+        divider = QFrame()
+        divider.setObjectName("WorkspaceRailDivider")
+        divider.setFixedHeight(1)
+        rail_layout.addSpacing(6)
+        rail_layout.addWidget(divider)
+        rail_layout.addSpacing(6)
+
+        rail_layout.addWidget(self._build_new_chooser())
+        rail_layout.addStretch(1)
+        return rail
+
+    def _build_pane(self) -> QWidget:
+        """The white pane: the current-document and reference group boxes,
+        hanging from the top like every other page's content. The future
+        multi-document Workspace stacks one box per document here, so the
+        single box today already has that shape. The reference box is hidden
+        when no reference is docked -- no empty-state placeholder (explicit
+        user decision)."""
+        pane = QWidget()
+        pane.setObjectName("WorkspacePane")
+        pane.setAttribute(Qt.WA_StyledBackground, True)
+        pane_layout = QVBoxLayout(pane)
+        pane_layout.setContentsMargins(24, 24, 24, 24)
+        pane_layout.setSpacing(16)
+
+        self._info_card = self._build_info_card()
+        self._info_card.setMaximumWidth(420)
+        pane_layout.addWidget(self._info_card, 0, Qt.AlignTop)
+
+        self._reference_tile = self._build_reference_card()
+        self._reference_tile.setMaximumWidth(420)
+        pane_layout.addWidget(self._reference_tile, 0, Qt.AlignTop)
+
+        pane_layout.addStretch(1)
+        return pane
 
     @staticmethod
     def _build_kv_form(keys: tuple[str, ...]) -> tuple[QFormLayout, dict[str, QLabel]]:
@@ -219,65 +216,112 @@ class WorkspacePanel(QWidget):
             fields[key] = value
         return form, fields
 
+    @staticmethod
+    def _build_group_box(header: QWidget, frame_name: str, header_name: str) -> tuple[QFrame, QVBoxLayout]:
+        """One banded-header group box (the Diagnostics group-box language):
+        a bordered rounded frame whose first row is a shaded header band,
+        returning the frame and its body layout for the caller to fill."""
+        box = QFrame()
+        box.setObjectName(frame_name)
+        box_layout = QVBoxLayout(box)
+        box_layout.setContentsMargins(0, 0, 0, 0)
+        box_layout.setSpacing(0)
+        header.setObjectName(header_name)
+        header.setAttribute(Qt.WA_StyledBackground, True)
+        box_layout.addWidget(header)
+        body = QWidget()
+        body_layout = QVBoxLayout(body)
+        body_layout.setContentsMargins(12, 10, 12, 12)
+        body_layout.setSpacing(8)
+        box_layout.addWidget(body)
+        return box, body_layout
+
+    @staticmethod
+    def _build_header_band(title_label: QLabel, trailing_label: QLabel) -> QWidget:
+        header = QWidget()
+        band = QHBoxLayout(header)
+        band.setContentsMargins(12, 5, 12, 5)
+        band.setSpacing(8)
+        band.addWidget(title_label)
+        band.addStretch(1)
+        band.addWidget(trailing_label)
+        return header
+
+    def _build_validity_row(self) -> tuple[QHBoxLayout, QLabel, QLabel]:
+        """The dot-plus-text validity line: a coloured mark from the shared
+        dot family beside a plain-text label. Two widgets on purpose -- the
+        text label keeps returning the bare wording ("3 warnings") from
+        ``text()``, which the tests and the driver read."""
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(6)
+        dot = _validity_dot_label()
+        text = QLabel()
+        text.setObjectName("DocInfoBadge")
+        row.addWidget(dot, 0, Qt.AlignVCenter)
+        row.addWidget(text, 0, Qt.AlignVCenter)
+        row.addStretch(1)
+        return row, dot, text
+
     def _build_info_card(self) -> QWidget:
-        """The right-hand current-document card: identity, validity, contents."""
-        card = QFrame()
-        card.setObjectName("WorkspaceCard")
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(16, 16, 16, 16)
-        card_layout.setSpacing(10)
+        """The current-document group box: banded header carrying the role
+        ("Current document" · MAIN), then identity, validity, contents."""
+        title = QLabel("Current document")
+        title.setObjectName("WorkspaceGroupBoxTitle")
+        role = QLabel("MAIN")
+        role.setObjectName("WorkspaceRoleTag")
+        box, body = self._build_group_box(
+            self._build_header_band(title, role),
+            "WorkspaceGroupBox",
+            "WorkspaceGroupBoxHeader",
+        )
 
         self._info_title = QLabel()
         self._info_title.setObjectName("WorkspaceCardTitle")
         self._info_title.setWordWrap(True)
-        card_layout.addWidget(self._info_title)
+        body.addWidget(self._info_title)
 
-        self._info_badge = QLabel()
-        self._info_badge.setObjectName("DocInfoBadge")
-        card_layout.addWidget(self._info_badge, 0, Qt.AlignLeft)
+        badge_row, self._info_dot, self._info_badge = self._build_validity_row()
+        body.addLayout(badge_row)
 
         self._info_form, self._info_fields = self._build_kv_form(
             ("Model", "BPX version", "File", "State", "Contents")
         )
-        card_layout.addLayout(self._info_form)
-        return card
+        body.addLayout(self._info_form)
+        return box
 
     def _build_reference_card(self) -> QWidget:
-        """The docked-reference card (Concept A revised, marker A1): the
-        exact anatomy of the current-document card -- title row, validity
-        pill, key/value rows -- so the two read as the same component. The
-        only reference-specific marks are the "Reference" heading above the
-        card and the small purple Read-only tag on the title row (the
-        reference feature's own hue, ``style.REFERENCE``); the card must
-        never read louder than the document's own. Its fill/border carry a
-        very subtle purple tint (``QFrame#ReferenceCard``), the one place
-        the card itself wears the feature colour."""
-        card = QFrame()
-        card.setObjectName("ReferenceCard")
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(16, 16, 16, 16)
-        card_layout.setSpacing(10)
+        """The docked-reference group box: the exact anatomy of the
+        current-document box -- header band, title, validity line, key/value
+        rows -- so the two read as the same component. The reference-specific
+        marks are the purple "Reference" header title, the small purple
+        Read-only tag on the band, and the band's own subtle purple tint
+        (``QWidget#ReferenceGroupBoxHeader``) -- the card must never read
+        louder than the document's own."""
+        self._reference_heading = QLabel("Reference")
+        self._reference_heading.setObjectName("ReferenceHeading")
+        self._reference_tag = QLabel("Read-only")
+        self._reference_tag.setObjectName("ReferenceReadOnlyTag")
+        box, body = self._build_group_box(
+            self._build_header_band(self._reference_heading, self._reference_tag),
+            "ReferenceGroupBox",
+            "ReferenceGroupBoxHeader",
+        )
 
-        title_row = QHBoxLayout()
-        title_row.setSpacing(10)
         self._reference_filename = QLabel()
         self._reference_filename.setObjectName("WorkspaceCardTitle")
         self._reference_filename.setWordWrap(True)
-        title_row.addWidget(self._reference_filename, 1)
-        self._reference_tag = QLabel("Read-only")
-        self._reference_tag.setObjectName("ReferenceReadOnlyTag")
-        title_row.addWidget(self._reference_tag, 0, Qt.AlignTop)
-        card_layout.addLayout(title_row)
+        body.addWidget(self._reference_filename)
 
-        self._reference_badge = QLabel()
-        card_layout.addWidget(self._reference_badge, 0, Qt.AlignLeft)
+        badge_row, self._reference_dot, self._reference_badge = self._build_validity_row()
+        body.addLayout(badge_row)
 
         self._reference_form, self._reference_fields = self._build_kv_form(("Model", "Contents"))
-        card_layout.addLayout(self._reference_form)
+        body.addLayout(self._reference_form)
 
         # Make main comes first (M4's signed entry point) at the same plain
         # weight as Remove -- neither is styled as a loud action, so the
-        # card still never reads louder than the document card beside it.
+        # card still never reads louder than the document card above it.
         action_row = QHBoxLayout()
         action_row.setSpacing(8)
         self._reference_make_main_button = QPushButton("Make main")
@@ -289,23 +333,24 @@ class WorkspacePanel(QWidget):
         self._reference_remove_button.clicked.connect(self.remove_reference_requested)
         action_row.addWidget(self._reference_remove_button)
         action_row.addStretch(1)
-        card_layout.addLayout(action_row)
+        body.addLayout(action_row)
 
-        return card
+        return box
 
     def _build_new_chooser(self) -> QWidget:
-        """Inline "New" surface: one labelled button per supported model.
+        """Inline "New" surface: one flat, name-first row per supported model
+        with its descriptor beneath -- list-row language, sized to the rail.
 
         Rendered directly on the page (not a dialog or dropdown) so the
-        Workspace page's roomy layout is used as intended.
+        Workspace page's layout is used as intended.
         """
         container = QWidget()
         container.setObjectName("NewChooser")
         layout = QVBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        layout.setSpacing(6)
 
-        heading = QLabel("New")
+        heading = QLabel("NEW")
         heading.setObjectName("NewChooserHeading")
         layout.addWidget(heading)
 
@@ -315,20 +360,26 @@ class WorkspacePanel(QWidget):
         return container
 
     def _build_model_option(self, model: str) -> QWidget:
+        """One chooser row: the model name as a flat bold button over a muted
+        descriptor label. The button keeps its plain ``text()`` (the model
+        name) and ``NewButton_{model}`` objectName -- the seam the tests and
+        driver click -- while the ``modelOption`` dynamic property carries the
+        shared flat-row styling (QSS cannot prefix-match objectNames)."""
         row = QWidget()
-        row_layout = QHBoxLayout(row)
+        row_layout = QVBoxLayout(row)
         row_layout.setContentsMargins(0, 0, 0, 0)
-        row_layout.setSpacing(12)
+        row_layout.setSpacing(0)
 
         button = QPushButton(model)
         button.setObjectName(f"NewButton_{model}")
+        button.setProperty("modelOption", True)
         button.clicked.connect(lambda: self.new_requested.emit(model))
-        row_layout.addWidget(button, 0)
+        row_layout.addWidget(button)
 
-        descriptor = _MODEL_DESCRIPTORS.get(model, model)
-        label = QLabel(descriptor)
-        label.setObjectName("NewChooserDescriptor")
-        row_layout.addWidget(label, 1)
+        descriptor = QLabel(_MODEL_DESCRIPTORS.get(model, model))
+        descriptor.setObjectName("NewChooserDescriptor")
+        descriptor.setWordWrap(True)
+        row_layout.addWidget(descriptor)
 
         return row
 
@@ -349,7 +400,7 @@ class WorkspacePanel(QWidget):
         the raw dict. ``error_count``/``warning_count`` are likewise supplied
         by the caller -- the already-computed ``PartitionedIssues`` totals
         (decision G in ``main_window._refresh_all``), not re-derived here from
-        ``document.error_count``/``warning_count``, so the pill can never
+        ``document.error_count``/``warning_count``, so the badge can never
         disagree with the Diagnostics rail badge over an absorbed diagnostic.
 
         ``reference`` is independent of ``document``: a reference may be
@@ -361,6 +412,7 @@ class WorkspacePanel(QWidget):
         if document is None:
             self._info_title.setText(_INFO_PANEL_EMPTY_STATE_TEXT)
             self._info_title.setEnabled(False)
+            self._info_dot.hide()
             self._info_badge.hide()
             for value in self._info_fields.values():
                 value.setText("")
@@ -381,10 +433,12 @@ class WorkspacePanel(QWidget):
         self._set_validity_badge(error_count, warning_count)
 
     def _set_reference(self, reference: ReferenceSnapshot | None) -> None:
-        """Show/populate or hide the reference heading + card.
+        """Show/populate or hide the reference group box.
 
-        Both are hidden together when no reference is docked -- no
-        empty-state placeholder (explicit user decision)."""
+        Hidden entirely when no reference is docked -- no empty-state
+        placeholder (explicit user decision). The heading lives on the box's
+        own header band; it is still shown/hidden alongside so its visibility
+        keeps answering "is the reference surface on screen"."""
         if reference is None:
             self._reference_heading.hide()
             self._reference_tile.hide()
@@ -398,7 +452,7 @@ class WorkspacePanel(QWidget):
         )
         text, colour = _reference_validity_text(reference.error_count, reference.warning_count)
         self._reference_badge.setText(text)
-        self._reference_badge.setStyleSheet(style.validity_pill_qss(colour))
+        self._reference_dot.setText(icons.html_img(icons.DOT, color=colour))
 
     def _set_validity_badge(self, errors: int, warnings: int) -> None:
         if not errors and not warnings:
@@ -414,7 +468,8 @@ class WorkspacePanel(QWidget):
                 WARNING,
             )
         self._info_badge.setText(text)
-        self._info_badge.setStyleSheet(style.validity_pill_qss(colour))
+        self._info_dot.setText(icons.html_img(icons.DOT, color=colour))
+        self._info_dot.show()
         self._info_badge.show()
 
     def _set_form_visible(self, visible: bool) -> None:

@@ -173,9 +173,9 @@ def all_clear(text: str) -> str:
 
 def validity_pill_qss(background: str) -> str:
     """Inline stylesheet for a document-validity pill (white text on
-    *background*) -- shared by the parameter card's per-card badge and the
-    workspace panel's document-info badge, which used to each hand-roll a
-    slightly different padding."""
+    *background*) -- the parameter card's per-card badge. (The workspace
+    panel used to share this; its Concept A restyle replaced the pill with
+    the dot-plus-plain-text language.)"""
     return f"color: white; background: {background}; padding: 2px 9px; border-radius: 3px;"
 
 
@@ -253,27 +253,61 @@ QLabel#InspectorPlaceholder { color: #57606a; }
    stay quiet: they annotate the value, they are not part of it. */
 QLabel#UnitLabel, QLabel#ReferenceUnitLabel { color: #57606a; }
 QFrame#Card { border: 1px solid #d0d7de; }
-/* Workspace page (Concept A revised, signed off): a canvas one step darker
-   than the app chrome, with one shared white-card treatment for the three
-   regions (actions, current document, reference) -- the same surface
-   inversion the Diagnostics page already uses (shaded rail, white pane).
-   The document and reference cards share the full anatomy (title row,
-   validity pill, key/value rows); the reference card carries the feature's
-   purple (style.REFERENCE) as a very subtle fill/border tint plus its
-   heading and the small Read-only tag -- never louder than the document
-   card (no bar, no caps). */
-QWidget#WorkspacePage { background: #eef1f4; }
-QFrame#WorkspaceCard { background: #ffffff; border: 1px solid #c4cdd5; border-radius: 6px; }
-QFrame#ReferenceCard { background: #fbfafe; border: 1px solid #d5cde6; border-radius: 6px; }
+/* Workspace page (Concept A restyle, signed 2026-07-22): the Diagnostics
+   page's own anatomy reused -- a shaded fixed-width actions rail beside a
+   white pane holding the document and reference as banded-header group
+   boxes. White ground; the earlier canvas tint, floating cards and solid
+   validity pill are gone. Validity is the dot language (ui_qt.icons.DOT
+   beside plain text), exactly as the Diagnostics strip chips draw it. The
+   reference box carries the feature's purple (style.REFERENCE) on its
+   header band, heading and Read-only tag only -- never louder than the
+   document box. */
+QWidget#WorkspacePage, QWidget#WorkspacePane { background: #ffffff; }
+QWidget#WorkspaceRail { background: #f3f4f6; border-right: 1px solid #c4cdd5; }
+QFrame#WorkspaceRailDivider { background: #d9dee5; border: none; }
+/* Rail action buttons: white chips on the shaded rail, the Diagnostics
+   strip-chip treatment (never native grey widgets). */
+QPushButton#WorkspaceOpen, QPushButton#WorkspaceOpenReference {
+    background: #ffffff; border: 1px solid #c4cdd5; border-radius: 6px;
+    padding: 5px 10px; font-size: 12px; text-align: left;
+}
+QPushButton#WorkspaceOpen:hover, QPushButton#WorkspaceOpenReference:hover { background: #eef1f4; }
+QLabel#NewChooserHeading { color: #57606a; font-weight: 600; font-size: 11px; }
+/* One New-chooser model row: flat bold name button over a muted descriptor
+   (list-row language). Property selector on purpose -- the buttons keep
+   their per-model NewButton_{model} objectNames as the test/driver seam,
+   which QSS cannot prefix-match. */
+QPushButton[modelOption="true"] {
+    background: transparent; border: none; border-radius: 4px;
+    padding: 3px 6px; font-weight: 600; text-align: left;
+}
+QPushButton[modelOption="true"]:hover { background: #e8eaed; }
+QLabel#NewChooserDescriptor { color: #57606a; font-size: 12px; padding: 0 6px 2px 6px; }
+/* The two file group boxes: the Diagnostics group-box language (bordered
+   rounded card, shaded banded header). The reference box swaps the band and
+   border to the reference purple's own pale tints. */
+QFrame#WorkspaceGroupBox { background: #ffffff; border: 1px solid #c4cdd5; border-radius: 6px; }
+QWidget#WorkspaceGroupBoxHeader {
+    background: #eef1f4; border-bottom: 1px solid #c4cdd5;
+    border-top-left-radius: 6px; border-top-right-radius: 6px;
+}
+QLabel#WorkspaceGroupBoxTitle { font-weight: 600; }
+QLabel#WorkspaceRoleTag { color: #57606a; font-size: 10px; font-weight: 600; }
+QFrame#ReferenceGroupBox { background: #ffffff; border: 1px solid #d5cde6; border-radius: 6px; }
+QWidget#ReferenceGroupBoxHeader {
+    background: #f6f2fb; border-bottom: 1px solid #d5cde6;
+    border-top-left-radius: 6px; border-top-right-radius: 6px;
+}
 QLabel#WorkspaceCardTitle { font-size: 15px; font-weight: 600; }
 QLabel#WorkspaceCardTitle:disabled { color: #8c959f; font-weight: 400; }
 QLabel#WorkspaceCardKey { color: #57606a; }
-QPushButton#WorkspaceOpen, QPushButton#WorkspaceOpenReference {
-    text-align: left; padding-left: 12px;
+QLabel#ReferenceHeading { color: #6f42c1; font-weight: 600; }
+QLabel#ReferenceReadOnlyTag { color: #6f42c1; font-size: 11px; font-weight: 600; }
+QPushButton#ReferenceTileMakeMain, QPushButton#ReferenceTileRemove {
+    background: #ffffff; border: 1px solid #d0d7de; border-radius: 5px;
+    padding: 3px 10px; font-size: 12px;
 }
-QLabel#NewChooserHeading { color: #57606a; font-weight: 600; }
-QLabel#ReferenceHeading { color: #7a63ad; font-weight: 600; }
-QLabel#ReferenceReadOnlyTag { color: #6f42c1; font-size: 11px; font-weight: 600; margin-top: 3px; }
+QPushButton#ReferenceTileMakeMain:hover, QPushButton#ReferenceTileRemove:hover { background: #f6f8fa; }
 /* Comparison strip (multi-file M2/M3): the slim reference-aware band atop
    the parameter list. Purple identity (style.REFERENCE), muted counts. */
 QWidget#ComparisonStrip { background: #f8f5fc; border-bottom: 1px solid #d0d7de; }
