@@ -64,7 +64,7 @@ passing** per the app-audit Phase A baseline, 2026-07-21. Implementation starts
 - **M5 build IN PROGRESS 2026-07-22, uncommitted** — building step by step
   with a check-in after each step; suite **1409 green** after step 2. Step
   plan: (1) core row model ✔; (2) rail entry + single-pane page ✔;
-  (3) two-pane aligned rendering + shared folding + gaps; (4) value-only
+  (3) two-pane aligned rendering + shared folding + gaps ✔; (4) value-only
   highlight chips; (5) ← gutter pulls; (6) toolbar (‹ › stepper, ⇄ Make
   main, stale band); (7) Up/Down navigation + double-click Editor jump;
   (8) real-window verification. Built so far:
@@ -91,12 +91,26 @@ passing** per the app-audit Phase A baseline, 2026-07-21. Implementation starts
     no document; falls back to Workspace if the document ever goes away
     while Source is current. `icons.py`: new `SOURCE` `</>` glyph.
     `tests/ui_driver.py`: `show_view("Source")` + line/fold/hint readers.
+  - Step 3 (2026-07-22, uncommitted): `SourceView` renders two aligned
+    panes over one shared fold set (`_PaneLine` pairs): per-side section
+    "n parameters" counts, flat NEUTRAL_TINT gap blocks where a side lacks
+    the key, ref-only rows/sections in the reference purple, fillable keys
+    grey with no value (signed F2 rendering), and open tables line-aligned
+    with difflib.SequenceMatcher so a longer table's gaps sit beside its
+    extra entries, not at the tail (caught by an offscreen paint smoke,
+    invisible to the text-level tests). Centre gutter column reserved
+    (40 px, the ← pulls land there in step 5); pane headers
+    "Main · file · model" / "◇ Reference · file · model" above the panes;
+    `refresh` now takes main_name/main_model from `_apply_comparison`.
+    Driver: `source_ref_line_texts`, `source_pane_headers`. 11 new tests;
+    suite 1416 green + 4 pre-existing environment-only failures on this
+    machine (2 known keyboard-focus + 2 real-dialog; the venv's stale
+    bpx 1.1.0 was synced to the committed 1.1.1 pin, which cleared 6
+    other pre-existing failures).
   - **Unlocked calls a later session may revisit with Bella**: rail order
     (Workspace·Editor·Source·Diagnostics); "n parameters" always shown on
-    headers (not only folded); lists close to the word "table" too (no
-    separate word invented). Interim state: with a reference docked the
-    page still renders main-only until step 3 (hint hides so it never
-    lies).
+    headers (not only folded, and per side in two-pane mode); lists close
+    to the word "table" too (no separate word invented).
 - M1 build wireframes (for the record):
   (internal design archive)
 - **Per-milestone workflow (Bella)**: wireframes drawn and approved BEFORE each

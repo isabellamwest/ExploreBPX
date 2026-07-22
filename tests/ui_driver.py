@@ -546,6 +546,20 @@ class AppDriver:
         self._w._source._view.toggle_fold(tuple(path))
         return self
 
+    def source_ref_line_texts(self) -> list[str]:
+        """Reference-pane counterpart of :meth:`source_line_texts`; empty
+        while no reference is docked. Gap blocks read as empty strings, at
+        the same indices as the main pane's lines."""
+        return self._w._source._view.ref_line_texts()
+
+    def source_pane_headers(self) -> tuple[str, str] | None:
+        """The two pane-header labels ("Main · …", "◇ Reference · …"), or
+        ``None`` while the header row is hidden (no reference docked)."""
+        page = self._w._source
+        if page._pane_head.isHidden():
+            return None
+        return (page._main_head.text(), page._ref_head.text())
+
     def source_hint_visible(self) -> bool:
         """Whether the "Open a reference to compare…" toolbar hint is shown.
         ``isHidden()``, not ``isVisible()`` -- the window is never shown in

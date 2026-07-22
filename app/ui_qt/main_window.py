@@ -1004,7 +1004,12 @@ class MainWindow(QMainWindow):
         # it must show (edit, undo/redo, open/new, reference dock/undock)
         # already funnels through this method.
         document = self._state.active.document if self._state.active else None
-        self._source.refresh(document.raw if document is not None else None, reference)
+        self._source.refresh(
+            document.raw if document is not None else None,
+            reference,
+            main_name=document.filename if document is not None else "",
+            main_model=document.identity.model if document is not None else None,
+        )
 
     def _on_ghost_selected(self, section_path: tuple, key: str) -> None:
         """A REF_ONLY ghost row was selected in the parameter list: show its

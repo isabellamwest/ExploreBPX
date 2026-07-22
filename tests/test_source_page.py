@@ -1,5 +1,7 @@
 """The Source page (multi-file track M5): rail entry, single-pane raw-JSON
-rendering, folding, live re-render, and the no-edit invariant.
+rendering, folding, live re-render, the aligned two-pane comparison
+(alignment, gaps, shared folding, per-state text styling), and the no-edit
+invariant.
 
 The aligned row model itself is covered in test_source_rows.py; this file
 covers the page widget and its MainWindow wiring.
@@ -15,6 +17,7 @@ import pytest
 pytest.importorskip("PySide6")
 
 import ui_qt.main_window as main_window_module
+from ui_qt import style
 from ui_qt.source_page import SourcePage
 
 _DOC = {
@@ -26,6 +29,15 @@ _DOC = {
         },
     },
 }
+
+
+class _RefStub:
+    """The slice of ``ReferenceSnapshot`` the Source page consumes."""
+
+    def __init__(self, raw, filename="reference.json", model="SPM"):
+        self.raw = raw
+        self.filename = filename
+        self.model = model
 
 
 def _write(tmp_path: Path, name: str, raw: dict) -> Path:
@@ -144,7 +156,7 @@ def test_hint_visible_only_with_document_and_no_reference(qtbot):
     page.refresh(_DOC, reference=None)
     assert not page._hint.isHidden()
 
-    page.refresh(_DOC, reference=object())
+    page.refresh(_DOC, reference=_RefStub(_DOC))
     assert page._hint.isHidden()
 
 
@@ -161,6 +173,183 @@ def test_page_contains_no_input_widget(qtbot):
     qtbot.addWidget(page)
     page.refresh(_DOC)
 
+    assert not page.findChildren(QLineEdit)
+    assert not page.findChildren(QComboBox)
+    assert not page.findChildren(QAbstractSpinBox)
+    assert not page.findChildren(QTextEdit)
+    assert not page.findChildren(QPlainTextEdit)
+
+
+# ---------------------------------------------------------------------------
+# Two-pane mode (step 3): keyed alignment, gaps, shared folding, styling.
+# ---------------------------------------------------------------------------
+
+_REF = {
+    "Header": {"BPX": "0.1.0", "Title": "Ref cell", "Model": "SPM"},
+    "Parameterisation": {
+        "Cell": {
+            "Reference temperature [K]": 298.15,
+            "Nominal cell capacity [A.h]": 4.0,
+            "Lower voltage cut-off [V]": 2.5,
+        },
+    },
+}
+
+_DOC_MAIN_ONLY = {
+    "Header": dict(_DOC["Header"]),
+    "Parameterisation": {
+        "Cell": {
+            "Reference temperature [K]": 298.15,
+            "Nominal cell capacity [A.h]": 5.0,
+            "Upper voltage cut-off [V]": 4.2,
+        },
+    },
+}
+
+
+def _two_pane(qtbot, main_raw, ref_raw):
+    page = SourcePage()
+    qtbot.addWidget(page)
+    page.refresh(main_raw, reference=_RefStub(ref_raw))
+    return page
+
+
+def test_two_pane_alignment_with_gaps(qtbot):
+    page = _two_pane(qtbot, _DOC_MAIN_ONLY, _REF)
+
+    main_texts = page._view.line_texts()
+    ref_texts = page._view.ref_line_texts()
+    assert len(main_texts) == len(ref_texts)
+
+    # Equal and differing rows sit side by side at the same index.
+    index = main_texts.index('"Nominal cell capacity [A.h]": 5.0')
+    assert ref_texts[index] == '"Nominal cell capacity [A.h]": 4.0'
+
+    # Ref-only slots in after the nearest preceding shared key, with a gap
+    # (empty text) on the main side; main-only leaves the gap on the ref side.
+    ref_only = ref_texts.index('"Lower voltage cut-off [V]": 2.5')
+    assert ref_only == index + 1
+    assert main_texts[ref_only] == ""
+    main_only = main_texts.index('"Upper voltage cut-off [V]": 4.2')
+    assert ref_texts[main_only] == ""
+
+
+def test_two_pane_section_headers_count_their_own_side(qtbot):
+    page = _two_pane(qtbot, _DOC_MAIN_ONLY, _REF)
+
+    main_texts = page._view.line_texts()
+    ref_texts = page._view.ref_line_texts()
+    index = main_texts.index("Cell  ·  3 parameters")
+    assert ref_texts[index] == "Cell  ·  3 parameters"
+    assert main_texts[0] == "Header  ·  3 parameters"
+
+
+def test_fillable_renders_grey_key_without_value(qtbot):
+    main = {"Parameterisation": {"Cell": {"Capacity": None}}}
+    ref = {"Parameterisation": {"Cell": {"Capacity": 28700}}}
+    page = _two_pane(qtbot, main, ref)
+
+    main_texts = page._view.line_texts()
+    ref_texts = page._view.ref_line_texts()
+    index = main_texts.index('"Capacity":')
+    assert ref_texts[index] == '"Capacity": 28700'
+    line = page._view._lines[index]
+    assert line.main.segments[0].color == style.GHOST_TEXT
+
+
+def test_ref_only_rows_render_in_reference_purple(qtbot):
+    page = _two_pane(qtbot, _DOC_MAIN_ONLY, _REF)
+
+    ref_texts = page._view.ref_line_texts()
+    index = ref_texts.index('"Lower voltage cut-off [V]": 2.5')
+    line = page._view._lines[index]
+    assert line.main.gap is True
+    assert line.ref.segments[0].color == style.REFERENCE
+
+
+def test_ref_only_section_gaps_the_whole_main_side(qtbot):
+    ref = dict(_REF)
+    ref["State"] = {"SOC": 1.0}
+    page = _two_pane(qtbot, _DOC_MAIN_ONLY, ref)
+
+    main_texts = page._view.line_texts()
+    ref_texts = page._view.ref_line_texts()
+    header = ref_texts.index("State  ·  1 parameter")
+    child = ref_texts.index('"SOC": 1.0')
+    assert main_texts[header] == ""
+    assert main_texts[child] == ""
+    header_line = page._view._lines[header]
+    assert header_line.ref.segments[0].color == style.REFERENCE
+
+
+def test_shared_fold_folds_both_panes(qtbot):
+    page = _two_pane(qtbot, _DOC_MAIN_ONLY, _REF)
+
+    page._view.toggle_fold(("Header",))
+    assert '"BPX": "0.1.0"' not in page._view.line_texts()
+    assert '"BPX": "0.1.0"' not in page._view.ref_line_texts()
+
+    page._view.toggle_fold(("Header",))
+    assert '"BPX": "0.1.0"' in page._view.ref_line_texts()
+
+
+def test_two_pane_table_pads_shorter_side_with_gaps(qtbot):
+    main = {"Section": {"T": {"x": [1.0, 2.0], "y": [3.0, 4.0]}}}
+    ref = {"Section": {"T": {"x": [1.0, 2.0, 9.0], "y": [3.0, 4.0, 5.0]}}}
+    page = _two_pane(qtbot, main, ref)
+
+    main_texts = page._view.line_texts()
+    ref_texts = page._view.ref_line_texts()
+    assert len(main_texts) == len(ref_texts)
+    # The reference table is two JSON lines longer; the main side carries
+    # exactly that many gap lines, each beside the extra entry itself
+    # (inside the table), so shared lines like "]" stay paired.
+    assert main_texts.count("") == 2
+    assert ref_texts.count("") == 0
+    gaps = [i for i, text in enumerate(main_texts) if text == ""]
+    assert [ref_texts[i] for i in gaps] == ["9.0", "5.0"]
+
+
+def test_two_pane_closed_table_summarises_both_sides(qtbot):
+    main = {"Section": {"T": {"x": [1.0], "y": [2.0]}}}
+    ref = {"Section": {"T": {"x": [1.0], "y": [3.0]}}}
+    page = _two_pane(qtbot, main, ref)
+
+    page._view.toggle_fold(("Section", "T"))
+    main_texts = page._view.line_texts()
+    ref_texts = page._view.ref_line_texts()
+    index = main_texts.index('"T": table')
+    assert ref_texts[index] == '"T": table'
+
+
+def test_pane_headers_show_roles_names_and_models(qtbot):
+    page = SourcePage()
+    qtbot.addWidget(page)
+
+    page.refresh(_DOC, reference=None)
+    assert page._pane_head.isHidden()
+
+    page.refresh(
+        _DOC,
+        reference=_RefStub(_REF, filename="lfp.json", model="SPMe"),
+        main_name="nmc.json",
+        main_model="DFN",
+    )
+    assert not page._pane_head.isHidden()
+    assert page._main_head.text() == "Main  ·  nmc.json  ·  DFN"
+    assert page._ref_head.text() == "◇ Reference  ·  lfp.json  ·  SPMe"
+
+
+def test_two_pane_page_still_has_no_input_widget(qtbot):
+    from PySide6.QtWidgets import (
+        QAbstractSpinBox,
+        QComboBox,
+        QLineEdit,
+        QPlainTextEdit,
+        QTextEdit,
+    )
+
+    page = _two_pane(qtbot, _DOC_MAIN_ONLY, _REF)
     assert not page.findChildren(QLineEdit)
     assert not page.findChildren(QComboBox)
     assert not page.findChildren(QAbstractSpinBox)
@@ -215,3 +404,25 @@ def test_source_hint_clears_when_reference_docks(app_driver, tmp_path, monkeypat
 
     app_driver.click_reference_remove()
     assert app_driver.source_hint_visible() is True
+
+
+def test_source_two_pane_follows_reference_dock(app_driver, tmp_path, monkeypatch):
+    app_driver.open(_write(tmp_path, "main.json", _DOC_MAIN_ONLY)).show_view("Source")
+    assert app_driver.source_ref_line_texts() == []
+    assert app_driver.source_pane_headers() is None
+
+    _stub_open_dialog(monkeypatch, _write(tmp_path, "reference.json", _REF))
+    app_driver.show_view("Workspace").click_workspace_open_reference()
+    app_driver.show_view("Source")
+
+    ref_texts = app_driver.source_ref_line_texts()
+    assert '"Nominal cell capacity [A.h]": 4.0' in ref_texts
+    assert len(ref_texts) == len(app_driver.source_line_texts())
+    headers = app_driver.source_pane_headers()
+    assert headers is not None
+    assert headers[0].startswith("Main")
+    assert "reference.json" in headers[1]
+
+    app_driver.click_reference_remove()
+    assert app_driver.source_ref_line_texts() == []
+    assert app_driver.source_pane_headers() is None
