@@ -292,7 +292,6 @@ QWidget#WorkspaceGroupBoxHeader {
     border-top-left-radius: 6px; border-top-right-radius: 6px;
 }
 QLabel#WorkspaceGroupBoxTitle { font-weight: 600; }
-QLabel#WorkspaceRoleTag { color: #57606a; font-size: 10px; font-weight: 600; }
 QFrame#ReferenceGroupBox { background: #ffffff; border: 1px solid #d5cde6; border-radius: 6px; }
 QWidget#ReferenceGroupBoxHeader {
     background: #f6f2fb; border-bottom: 1px solid #d5cde6;
@@ -302,7 +301,9 @@ QLabel#WorkspaceCardTitle { font-size: 15px; font-weight: 600; }
 QLabel#WorkspaceCardTitle:disabled { color: #8c959f; font-weight: 400; }
 QLabel#WorkspaceCardKey { color: #57606a; }
 QLabel#ReferenceHeading { color: #6f42c1; font-weight: 600; }
-QLabel#ReferenceReadOnlyTag { color: #6f42c1; font-size: 11px; font-weight: 600; }
+/* Quieter than the heading beside it (explicit user call): a light, small
+   annotation, not a badge. */
+QLabel#ReferenceReadOnlyTag { color: #7a63ad; font-size: 10px; }
 QPushButton#ReferenceTileMakeMain, QPushButton#ReferenceTileRemove {
     background: #ffffff; border: 1px solid #d0d7de; border-radius: 5px;
     padding: 3px 10px; font-size: 12px;

@@ -45,9 +45,14 @@ _INFO_PANEL_EMPTY_STATE_TEXT = "No document open"
 # in main_window.py; both describe the same supported set of file extensions.
 SUPPORTED_BPX_EXTENSIONS = (".json", ".yaml", ".yml")
 
-#: The actions rail's fixed width -- sized so "Open File as Reference…" and
-#: the longest model descriptor fit on one line at the app's 13px base font.
-_RAIL_WIDTH = 248
+#: The actions rail's fixed width. Wider than the content strictly needs
+#: (explicit user call): the rail/pane divider sits further right so the
+#: centred document column doesn't leave a lopsided field on its right.
+_RAIL_WIDTH = 340
+
+#: The document column's fixed width -- one width for both group boxes so
+#: the main and reference cards always read as the same component.
+_CARD_COLUMN_WIDTH = 440
 
 
 def _first_supported_local_file(mime_data: QMimeData) -> Path | None:
@@ -175,18 +180,26 @@ class WorkspacePanel(QWidget):
         pane = QWidget()
         pane.setObjectName("WorkspacePane")
         pane.setAttribute(Qt.WA_StyledBackground, True)
-        pane_layout = QVBoxLayout(pane)
+        # The boxes live in one fixed-width column centred between the rail
+        # and the window edge (explicit user call): left-hugging the divider
+        # left an awkward empty field on the column's right.
+        pane_layout = QHBoxLayout(pane)
         pane_layout.setContentsMargins(24, 24, 24, 24)
-        pane_layout.setSpacing(16)
+        column = QWidget()
+        column.setFixedWidth(_CARD_COLUMN_WIDTH)
+        column_layout = QVBoxLayout(column)
+        column_layout.setContentsMargins(0, 0, 0, 0)
+        column_layout.setSpacing(16)
 
         self._info_card = self._build_info_card()
-        self._info_card.setMaximumWidth(420)
-        pane_layout.addWidget(self._info_card, 0, Qt.AlignTop)
+        column_layout.addWidget(self._info_card)
 
         self._reference_tile = self._build_reference_card()
-        self._reference_tile.setMaximumWidth(420)
-        pane_layout.addWidget(self._reference_tile, 0, Qt.AlignTop)
+        column_layout.addWidget(self._reference_tile)
 
+        column_layout.addStretch(1)
+        pane_layout.addStretch(1)
+        pane_layout.addWidget(column)
         pane_layout.addStretch(1)
         return pane
 
@@ -237,14 +250,15 @@ class WorkspacePanel(QWidget):
         return box, body_layout
 
     @staticmethod
-    def _build_header_band(title_label: QLabel, trailing_label: QLabel) -> QWidget:
+    def _build_header_band(title_label: QLabel, trailing_label: QLabel | None = None) -> QWidget:
         header = QWidget()
         band = QHBoxLayout(header)
         band.setContentsMargins(12, 5, 12, 5)
         band.setSpacing(8)
         band.addWidget(title_label)
         band.addStretch(1)
-        band.addWidget(trailing_label)
+        if trailing_label is not None:
+            band.addWidget(trailing_label)
         return header
 
     def _build_validity_row(self) -> tuple[QHBoxLayout, QLabel, QLabel]:
@@ -264,14 +278,14 @@ class WorkspacePanel(QWidget):
         return row, dot, text
 
     def _build_info_card(self) -> QWidget:
-        """The current-document group box: banded header carrying the role
-        ("Current document" · MAIN), then identity, validity, contents."""
-        title = QLabel("Current document")
+        """The main-document group box: banded header naming the role
+        plainly ("Main document" -- "main" is the app's one role word, per
+        the UI copy rule; no tag, the caps MAIN tag read as noise), then
+        identity, validity, contents."""
+        title = QLabel("Main document")
         title.setObjectName("WorkspaceGroupBoxTitle")
-        role = QLabel("MAIN")
-        role.setObjectName("WorkspaceRoleTag")
         box, body = self._build_group_box(
-            self._build_header_band(title, role),
+            self._build_header_band(title),
             "WorkspaceGroupBox",
             "WorkspaceGroupBoxHeader",
         )
@@ -293,12 +307,13 @@ class WorkspacePanel(QWidget):
     def _build_reference_card(self) -> QWidget:
         """The docked-reference group box: the exact anatomy of the
         current-document box -- header band, title, validity line, key/value
-        rows -- so the two read as the same component. The reference-specific
-        marks are the purple "Reference" header title, the small purple
-        Read-only tag on the band, and the band's own subtle purple tint
+        rows -- so the two read as the same component. Its header mirrors the
+        primary box's format ("Reference document"); the reference-specific
+        marks are that title's purple, the small light Read-only tag on the
+        band, and the band's own subtle purple tint
         (``QWidget#ReferenceGroupBoxHeader``) -- the card must never read
         louder than the document's own."""
-        self._reference_heading = QLabel("Reference")
+        self._reference_heading = QLabel("Reference document")
         self._reference_heading.setObjectName("ReferenceHeading")
         self._reference_tag = QLabel("Read-only")
         self._reference_tag.setObjectName("ReferenceReadOnlyTag")
