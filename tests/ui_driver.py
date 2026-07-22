@@ -552,6 +552,11 @@ class AppDriver:
         the same indices as the main pane's lines."""
         return self._w._source._view.ref_line_texts()
 
+    def source_chipped_texts(self) -> list[tuple[int, str, str]]:
+        """Every value-chip highlight as (line index, "main"/"ref", text);
+        empty with no reference docked (chips are a two-pane signal)."""
+        return self._w._source._view.chipped_texts()
+
     def source_pane_headers(self) -> tuple[str, str] | None:
         """The two pane-header labels ("Main · …", "◇ Reference · …"), or
         ``None`` while the header row is hidden (no reference docked)."""

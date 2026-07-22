@@ -358,6 +358,135 @@ def test_two_pane_page_still_has_no_input_widget(qtbot):
 
 
 # ---------------------------------------------------------------------------
+# Value chips (step 4): chip placement per state, values only.
+# ---------------------------------------------------------------------------
+
+
+def test_differs_chips_the_value_on_both_sides(qtbot):
+    page = _two_pane(qtbot, _DOC_MAIN_ONLY, _REF)
+
+    chips = page._view.chipped_texts()
+    index = page._view.line_texts().index('"Nominal cell capacity [A.h]": 5.0')
+    assert (index, "main", "5.0") in chips
+    assert (index, "ref", "4.0") in chips
+    # Values only -- no chip ever contains a key.
+    assert not any("Nominal" in text for _, _, text in chips)
+
+
+def test_equal_main_only_and_ref_only_rows_carry_no_chip(qtbot):
+    page = _two_pane(qtbot, _DOC_MAIN_ONLY, _REF)
+
+    chip_lines = {index for index, _, _ in page._view.chipped_texts()}
+    main_texts = page._view.line_texts()
+    ref_texts = page._view.ref_line_texts()
+    assert main_texts.index('"Reference temperature [K]": 298.15') not in chip_lines
+    assert main_texts.index('"Upper voltage cut-off [V]": 4.2') not in chip_lines
+    assert ref_texts.index('"Lower voltage cut-off [V]": 2.5') not in chip_lines
+
+
+def test_fillable_chips_the_reference_side_value_only(qtbot):
+    main = {"Parameterisation": {"Cell": {"Capacity": None}}}
+    ref = {"Parameterisation": {"Cell": {"Capacity": 28700}}}
+    page = _two_pane(qtbot, main, ref)
+
+    assert [
+        (side, text) for _, side, text in page._view.chipped_texts()
+    ] == [("ref", "28700")]
+
+
+def test_function_string_chips_only_the_differing_tokens(qtbot):
+    main = {"Parameterisation": {"Cell": {"D": "8.3e-4 * exp(-4300 / T)"}}}
+    ref = {"Parameterisation": {"Cell": {"D": "6.1e-4 * exp(-4300 / T)"}}}
+    page = _two_pane(qtbot, main, ref)
+
+    chips = page._view.chipped_texts()
+    assert [(side, text) for _, side, text in chips] == [
+        ("main", "8.3e-4"),
+        ("ref", "6.1e-4"),
+    ]
+    # The full line still reads as the whole JSON value.
+    index = chips[0][0]
+    assert page._view.line_texts()[index] == '"D": "8.3e-4 * exp(-4300 / T)"'
+
+
+def test_open_table_chips_changed_entries_not_extras(qtbot):
+    main = {"Section": {"T": {"x": [1.0, 2.0], "y": [3.0, 4.0]}}}
+    ref = {"Section": {"T": {"x": [1.0, 2.0], "y": [3.5, 4.0, 5.0]}}}
+    page = _two_pane(qtbot, main, ref)
+
+    chips = page._view.chipped_texts()
+    texts = {(side, text) for _, side, text in chips}
+    # The changed entry chips on both sides; the trailing-comma pair
+    # ("4.0" vs "4.0,") and the extra entry facing a gap do not.
+    assert ("main", "3.0,") in texts
+    assert ("ref", "3.5,") in texts
+    assert not any("4.0" in text for text in [t for _, t in texts])
+    assert not any("5.0" in text for text in [t for _, t in texts])
+
+
+def test_closed_table_chips_the_table_word_when_it_differs(qtbot):
+    main = {"Section": {"T": {"x": [1.0], "y": [2.0]}}}
+    ref = {"Section": {"T": {"x": [1.0], "y": [3.0]}}}
+    page = _two_pane(qtbot, main, ref)
+    page._view.toggle_fold(("Section", "T"))
+
+    chips = page._view.chipped_texts()
+    index = page._view.line_texts().index('"T": table')
+    assert (index, "main", "table") in chips
+    assert (index, "ref", "table") in chips
+
+
+def test_closed_equal_table_stays_plain(qtbot):
+    same = {"Section": {"T": {"x": [1.0], "y": [2.0]}}}
+    page = _two_pane(qtbot, same, {"Section": {"T": {"x": [1.0], "y": [2.0]}}})
+    page._view.toggle_fold(("Section", "T"))
+
+    assert page._view.chipped_texts() == []
+
+
+def test_collapsed_section_with_differences_chips_its_dots(qtbot):
+    page = _two_pane(qtbot, _DOC_MAIN_ONLY, _REF)
+    page._view.toggle_fold(("Parameterisation",))
+
+    chips = page._view.chipped_texts()
+    main_texts = page._view.line_texts()
+    index = next(
+        i for i, text in enumerate(main_texts)
+        if text.startswith("Parameterisation  ·  3 parameters")
+    )
+    assert main_texts[index].endswith("⋯")
+    assert (index, "main", "⋯") in chips
+    assert (index, "ref", "⋯") in chips
+
+    # An equal collapsed section stays plain: Header differs only in Title
+    # here, so build an equal one explicitly.
+    equal = {"Header": dict(_DOC["Header"])}
+    page2 = _two_pane(qtbot, equal, {"Header": dict(_DOC["Header"])})
+    page2._view.toggle_fold(("Header",))
+    assert page2._view.chipped_texts() == []
+
+
+def test_ref_only_section_header_carries_no_dots_chip(qtbot):
+    ref = dict(_REF)
+    ref["State"] = {"SOC": 1.0}
+    page = _two_pane(qtbot, _DOC_MAIN_ONLY, ref)
+
+    ref_texts = page._view.ref_line_texts()
+    header = ref_texts.index("State  ·  1 parameter")
+    page._view.toggle_fold(("State",))
+    chips = page._view.chipped_texts()
+    assert not any(index == header and text == "⋯" for index, _, text in chips)
+
+
+def test_single_pane_never_chips(qtbot):
+    page = SourcePage()
+    qtbot.addWidget(page)
+    page.refresh(_DOC)
+
+    assert page._view.chipped_texts() == []
+
+
+# ---------------------------------------------------------------------------
 # MainWindow wiring, through the driver.
 # ---------------------------------------------------------------------------
 

@@ -65,7 +65,7 @@ passing** per the app-audit Phase A baseline, 2026-07-21. Implementation starts
   with a check-in after each step; suite **1409 green** after step 2. Step
   plan: (1) core row model ✔; (2) rail entry + single-pane page ✔;
   (3) two-pane aligned rendering + shared folding + gaps ✔; (4) value-only
-  highlight chips; (5) ← gutter pulls; (6) toolbar (‹ › stepper, ⇄ Make
+  highlight chips ✔; (5) ← gutter pulls; (6) toolbar (‹ › stepper, ⇄ Make
   main, stale band); (7) Up/Down navigation + double-click Editor jump;
   (8) real-window verification. Built so far:
   - `app/core/source_rows.py` (+ `tests/test_source_rows.py`, 14 tests):
@@ -107,6 +107,22 @@ passing** per the app-audit Phase A baseline, 2026-07-21. Implementation starts
     machine (2 known keyboard-focus + 2 real-dialog; the venv's stale
     bpx 1.1.0 was synced to the committed 1.1.1 pin, which cleared 6
     other pre-existing failures).
+  - Step 4 (2026-07-22, uncommitted): value-only chips over a new
+    `style.DIFF_TINT` (#ffdfb8, the frames' chip wash, added to the
+    palette like M2's REFERENCE_TINT). `_Segment.chip` painted as a
+    rounded wash behind the segment. Placement: DIFFERS chips both
+    sides' values -- token-level for string pairs (whitespace-token
+    difflib, quotes stay outside the chip) so functions light only their
+    changed segments; FILLABLE chips the reference-side value alone;
+    open tables chip replace-paired entry lines on both sides (comma-only
+    pairs and gap-facing extras stay plain; key/caret lines never chip);
+    closed differing tables chip the "table" word; shared collapsed
+    sections holding any difference append a chipped "  ⋯" (ref-only
+    headers stay purple-without-chip; equal/main-only stay plain).
+    Single-pane never chips. `SourceView.chipped_texts()` +
+    driver `source_chipped_texts()`. 10 new tests; suite 1426 green +
+    the same 4 environment-only failures (one toast timing flake passed
+    on re-run). Offscreen screenshot matches F1/F2 chip placement.
   - **Unlocked calls a later session may revisit with Bella**: rail order
     (Workspace·Editor·Source·Diagnostics); "n parameters" always shown on
     headers (not only folded, and per side in two-pane mode); lists close

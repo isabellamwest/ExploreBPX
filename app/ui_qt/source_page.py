@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import difflib
 import json
+import re
 from dataclasses import dataclass
 
 from PySide6.QtCore import Qt
@@ -62,6 +63,10 @@ class _Segment:
     color: str = style.DEFAULT_TEXT
     bold: bool = False
     italic: bool = False
+    #: Painted over the ``style.DIFF_TINT`` wash: the value-only highlight
+    #: chip of the signed frames. Only values (or the ⋯/"table" stand-ins)
+    #: ever chip -- keys, structure and whole rows never do.
+    chip: bool = False
 
 
 @dataclass(frozen=True)
@@ -120,17 +125,46 @@ def _param_counts(
 
 
 def _section_pane(
-    row: SourceRow, key_color: str, count: int, is_closed: bool
+    row: SourceRow,
+    key_color: str,
+    count: int,
+    is_closed: bool,
+    diff_dots: bool = False,
 ) -> _PaneLine:
     noun = "parameter" if count == 1 else "parameters"
+    segments = [
+        _Segment(row.key, color=key_color, bold=True),
+        _Segment(f"  ·  {count} {noun}", color=style.MUTED),
+    ]
+    if diff_dots:
+        # A collapsed section signals with a chipped ⋯ when anything inside
+        # differs, is fillable or is ref-only (the signed frames' call: no
+        # text counts, the chip carries the whole signal).
+        segments += [_Segment("  "), _Segment("⋯", color=style.MUTED, chip=True)]
     return _PaneLine(
-        segments=(
-            _Segment(row.key, color=key_color, bold=True),
-            _Segment(f"  ·  {count} {noun}", color=style.MUTED),
-        ),
+        segments=tuple(segments),
         depth=row.depth,
         caret=_CARET_CLOSED if is_closed else _CARET_OPEN,
     )
+
+
+def _token_diff_segments(value: str, other: str, color: str) -> tuple[_Segment, ...]:
+    """A differing string value rendered with only its changed parts
+    chipped: whitespace-delimited tokens are diffed against the other
+    side, so ``"8.3e-4 * exp(-4300 / T)"`` chips ``8.3e-4`` alone when the
+    tail is shared (the signed frames' function-segment chips)."""
+    dumped = format_value(value)[1:-1]
+    other_dumped = format_value(other)[1:-1]
+    tokens = re.split(r"(\s+)", dumped)
+    other_tokens = re.split(r"(\s+)", other_dumped)
+    matcher = difflib.SequenceMatcher(None, tokens, other_tokens, autojunk=False)
+    segments = [_Segment('"', color=color)]
+    for tag, start, end, _, _ in matcher.get_opcodes():
+        text = "".join(tokens[start:end])
+        if text:
+            segments.append(_Segment(text, color=color, chip=tag != "equal"))
+    segments.append(_Segment('"', color=color))
+    return tuple(segments)
 
 
 def _open_value_panes(
@@ -167,9 +201,17 @@ def _param_side_panes(
     color: str,
     fillable: bool,
     is_closed: bool,
+    chip: str | None = None,
+    other_value: object = None,
 ) -> list[_PaneLine]:
     """One side's lines for a PARAM row; empty when the side lacks the key
-    (the caller pads with gap blocks to keep the panes aligned)."""
+    (the caller pads with gap blocks to keep the panes aligned).
+
+    *chip* is the side's value-chip mode: ``None`` (no chip), ``"whole"``
+    (chip the whole rendered value) or ``"tokens"`` (string values only:
+    chip just the tokens that differ from *other_value*). Open dict/list
+    values ignore it -- their chips come from the line alignment instead.
+    """
     if not present:
         return []
     if fillable:
@@ -187,29 +229,63 @@ def _param_side_panes(
                 _PaneLine(
                     segments=(
                         _Segment(f'"{row.key}": ', color=color),
-                        _Segment(_CLOSED_SUMMARY, color=style.MUTED, italic=True),
+                        _Segment(
+                            _CLOSED_SUMMARY,
+                            color=style.MUTED,
+                            italic=True,
+                            chip=chip is not None,
+                        ),
                     ),
                     depth=row.depth,
                     caret=_CARET_CLOSED,
                 )
             ]
         return _open_value_panes(row.key, value, row.depth, color)
+    prefix = _Segment(f'"{row.key}": ', color=color)
+    if chip == "tokens" and isinstance(value, str) and isinstance(other_value, str):
+        return [
+            _PaneLine(
+                segments=(prefix,) + _token_diff_segments(value, other_value, color),
+                depth=row.depth,
+            )
+        ]
     return [
         _PaneLine(
             segments=(
-                _Segment(f'"{row.key}": {format_value(value)}', color=color),
+                prefix,
+                _Segment(format_value(value), color=color, chip=chip is not None),
             ),
             depth=row.depth,
         )
     ]
 
 
+def _chip_pane(pane: _PaneLine) -> _PaneLine:
+    return _PaneLine(
+        segments=tuple(
+            _Segment(s.text, s.color, s.bold, s.italic, True) for s in pane.segments
+        ),
+        depth=pane.depth,
+        caret=pane.caret,
+    )
+
+
 def _align_panes(
-    main_panes: list[_PaneLine], ref_panes: list[_PaneLine], depth: int
+    main_panes: list[_PaneLine],
+    ref_panes: list[_PaneLine],
+    depth: int,
+    chip_replaced: bool = False,
 ) -> list[tuple[_PaneLine, _PaneLine]]:
     """Pair one parameter's two sides line by line: identical JSON lines
     pair up, unmatched lines face a gap block -- so a longer table pads
-    beside its extra entries, inside the table, never at its tail."""
+    beside its extra entries, inside the table, never at its tail.
+
+    With *chip_replaced* (open dict/list values), the entry lines that
+    genuinely changed -- paired but different beyond a trailing comma --
+    chip on both sides: the frames' per-table-entry chips. Extra entries
+    facing a gap do not chip (the gap already carries the signal), and key
+    lines (carets) never chip.
+    """
     gap = _gap(depth)
     if not main_panes:
         return [(gap, pane) for pane in ref_panes]
@@ -225,12 +301,19 @@ def _align_panes(
     for tag, m1, m2, r1, r2 in matcher.get_opcodes():
         if tag in ("equal", "replace"):
             for offset in range(max(m2 - m1, r2 - r1)):
-                pairs.append(
-                    (
-                        main_panes[m1 + offset] if m1 + offset < m2 else gap,
-                        ref_panes[r1 + offset] if r1 + offset < r2 else gap,
-                    )
-                )
+                main = main_panes[m1 + offset] if m1 + offset < m2 else gap
+                ref = ref_panes[r1 + offset] if r1 + offset < r2 else gap
+                if (
+                    tag == "replace"
+                    and chip_replaced
+                    and not main.gap
+                    and not ref.gap
+                    and main.caret is None
+                    and ref.caret is None
+                    and main.text.rstrip(",") != ref.text.rstrip(",")
+                ):
+                    main, ref = _chip_pane(main), _chip_pane(ref)
+                pairs.append((main, ref))
         elif tag == "delete":
             pairs.extend((pane, gap) for pane in main_panes[m1:m2])
         else:  # insert
@@ -245,6 +328,16 @@ def _build_lines(
     counts_ref = (
         _param_counts(rows, lambda row: row.in_reference) if two_pane else {}
     )
+    # Sections holding any difference (differs/fillable/ref-only anywhere
+    # beneath, ref-only ghost sections included): their collapsed headers
+    # carry the chipped ⋯. Ancestors only -- a ref-only header itself stays
+    # purple-without-chip, per the signed frames.
+    diff_sections: set[tuple[str, ...]] = set()
+    if two_pane:
+        for row in rows:
+            if row.is_difference:
+                for depth in range(1, len(row.path)):
+                    diff_sections.add(row.path[:depth])
     lines: list[_Line] = []
     for row in rows:
         # Anything under a closed section stays unrendered, on both sides.
@@ -252,9 +345,22 @@ def _build_lines(
             continue
         is_closed = row.path in closed
         if row.kind is RowKind.SECTION:
+            # The ⋯ chip belongs to shared collapsed sections only: a
+            # ref-only header is already purple, a main-only section can
+            # never contain differences.
+            diff_dots = (
+                is_closed
+                and row.in_main
+                and row.in_reference
+                and row.path in diff_sections
+            )
             main = (
                 _section_pane(
-                    row, style.DEFAULT_TEXT, counts_main.get(row.path, 0), is_closed
+                    row,
+                    style.DEFAULT_TEXT,
+                    counts_main.get(row.path, 0),
+                    is_closed,
+                    diff_dots,
                 )
                 if row.in_main
                 else _gap(row.depth)
@@ -266,13 +372,27 @@ def _build_lines(
                 )
                 ref = (
                     _section_pane(
-                        row, key_color, counts_ref.get(row.path, 0), is_closed
+                        row,
+                        key_color,
+                        counts_ref.get(row.path, 0),
+                        is_closed,
+                        diff_dots,
                     )
                     if row.in_reference
                     else _gap(row.depth)
                 )
             lines.append(_Line(main=main, ref=ref, toggle_path=row.path))
         else:
+            # Value-chip modes per state (signed frames): differs chips
+            # both sides -- token-level for string pairs, whole otherwise;
+            # fillable chips the reference-side value alone; everything
+            # else (equal, main-only, ref-only) carries no chip.
+            chip = None
+            if two_pane and row.state is RowState.DIFFERS:
+                both_str = isinstance(row.main_value, str) and isinstance(
+                    row.ref_value, str
+                )
+                chip = "tokens" if both_str else "whole"
             main_panes = _param_side_panes(
                 row,
                 row.main_value,
@@ -280,6 +400,8 @@ def _build_lines(
                 style.DEFAULT_TEXT,
                 two_pane and row.state is RowState.FILLABLE,
                 is_closed,
+                chip=chip,
+                other_value=row.ref_value,
             )
             if two_pane:
                 value_color = (
@@ -287,11 +409,26 @@ def _build_lines(
                     if row.state is RowState.REF_ONLY
                     else style.DEFAULT_TEXT
                 )
+                ref_chip = chip
+                if row.state is RowState.FILLABLE:
+                    ref_chip = "whole"
                 ref_panes = _param_side_panes(
-                    row, row.ref_value, row.in_reference, value_color, False, is_closed
+                    row,
+                    row.ref_value,
+                    row.in_reference,
+                    value_color,
+                    False,
+                    is_closed,
+                    chip=ref_chip,
+                    other_value=row.main_value,
                 )
                 for index, (main, ref) in enumerate(
-                    _align_panes(main_panes, ref_panes, row.depth)
+                    _align_panes(
+                        main_panes,
+                        ref_panes,
+                        row.depth,
+                        chip_replaced=row.closable and not is_closed,
+                    )
                 ):
                     lines.append(
                         _Line(
@@ -369,6 +506,19 @@ class SourceView(QAbstractScrollArea):
         if not self._two_pane:
             return []
         return [line.ref.text if line.ref is not None else "" for line in self._lines]
+
+    def chipped_texts(self) -> list[tuple[int, str, str]]:
+        """Every chip-highlighted segment as ``(line index, "main"/"ref",
+        text)`` -- the test-facing read of the value chips."""
+        found: list[tuple[int, str, str]] = []
+        for index, line in enumerate(self._lines):
+            for side, pane in (("main", line.main), ("ref", line.ref)):
+                if pane is None or pane.gap:
+                    continue
+                for segment in pane.segments:
+                    if segment.chip:
+                        found.append((index, side, segment.text))
+        return found
 
     # -- geometry --------------------------------------------------------
 
@@ -483,9 +633,17 @@ class SourceView(QAbstractScrollArea):
             font.setBold(segment.bold)
             font.setItalic(segment.italic)
             painter.setFont(font)
+            advance = painter.fontMetrics().horizontalAdvance(segment.text)
+            if segment.chip:
+                painter.setPen(Qt.NoPen)
+                painter.setBrush(QColor(style.DIFF_TINT))
+                painter.drawRoundedRect(
+                    x - 2, top + 2, advance + 4, line_height - 4, 3, 3
+                )
+                painter.setBrush(Qt.NoBrush)
             painter.setPen(QColor(segment.color))
             painter.drawText(x, baseline, segment.text)
-            x += painter.fontMetrics().horizontalAdvance(segment.text)
+            x += advance
         painter.restore()
 
     # -- interaction -----------------------------------------------------

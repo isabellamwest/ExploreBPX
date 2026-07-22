@@ -36,6 +36,12 @@ WARNING_TINT = "#fff1e0"
 #: Pale wash behind a REF_ONLY ghost row/the comparison strip (multi-file
 #: track M2) -- the ``REFERENCE`` counterpart to ``ERROR_TINT``/``WARNING_TINT``.
 REFERENCE_TINT = "#f3ecfa"
+#: The Source page's value chip (multi-file track M5, signed frames): the
+#: wash behind a value that differs between the two panes. Warm but its own
+#: tint -- "differs" is information, not a severity, so it is deliberately
+#: darker than ``WARNING_TINT`` (it must read at value-chip size) while
+#: staying out of the error/warning families.
+DIFF_TINT = "#ffdfb8"
 #: Neutral grey badge background: the "All sections" rail entry's total
 #: badge and every "outstanding" count badge (rail/pane), which are never
 #: red/amber -- decision B's "outstanding is not an error" kept visible in
