@@ -19,6 +19,7 @@ from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 from core.parameter_types import ParameterKind, split_name_and_unit
 
 from ..parameter_row import value_preview
+from .page import page_content, page_header
 from .reference_block import ReferenceValueBlock
 
 #: See ``parameter_card._UNIT_LABEL_KINDS``: the same kinds whose main
@@ -55,25 +56,34 @@ class GhostParameterCard(QWidget):
         #: Inspector having to remember it separately.
         self.section_path = section_path
         self.key = key
+        # Same page anatomy as ``ParameterCard`` (structured-page layout):
+        # identity in the header block, the value row in the content column.
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        header_frame, header_box = page_header()
 
         self._heading = QLabel("Not in the main file")
         self._heading.setObjectName("GhostCardHeading")
-        layout.addWidget(self._heading)
+        header_box.addWidget(self._heading)
 
         name, unit = split_name_and_unit(key)
         self._title = QLabel(f"{name} [{unit}]" if unit else name)
         self._title.setObjectName("CardTitle")
-        layout.addWidget(self._title)
+        header_box.addWidget(self._title)
+        layout.addWidget(header_frame)
 
+        body, body_layout = page_content()
         self._reference_block = ReferenceValueBlock()
         self._reference_block.copy_up_requested.connect(self.copy_up_requested)
-        layout.addWidget(self._reference_block)
+        body_layout.addWidget(self._reference_block)
+        layout.addWidget(body)
         text, _ghost = value_preview(ref_value, kind)
         row_unit = unit if kind in _UNIT_LABEL_KINDS else ""
         # same_as_main is always False here: a REF_ONLY row has no main-file
         # value to be "the same" as, so Copy up is always enabled.
-        self._reference_block.set_content(text, row_unit, same_as_main=False)
+        self._reference_block.set_content(
+            text, row_unit, same_as_main=False, narrow=kind in _UNIT_LABEL_KINDS
+        )
 
         layout.addStretch(1)

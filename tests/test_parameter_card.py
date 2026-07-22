@@ -85,29 +85,38 @@ def _layout_index(layout, item) -> int:
 
 def test_description_sits_directly_under_title_without_reference():
     """Multi-file track M3 restyle: the description is always directly below
-    the title (and the rename row, when present), never below the editor."""
+    the title (and the rename row, when present), never below the editor.
+    Structured-page layout: the description closes the header block, and the
+    editor lives in the content column below it."""
     card = _series_card_with_description()
-    top = card.layout()
-    desc_index = _layout_index(top, card._description_widgets[0])
-    editor_index = _layout_index(top, card._value_row)
+    description = card._description_widgets[0]
+    header_frame = description.parentWidget()
+    header_box = header_frame.layout()
+    desc_index = _layout_index(header_box, description)
     expected_desc_index = 2 if card._rename_row is not None else 1
     assert desc_index == expected_desc_index
-    assert desc_index < editor_index
+    assert desc_index == header_box.count() - 1  # nothing below it in the header
+    # The whole header block precedes the content column holding the editor.
+    body = card._body_layout.parentWidget()
+    top = card.layout()
+    assert _layout_index(top, header_frame) < _layout_index(top, body)
 
 
 def test_description_sits_directly_under_title_with_reference_docked():
     """Docking a reference must not move the description: it stays directly
-    under the title, and the new "Main file" heading slots in between it and
-    the editor, not before it."""
+    under the title in the header block, and the new "Main file" heading
+    slots in directly above the editor in the content column, not into the
+    header."""
     card = _series_card_with_description()
     card.set_reference([1, 2, 3], RowState.DIFFERS, ParameterKind.SERIES)
-    top = card.layout()
-    desc_index = _layout_index(top, card._description_widgets[0])
-    main_heading_index = _layout_index(top, card._main_file_heading)
-    editor_index = _layout_index(top, card._value_row)
+    description = card._description_widgets[0]
+    header_box = description.parentWidget().layout()
+    desc_index = _layout_index(header_box, description)
     expected_desc_index = 2 if card._rename_row is not None else 1
     assert desc_index == expected_desc_index
-    assert main_heading_index == desc_index + 1
+    assert desc_index == header_box.count() - 1  # the heading never joined it
+    main_heading_index = _layout_index(card._body_layout, card._main_file_heading)
+    editor_index = _layout_index(card._body_layout, card._value_row)
     assert editor_index == main_heading_index + 1
 
 

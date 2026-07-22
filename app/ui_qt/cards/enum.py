@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QComboBox, QHBoxLayout
 
+from ..style import VALUE_INPUT_MAX_WIDTH
 from .base import EditorCard
 
 
@@ -43,9 +44,11 @@ class EnumCard(EditorCard):
             values.append(str(self._original))
         self._combo.addItems([str(v) for v in values])
         self._select(self._original)
+        self._combo.setMaximumWidth(VALUE_INPUT_MAX_WIDTH)
         self._combo.currentTextChanged.connect(lambda *_: self.draft_changed.emit())
         self._combo.activated.connect(self._on_activated)
         layout.addWidget(self._combo, 1)
+        layout.addStretch(1)
         self._install_keyboard_handler(self._combo)
 
     def _on_activated(self, _index: int) -> None:

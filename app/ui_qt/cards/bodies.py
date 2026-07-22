@@ -39,7 +39,7 @@ from PySide6.QtWidgets import (
 from core import bpx_gateway
 from core.values import format_value, parse_value
 
-from ..style import ERROR, MUTED
+from ..style import ERROR, MUTED, VALUE_INPUT_MAX_WIDTH
 from .cell_issues import table_cells
 from .grid import NumericGrid
 from .hint import GridHint
@@ -105,6 +105,7 @@ class NumberBody(ModeBody):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         self._edit = QLineEdit()
+        self._edit.setMaximumWidth(VALUE_INPUT_MAX_WIDTH)
         self._edit.textChanged.connect(lambda *_: self.changed.emit())
         layout.addWidget(self._edit, 1)
         #: The unit label, or ``None`` when no unit was given -- kept as an
@@ -112,9 +113,11 @@ class NumberBody(ModeBody):
         self._unit_label: QLabel | None = None
         if unit:
             self._unit_label = QLabel(unit)
+            self._unit_label.setObjectName("UnitLabel")
             if unit_tooltip:
                 self._unit_label.setToolTip(unit_tooltip)
             layout.addWidget(self._unit_label)
+        layout.addStretch(1)
 
     def value(self) -> object:
         return parse_value(self._edit.text())
@@ -268,6 +271,7 @@ class MaterialMapBody(ModeBody):
             self._menu = QMenu(self)
             self._menu.aboutToShow.connect(self._populate_menu)
             button = QToolButton()
+            button.setObjectName("AddMaterialButton")
             button.setText("Material")
             button.setToolTip("Add a known material")
             button.setAccessibleName("Add material")

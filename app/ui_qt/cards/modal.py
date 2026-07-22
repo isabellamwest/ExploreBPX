@@ -36,6 +36,7 @@ from dataclasses import dataclass
 from PySide6.QtWidgets import (
     QButtonGroup,
     QHBoxLayout,
+    QSizePolicy,
     QStackedWidget,
     QToolButton,
     QVBoxLayout,
@@ -113,6 +114,7 @@ class ModalCard(EditorCard):
         self._stack = QStackedWidget()
         for mode in modes:
             self._stack.addWidget(mode.body)
+        self._stack.currentChanged.connect(self._sync_page_heights)
         layout.addWidget(self._stack)
 
         # Seed the initial body *before* wiring any ``changed`` signal, or
@@ -125,6 +127,9 @@ class ModalCard(EditorCard):
             self._install_keyboard_handler(mode.body.focus_widget())
 
         self._stack.setCurrentIndex(initial)
+        # Explicit call: setCurrentIndex emits currentChanged only on a real
+        # change, and the stack starts at index 0.
+        self._sync_page_heights(initial)
         if self._strip is not None:
             self._strip.select(initial)
 
@@ -150,6 +155,26 @@ class ModalCard(EditorCard):
         """Swap the visible body. Deliberately silent: no ``draft_changed``, no
         ``_touched``, so a mode switch alone is never a pending edit."""
         self._stack.setCurrentIndex(index)
+
+    def _sync_page_heights(self, index: int) -> None:
+        """Let only the visible body shape the stack's height.
+
+        ``QStackedLayout`` sizes itself to its *tallest* page -- and imposes
+        that as a minimum through the layout chain, past any widget-level
+        ``sizeHint`` override -- so the one-line ``Function`` editor inherited
+        the table page's height and its hint label floated mid-pane. A hidden
+        page's vertical policy drops to ``Ignored``, which ``QStackedLayout``
+        explicitly zeroes in both its size hint and its minimum; the visible
+        page's is restored to ``Preferred``. Size policies only: bodies'
+        drafts and change signals are never touched.
+        """
+        for i in range(self._stack.count()):
+            body = self._stack.widget(i)
+            policy = body.sizePolicy()
+            policy.setVerticalPolicy(
+                QSizePolicy.Preferred if i == index else QSizePolicy.Ignored
+            )
+            body.setSizePolicy(policy)
 
     @property
     def _body(self) -> ModeBody:

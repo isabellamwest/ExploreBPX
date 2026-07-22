@@ -66,6 +66,7 @@ from ..latex import symbol_label
 from ..parameter_info_popover import ParameterInfoPopover
 from ..parameter_row import value_preview
 from ..style import ERROR, MUTED
+from .page import page_content, page_header
 from .reference_block import ReferenceValueBlock
 from .registry import create_card
 
@@ -113,8 +114,14 @@ class ParameterCard(QWidget):
         # neither invents anything the dataset does not carry.
         self._metadata = resolve_parameter_metadata(parameter.path, meta)
 
+        # Structured-page layout (signed off 2026-07-22): a full-bleed header
+        # block (title row, rename row, description) closed by a hairline,
+        # then the content column (editor, reference section) on the shared
+        # gutter -- see cards/page.py.
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        header_frame, header_box = page_header()
 
         header = QHBoxLayout()
         self._title = QLabel(parameter.label)
@@ -157,11 +164,11 @@ class ParameterCard(QWidget):
         )
         self._info_button.clicked.connect(self._toggle_info_popover)
         header.addWidget(self._info_button)
-        layout.addLayout(header)
+        header_box.addLayout(header)
 
         if self._renamable:
             self._rename_row = self._build_rename_row()
-            layout.addWidget(self._rename_row)
+            header_box.addWidget(self._rename_row)
         else:
             self._rename_row = None
 
@@ -179,8 +186,12 @@ class ParameterCard(QWidget):
             desc.setObjectName("CardDescription")
             desc.setWordWrap(True)
             desc.setTextInteractionFlags(Qt.TextSelectableByMouse)
-            layout.addWidget(desc)
+            header_box.addWidget(desc)
             self._description_widgets = [desc]
+        layout.addWidget(header_frame)
+
+        body, self._body_layout = page_content()
+        layout.addWidget(body)
 
         # "Main file" heading (multi-file track M3): built lazily alongside
         # the reference block below, only while a reference is docked.
@@ -195,7 +206,10 @@ class ParameterCard(QWidget):
         self._editor.bulk_commit_requested.connect(self.bulk_commit_requested)
         self._value_row = QHBoxLayout()
         self._value_row.addWidget(self._editor, 1)
-        layout.addLayout(self._value_row)
+        # Stretch 1: inert while the card sits at its natural height (the
+        # Inspector top-aligns it), but a grid takeover clears that alignment
+        # and this is what hands the editor the whole pane.
+        self._body_layout.addLayout(self._value_row, 1)
 
         # Reference section (multi-file track M2/M3): the "Main file" heading
         # above plus this "Reference file" heading + value row, built lazily,
@@ -231,15 +245,17 @@ class ParameterCard(QWidget):
         if self._reference_block is None:
             self._main_file_heading = QLabel("Main file")
             self._main_file_heading.setObjectName("MainFileHeading")
-            insert_at = _layout_item_index(self.layout(), self._value_row)
-            self.layout().insertWidget(insert_at, self._main_file_heading)
+            insert_at = _layout_item_index(self._body_layout, self._value_row)
+            self._body_layout.insertWidget(insert_at, self._main_file_heading)
             self._reference_block = ReferenceValueBlock()
             self._reference_block.copy_up_requested.connect(self.copy_up_requested)
-            self.layout().addWidget(self._reference_block)
+            self._body_layout.addWidget(self._reference_block)
         text, _ghost = value_preview(ref_value, kind)
         unit = self.parameter.unit if kind in _UNIT_LABEL_KINDS else ""
         same = ref_state is RowState.EQUAL
-        self._reference_block.set_content(text, unit, same)
+        self._reference_block.set_content(
+            text, unit, same, narrow=kind in _UNIT_LABEL_KINDS
+        )
         self._main_file_heading.show()
         self._reference_block.show()
 

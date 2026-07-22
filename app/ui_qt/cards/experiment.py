@@ -58,6 +58,7 @@ from .cell_issues import experiment_cells
 from .csv_dialog import CsvImportDialog
 from .database_examples_dialog import DatabaseExamplesDialog
 from .grid import MultiColumnGrid
+from .page import page_content, page_header
 
 #: The Experiment array aliases in the schema's own field order, derived
 #: live through the gateway (every Validation run is typed ``Experiment``,
@@ -229,9 +230,13 @@ class ExperimentCard(QWidget):
             self._baseline(parameter.value) for parameter in self._columns
         ]
 
+        # Same page anatomy as ``ParameterCard`` (structured-page layout):
+        # the title row in the hairline-ruled header block, the dropzone and
+        # grid in the content column beneath it.
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
+        layout.setSpacing(0)
+        header_frame, header_box = page_header()
 
         header = QHBoxLayout()
         self._title = QLabel(f"Experiment · {run.label}")
@@ -258,7 +263,13 @@ class ExperimentCard(QWidget):
             self._database_examples_button.setAutoRaise(True)
             self._database_examples_button.clicked.connect(self._open_database_examples)
             header.addWidget(self._database_examples_button)
-        layout.addLayout(header)
+        header_box.addLayout(header)
+        layout.addWidget(header_frame)
+
+        body, body_layout = page_content()
+        # Stretch 1 so a grid takeover hands the content column -- and through
+        # its own stretch below, the grid -- the whole pane.
+        layout.addWidget(body, 1)
 
         # Import-first entry for a run with nothing typed yet (Phase 3): an
         # upload/drop target above the still-usable empty grid. Disappears
@@ -269,7 +280,7 @@ class ExperimentCard(QWidget):
         if not read_only:
             self._dropzone = _CsvDropzone()
             self._dropzone.csv_path_chosen.connect(self._import_csv_from_path)
-            layout.addWidget(self._dropzone)
+            body_layout.addWidget(self._dropzone)
 
         headers = tuple(parameter.label for parameter in self._columns)
         self._grid = MultiColumnGrid(headers, read_only=read_only)
@@ -278,7 +289,7 @@ class ExperimentCard(QWidget):
         self._grid.set_cell_issues(experiment_cells(self._all_issues(), headers))
         self._grid.changed.connect(self._on_grid_changed)
         self._grid.expand_toggled.connect(self.expand_toggled)
-        layout.addWidget(self._grid, 1)
+        body_layout.addWidget(self._grid, 1)
 
         # "+ Temperature [K]" only while it is genuinely absent: present-but-
         # malformed still counts as present, so this never offers to add a

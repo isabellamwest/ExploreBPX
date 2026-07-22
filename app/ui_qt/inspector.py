@@ -89,11 +89,19 @@ class InspectorPanel(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
 
         # Editing area (top splitter pane): the scrollable ParameterCard, or
-        # the placeholder label when no parameter is selected.
+        # the placeholder label when no parameter is selected. The pane is a
+        # white full-bleed page (structured-page layout, signed off
+        # 2026-07-22): zero margins here, because each card carries its own
+        # header block and gutter (cards/page.py) and its hairline rule must
+        # span the pane edge to edge.
         scroll = QScrollArea()
+        scroll.setObjectName("InspectorScroll")
         scroll.setWidgetResizable(True)
         self._content = QWidget()
+        self._content.setObjectName("InspectorContent")
         self._content_layout = QVBoxLayout(self._content)
+        self._content_layout.setContentsMargins(0, 0, 0, 0)
+        self._content_layout.setSpacing(0)
         scroll.setWidget(self._content)
 
         # Secondary workspace (bottom splitter pane).
@@ -160,9 +168,12 @@ class InspectorPanel(QWidget):
 
     def show_placeholder(self) -> None:
         self._clear_content()
-        self._content_layout.addWidget(
-            QLabel("Select an object from the structure to inspect + edit it.")
-        )
+        placeholder = QLabel("Select an object from the structure to inspect + edit it.")
+        placeholder.setObjectName("InspectorPlaceholder")
+        # The one content widget with no page header of its own: centred in
+        # the pane (an empty state), not typeset at the top-left of a page.
+        placeholder.setAlignment(Qt.AlignCenter)
+        self._content_layout.addWidget(placeholder)
         self._issues_tab.show_parameter(None)
         self._docs_tab.show_metadata(None)
         self._secondary.set_count("issues", 0)

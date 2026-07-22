@@ -50,6 +50,7 @@ from core.csv_import import CsvData, read_csv_file
 
 from .cards.csv_dialog import CsvImportDialog
 from .cards.experiment import KNOWN_ALIASES
+from .cards.page import GUTTER
 from .name_popup import NamePopup
 from .style import MUTED
 
@@ -82,6 +83,10 @@ class ValidationEmptyState(QWidget):
         # under-estimates, clipping the last line on screen. Labels span the
         # widget and centre their text; the buttons centre themselves below.
         layout = QVBoxLayout(self)
+        # The Inspector pane no longer carries margins of its own (structured-
+        # page layout), so this full-pane empty state supplies the shared
+        # gutter itself, plus headroom in place of a page header.
+        layout.setContentsMargins(GUTTER, 24, GUTTER, 16)
         layout.setSpacing(8)
 
         heading = QLabel(_HEADING)

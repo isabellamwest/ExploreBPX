@@ -15,6 +15,11 @@ from __future__ import annotations
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
+from ..style import VALUE_INPUT_MAX_WIDTH
+
+#: "No maximum": Qt's QWIDGETSIZE_MAX, restored when the row is not narrow.
+_NO_MAX_WIDTH = 16777215
+
 
 class ReferenceValueBlock(QFrame):
     """The "Reference file" heading plus its read-only value row: a purple-
@@ -58,6 +63,11 @@ class ReferenceValueBlock(QFrame):
         self._unit_label.hide()
         row.addWidget(self._unit_label)
 
+        # Zero-stretch spacer: inert while the (stretch-1) value box may grow,
+        # but when the box is capped (*narrow*) it soaks up the slack so the
+        # button keeps its natural width instead of inheriting the row's.
+        row.addStretch(0)
+
         self._copy_up = QPushButton("Copy up")
         self._copy_up.setObjectName("CopyUpButton")
         self._copy_up.clicked.connect(self.copy_up_requested)
@@ -65,14 +75,25 @@ class ReferenceValueBlock(QFrame):
 
         layout.addLayout(row)
 
-    def set_content(self, value_text: str, unit: str, same_as_main: bool) -> None:
+    def set_content(
+        self, value_text: str, unit: str, same_as_main: bool, *, narrow: bool = False
+    ) -> None:
         """Show the reference's *value_text* (and *unit*, if any).
 
         *same_as_main* (an EQUAL row) appends " · same" and renders the value
         in the faint "same" style rather than the loud one, and disables
         "Copy up" -- there is nothing to copy. An empty *unit* hides the unit
         label entirely, the same as the main editor's own unit label.
+
+        *narrow* mirrors the main editor's input width (structured-page
+        layout): the kinds whose main input is capped at
+        ``VALUE_INPUT_MAX_WIDTH`` cap this box the same, so the two value
+        columns align; every other kind's value (a series, a table preview)
+        keeps the full row.
         """
+        self._value_box.setMaximumWidth(
+            VALUE_INPUT_MAX_WIDTH if narrow else _NO_MAX_WIDTH
+        )
         self._value.setText(f"{value_text} · same" if same_as_main else value_text)
         self._value.setProperty("same", same_as_main)
         self._value.style().unpolish(self._value)

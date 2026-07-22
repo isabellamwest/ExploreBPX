@@ -151,6 +151,17 @@ def counts_tooltip(error_count: int, warning_count: int, outstanding_count: int)
 #: here.
 FIXED_UNIT_TOOLTIP = "Fixed by the BPX schema"
 
+#: Widest a single-value input (scalar/enum/FloatInt line edit or combo) may
+#: grow (structured-page layout): sized to the values it holds, not the pane,
+#: so the unit label sits beside the value instead of at the pane's far edge.
+#: Grids, tables and expressions still take the full width -- their content
+#: genuinely uses it.
+VALUE_INPUT_MAX_WIDTH = 280
+
+#: Narrower cap for the integer stepper -- counts are short and the spin
+#: buttons already widen it.
+SPIN_INPUT_MAX_WIDTH = 160
+
 
 def all_clear(text: str) -> str:
     """Prefix *text* with the app's one "all clear" glyph (a plain check),
@@ -221,7 +232,18 @@ QSplitter#EditorSplitter::handle { background: #d0d7de; }
 QLabel#CardTitle { font-size: 15px; font-weight: 600; }
 QLabel#CardSymbol { margin-left: 8px; }
 QLabel#Heading { color: #57606a; font-weight: 600; }
-QLabel#CardDescription { color: #57606a; padding-top: 4px; }
+QLabel#CardDescription { color: #57606a; }
+/* Structured-page inspector (signed off 2026-07-22): the editing pane is a
+   white page -- frameless scroll area, white content surface -- with each
+   card's header block closed by a single full-bleed hairline. The gutter and
+   rhythm live in cards/page.py; only the surfaces are painted here. */
+QScrollArea#InspectorScroll { border: none; background: #ffffff; }
+QWidget#InspectorContent { background: #ffffff; }
+QFrame#CardPageHeader { border: none; border-bottom: 1px solid #d0d7de; }
+QLabel#InspectorPlaceholder { color: #57606a; }
+/* Unit labels sit directly beside their input (never at the pane edge) and
+   stay quiet: they annotate the value, they are not part of it. */
+QLabel#UnitLabel, QLabel#ReferenceUnitLabel { color: #57606a; }
 QFrame#Card { border: 1px solid #d0d7de; }
 /* Workspace page (Concept A revised, signed off): a canvas one step darker
    than the app chrome, with one shared white-card treatment for the three

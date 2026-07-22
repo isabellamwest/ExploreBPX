@@ -14,7 +14,7 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QSpinBox
 
 from core import structure
 
-from ..style import FIXED_UNIT_TOOLTIP
+from ..style import FIXED_UNIT_TOOLTIP, SPIN_INPUT_MAX_WIDTH, VALUE_INPUT_MAX_WIDTH
 from .base import EditorCard
 
 
@@ -36,6 +36,7 @@ class IntegerCard(EditorCard):
             self._spin: QSpinBox | None = QSpinBox()
             self._spin.setRange(-1_000_000, 1_000_000)
             self._spin.setValue(initial)
+            self._spin.setMaximumWidth(SPIN_INPUT_MAX_WIDTH)
             self._spin.valueChanged.connect(lambda *_: self.draft_changed.emit())
             layout.addWidget(self._spin, 1)
             self._fallback: QLineEdit | None = None
@@ -43,6 +44,7 @@ class IntegerCard(EditorCard):
         else:
             self._spin = None
             self._fallback = QLineEdit(str(self._original) if self._original is not None else "")
+            self._fallback.setMaximumWidth(VALUE_INPUT_MAX_WIDTH)
             self._fallback.textChanged.connect(lambda *_: self.draft_changed.emit())
             layout.addWidget(self._fallback, 1)
             input_widget = self._fallback
@@ -53,9 +55,11 @@ class IntegerCard(EditorCard):
         self._unit_label: QLabel | None = None
         if parameter.unit:
             self._unit_label = QLabel(parameter.unit)
+            self._unit_label.setObjectName("UnitLabel")
             if not structure.can_rename_parameter(parameter.path, parameter.value):
                 self._unit_label.setToolTip(FIXED_UNIT_TOOLTIP)
             layout.addWidget(self._unit_label)
+        layout.addStretch(1)
         self._install_keyboard_handler(input_widget)
 
     def value(self) -> object:
