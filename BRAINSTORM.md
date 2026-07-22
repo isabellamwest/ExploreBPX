@@ -77,6 +77,11 @@ these route through the gateway, not hand-rolled field lists.
 - **Ladder explainer** `[idea]` **S** — a small static visual (DFN → SPMe → SPM)
   in the Workspace or docs/about, for users who don't know the model families.
   Content-only; no spec logic.
+- **Fidelity-aware relevance** `[idea]` **M** — dim or annotate parameters a
+  lower `Model` rung never consumes, read from `bpx`'s per-rung schema (which
+  fields each rung allows/requires) rather than a hand list. Turns the ladder
+  into an authoring aid: "you're editing a DFN-only field on an SPM file." Pure
+  gateway usage; the honest, in-lane cousin of the consumer-readiness lens (§6).
 
 ## 4. Reference data & libraries
 
@@ -89,15 +94,27 @@ these route through the gateway, not hand-rolled field lists.
   `example_library` seam. Parked with the AI direction.
 - **Plausibility / sanity layer** `[deferred]` **L** — range checks against a
   versioned reference dataset (`core/sanity.py`), forever separate from
-  `bpx_gateway.py`. Parked; revisit after the active tracks.
+  `bpx_gateway.py`, and never styled as validator output. Concrete catches an
+  expert would still want but the schema never flags: a diffusivity many orders
+  of magnitude off any real Li-ion cell, a non-monotonic OCP, an OCP that leaves
+  physical bounds. Hard rule: advisory-only, opt-in, visually walled from
+  Diagnostics, derived from a cited dataset — not a hand-rolled list. Parked;
+  revisit after the active tracks.
 - **User-contributed library folder** `[idea]` **S–M** — a watched local folder
   of the user's own BPX files surfaced alongside the bundled examples.
 
 ## 5. Visualisation & analysis
 
 - **Function/table plot preview** `[idea]` **M** — plot an OCP curve or
-  interpolated table from its card. Note the known gotcha: `matplotlib` is
-  missing from the `.venv`; decide the plotting backend deliberately.
+  interpolated table from its card. The strongest read-it-truthfully win: an
+  expert can't eyeball whether a raw expression string is monotonic, stays
+  positive, or blows up at the domain edge, but a curve makes it obvious at
+  once — value neither `bpx` nor a text editor gives, and squarely in-lane (we
+  render the parameter, we don't simulate it). Two design points: (a) prefer a
+  lightweight built-in backend (QPainter path) over adding the missing
+  `matplotlib` dep for one feature; (b) plot over the parameter's *real* domain
+  (stoichiometry 0→1, the concentration window) rather than an arbitrary
+  x-range — the domain edge is where authoring errors hide.
 - **Comparison overlays** `[idea]` **M** — overlay a source's function/table on
   yours (two curves, one axes). The honest "semantic diff" for big kinds that D4
   deliberately excluded from phase 1.
@@ -106,6 +123,22 @@ these route through the gateway, not hand-rolled field lists.
 
 ## 6. Simulation & export
 
+- **Consumer-readiness lens** `[idea]` **M** — the insight from PyBaMM's
+  `create_from_bpx`: a file can be schema-valid yet make a consumer *warn and
+  substitute* — e.g. missing OCV bounds → PyBaMM silently falls back to the
+  voltage cutoffs. That is a distinct third validity tier between "validator
+  says yes" (core) and "physically plausible" (§4), and arguably the most
+  in-lane advisory of all, because it mirrors a real tool's real behaviour
+  rather than inventing spec. Open question: computing it *truthfully* may need
+  the consumer's own loader (a heavy PyBaMM import), so the cheap honest version
+  is a documented, per-consumer checklist maintained offline — same discipline
+  as the fidelity ladder (§3). Pairs with the completion track's "what's
+  missing"; do not merge it into Diagnostics.
+- **Copy load snippet** `[idea]` **S** — one click to copy the ~3 lines that
+  load this file in PyBaMM (later PyBOP). Not the full export adapter below;
+  just a snippet that drops us cleanly into the pipeline our users already live
+  in, and signals we know our place: author and inspect, then hand off. No
+  simulator dependency.
 - **Simulator hand-off** `[idea]` **M–L** — export adapters for PyBaMM / PyBOP /
   PyProBE behind the export layer; possibly per-target compatibility notes.
 - **Run preview** `[idea]` **L** — actually simulate (e.g. a C/2 discharge via
