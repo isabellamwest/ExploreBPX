@@ -182,6 +182,25 @@ STYLESHEET = """
 QWidget { font-size: 13px; color: #1f2328; }
 QMainWindow, QWidget#Panel { background: #ffffff; }
 QToolBar { background: #f6f8fa; border-bottom: 1px solid #d0d7de; padding: 4px; spacing: 8px; }
+/* Toolbar buttons (Save/Export/Undo/Redo), styled as one family. The
+   native Windows style hangs Export's menu-indicator caret below the text
+   baseline, tight against the label, where it reads as a stray comma;
+   fixing that needs padding on the button, which switches it to
+   stylesheet rendering -- so all four buttons get the same flat treatment
+   (the ActivityButton/SecondaryTab hover language) rather than leaving
+   Export a one-off. Child selector on purpose: a descendant selector
+   would also catch the search box's internal clear button. */
+QToolBar > QToolButton { background: transparent; border: none; border-radius: 4px; padding: 3px 8px; }
+QToolBar > QToolButton:hover:!disabled { background: #e8eaed; }
+QToolBar > QToolButton:disabled { color: #8c959f; }
+/* Export carries the menu caret: reserve room on the right and centre
+   the caret in it, clear of the label. */
+QToolButton#ExportButton { padding-right: 22px; }
+QToolButton#ExportButton::menu-indicator {
+    subcontrol-origin: padding;
+    subcontrol-position: center right;
+    right: 6px;
+}
 QTreeView, QListWidget { border: 1px solid #d0d7de; background: #ffffff; }
 QTreeView::item, QListWidget::item { padding: 3px 4px; }
 QListWidget::item:selected, QTreeView::item:selected { background: #ddeeff; color: #1f2328; }

@@ -229,6 +229,7 @@ class MainWindow(QMainWindow):
         to warrant ``MenuButtonPopup``'s split behaviour.
         """
         button = QToolButton(self)
+        button.setObjectName("ExportButton")
         button.setText("Export")
         button.setAutoRaise(True)
         button.setPopupMode(QToolButton.InstantPopup)
