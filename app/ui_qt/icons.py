@@ -63,6 +63,18 @@ DIAGNOSTICS = """
 """.strip()
 
 
+#: Code brackets ``</>`` -- Source: the document's raw JSON. Ink centred on
+#: (12, 12) alongside the other rail icons.
+SOURCE = """
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+     stroke="{color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M8 8l-4 4 4 4"/>
+  <path d="M16 8l4 4-4 4"/>
+  <path d="M13.25 6.75l-2.5 10.5"/>
+</svg>
+""".strip()
+
+
 #: Folder outline -- a section/object row in the search results (same
 #: container metaphor as the Workspace rail icon, drawn as its own constant
 #: so the rail identity can evolve without silently restyling result rows).

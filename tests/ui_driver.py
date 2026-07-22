@@ -518,10 +518,58 @@ class AppDriver:
         raise AssertionError(f"No search result for {path!r}")
 
     def show_view(self, name: str) -> "AppDriver":
-        """Switch the workspace via the activity bar ("Workspace"/"Editor"/"Diagnostics")."""
-        index = {"Editor": 0, "Diagnostics": 1, "Workspace": 2}[name]
+        """Switch the workspace via the activity bar ("Workspace"/"Editor"/
+        "Source"/"Diagnostics")."""
+        index = {"Editor": 0, "Diagnostics": 1, "Workspace": 2, "Source": 3}[name]
         self._w._activity_bar.view_requested.emit(index)
         return self
+
+    def current_view_name(self) -> str:
+        """Label of the rail entry for whichever stack page is current."""
+        return self._w._activity_bar.label_for(self._w._stack.currentIndex())
+
+    # -- Source page (multi-file track M5) --------------------------------
+
+    def source_rail_enabled(self) -> bool:
+        """Whether the Source rail entry is currently clickable (gated on an
+        open document, decision 13)."""
+        return self._w._btn_source.isEnabled()
+
+    def source_line_texts(self) -> list[str]:
+        """Plain text of every line the Source view currently renders, top
+        to bottom (folded-away content is genuinely absent)."""
+        return self._w._source._view.line_texts()
+
+    def source_toggle_fold(self, path: tuple[str, ...]) -> "AppDriver":
+        """Fold/unfold the Source-view section or table at *path*, as a
+        click on its caret line does."""
+        self._w._source._view.toggle_fold(tuple(path))
+        return self
+
+    def source_hint_visible(self) -> bool:
+        """Whether the "Open a reference to compare…" toolbar hint is shown.
+        ``isHidden()``, not ``isVisible()`` -- the window is never shown in
+        the headless suite (known Qt pitfall)."""
+        return not self._w._source._hint.isHidden()
+
+    def source_has_input_widget(self) -> bool:
+        """The Source page's no-edit invariant (coexistence rule 14): true
+        if any input widget exists anywhere on the page."""
+        from PySide6.QtWidgets import (
+            QAbstractSpinBox,
+            QComboBox,
+            QPlainTextEdit,
+            QTextEdit,
+        )
+
+        page = self._w._source
+        return bool(
+            page.findChildren(QLineEdit)
+            or page.findChildren(QComboBox)
+            or page.findChildren(QAbstractSpinBox)
+            or page.findChildren(QTextEdit)
+            or page.findChildren(QPlainTextEdit)
+        )
 
     def click_workspace_open(self) -> "AppDriver":
         """Click the Open File button on the Workspace page."""

@@ -53,6 +53,7 @@ from .navigation import NavigationService, NavigationTarget
 from .page_header import PageHeader
 from .parameter_list import ParameterListPanel
 from .search import SearchBar
+from .source_page import SourcePage
 from .style import STYLESHEET
 from .toast import Toast
 from .tree_panel import TreePanel
@@ -63,6 +64,7 @@ _NO_DOCUMENT_TEXT = "No document"
 _EDITOR_PAGE_INDEX = 0  # QStackedWidget page hosting the tree/params/inspector
 _DIAGNOSTICS_PAGE_INDEX = 1
 _WORKSPACE_PAGE_INDEX = 2
+_SOURCE_PAGE_INDEX = 3
 
 
 class OpenIntent(Enum):
@@ -141,6 +143,7 @@ class MainWindow(QMainWindow):
         self._inspector = InspectorPanel(self._state)
         self._diagnostics = DiagnosticsPanel()
         self._workspace = WorkspacePanel()
+        self._source = SourcePage()
         self._search = SearchBar()
         self._activity_bar = ActivityBar()
         self._identity_label = _IdentityLabel()
@@ -266,12 +269,16 @@ class MainWindow(QMainWindow):
         self._stack.addWidget(self._editor_page)  # _EDITOR_PAGE_INDEX
         self._stack.addWidget(self._diagnostics)  # _DIAGNOSTICS_PAGE_INDEX
         self._stack.addWidget(self._workspace)   # _WORKSPACE_PAGE_INDEX
+        self._stack.addWidget(self._source)      # _SOURCE_PAGE_INDEX
 
         self._btn_workspace = self._activity_bar.add_view(
             "Workspace", page_index=_WORKSPACE_PAGE_INDEX, icon=icons.activity_icon(icons.WORKSPACE)
         )
         self._btn_editor = self._activity_bar.add_view(
             "Editor", page_index=_EDITOR_PAGE_INDEX, icon=icons.activity_icon(icons.EDITOR)
+        )
+        self._btn_source = self._activity_bar.add_view(
+            "Source", page_index=_SOURCE_PAGE_INDEX, icon=icons.activity_icon(icons.SOURCE)
         )
         self._btn_diagnostics = self._activity_bar.add_view(
             "Diagnostics", page_index=_DIAGNOSTICS_PAGE_INDEX, icon=icons.activity_icon(icons.DIAGNOSTICS)
@@ -993,6 +1000,11 @@ class MainWindow(QMainWindow):
         self._tree.set_comparison(self._comparison)
         self._params.set_comparison(self._comparison, reference)
         self._inspector.set_comparison(self._comparison, reference)
+        # The Source page re-renders here too: every route that changes what
+        # it must show (edit, undo/redo, open/new, reference dock/undock)
+        # already funnels through this method.
+        document = self._state.active.document if self._state.active else None
+        self._source.refresh(document.raw if document is not None else None, reference)
 
     def _on_ghost_selected(self, section_path: tuple, key: str) -> None:
         """A REF_ONLY ghost row was selected in the parameter list: show its
@@ -1227,6 +1239,12 @@ class MainWindow(QMainWindow):
         self._workspace_warning_count = warnings
         severity = "error" if errors else ("warning" if warnings else None)
         self._btn_diagnostics.set_badge(errors + warnings, severity)
+        # Source is the one rail entry gated on an open document (decision
+        # 13): with none there is no raw JSON to show. If the document ever
+        # goes away while Source is current, land on Workspace like startup.
+        self._btn_source.setEnabled(document is not None)
+        if document is None and self._stack.currentIndex() == _SOURCE_PAGE_INDEX:
+            self._show_page(_WORKSPACE_PAGE_INDEX)
         self._btn_diagnostics.setToolTip(self._diagnostics_tooltip(errors, warnings))
         self._update_title()
         self._update_identity_label()
