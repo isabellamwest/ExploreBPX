@@ -765,6 +765,35 @@ class MainWindow(QMainWindow):
             return False
         return self._save()
 
+    def _confirm_new(self) -> bool:
+        """Guard for New: never replace an open document silently.
+
+        A dirty document goes through the same Save/Discard/Cancel guard as
+        Open. A clean one still gets a lightweight Ok/Cancel confirm: the
+        file on disk loses nothing, but a single click on a model button
+        would otherwise wipe the open document with no warning at all --
+        Open asks before replacing the main, so New must too. Returns True
+        when it is safe to replace the active session.
+        """
+        session = self._state.active
+        if session is None:
+            return True
+        if session.dirty:
+            return self._confirm_discard_if_dirty()
+        filename = (
+            session.backing_file.name
+            if session.backing_file is not None
+            else session.document.filename
+        )
+        choice = QMessageBox.question(
+            self,
+            "New document",
+            f"This will replace {filename}. Continue?",
+            QMessageBox.Ok | QMessageBox.Cancel,
+            QMessageBox.Ok,
+        )
+        return choice == QMessageBox.Ok
+
     def _open(self) -> None:
         name, _ = QFileDialog.getOpenFileName(self, "Open BPX", "", "BPX (*.json *.yaml *.yml)")
         if not name:
@@ -984,11 +1013,12 @@ class MainWindow(QMainWindow):
     def _new(self, model: str) -> None:
         """Create a fresh incomplete document scaffold for *model*.
 
-        Goes through the same discard guard as Open before replacing the
-        active session, then lands on the Editor page so the user can start
+        Goes through :meth:`_confirm_new` before replacing the active
+        session -- Save/Discard/Cancel when dirty, a replace confirm even
+        when clean -- then lands on the Editor page so the user can start
         filling in the new document.
         """
-        if not self._confirm_discard_if_dirty():
+        if not self._confirm_new():
             return
         self._state.new_document(model)
         self._params.reset_expansion_state()

@@ -295,6 +295,48 @@ def test_new_from_workspace_page_discard_guard_proceeds_on_discard(
     assert d.current_view_index() == 0
 
 
+def test_new_with_a_clean_document_asks_before_replacing_and_cancel_aborts(
+    app_driver, spm_workfile, monkeypatch
+):
+    d = app_driver
+    d.open(spm_workfile)
+    assert d._w._state.active.dirty is False
+    original_identity = d.identity_text()
+
+    d.show_view("Workspace")  # a wrongful switch-to-Editor on abort would move the index
+    captured = {}
+
+    def fake_question(parent, title, text, *rest):
+        captured["text"] = text
+        return main_window_module.QMessageBox.Cancel
+
+    monkeypatch.setattr(main_window_module.QMessageBox, "question", fake_question)
+
+    d.click_workspace_new("DFN")
+
+    assert captured["text"] == "This will replace spm_workfile.json. Continue?"
+    assert d.current_view_index() == 2
+    assert d.identity_text() == original_identity
+    assert d._w._state.active.backing_file == spm_workfile  # untouched, still clean
+    assert d._w._state.active.dirty is False
+
+
+def test_new_with_a_clean_document_proceeds_on_ok(app_driver, spm_workfile, monkeypatch):
+    d = app_driver
+    d.open(spm_workfile)
+    monkeypatch.setattr(
+        main_window_module.QMessageBox,
+        "question",
+        lambda *a, **k: main_window_module.QMessageBox.Ok,
+    )
+
+    d.click_workspace_new("DFN")
+
+    assert d._w._state.active.document.identity.model == "DFN"
+    assert d._w._state.active.backing_file is None
+    assert d.current_view_index() == 0
+
+
 # --- panel-level drag/drop filtering ------------------------------------
 #
 # These construct real QDragEnterEvent/QDropEvent instances and dispatch

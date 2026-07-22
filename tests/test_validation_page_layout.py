@@ -201,12 +201,22 @@ def test_rail_selection_persists_across_a_commit_triggered_refresh(app_driver, m
     assert d.diagnostics_selected_rail_label() == "Cell"
 
 
-def test_rail_selection_resets_to_all_sections_on_a_new_document(app_driver, many_issues_path):
+def test_rail_selection_resets_to_all_sections_on_a_new_document(
+    app_driver, many_issues_path, monkeypatch
+):
     d = app_driver
     d.open(many_issues_path)
     d.diagnostics_select_rail("Cell")
     assert d.diagnostics_selected_rail_label() == "Cell"
 
+    from ui_qt import main_window as main_window_module
+
+    # accept the clean-document replace confirm New now shows
+    monkeypatch.setattr(
+        main_window_module.QMessageBox,
+        "question",
+        lambda *a, **k: main_window_module.QMessageBox.Ok,
+    )
     d._w._new("SPM")
 
     assert d.diagnostics_selected_rail_label() == "All sections"
@@ -427,13 +437,21 @@ def test_fold_survives_a_refresh(app_driver):
     assert ("Cell", True) in d.all_sections_fold_headers()
 
 
-def test_fold_does_not_leak_into_a_new_document(app_driver):
+def test_fold_does_not_leak_into_a_new_document(app_driver, monkeypatch):
     d = app_driver
     d._w._new("SPM")
     d.toggle_all_sections_fold("Cell")
     assert ("Cell", True) in d.all_sections_fold_headers()
 
-    d._w._state.active.dirty = False  # avoid the offscreen-blocking discard dialog
+    from ui_qt import main_window as main_window_module
+
+    # take the clean path, then accept its replace confirm
+    d._w._state.active.dirty = False
+    monkeypatch.setattr(
+        main_window_module.QMessageBox,
+        "question",
+        lambda *a, **k: main_window_module.QMessageBox.Ok,
+    )
     d._w._new("SPM")
 
     assert ("Cell", False) in d.all_sections_fold_headers()

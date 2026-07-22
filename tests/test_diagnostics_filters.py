@@ -216,12 +216,19 @@ def test_filter_state_persists_across_a_commit_triggered_refresh(app_driver, two
     assert d.diagnostics_chip_is_on("errors") is False
 
 
-def test_filter_state_resets_on_a_new_document(app_driver, two_cell_errors_path):
+def test_filter_state_resets_on_a_new_document(app_driver, two_cell_errors_path, monkeypatch):
     d = app_driver
     d.open(two_cell_errors_path)
     d.diagnostics_toggle_chip("errors")
 
-    d._w._state.active.dirty = False
+    from ui_qt import main_window as main_window_module
+
+    # accept the clean-document replace confirm New now shows
+    monkeypatch.setattr(
+        main_window_module.QMessageBox,
+        "question",
+        lambda *a, **k: main_window_module.QMessageBox.Ok,
+    )
     d._w._new("SPM")
 
     assert d.diagnostics_chip_is_on("errors") is True
