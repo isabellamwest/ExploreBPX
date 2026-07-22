@@ -6,12 +6,19 @@ Top to bottom, a ``ParameterCard`` holds:
      toggles a :class:`~ui_qt.parameter_info_popover.ParameterInfoPopover` -
      the quick glance; the long-form prose lives in the Inspector's
      Documentation tab),
-  2. the per-kind value editor, produced by :func:`create_card`,
-  3. the parameter's summary description, when present,
+  2. the parameter's summary description, when present -- always directly
+     under the title (and the rename row, when open), in both modes below,
+     for consistency: it describes the parameter, not either value (Bella,
+     2026-07-22),
+  3. a "Main file" heading, then the per-kind value editor (:func:`create_card`),
   4. a docked reference's value for this parameter (multi-file track M2/M3,
-     :meth:`set_reference`), when one exists -- a purple-framed, read-only
-     :class:`~.reference_block.ReferenceValueBlock`, subordinate to
-     everything above it and absent entirely with no reference docked.
+     :meth:`set_reference`), when one exists -- a "Reference file" heading
+     over a purple-framed, read-only value row
+     (:class:`~.reference_block.ReferenceValueBlock`, shared with
+     ``GhostParameterCard``), with a "Copy up" action. The "Main file"
+     heading and the whole reference section are absent entirely with no
+     reference docked -- the card is then exactly today's, description move
+     aside.
 
 ``ParameterCard`` is a pure composition container. It forwards the inner
 editor's ``draft_changed`` / ``draft_reset`` / ``commit_requested`` signals
@@ -62,6 +69,22 @@ from ..style import ERROR, MUTED
 from .reference_block import ReferenceValueBlock
 from .registry import create_card
 
+#: Kinds whose main editor shows a unit label (``ScalarCard``/``IntegerCard``
+#: read ``parameter.unit`` directly) -- the same kinds whose reference row
+#: shows one, mirroring the main row. Every other kind's main editor -- an
+#: enum dropdown, a checkbox, a grid, a mode strip -- carries no separate
+#: unit affordance, so the reference row shows none either.
+_UNIT_LABEL_KINDS = (ParameterKind.SCALAR, ParameterKind.INTEGER)
+
+
+def _layout_item_index(layout, item) -> int:
+    """The index of *item* (a widget or a nested layout) within *layout*."""
+    for i in range(layout.count()):
+        entry = layout.itemAt(i)
+        if entry.widget() is item or entry.layout() is item:
+            return i
+    raise ValueError(f"{item!r} is not a direct child of {layout!r}")
+
 
 class ParameterCard(QWidget):
     """Composes the header, per-kind editor and description for one parameter."""
@@ -74,6 +97,10 @@ class ParameterCard(QWidget):
     #: (path, new_key) -- the inline rename row's "Apply". Only ever emitted
     #: when the pencil button exists at all (``self._renamable``).
     rename_requested = Signal(tuple, str)
+    #: The reference row's "Copy up" button (multi-file track M3). Forwarded
+    #: verbatim from the (lazily built) reference block; ``InspectorPanel``
+    #: wires this to a ``PullParameter`` command.
+    copy_up_requested = Signal()
 
     def __init__(self, parameter: ParameterItem, meta: FieldMeta | None) -> None:
         super().__init__()
@@ -138,22 +165,14 @@ class ParameterCard(QWidget):
         else:
             self._rename_row = None
 
-        self._editor = create_card(parameter, meta)
-        self._editor.draft_changed.connect(self.draft_changed)
-        self._editor.draft_reset.connect(self.draft_reset)
-        self._editor.commit_requested.connect(self.commit_requested)
-        self._editor.expand_toggled.connect(self.expand_toggled)
-        self._editor.expand_toggled.connect(self._on_expand_toggled)
-        self._editor.bulk_commit_requested.connect(self.bulk_commit_requested)
-        value_row = QHBoxLayout()
-        value_row.addWidget(self._editor, 1)
-        layout.addLayout(value_row)
-
-        # Description: quiet muted prose under the editor -- not a boxed text
-        # widget, which read as another input and claimed a fixed slab of
-        # height whatever its one sentence needed. Selectable so it can still
-        # be copied. Hidden while the editor's grid takes over the pane (a big
-        # table needs the room; the live preview chart above the grid stays).
+        # Description: quiet muted prose directly under the title/rename row,
+        # in both modes -- it describes the *parameter*, not either value, so
+        # it never moves depending on whether a reference is docked (Bella,
+        # 2026-07-22). Not a boxed text widget, which read as another input
+        # and claimed a fixed slab of height whatever its one sentence
+        # needed. Selectable so it can still be copied. Hidden while the
+        # editor's grid takes over the pane (a big table needs the room; the
+        # live preview chart above the grid stays).
         self._description_widgets: list[QWidget] = []
         if parameter.description:
             desc = QLabel(parameter.description)
@@ -163,47 +182,80 @@ class ParameterCard(QWidget):
             layout.addWidget(desc)
             self._description_widgets = [desc]
 
-        # Reference block (multi-file track M2/M3): built lazily, only once
-        # ``set_reference`` is first called with real content -- with no
-        # reference docked this never runs, so the card stays exactly
-        # today's, no extra widget instantiated at all.
+        # "Main file" heading (multi-file track M3): built lazily alongside
+        # the reference block below, only while a reference is docked.
+        self._main_file_heading: QLabel | None = None
+
+        self._editor = create_card(parameter, meta)
+        self._editor.draft_changed.connect(self.draft_changed)
+        self._editor.draft_reset.connect(self.draft_reset)
+        self._editor.commit_requested.connect(self.commit_requested)
+        self._editor.expand_toggled.connect(self.expand_toggled)
+        self._editor.expand_toggled.connect(self._on_expand_toggled)
+        self._editor.bulk_commit_requested.connect(self.bulk_commit_requested)
+        self._value_row = QHBoxLayout()
+        self._value_row.addWidget(self._editor, 1)
+        layout.addLayout(self._value_row)
+
+        # Reference section (multi-file track M2/M3): the "Main file" heading
+        # above plus this "Reference file" heading + value row, built lazily,
+        # only once ``set_reference`` is first called with real content --
+        # with no reference docked this never runs, so the card stays
+        # exactly today's, no extra widget instantiated at all.
         self._reference_block: ReferenceValueBlock | None = None
+        #: Whether the reference section is currently meant to be showing --
+        #: distinct from a widget's own ``isVisible()``, which the grid-expand
+        #: toggle also drives (see ``_on_expand_toggled``).
+        self._reference_active = False
 
     def set_reference(
-        self,
-        ref_value: object,
-        ref_state: RowState | None,
-        filename: str | None,
-        kind: ParameterKind | None,
+        self, ref_value: object, ref_state: RowState | None, kind: ParameterKind | None
     ) -> None:
-        """Show/refresh/hide the reference block (multi-file track M2/M3).
+        """Show/refresh/hide the reference section (multi-file track M2/M3).
 
         *ref_state* is ``None`` when there is nothing to show (no reference
         docked, comparison hidden, or the reference lacks this key --
-        MAIN_ONLY) -- the block hides in every such case. Populate-only:
-        this never touches ``self._editor`` or any of its draft/commit
-        signals (known Qt pitfall), so calling it can never trip
-        ``_touched``, whatever order it is called relative to construction.
+        MAIN_ONLY) -- the "Main file" heading and reference block hide in
+        every such case. Populate-only: this never touches ``self._editor``
+        or any of its draft/commit signals (known Qt pitfall), so calling it
+        can never trip ``_touched``, whatever order it is called relative to
+        construction.
         """
-        if ref_state is None or ref_state is RowState.MAIN_ONLY:
+        self._reference_active = ref_state is not None and ref_state is not RowState.MAIN_ONLY
+        if not self._reference_active:
+            if self._main_file_heading is not None:
+                self._main_file_heading.hide()
             if self._reference_block is not None:
                 self._reference_block.hide()
             return
         if self._reference_block is None:
+            self._main_file_heading = QLabel("Main file")
+            self._main_file_heading.setObjectName("MainFileHeading")
+            insert_at = _layout_item_index(self.layout(), self._value_row)
+            self.layout().insertWidget(insert_at, self._main_file_heading)
             self._reference_block = ReferenceValueBlock()
+            self._reference_block.copy_up_requested.connect(self.copy_up_requested)
             self.layout().addWidget(self._reference_block)
         text, _ghost = value_preview(ref_value, kind)
+        unit = self.parameter.unit if kind in _UNIT_LABEL_KINDS else ""
         same = ref_state is RowState.EQUAL
-        self._reference_block.set_content(filename, text, same)
+        self._reference_block.set_content(text, unit, same)
+        self._main_file_heading.show()
         self._reference_block.show()
 
     def _on_expand_toggled(self, expanded: bool) -> None:
-        """Hide the description (and reference block) while the grid is
-        expanded, restore on collapse."""
+        """Hide the description and the whole reference section ("Main
+        file" heading + "Reference file" heading/row) while the grid is
+        expanded, restore on collapse -- but only the reference section's
+        own showing state, so collapsing never reveals it when no reference
+        is docked."""
         for widget in self._description_widgets:
             widget.setVisible(not expanded)
+        show_reference = self._reference_active and not expanded
+        if self._main_file_heading is not None:
+            self._main_file_heading.setVisible(show_reference)
         if self._reference_block is not None:
-            self._reference_block.setVisible(not expanded)
+            self._reference_block.setVisible(show_reference)
 
     def value(self) -> object:
         """Return the inner editor's current draft value in raw-dict form."""

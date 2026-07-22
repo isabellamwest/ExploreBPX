@@ -128,10 +128,6 @@ class ParameterListPanel(QWidget):
     #: track M2) -- distinct from ``parameter_selected`` because a ghost row
     #: names no real document parameter for ``NavigationService`` to resolve.
     ghost_selected = Signal(tuple, str)
-    #: The comparison strip's "hide"/"show comparison" link was clicked.
-    #: Carries no state of its own -- ``MainWindow`` owns the hidden flag and
-    #: relays it back through :meth:`set_comparison` to every view.
-    comparison_hide_toggle_requested = Signal()
 
     #: Item-data roles marking a synthetic "fields to add" row -- a group
     #: header or one field suggestion -- as distinct from a real parameter
@@ -168,14 +164,11 @@ class ParameterListPanel(QWidget):
         self._visible_issue_severities: dict[tuple[str, ...], str] = {}
         #: Comparison state (multi-file track M2), set only by
         #: ``MainWindow.set_comparison`` -- ``None`` whenever no reference is
-        #: docked, comparison decoration is hidden, or no document is open.
-        #: ``self._reference`` is independent of the above (kept even while
-        #: hidden) so the strip can still show its collapsed affordance.
+        #: docked or no document is open.
         self._comparison: ComparisonResult | None = None
         self._reference: ReferenceSnapshot | None = None
 
         self._strip = ComparisonStrip()
-        self._strip.hide_toggled.connect(self.comparison_hide_toggle_requested)
         layout.addWidget(self._strip)
 
         self._add_button = QPushButton("+ Add parameter")
@@ -233,21 +226,18 @@ class ParameterListPanel(QWidget):
         self,
         comparison: ComparisonResult | None,
         reference: ReferenceSnapshot | None,
-        hidden: bool,
     ) -> None:
         """Set the reference comparison state (multi-file track M2) and
         re-render whatever section is currently shown.
 
         Called by ``MainWindow`` -- the single place computing this state --
-        on every document change and every reference dock/undock/hide
-        toggle. *comparison* already reflects *hidden* (``None`` while
-        hidden, or with no reference docked); *reference* is independent of
-        *hidden* so the strip can still offer its collapsed "show
-        comparison" affordance while decoration elsewhere is suppressed.
+        on every document change and every reference dock/undock.
+        *comparison* is ``None`` with no reference docked or no document
+        open.
         """
         self._comparison = comparison
         self._reference = reference
-        self._strip.set_state(reference, comparison, hidden)
+        self._strip.set_state(reference, comparison)
         if self._node is not None:
             self.show_node(self._node, self._model)
 

@@ -49,6 +49,48 @@ def test_validate_invalid_file_reports_issues(valid_spm_dict):
     assert result.issues
 
 
+# Multi-file 5c pins (PLAN-multi-file.md decision 6): a Copy up that leaves a
+# dangling or half-built particle name gets no invented diagnostic -- the app
+# surfaces exactly what the validator reports. These pin what that actually
+# is, recorded live 2026-07-22; a bpx upgrade that changes it should fail here.
+
+
+def test_dangling_particle_name_diagnostic_comes_from_bpx(valid_spm_dict):
+    renamed = copy.deepcopy(valid_spm_dict)
+    particles = renamed["Parameterisation"]["Positive electrode"]["Particle"]
+    particles["Renamed material X"] = particles.pop("Primary")
+    result = bpx_gateway.validate(renamed)
+    assert result.is_valid is False
+    assert len(result.issues) == 1
+    issue = result.issues[0]
+    assert issue.severity.value == "error"
+    assert issue.loc == ()
+    assert "keys must exactly match" in issue.message
+    assert "unexpected keys: ['Primary']" in issue.message
+
+
+def test_partial_particle_reports_field_required_for_each_gap(valid_spm_dict):
+    partial = copy.deepcopy(valid_spm_dict)
+    particles = partial["Parameterisation"]["Positive electrode"]["Particle"]
+    diffusivity = copy.deepcopy(particles["Primary"]["Diffusivity [m2.s-1]"])
+    particles["Ghost material"] = {"Diffusivity [m2.s-1]": diffusivity}
+    result = bpx_gateway.validate(partial)
+    assert result.is_valid is False
+    assert {issue.message for issue in result.issues} == {"Field required"}
+    assert {issue.loc for issue in result.issues} == {
+        ("Positive electrode", "Particle", "Ghost material", field)
+        for field in (
+            "Minimum stoichiometry",
+            "Maximum stoichiometry",
+            "Maximum concentration [mol.m-3]",
+            "Particle radius [m]",
+            "Surface area per unit volume [m-1]",
+            "OCP [V]",
+            "Reaction rate constant [mol.m-2.s-1]",
+        )
+    }
+
+
 def test_field_meta_known_fields():
     ocp = bpx_gateway.field_meta(("Parameterisation", "Negative electrode", "OCP [V]"))
     assert ocp.allows_function is True

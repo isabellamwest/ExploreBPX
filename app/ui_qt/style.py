@@ -225,24 +225,35 @@ QPushButton#WorkspaceOpen, QPushButton#WorkspaceOpenReference {
 QLabel#NewChooserHeading { color: #57606a; font-weight: 600; }
 QLabel#ReferenceHeading { color: #7a63ad; font-weight: 600; }
 QLabel#ReferenceReadOnlyTag { color: #6f42c1; font-size: 11px; font-weight: 600; margin-top: 3px; }
-/* Comparison strip (multi-file M2): the slim reference-aware band atop the
-   parameter list. Purple identity (style.REFERENCE), muted counts, and a
-   flat accent "hide"/"show comparison" toggle -- same flat-link treatment
-   as QPushButton#AddParameterCreate below. */
+/* Comparison strip (multi-file M2/M3): the slim reference-aware band atop
+   the parameter list. Purple identity (style.REFERENCE), muted counts. */
 QWidget#ComparisonStrip { background: #f8f5fc; border-bottom: 1px solid #d0d7de; }
 QLabel#ComparisonStripIdentity { color: #6f42c1; font-weight: 600; font-size: 12px; }
 QLabel#ComparisonStripCounts { color: #57606a; font-size: 12px; }
-QPushButton#ComparisonStripToggle {
-    background: transparent; border: none; color: #1f6feb; font-size: 12px; padding: 2px;
-}
-QPushButton#ComparisonStripToggle:hover { text-decoration: underline; }
-/* Reference value block (multi-file M2/M3): purple-framed, subordinate to
-   the card's own content above it. The "same as main" faint style reuses
-   the app's muted-text tone via a dynamic property, the same pattern
-   QLabel#DiagnosticsChip[chipOff="true"] already uses below. */
-QFrame#ReferenceBlock { border: 1px solid #6f42c1; border-radius: 6px; background: #f8f5fc; margin-top: 6px; }
-QLabel#ReferenceBlockHeading { color: #6f42c1; font-weight: 600; font-size: 11px; }
+/* Reference row (multi-file M2/M3, restyled): "Main file"/"Reference file"
+   are plain bold micro-labels above their own value; the purple frame+tint
+   marks only the read-only value box itself, not the whole row -- the unit
+   label and "Copy up" button sit outside it, mirroring how the main
+   editable row shows its own unit label outside the input. The "same as
+   main" faint style reuses the app's muted-text tone via a dynamic
+   property, the same pattern QLabel#DiagnosticsChip[chipOff="true"]
+   already uses below. */
+QLabel#MainFileHeading { font-weight: 600; font-size: 11px; }
+QLabel#ReferenceFileHeading { color: #6f42c1; font-weight: 600; font-size: 11px; }
+QFrame#ReferenceValueBox { border: 1px solid #6f42c1; border-radius: 6px; background: #f8f5fc; }
 QLabel#ReferenceBlockValue[same="true"] { color: #8c959f; }
+/* "Copy up": the reference feature's first solid button -- solid
+   style.REFERENCE fill, white text, so it reads as a deliberate, loud
+   action beside the row's otherwise flat/bordered treatment. Disabled (an
+   EQUAL row -- nothing to copy) fades to the same light-purple/muted-text
+   pairing QPushButton#AddParameterButton:disabled already uses for "not
+   available right now", not a full grey-out. */
+QPushButton#CopyUpButton {
+    background: #6f42c1; color: #ffffff; font-weight: 600;
+    border: none; border-radius: 4px; padding: 4px 12px;
+}
+QPushButton#CopyUpButton:hover:!disabled { background: #5a3399; }
+QPushButton#CopyUpButton:disabled { background: #d5cde6; color: #8c959f; font-weight: 400; }
 QLabel#GhostCardHeading { color: #6f42c1; font-weight: 600; }
 QStatusBar { background: #f6f8fa; border-top: 1px solid #d0d7de; font-size: 12px; color: #57606a; }
 QWidget#ActivityBar { background: #f6f8fa; border-right: 1px solid #d0d7de; }

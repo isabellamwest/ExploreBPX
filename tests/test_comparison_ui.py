@@ -141,7 +141,7 @@ def test_no_comparison_renders_no_decoration_at_all(panel):
 def test_row_tint_for_differs_and_fillable_not_equal_or_main_only(panel):
     node = _cell_node(MAIN_RAW)
     panel.show_node(node, "SPM")
-    panel.set_comparison(compare(MAIN_RAW, REF_RAW), _reference_snapshot(REF_RAW), False)
+    panel.set_comparison(compare(MAIN_RAW, REF_RAW), _reference_snapshot(REF_RAW))
 
     assert _real_item(panel, "Nominal cell capacity").data(parameter_row.TINT_ROLE) == style.WARNING_TINT
     assert _real_item(panel, "Lower voltage cut-off").data(parameter_row.TINT_ROLE) == style.WARNING_TINT
@@ -152,7 +152,7 @@ def test_row_tint_for_differs_and_fillable_not_equal_or_main_only(panel):
 def test_ghost_row_rendered_read_only_and_selectable(panel):
     node = _cell_node(MAIN_RAW)
     panel.show_node(node, "SPM")
-    panel.set_comparison(compare(MAIN_RAW, REF_RAW), _reference_snapshot(REF_RAW), False)
+    panel.set_comparison(compare(MAIN_RAW, REF_RAW), _reference_snapshot(REF_RAW))
 
     ghosts = _ghost_items(panel)
     assert len(ghosts) == 1
@@ -185,7 +185,7 @@ def test_ghost_row_rendered_read_only_and_selectable(panel):
 
 def test_merge_rule_ghost_key_excluded_from_fields_to_add(panel):
     node = _cell_node(MAIN_RAW)
-    panel.set_comparison(compare(MAIN_RAW, REF_RAW), _reference_snapshot(REF_RAW), False)
+    panel.set_comparison(compare(MAIN_RAW, REF_RAW), _reference_snapshot(REF_RAW))
     panel._expanded[node.path] = True
     panel.show_node(node, "SPM")
 
@@ -215,7 +215,7 @@ def test_merge_rule_with_no_reference_docked_matches_todays_behaviour(panel):
 def test_strip_counts_text_variations(panel):
     reference = _reference_snapshot(REF_RAW)
 
-    panel.set_comparison(compare(MAIN_RAW, REF_RAW), reference, False)
+    panel.set_comparison(compare(MAIN_RAW, REF_RAW), reference)
     assert panel._strip._counts.text() == "2 differ · 1 ref only"
 
     one_differ = ComparisonResult(
@@ -228,29 +228,16 @@ def test_strip_counts_text_variations(panel):
             )
         }
     )
-    panel.set_comparison(one_differ, reference, False)
+    panel.set_comparison(one_differ, reference)
     assert panel._strip._counts.text() == "1 differs"
 
     no_diff = ComparisonResult(sections={_CELL_PATH: SectionDiff(_CELL_PATH, True, True, {})})
-    panel.set_comparison(no_diff, reference, False)
+    panel.set_comparison(no_diff, reference)
     assert panel._strip._counts.text() == "no differences"
 
 
-def test_strip_hidden_state_collapses_identity_and_counts(panel):
-    reference = _reference_snapshot(REF_RAW)
-    panel.set_comparison(compare(MAIN_RAW, REF_RAW), reference, False)
-    assert not panel._strip.isHidden()
-    assert not panel._strip._identity.isHidden()
-
-    panel.set_comparison(None, reference, True)
-    assert not panel._strip.isHidden()  # collapsed affordance stays visible
-    assert panel._strip._identity.isHidden()
-    assert panel._strip._counts.isHidden()
-    assert panel._strip._toggle.text() == "◇ show comparison"
-
-
 def test_strip_invisible_with_no_reference_docked(panel):
-    panel.set_comparison(None, None, False)
+    panel.set_comparison(None, None)
     assert panel._strip.isHidden()
 
 
@@ -319,28 +306,6 @@ def test_strip_appears_with_correct_counts_after_docking(app_driver, main_and_re
     assert app_driver.comparison_strip_visible()
     assert app_driver.comparison_strip_identity_text() == f"◇ {ref_path.name} · SPM"
     assert app_driver.comparison_strip_counts_text() == "2 differ · 1 ref only"
-    assert app_driver.comparison_strip_toggle_text() == "hide"
-
-
-def test_hide_toggle_collapses_and_restores(app_driver, main_and_ref, monkeypatch):
-    main_path, ref_path = main_and_ref
-    app_driver.open(main_path)
-    _dock_reference(app_driver, ref_path, monkeypatch)
-
-    app_driver.click_comparison_strip_toggle()
-    assert app_driver.comparison_strip_visible()
-    assert not app_driver.comparison_strip_counts_visible()
-    assert app_driver.comparison_strip_toggle_text() == "◇ show comparison"
-    app_driver.go_to(("Parameterisation", "Cell"))
-    assert app_driver.ghost_row_keys() == []
-    assert app_driver.parameter_row_tint("Nominal cell capacity") is None
-
-    app_driver.click_comparison_strip_toggle()
-    assert app_driver.comparison_strip_counts_visible()
-    assert app_driver.comparison_strip_toggle_text() == "hide"
-    app_driver.go_to(("Parameterisation", "Cell"))
-    assert "Electrode area [m2]" in app_driver.ghost_row_keys()
-    assert app_driver.parameter_row_tint("Nominal cell capacity") == style.WARNING_TINT
 
 
 def test_row_tint_end_to_end(app_driver, main_and_ref, monkeypatch):
@@ -420,12 +385,17 @@ def test_reference_block_shows_differing_value(app_driver, main_and_ref, monkeyp
     app_driver.go_to(("Parameterisation", "Cell", "Nominal cell capacity [A.h]"))
 
     assert app_driver.reference_block_visible()
-    assert app_driver.reference_block_heading_text() == f"◇ {ref_path.name}"
-    assert app_driver.reference_block_value_text() == "6.0"
+    assert app_driver.main_file_heading_visible()
+    assert app_driver.main_file_heading_text() == "Main file"
+    assert app_driver.reference_file_heading_text() == "Reference file"
+    assert app_driver.reference_value_text() == "6.0"
+    assert app_driver.reference_unit_text() == "A.h"
     assert not app_driver.reference_block_is_same()
+    assert app_driver.copy_up_visible()
+    assert app_driver.copy_up_enabled()
 
 
-def test_reference_block_faint_for_equal_value(app_driver, main_and_ref, monkeypatch):
+def test_reference_block_faint_and_copy_up_disabled_for_equal_value(app_driver, main_and_ref, monkeypatch):
     main_path, ref_path = main_and_ref
     app_driver.open(main_path)
     _dock_reference(app_driver, ref_path, monkeypatch)
@@ -433,8 +403,21 @@ def test_reference_block_faint_for_equal_value(app_driver, main_and_ref, monkeyp
     app_driver.go_to(("Parameterisation", "Cell", "Reference temperature [K]"))
 
     assert app_driver.reference_block_visible()
-    assert app_driver.reference_block_value_text() == "298.15"
+    assert app_driver.reference_value_text() == "298.15 · same"
     assert app_driver.reference_block_is_same()
+    assert not app_driver.copy_up_enabled()
+
+
+def test_reference_block_copy_up_enabled_for_fillable_value(app_driver, main_and_ref, monkeypatch):
+    main_path, ref_path = main_and_ref
+    app_driver.open(main_path)
+    _dock_reference(app_driver, ref_path, monkeypatch)
+
+    app_driver.go_to(("Parameterisation", "Cell", "Lower voltage cut-off [V]"))
+
+    assert app_driver.reference_block_visible()
+    assert not app_driver.reference_block_is_same()
+    assert app_driver.copy_up_enabled()
 
 
 def test_reference_block_absent_for_main_only_parameter(app_driver, main_and_ref, monkeypatch):
@@ -445,6 +428,36 @@ def test_reference_block_absent_for_main_only_parameter(app_driver, main_and_ref
     app_driver.go_to(("Parameterisation", "Cell", "Density [kg.m-3]"))
 
     assert not app_driver.reference_block_visible()
+    assert not app_driver.main_file_heading_visible()
+
+
+def test_no_reference_docked_shows_no_main_file_heading(app_driver, main_and_ref):
+    main_path, _ = main_and_ref
+    app_driver.open(main_path)
+
+    app_driver.go_to(("Parameterisation", "Cell", "Density [kg.m-3]"))
+
+    assert not app_driver.main_file_heading_visible()
+    assert not app_driver.reference_block_visible()
+
+
+def test_clicking_copy_up_emits_signal_and_does_not_dirty_the_card(app_driver, main_and_ref, monkeypatch):
+    """Multi-file track M3: Copy up is now wired (see the "Copy up" section
+    below for full coverage) -- this pins the signal itself still fires and
+    the card the pull rebuilds is never left holding a draft."""
+    main_path, ref_path = main_and_ref
+    app_driver.open(main_path)
+    _dock_reference(app_driver, ref_path, monkeypatch)
+    app_driver.go_to(("Parameterisation", "Cell", "Nominal cell capacity [A.h]"))
+
+    received: list = []
+    app_driver._w._inspector._card.copy_up_requested.connect(lambda: received.append(True))
+
+    app_driver.click_copy_up()
+
+    assert received == [True]
+    assert not app_driver.card_is_dirty()
+    assert app_driver.field_value() == 6.0  # the reference value, now pulled in
 
 
 def test_docking_reference_then_selecting_differing_parameter_leaves_card_untouched(
@@ -478,24 +491,29 @@ def test_ghost_row_selection_shows_ghost_card_with_no_input_widget(app_driver, m
     assert app_driver.ghost_card_heading_text() == "Not in the main file"
     assert "Electrode area" in app_driver.ghost_card_title_text()
     assert not app_driver.ghost_card_has_input_widget()
+    assert app_driver.reference_file_heading_text() == "Reference file"
+    assert app_driver.reference_value_text() == "1.0"
+    assert app_driver.reference_unit_text() == "m2"
+    assert app_driver.copy_up_visible()
+    assert app_driver.copy_up_enabled()
 
     app_driver.press_delete_in_parameter_list()
     assert "Electrode area [m2]" in app_driver.ghost_row_keys()
 
 
-def test_hiding_comparison_while_a_ghost_card_is_shown_falls_back_to_placeholder(
-    app_driver, main_and_ref, monkeypatch
-):
+def test_ghost_card_copy_up_emits_signal(app_driver, main_and_ref, monkeypatch):
     main_path, ref_path = main_and_ref
     app_driver.open(main_path)
     _dock_reference(app_driver, ref_path, monkeypatch)
     app_driver.go_to(("Parameterisation", "Cell"))
     app_driver.select_ghost_row("Electrode area [m2]")
-    assert app_driver.ghost_card_shown()
 
-    app_driver.click_comparison_strip_toggle()  # hide
+    received: list = []
+    app_driver._w._inspector._card.copy_up_requested.connect(lambda: received.append(True))
 
-    assert app_driver.showing_placeholder()
+    app_driver.click_copy_up()
+
+    assert received == [True]
 
 
 def test_removing_reference_clears_everything_immediately(app_driver, main_and_ref, monkeypatch):
@@ -549,6 +567,152 @@ def test_no_reference_docked_is_structurally_todays_editor(app_driver, main_and_
 
     app_driver.go_to(("Parameterisation", "Cell", "Nominal cell capacity [A.h]"))
     assert not app_driver.reference_block_visible()
+
+
+
+# ---------------------------------------------------------------------------
+# "Copy up" (multi-file track M3): PullParameter/PullSection wired to the
+# comparison cards' Copy up buttons. Core command behaviour (ancestor
+# creation, one undo entry, deepcopy) is covered in test_command_service.py;
+# this file covers only the end-to-end UI wiring.
+# ---------------------------------------------------------------------------
+
+
+def test_copy_up_on_differs_row_pulls_value_retints_and_disables(app_driver, main_and_ref, monkeypatch):
+    main_path, ref_path = main_and_ref
+    app_driver.open(main_path)
+    _dock_reference(app_driver, ref_path, monkeypatch)
+    app_driver.go_to(("Parameterisation", "Cell", "Nominal cell capacity [A.h]"))
+    assert app_driver.parameter_row_tint("Nominal cell capacity") == style.WARNING_TINT
+
+    app_driver.click_copy_up()
+
+    assert app_driver.field_value() == 6.0
+    assert app_driver.reference_block_is_same()
+    assert not app_driver.copy_up_enabled()
+    assert app_driver.parameter_row_tint("Nominal cell capacity") is None
+
+    app_driver.undo()
+
+    assert app_driver.field_value() == 5.0
+    assert not app_driver.reference_block_is_same()
+    assert app_driver.copy_up_enabled()
+    assert app_driver.parameter_row_tint("Nominal cell capacity") == style.WARNING_TINT
+
+
+def test_copy_up_on_fillable_row_pulls_the_reference_value(app_driver, main_and_ref, monkeypatch):
+    main_path, ref_path = main_and_ref
+    app_driver.open(main_path)
+    _dock_reference(app_driver, ref_path, monkeypatch)
+    app_driver.go_to(("Parameterisation", "Cell", "Lower voltage cut-off [V]"))
+    assert app_driver.copy_up_enabled()
+
+    app_driver.click_copy_up()
+
+    assert app_driver.field_value() == 3.0
+    assert app_driver.reference_block_is_same()
+
+
+def test_ghost_row_copy_up_adds_and_selects_the_real_parameter(app_driver, main_and_ref, monkeypatch):
+    main_path, ref_path = main_and_ref
+    app_driver.open(main_path)
+    _dock_reference(app_driver, ref_path, monkeypatch)
+    app_driver.go_to(("Parameterisation", "Cell"))
+    app_driver.select_ghost_row("Electrode area [m2]")
+    assert app_driver.ghost_card_shown()
+
+    app_driver.click_copy_up()
+
+    assert not app_driver.ghost_card_shown()
+    assert app_driver.shown_parameter_path() == ("Parameterisation", "Cell", "Electrode area [m2]")
+    assert app_driver.field_value() == 1.0
+    assert "Electrode area [m2]" not in app_driver.ghost_row_keys()
+
+
+def test_copy_up_supersedes_a_dirty_draft_and_undo_restores_the_prior_value(
+    app_driver, main_and_ref, monkeypatch
+):
+    main_path, ref_path = main_and_ref
+    app_driver.open(main_path)
+    _dock_reference(app_driver, ref_path, monkeypatch)
+    app_driver.go_to(("Parameterisation", "Cell", "Nominal cell capacity [A.h]"))
+
+    app_driver.edit_field(7.0)
+    assert app_driver.card_is_dirty()
+
+    app_driver.click_copy_up()
+
+    assert app_driver.field_value() == 6.0  # the reference value, not the discarded draft
+    assert not app_driver.card_is_dirty()
+
+    app_driver.undo()
+
+    assert app_driver.field_value() == 5.0  # one undo restores the prior committed value
+    assert not app_driver.card_is_dirty()
+
+
+def test_bare_enter_after_a_pull_commits_nothing(app_driver, main_and_ref, monkeypatch):
+    """The _touched pin (known Qt pitfall): the card the pull's own refresh
+    rebuilds must not read as dirty, so a bare Enter afterwards is a no-op --
+    a single undo still reverts the pull alone, not a phantom second commit."""
+    main_path, ref_path = main_and_ref
+    app_driver.open(main_path)
+    _dock_reference(app_driver, ref_path, monkeypatch)
+    app_driver.go_to(("Parameterisation", "Cell", "Nominal cell capacity [A.h]"))
+
+    app_driver.click_copy_up()
+    assert app_driver.field_value() == 6.0
+    assert not app_driver.card_is_dirty()
+
+    app_driver.commit()  # bare Enter, no edit
+
+    assert app_driver.field_value() == 6.0  # unchanged: no spurious commit
+
+    app_driver.undo()
+
+    assert app_driver.field_value() == 5.0  # the pull was the only thing to revert
+
+
+_SHAPE_MAIN = {
+    "Header": {"BPX": "0.1.0", "Title": "Shape cell", "Model": "SPM", "Custom Note": 5.0},
+    "Parameterisation": {"Cell": {}},
+}
+_SHAPE_REF = {
+    "Header": {
+        "BPX": "0.1.0",
+        "Title": "Shape cell",
+        "Model": "SPM",
+        "Custom Note": {"x": [0, 1], "y": [2, 3]},
+    },
+    "Parameterisation": {"Cell": {}},
+}
+
+
+@pytest.fixture
+def shape_change_main_and_ref(tmp_path) -> tuple[Path, Path]:
+    main_path = tmp_path / "shape_main.json"
+    main_path.write_text(json.dumps(_SHAPE_MAIN), encoding="utf-8")
+    ref_path = tmp_path / "shape_reference.json"
+    ref_path.write_text(json.dumps(_SHAPE_REF), encoding="utf-8")
+    return main_path, ref_path
+
+
+def test_copy_up_shape_change_scalar_to_table_reclassifies_the_card(
+    app_driver, shape_change_main_and_ref, monkeypatch
+):
+    """"Custom Note" carries no schema metadata (an undeclared alias), so its
+    kind follows the stored value's shape -- a same-key pull that changes
+    shape is copied verbatim, and the card re-classifies to match."""
+    main_path, ref_path = shape_change_main_and_ref
+    app_driver.open(main_path)
+    _dock_reference(app_driver, ref_path, monkeypatch)
+    app_driver.go_to(("Header", "Custom Note"))
+    assert type(app_driver._w._inspector._card._editor).__name__ == "ScalarCard"
+
+    app_driver.click_copy_up()
+
+    assert app_driver.field_value() == {"x": [0, 1], "y": [2, 3]}
+    assert type(app_driver._w._inspector._card._editor).__name__ == "TableCard"
 
 
 def test_end_to_end_with_bundled_about_energy_examples(app_driver, monkeypatch):

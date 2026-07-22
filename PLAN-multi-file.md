@@ -22,8 +22,18 @@ passing** per the app-audit Phase A baseline, 2026-07-21. Implementation starts
   also carries the (separately owned) Workspace-restyle session's uncommitted
   work. Rev 3 build wireframes (signed):
   (internal design archive)
-- **M3 signed and ready to build** — Bella approved the plan 2026-07-21; a
-  different session/agent will implement it. Signed M3 wireframes:
+- **M3 built and verified 2026-07-22, uncommitted** — hide toggle removed
+  everywhere; stacked "Main file"/"Reference file" card + ghost card with
+  Copy up (solid purple, disabled when equal); `PullParameter`/`PullSection`
+  core commands (verbatim, ancestor-creating, one undo entry; section pull
+  UI waits for M5); 5c pinned live (bpx itself reports a dangling particle
+  name via the Initial-hysteresis-state key-match error, and "Field
+  required" for half-built particles — the app invents nothing). Suite
+  1358 green; real-window screenshots match the signed wireframes.
+  *Amendment (Bella, 2026-07-22): the card description now sits directly
+  under the parameter title in BOTH modes (it used to sit below the
+  editor) — consistent position whether or not a reference is docked.*
+  Signed M3 wireframes:
   (internal design archive)
 - M1 build wireframes (for the record):
   (internal design archive)

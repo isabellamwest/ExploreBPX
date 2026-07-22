@@ -123,12 +123,11 @@ class MainWindow(QMainWindow):
         self._workspace_error_count = 0
         self._workspace_warning_count = 0
         #: Reference comparison state (multi-file track M2): the whole-
-        #: document diff (``None`` with no reference docked or no document
-        #: open) and the strip's own collapse toggle -- UI-session state,
-        #: not persisted, reset whenever a reference docks or undocks (see
-        #: ``_open_reference_path``/``_on_remove_reference_requested``).
+        #: document diff -- ``None`` with no reference docked or no document
+        #: open. UI-session state, not persisted, recomputed whenever a
+        #: reference docks or undocks (see ``_open_reference_path``/
+        #: ``_on_remove_reference_requested``).
         self._comparison: ComparisonResult | None = None
-        self._comparison_hidden = False
 
         self._tree = TreePanel()
         self._params = ParameterListPanel()
@@ -330,9 +329,6 @@ class MainWindow(QMainWindow):
         self._params.duplicate_parameter_requested.connect(self._on_duplicate_parameter_requested)
         self._params.move_parameter_requested.connect(self._on_move_parameter_requested)
         self._params.ghost_selected.connect(self._on_ghost_selected)
-        self._params.comparison_hide_toggle_requested.connect(
-            self._on_comparison_hide_toggle_requested
-        )
         self._diagnostics.issue_activated.connect(self._navigation.navigate)
         self._diagnostics.task_activated.connect(self._on_task_activated)
         self._inspector.issue_activated.connect(self._navigation.navigate)
@@ -837,10 +833,9 @@ class MainWindow(QMainWindow):
         """Dock *path* as the reference, showing a toast for the outcome.
 
         Load failure surfaces through the same error-dialog pattern as the
-        main Open flow. A genuine dock/replace (``ADDED``) resets the
-        comparison strip's hide toggle and recomputes the comparison
-        (multi-file track M2) -- a no-op outcome (already docked/is-main)
-        changes nothing to recompute.
+        main Open flow. A genuine dock/replace (``ADDED``) recomputes the
+        comparison (multi-file track M2) -- a no-op outcome (already
+        docked/is-main) changes nothing to recompute.
         """
         try:
             outcome = self._state.open_reference(path)
@@ -854,13 +849,11 @@ class MainWindow(QMainWindow):
         }[outcome]
         self._toast.show_message(message)
         if outcome is OpenReferenceOutcome.ADDED:
-            self._comparison_hidden = False
             self._recompute_comparison()
         self._update_workspace_info()
 
     def _on_remove_reference_requested(self) -> None:
         self._state.remove_reference()
-        self._comparison_hidden = False
         self._recompute_comparison()
         self._update_workspace_info()
 
@@ -884,19 +877,12 @@ class MainWindow(QMainWindow):
         self._apply_comparison()
 
     def _apply_comparison(self) -> None:
-        """Push the current comparison to the tree/list/inspector, honouring
-        the strip's hide toggle -- decoration sees ``None`` while hidden,
-        but the strip itself still needs the docked reference's identity to
-        offer its collapsed "show comparison" affordance."""
+        """Push the current comparison to the tree/list/inspector -- the
+        single fan-out point every comparison-state change goes through."""
         reference = self._state.reference
-        decoration = None if self._comparison_hidden else self._comparison
-        self._tree.set_comparison(decoration)
-        self._params.set_comparison(decoration, reference, self._comparison_hidden)
-        self._inspector.set_comparison(decoration, reference)
-
-    def _on_comparison_hide_toggle_requested(self) -> None:
-        self._comparison_hidden = not self._comparison_hidden
-        self._apply_comparison()
+        self._tree.set_comparison(self._comparison)
+        self._params.set_comparison(self._comparison, reference)
+        self._inspector.set_comparison(self._comparison, reference)
 
     def _on_ghost_selected(self, section_path: tuple, key: str) -> None:
         """A REF_ONLY ghost row was selected in the parameter list: show its

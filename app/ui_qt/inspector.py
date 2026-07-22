@@ -42,7 +42,7 @@ from PySide6.QtWidgets import (
 
 from core import bpx_gateway
 from core.command_service import CommandError
-from core.commands import RenameKey
+from core.commands import PullParameter, RenameKey
 from core.compare import ComparisonResult, RowState
 from core.parameter_metadata import resolve_parameter_metadata
 from core.parameter_types import ParameterKind, classify
@@ -206,16 +206,16 @@ class InspectorPanel(QWidget):
         if self._card is None:
             return
         if self._comparison is None or self._reference is None:
-            self._card.set_reference(None, None, None, None)
+            self._card.set_reference(None, None, None)
             return
         section_path = tuple(parameter.path[:-1])
         row = self._comparison.row(section_path, parameter.path[-1])
         if row is None or row.state is RowState.MAIN_ONLY:
-            self._card.set_reference(None, None, None, None)
+            self._card.set_reference(None, None, None)
             return
         meta = bpx_gateway.field_meta(parameter.path)
         kind = classify(row.ref_value, meta)
-        self._card.set_reference(row.ref_value, row.state, self._reference.filename, kind)
+        self._card.set_reference(row.ref_value, row.state, kind)
 
     def show_ghost_parameter(self, section_path: tuple[str, ...], key: str) -> None:
         """Show the read-only ghost card for a REF_ONLY row (multi-file
@@ -234,7 +234,8 @@ class InspectorPanel(QWidget):
         self._clear_content()
         meta = bpx_gateway.field_meta(section_path + (key,))
         kind = classify(row.ref_value, meta)
-        self._card = GhostParameterCard(key, row.ref_value, kind, self._reference.filename)
+        self._card = GhostParameterCard(section_path, key, row.ref_value, kind)
+        self._card.copy_up_requested.connect(self._on_ghost_copy_up)
         self._content_layout.addWidget(self._card)
         self._content_layout.setAlignment(self._card, Qt.AlignTop)
         self._issues_tab.show_parameter(None)
@@ -365,6 +366,7 @@ class InspectorPanel(QWidget):
         self._card.bulk_commit_requested.connect(self._on_bulk_commit)
         self._card.expand_toggled.connect(self._on_card_expanded)
         self._card.rename_requested.connect(self._on_card_rename_requested)
+        self._card.copy_up_requested.connect(self._on_copy_up)
         # Top-aligned so the card sits at its natural height with space beneath;
         # expanding (a grid takeover) clears the alignment so the card -- and its
         # now-stretching grid -- fills the pane. This replaces a trailing stretch
@@ -479,6 +481,51 @@ class InspectorPanel(QWidget):
             if self._card is not None:
                 self._card.show_rename_error(str(exc))
             return
+        self.committed.emit()
+
+    def _on_copy_up(self) -> None:
+        """Execute the current ``ParameterCard``'s "Copy up" (multi-file
+        track M3): copy the docked reference's raw value verbatim into the
+        main document at this parameter's path.
+
+        The reference value comes from the stored comparison, not any value
+        cached on the card, so this always reflects the comparison last
+        computed. Guards defensively against a stale/absent comparison or an
+        EQUAL row (the button is already disabled for EQUAL from the UI side
+        -- ``ReferenceValueBlock.set_content`` -- this is a backstop, not a
+        second implementation of that rule). Reuses the ``committed`` signal
+        so ``MainWindow`` runs its standard post-commit refresh, which
+        recomputes the comparison from the new document.
+        """
+        if self._card is None or self._state.active is None:
+            return
+        if self._comparison is None or self._reference is None:
+            return
+        parameter = self._card.parameter
+        section_path = parameter.path[:-1]
+        row = self._comparison.row(section_path, parameter.path[-1])
+        if row is None or row.state in (RowState.MAIN_ONLY, RowState.EQUAL):
+            return
+        self._state.active.execute_command(PullParameter(parameter.path, row.ref_value))
+        self.committed.emit()
+
+    def _on_ghost_copy_up(self) -> None:
+        """Execute a ghost row's "Copy up" (multi-file track M3): a REF_ONLY
+        row has no parameter in the main document yet, so this always adds
+        one. The ``GhostParameterCard`` retains ``section_path``/``key`` --
+        there is no committed parameter to read a path from -- and, as in
+        ``_on_copy_up``, the value is re-resolved from the stored comparison
+        rather than the card's own cached copy.
+        """
+        if not isinstance(self._card, GhostParameterCard) or self._state.active is None:
+            return
+        if self._comparison is None or self._reference is None:
+            return
+        section_path, key = self._card.section_path, self._card.key
+        row = self._comparison.row(section_path, key)
+        if row is None or row.state is not RowState.REF_ONLY:
+            return
+        self._state.active.execute_command(PullParameter(section_path + (key,), row.ref_value))
         self.committed.emit()
 
     def _on_bulk_commit(self, command) -> None:

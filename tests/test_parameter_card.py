@@ -17,6 +17,7 @@ pytest.importorskip("PySide6")
 from PySide6.QtWidgets import QApplication
 
 from core import bpx_gateway
+from core.compare import RowState
 from core.parameter_types import ParameterKind
 from core.tree_model import ParameterItem
 from ui_qt.cards.parameter_card import ParameterCard
@@ -27,8 +28,8 @@ def _qapp():
     yield QApplication.instance() or QApplication([])
 
 
-def _card(path, kind=ParameterKind.SCALAR, value=1.0) -> ParameterCard:
-    param = ParameterItem(label=path[-1], path=tuple(path), kind=kind, value=value)
+def _card(path, kind=ParameterKind.SCALAR, value=1.0, unit="") -> ParameterCard:
+    param = ParameterItem(label=path[-1], path=tuple(path), kind=kind, value=value, unit=unit)
     return ParameterCard(param, bpx_gateway.field_meta(tuple(path)))
 
 
@@ -72,3 +73,85 @@ def test_description_hides_while_the_grid_is_expanded():
 
     card._editor.expand_toggled.emit(False)
     assert all(w.isVisibleTo(card) for w in card._description_widgets)
+
+
+def _layout_index(layout, item) -> int:
+    for i in range(layout.count()):
+        entry = layout.itemAt(i)
+        if entry.widget() is item or entry.layout() is item:
+            return i
+    raise AssertionError(f"{item!r} not found in layout")
+
+
+def test_description_sits_directly_under_title_without_reference():
+    """Multi-file track M3 restyle: the description is always directly below
+    the title (and the rename row, when present), never below the editor."""
+    card = _series_card_with_description()
+    top = card.layout()
+    desc_index = _layout_index(top, card._description_widgets[0])
+    editor_index = _layout_index(top, card._value_row)
+    expected_desc_index = 2 if card._rename_row is not None else 1
+    assert desc_index == expected_desc_index
+    assert desc_index < editor_index
+
+
+def test_description_sits_directly_under_title_with_reference_docked():
+    """Docking a reference must not move the description: it stays directly
+    under the title, and the new "Main file" heading slots in between it and
+    the editor, not before it."""
+    card = _series_card_with_description()
+    card.set_reference([1, 2, 3], RowState.DIFFERS, ParameterKind.SERIES)
+    top = card.layout()
+    desc_index = _layout_index(top, card._description_widgets[0])
+    main_heading_index = _layout_index(top, card._main_file_heading)
+    editor_index = _layout_index(top, card._value_row)
+    expected_desc_index = 2 if card._rename_row is not None else 1
+    assert desc_index == expected_desc_index
+    assert main_heading_index == desc_index + 1
+    assert editor_index == main_heading_index + 1
+
+
+def test_headings_absent_with_no_reference_docked():
+    """The plain card (no ``set_reference`` call at all) carries no "Main
+    file"/"Reference file" heading -- exactly today's card."""
+    card = _card(("Parameterisation", "Cell", "Electrode area [m2]"))
+    assert card._main_file_heading is None
+    assert card._reference_block is None
+
+
+def test_headings_present_only_while_reference_docked():
+    card = _card(("Parameterisation", "Cell", "Electrode area [m2]"))
+    card.set_reference(2.0, RowState.DIFFERS, ParameterKind.SCALAR)
+    assert card._main_file_heading is not None and not card._main_file_heading.isHidden()
+    assert card._reference_block is not None and not card._reference_block.isHidden()
+
+    card.set_reference(None, None, None)
+    assert card._main_file_heading.isHidden()
+    assert card._reference_block.isHidden()
+
+
+def test_reference_row_shows_unit_for_scalar_kind():
+    card = _card(("Parameterisation", "Cell", "Electrode area [m2]"), unit="m2")
+    card.set_reference(2.0, RowState.DIFFERS, ParameterKind.SCALAR)
+    assert not card._reference_block._unit_label.isHidden()
+    assert card._reference_block._unit_label.text() == "m2"
+
+
+def test_reference_row_hides_unit_for_kinds_without_one():
+    """SERIES (like TABLE/FUNCTION/BOOLEAN) has no unit label on its main
+    editor, so the reference row shows none either."""
+    card = _series_card_with_description()
+    card.set_reference([1, 2, 3], RowState.DIFFERS, ParameterKind.SERIES)
+    assert card._reference_block._unit_label.isHidden()
+
+
+def test_clicking_copy_up_emits_signal_without_dirtying_the_card():
+    card = _card(("Parameterisation", "Cell", "Electrode area [m2]"))
+    card.set_reference(2.0, RowState.DIFFERS, ParameterKind.SCALAR)
+    received: list = []
+    card.copy_up_requested.connect(lambda: received.append(True))
+
+    card._reference_block._copy_up.click()
+
+    assert received == [True]
+    assert not card.is_dirty

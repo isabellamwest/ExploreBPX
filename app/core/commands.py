@@ -140,6 +140,38 @@ class RemoveParameter(Command):
 
 
 @dataclass(frozen=True)
+class PullParameter(Command):
+    """Copy a reference parameter's raw value verbatim into the main
+    document at ``path`` (multi-file track M3, comparison "Copy up").
+
+    ``value`` is the reference's raw value for the key at ``path`` --
+    whatever shape it is, table over scalar or otherwise: this never
+    coerces, it is a literal copy. If ``path`` does not yet exist in the
+    document, it is added; any missing ancestor sections are created empty
+    in the *same* command (see ``command_service._pull_updates``), so a pull
+    that also has to build structure is still one document rebuild and one
+    undo entry. One direction only -- the reference is never a target.
+    """
+
+    path: tuple[str, ...]
+    value: object
+
+
+@dataclass(frozen=True)
+class PullSection(Command):
+    """Copy a reference section's raw subtree verbatim into the main
+    document at ``path`` (multi-file track M3/M5, ghost-section "Copy up").
+
+    Same contract as ``PullParameter``, one level up: ``value`` is the whole
+    object at ``path``, replacing or creating it as needed; missing
+    ancestors are created in the same command, one undo entry.
+    """
+
+    path: tuple[str, ...]
+    value: object
+
+
+@dataclass(frozen=True)
 class ChangeModel(Command):
     """Declare the document to be ``model``, completing its structure.
 

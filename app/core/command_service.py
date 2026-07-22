@@ -10,6 +10,8 @@ and lets the document rebuild revalidate.
 
 from __future__ import annotations
 
+import copy
+
 from . import editing, structure
 from .commands import (
     AddParameter,
@@ -21,6 +23,8 @@ from .commands import (
     DuplicateParameter,
     MoveParameter,
     Preview,
+    PullParameter,
+    PullSection,
     RemoveParameter,
     RemoveSection,
     RenameKey,
@@ -75,6 +79,16 @@ def execute(raw: dict, command: Command) -> CommandResult:
         new = editing.set_values(raw, command.updates)
         first = command.updates[0][0]
         return CommandResult(new, command.label, first[:-1], first)
+    if isinstance(command, PullParameter):
+        updates = _pull_updates(raw, command.path, command.value)
+        new = editing.set_values(raw, updates)
+        return CommandResult(
+            new, f'Copy up "{command.path[-1]}"', command.path[:-1], command.path
+        )
+    if isinstance(command, PullSection):
+        updates = _pull_updates(raw, command.path, command.value)
+        new = editing.set_values(raw, updates)
+        return CommandResult(new, f'Copy up "{command.path[-1]}"', command.path)
     if isinstance(command, ChangeModel):
         updates = ((("Header", "Model"), command.model),) + tuple(
             (path, {}) for path in _sections_to_add(raw, command.model)
@@ -147,6 +161,45 @@ def raw_at(raw: dict, path: tuple[str, ...]) -> object:
             return None
         node = node[key]
     return node
+
+
+def _missing_ancestors(raw: dict, path: tuple[str, ...]) -> tuple[tuple[str, ...], ...]:
+    """Ancestor section paths of ``path`` absent from ``raw``, parents-first.
+
+    Walks each successive prefix of ``path`` (excluding ``path`` itself,
+    which the caller sets separately). Once a prefix is found missing, every
+    deeper prefix is assumed missing too without checking ``raw`` again --
+    correct because the caller (``_pull_updates``) applies this list, in
+    order, into one ``editing.set_values`` batch: the earlier entry will
+    have created that parent by the time the deeper one is written.
+    """
+    missing: list[tuple[str, ...]] = []
+    node: object = raw
+    for depth in range(1, len(path)):
+        prefix = path[:depth]
+        key = path[depth - 1]
+        if isinstance(node, dict) and key in node:
+            node = node[key]
+        else:
+            missing.append(prefix)
+            node = {}
+    return tuple(missing)
+
+
+def _pull_updates(
+    raw: dict, path: tuple[str, ...], value: object
+) -> tuple[tuple[tuple[str, ...], object], ...]:
+    """The parents-first ``set_values`` batch for a "Copy up" pull
+    (``PullParameter``/``PullSection``): any missing ancestor section as an
+    empty object, then ``path`` itself set to a deep copy of ``value``.
+
+    The deep copy matters: ``value`` comes from a frozen
+    ``ReferenceSnapshot``'s raw dict, and the main document must never end up
+    aliasing it -- a later edit to the pulled value must not silently rewrite
+    the reference too.
+    """
+    ancestors = tuple((ancestor, {}) for ancestor in _missing_ancestors(raw, path))
+    return ancestors + ((path, copy.deepcopy(value)),)
 
 
 def _sections_to_add(raw: dict, model: str) -> tuple[tuple[str, ...], ...]:

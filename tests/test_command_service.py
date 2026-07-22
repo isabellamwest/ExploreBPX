@@ -11,6 +11,8 @@ from core.commands import (
     CreateDocument,
     DuplicateParameter,
     MoveParameter,
+    PullParameter,
+    PullSection,
     RemoveParameter,
     RemoveSection,
     RenameKey,
@@ -716,3 +718,132 @@ def test_add_parameter_export_roundtrip_has_no_fabricated_content():
     reloaded = json.loads(data)
     assert reloaded["Header"]["CustomAlias"] is None
     assert set(reloaded["Header"]) == set(added["Header"])
+
+
+# --- PullParameter / PullSection: comparison "Copy up" (multi-file track M3) ---
+
+
+def test_pull_parameter_sets_an_existing_value_verbatim():
+    raw = {"Header": {"Title": "mine"}}
+    result = command_service.execute(raw, PullParameter(("Header", "Title"), "theirs"))
+    assert result.raw["Header"]["Title"] == "theirs"
+    assert result.label == 'Copy up "Title"'
+    assert result.select_path == ("Header",)
+    assert result.select_parameter_path == ("Header", "Title")
+    assert raw["Header"]["Title"] == "mine"  # source untouched
+
+
+def test_pull_parameter_adds_a_missing_key():
+    raw = {"Header": {}}
+    result = command_service.execute(raw, PullParameter(("Header", "Title"), "theirs"))
+    assert result.raw["Header"]["Title"] == "theirs"
+    assert "Title" not in raw["Header"]
+
+
+def test_pull_parameter_creates_missing_ancestors_in_a_deep_chain():
+    """A reference-only parameter several sections deep: every missing
+    ancestor is created empty, parents-first, in the same command."""
+    raw = {"Header": {}}
+    path = ("Parameterisation", "Positive electrode", "Particle", "Primary", "Radius [m]")
+    result = command_service.execute(raw, PullParameter(path, 1e-6))
+    parameterisation = result.raw["Parameterisation"]
+    assert parameterisation["Positive electrode"]["Particle"]["Primary"] == {
+        "Radius [m]": 1e-6
+    }
+    # Nothing invented beyond the empty ancestors + the pulled leaf.
+    assert set(parameterisation) == {"Positive electrode"}
+    assert set(parameterisation["Positive electrode"]) == {"Particle"}
+    assert set(parameterisation["Positive electrode"]["Particle"]) == {"Primary"}
+    assert "Parameterisation" not in raw  # source untouched
+
+
+def test_pull_parameter_leaves_an_existing_ancestor_untouched():
+    """A sibling already inside a partially-existing ancestor chain survives
+    the pull -- only the missing leaf is added."""
+    raw = {"Parameterisation": {"Cell": {"Other [m]": 1}}}
+    result = command_service.execute(
+        raw, PullParameter(("Parameterisation", "Cell", "Thickness [m]"), 2)
+    )
+    assert result.raw["Parameterisation"]["Cell"] == {"Other [m]": 1, "Thickness [m]": 2}
+
+
+def test_pull_parameter_deepcopies_the_value_no_aliasing():
+    """The pulled value is a fresh copy: mutating the main document's copy
+    afterwards must never mutate the reference's original object."""
+    ref_value = {"nested": [1, 2, 3]}
+    raw = {"Header": {}}
+    result = command_service.execute(raw, PullParameter(("Header", "Custom"), ref_value))
+    result.raw["Header"]["Custom"]["nested"].append(4)
+    assert ref_value == {"nested": [1, 2, 3]}
+
+
+def test_pull_parameter_shape_change_scalar_over_table_is_verbatim():
+    """A same-key pull with a different shape copies verbatim -- no coercion,
+    whatever the destination previously held."""
+    raw = {"Header": {"Custom": {"x": [1, 2], "y": [3, 4]}}}
+    result = command_service.execute(raw, PullParameter(("Header", "Custom"), 42))
+    assert result.raw["Header"]["Custom"] == 42
+
+
+def test_pull_parameter_is_one_undo_step_including_created_ancestors():
+    """Ctrl+Z reverts the whole pull, including any structure it created, as
+    a single step -- the ancestors it added disappear along with the value."""
+    import copy
+
+    from state.document_session import DocumentSession
+
+    session = DocumentSession()
+    session.execute_command(CreateDocument("Partial", "T"))
+    before = copy.deepcopy(session.document.raw)
+    path = ("Parameterisation", "Positive electrode", "Radius [m]")
+    session.execute_command(PullParameter(path, 5e-6))
+    assert session.document.raw["Parameterisation"]["Positive electrode"] == {
+        "Radius [m]": 5e-6
+    }
+    session.undo()
+    assert session.document.raw == before
+    assert "Positive electrode" not in session.document.raw["Parameterisation"]
+    session.redo()
+    assert session.document.raw["Parameterisation"]["Positive electrode"] == {
+        "Radius [m]": 5e-6
+    }
+
+
+def test_pull_section_sets_the_whole_subtree_verbatim():
+    raw = {"Parameterisation": {"Cell": {"a": 1}}}
+    ref_section = {"b": 2, "c": {"d": 3}}
+    result = command_service.execute(
+        raw, PullSection(("Parameterisation", "Cell"), ref_section)
+    )
+    assert result.raw["Parameterisation"]["Cell"] == ref_section
+    assert result.raw["Parameterisation"]["Cell"] is not ref_section
+    assert result.label == 'Copy up "Cell"'
+    assert result.select_path == ("Parameterisation", "Cell")
+
+
+def test_pull_section_creates_missing_ancestors_and_the_section_itself():
+    raw = {"Header": {}}
+    ref_section = {"Thickness [m]": 1e-5}
+    result = command_service.execute(
+        raw, PullSection(("Parameterisation", "Separator"), ref_section)
+    )
+    assert result.raw["Parameterisation"]["Separator"] == ref_section
+    assert "Separator" not in raw.get("Parameterisation", {})
+
+
+def test_pull_section_round_trip_is_one_undo_step():
+    import copy
+
+    from state.document_session import DocumentSession
+
+    session = DocumentSession()
+    session.execute_command(CreateDocument("Partial", "T"))
+    before = copy.deepcopy(session.document.raw)
+    ref_section = {"Thickness [m]": 1e-5, "Porosity": 0.5}
+    session.execute_command(PullSection(("Parameterisation", "Separator"), ref_section))
+    assert session.document.raw["Parameterisation"]["Separator"] == ref_section
+    session.undo()
+    assert session.document.raw == before
+    assert "Separator" not in session.document.raw["Parameterisation"]
+    session.redo()
+    assert session.document.raw["Parameterisation"]["Separator"] == ref_section

@@ -1,17 +1,16 @@
 """ComparisonStrip: slim reference-aware band atop the parameter list
-(multi-file track M2). See PLAN-multi-file.md decision 12 / the M2 brief.
+(multi-file track M2/M3). See PLAN-multi-file.md decision 12 / the M2 brief.
 
 Visible only while a reference is docked -- with none docked it stays
 hidden and renders nothing, so the Editor is pixel-for-pixel today's, per
 the milestone's explicit contract. Purely a display widget: it holds no
-comparison/hidden state of its own between calls, so ``MainWindow`` (the
-single place computing that state) stays the one source of truth.
+comparison state of its own between calls, so ``MainWindow`` (the single
+place computing that state) stays the one source of truth.
 """
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget
 
 from core.compare import ComparisonResult
 from state.reference_snapshot import ReferenceSnapshot
@@ -32,11 +31,7 @@ def _counts_text(comparison: ComparisonResult) -> str:
 
 class ComparisonStrip(QWidget):
     """One-line band: the docked reference's identity + whole-file diff
-    counts, plus a "hide" toggle that collapses every comparison decoration
-    app-wide -- this strip included, down to a slim "show comparison"
-    affordance -- without undocking the reference."""
-
-    hide_toggled = Signal()
+    counts."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -55,36 +50,18 @@ class ComparisonStrip(QWidget):
 
         layout.addStretch(1)
 
-        self._toggle = QPushButton()
-        self._toggle.setObjectName("ComparisonStripToggle")
-        self._toggle.setFlat(True)
-        self._toggle.setCursor(Qt.PointingHandCursor)
-        self._toggle.clicked.connect(self.hide_toggled)
-        layout.addWidget(self._toggle)
-
         self.hide()  # no reference docked yet
 
     def set_state(
         self,
         reference: ReferenceSnapshot | None,
         comparison: ComparisonResult | None,
-        hidden: bool,
     ) -> None:
-        """Render for the current reference/comparison/hidden state, or hide
-        the strip entirely when no reference is docked at all -- the one
-        case distinct from "hidden" (which keeps the collapsed affordance
-        visible so the user can bring the comparison back)."""
+        """Render for the current reference/comparison state, or hide the
+        strip entirely when no reference is docked."""
         if reference is None:
             self.hide()
             return
         self.show()
-        if hidden:
-            self._identity.hide()
-            self._counts.hide()
-            self._toggle.setText("◇ show comparison")
-            return
-        self._identity.show()
-        self._counts.show()
         self._identity.setText(f"◇ {reference.filename} · {reference.model or '-'}")
         self._counts.setText(_counts_text(comparison) if comparison is not None else "")
-        self._toggle.setText("hide")

@@ -575,16 +575,6 @@ class AppDriver:
     def comparison_strip_counts_text(self) -> str:
         return self._w._params._strip._counts.text()
 
-    def comparison_strip_toggle_text(self) -> str:
-        return self._w._params._strip._toggle.text()
-
-    def comparison_strip_counts_visible(self) -> bool:
-        return not self._w._params._strip._counts.isHidden()
-
-    def click_comparison_strip_toggle(self) -> "AppDriver":
-        self._qtbot.mouseClick(self._w._params._strip._toggle, Qt.LeftButton)
-        return self
-
     def parameter_row_tint(self, label: str) -> str | None:
         """The real parameter row starting with *label*'s own
         :data:`~ui_qt.parameter_row.TINT_ROLE` hex colour, or ``None`` if it
@@ -675,18 +665,53 @@ class AppDriver:
         return model.data(index, Qt.DisplayRole)
 
     def reference_block_visible(self) -> bool:
+        """Whether the current card's reference row is currently shown --
+        works for both ``ParameterCard`` and ``GhostParameterCard``, which
+        share the same ``_reference_block`` attribute (the shared
+        ``ReferenceValueBlock`` widget)."""
         card = self._w._inspector._card
         block = getattr(card, "_reference_block", None) if card is not None else None
         return block is not None and not block.isHidden()
 
-    def reference_block_heading_text(self) -> str:
+    def main_file_heading_visible(self) -> bool:
+        """Whether the current ``ParameterCard``'s "Main file" heading is
+        shown -- only ever true while a reference is docked and its section
+        is not collapsed by an expanded grid."""
+        card = self._w._inspector._card
+        heading = getattr(card, "_main_file_heading", None) if card is not None else None
+        return heading is not None and not heading.isHidden()
+
+    def main_file_heading_text(self) -> str:
+        return self._w._inspector._card._main_file_heading.text()
+
+    def reference_file_heading_text(self) -> str:
         return self._w._inspector._card._reference_block._heading.text()
 
-    def reference_block_value_text(self) -> str:
+    def reference_value_text(self) -> str:
         return self._w._inspector._card._reference_block._value.text()
+
+    def reference_unit_text(self) -> str | None:
+        """The reference row's unit label text, or ``None`` when this kind
+        shows no unit (mirroring whether the main editable row shows one).
+        ``isHidden()``, not ``isVisible()`` -- the latter also requires every
+        ancestor up to a shown top-level window (known Qt pitfall)."""
+        label = self._w._inspector._card._reference_block._unit_label
+        return label.text() if not label.isHidden() else None
 
     def reference_block_is_same(self) -> bool:
         return bool(self._w._inspector._card._reference_block._value.property("same"))
+
+    def copy_up_visible(self) -> bool:
+        return not self._w._inspector._card._reference_block._copy_up.isHidden()
+
+    def copy_up_enabled(self) -> bool:
+        return self._w._inspector._card._reference_block._copy_up.isEnabled()
+
+    def click_copy_up(self) -> "AppDriver":
+        """Click the current card's "Copy up" button -- works for both
+        ``ParameterCard`` and ``GhostParameterCard``."""
+        self._w._inspector._card._reference_block._copy_up.click()
+        return self
 
     def ghost_card_shown(self) -> bool:
         from ui_qt.cards.ghost_card import GhostParameterCard
@@ -698,9 +723,6 @@ class AppDriver:
 
     def ghost_card_title_text(self) -> str:
         return self._w._inspector._card._title.text()
-
-    def ghost_card_value_text(self) -> str:
-        return self._w._inspector._card._value.text()
 
     def ghost_card_has_input_widget(self) -> bool:
         from PySide6.QtWidgets import QAbstractSpinBox, QComboBox
