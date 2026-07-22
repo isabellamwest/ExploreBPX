@@ -52,6 +52,51 @@ passing** per the app-audit Phase A baseline, 2026-07-21. Implementation starts
   labels need Qt's "&&" escape — a lone "&" is a mnemonic marker and the
   native style renders "Save  switch"; caught only in the real-window
   pass, invisible offscreen.*
+- **M4 committed** `ee0382d` 2026-07-22 (suite re-verified 1373 green at the
+  commit).
+- **M5 redesigned and signed 2026-07-22 (four review revs with Bella): the
+  Compare page became the SOURCE page**, a raw-JSON split diff inspired by
+  semanticdiff/diffchecker with BPX tree intelligence. Signed frames:
+  (internal design archive)
+  Decisions 2/13/15 amended below; the Workspace doorway idea (counts line +
+  Compare action on the reference card) is rejected. Build awaits Bella's
+  explicit go.
+- **M5 build IN PROGRESS 2026-07-22, uncommitted** — building step by step
+  with a check-in after each step; suite **1409 green** after step 2. Step
+  plan: (1) core row model ✔; (2) rail entry + single-pane page ✔;
+  (3) two-pane aligned rendering + shared folding + gaps; (4) value-only
+  highlight chips; (5) ← gutter pulls; (6) toolbar (‹ › stepper, ⇄ Make
+  main, stale band); (7) Up/Down navigation + double-click Editor jump;
+  (8) real-window verification. Built so far:
+  - `app/core/source_rows.py` (+ `tests/test_source_rows.py`, 14 tests):
+    pure aligned row model. `build_rows(main_raw, ref_raw=None)` walks the
+    raw dicts in true document order (sections/leaves interleaved); ref-only
+    keys/sections slot in after the nearest preceding shared key in the
+    reference's own order; states looked up from `core.compare.compare`
+    (never recomputed — rule 14); `ref_raw=None` = single-pane mode;
+    `closable` marks dict/list leaves; `is_difference` marks stepper
+    targets (ghost section header included, main-only excluded).
+    Presentation ORDER lives here, not in compare.py, on purpose.
+  - `app/ui_qt/source_page.py` (+ `tests/test_source_page.py`, 12 tests):
+    `SourcePage` (toolbar + "◇ Open a reference to compare…" hint) over
+    `SourceView`, a custom read-only `QAbstractScrollArea` painting
+    monospace JSON lines — bold section headers with carets + muted
+    "n parameters" sizes, tables whole/closable to `"key": table`, fold
+    state preserved across re-renders and pruned for vanished paths, no
+    input widgets. Deliberately NOT built on `BpxTreeModel`/QTreeView:
+    custom painting is the path to step 3's aligned panes, chips, gutter.
+  - `main_window.py`: `_SOURCE_PAGE_INDEX = 3`; rail entry between Editor
+    and Diagnostics; refresh pushed from `_apply_comparison` (the existing
+    fan-out — edits/undo/open/dock all reach it); rail button disabled with
+    no document; falls back to Workspace if the document ever goes away
+    while Source is current. `icons.py`: new `SOURCE` `</>` glyph.
+    `tests/ui_driver.py`: `show_view("Source")` + line/fold/hint readers.
+  - **Unlocked calls a later session may revisit with Bella**: rail order
+    (Workspace·Editor·Source·Diagnostics); "n parameters" always shown on
+    headers (not only folded); lists close to the word "table" too (no
+    separate word invented). Interim state: with a reference docked the
+    page still renders main-only until step 3 (hint hides so it never
+    lies).
 - M1 build wireframes (for the record):
   (internal design archive)
 - **Per-milestone workflow (Bella)**: wireframes drawn and approved BEFORE each
@@ -92,7 +137,10 @@ is missing from the venv; two `PyparsingDeprecationWarning`s from bpx are expect
    asymmetrically (user-guide note explains; no special handling).
 2. **Difference = raw inequality of committed values**, per kind. Functions /
    tables / series show existing ghost summaries ("table · 12 pts") and tint on
-   raw inequality. No numeric tolerance, no semantic curve diff.
+   raw inequality. No numeric tolerance, no semantic curve diff. *Amended
+   2026-07-22, Source page only: the page renders real raw values (functions
+   in full, tables whole and closable); Editor rows keep their summaries.
+   Difference remains raw inequality.*
 3. **Row states**: equal · differs · fillable (empty main, value in ref) ·
    main-only (no tint — absence in a reference is not a defect) · ghost
    (ref-only row or whole ref-only section).
@@ -152,22 +200,44 @@ is missing from the venv; two `PyparsingDeprecationWarning`s from bpx are expect
       Headings appear only while a reference is docked; with none, the card
       is exactly today's. Ghost card: "Not in the main file" + the Reference
       file section + Copy up only.
-13. **Compare page (round 3–4)**: a separate page, enabled when a reference is
-    docked. Body is **one long collapsible tree, starting fully collapsed** —
-    the landing view is the structural diff. Columns: Parameter | Main | ↑ |
-    Reference. Section nodes carry counts ("3 differ · 1 ref only" / "=");
-    ghost sections are dashed `◇ REF ONLY` nodes with ↑ pull section. Header:
-    counts, ‹ › next/prev difference (auto-expands target section), "expand
-    differences", differences-only toggle, ⇄ (= Make main, full M4 flow).
+13. **Source page (REPLACED 2026-07-22; supersedes the round 3–4 Compare
+    page; signed rev-4 frames linked in Status)**: a rail-tab sibling of
+    Workspace/Editor/Diagnostics named **Source**, icon `</>`, enabled
+    whenever a document is open. No reference docked: one full-width pane of
+    the main file's formatted raw JSON (monospace, live against the session,
+    collapsible section headers, "n parameters" sizes, quiet "◇ Open a
+    reference to compare…" toolbar hint). Reference docked: two aligned panes
+    (Main left, Reference right) of real JSON matched by full key, the whole
+    file visible including equal rows — no fold-away, no differences-only
+    filter. Common sections share ONE fold state across both panes; flat grey
+    blocks mark a key absent on one side. Highlight chips on VALUES ONLY, no
+    row washes: changed scalars, the changed segment of function strings,
+    per-entry in tables, the word "table" on a closed differing table, and
+    the ⋯ of a closed section containing differs/fillable/ref-only rows.
+    **No difference counts and no "=" anywhere on the page** (Bella rejects
+    the "n differ · n ref only" wording; the Editor strip keeps its counts
+    for now). Ref-only = purple text plus the opposite gap, no ◇ REF ONLY
+    tag on this page; fillable = grey key with no value, ref-side value
+    chipped; main-only quiet. Copy = small light-purple-tint **←** in the
+    centre gutter (differs / fillable / ref-only rows, table key-lines,
+    ref-only section headers = whole-section pull, one undo entry); absent —
+    not disabled — on equal and main-only rows. Toolbar: ‹ › difference
+    stepper (unfolds its target) and ⇄ Make main only. Keyboard: Up/Down
+    move the selection row by row through the file; ‹ › jump differences.
     Double-click a row → Editor at that parameter via `NavigationService`.
-    Rejected deliberately: sort-keys / ignore-array-order options (comparison
-    semantics are fixed), raw text diff, two-way merge, green/red palette.
-14. **Coexistence rules**: one diff engine; one pull command shared by Compare
-    ↑ and inspector ↑ (same session, same undo stack, Ctrl+Z from either page);
-    Compare owns its own scroll/selection — the only Editor link is the explicit
-    double-click jump; **no input widget ever appears on the Compare page**.
-15. **Big kinds**: double-click a reference table/function → small read-only
-    viewer built on the grid's existing (never-yet-used) `read_only` mode.
+    Stale reference: slim neutral band under the pane headers ("The
+    reference changed on disk · Reload"). Still rejected: sort-keys /
+    ignore-array-order options, raw text diff, two-way merge, green/red
+    palette.
+14. **Coexistence rules**: one diff engine; one pull command shared by the
+    Source ← and inspector Copy up (same session, same undo stack, Ctrl+Z
+    from either page); Source owns its own scroll/selection/fold state — the
+    only Editor link is the explicit double-click jump; **no input widget
+    ever appears on the Source page**.
+15. **Big kinds (AMENDED 2026-07-22)**: no modal viewer. Tables render whole
+    in the Source panes by default, closable via the caret on their key line
+    to a `"key": table` summary, the word "table" chipped when the tables
+    differ. The grid's `read_only` mode stays unused.
 
 Deferred (BRAINSTORM, not this track): N-file matrix, bulk pull beyond one
 section, curve overlay plots, raw-JSON diff tab, second editable document.
@@ -282,20 +352,33 @@ dirty-dialog branch, 3c cancel unwind, discard-edits-not-in-snapshot,
 diagnostics/pull direction follow roles, swap absent from the undo stack,
 real-window verification per the working agreements.
 
-**M5 — Compare page + polish.** The collapsible structural tree per decision
-13, gutter ↑ invoking the M3 commands, double-click navigation, ⇄ hooked to
-M4, reference-tile counts line as the doorway; read-only viewer for big kinds;
-stale-reload band. Tests: landing view is collapsed structure, copy-from-page
-shares the undo stack, no-edit invariant, navigation jump.
+**M5 — Source page.** Build per decision 13 as replaced (signed rev-4 frames
+linked in Status). Scope: page widget + `</>` rail entry (enabled with any
+open document), aligned raw-JSON rendering with shared section folding,
+value-only highlight chips (function segments and per-table-entry included),
+← gutter wired to the existing `PullParameter`/`PullSection` commands,
+no-reference single-pane mode with the docking hint, ‹ › stepper, Up/Down
+row navigation, double-click Editor jump, ⇄ → the full M4 flow, on-page
+stale band + Reload. Explicitly out: any Workspace doorway (rejected), the
+modal viewer (decision 15), difference counts on the page. Tests at minimum:
+keyed alignment including gaps and shared folding; chip placement per state
+(fillable ref-side chip included); ← absent on equal and main-only rows;
+copy-from-page shares the undo stack (Ctrl+Z cross-page); section pull is
+one undo entry; no-edit invariant (no input widgets on the page, ever);
+no-reference mode renders live and re-renders on edit/undo; stepper unfold
+behaviour; arrow-key row navigation; double-click jump; stale band appears
+on mtime change and Reload re-snapshots; real-window verification per the
+working agreements.
 
 ## 5. Risks / watch items
 
-- Ghost tree nodes were cut from the Editor by the rev 3 rethink; if the
-  Compare page (M5) reuses `BpxTreeModel`, its contract with navigation and
-  the ⚠ refresh path is still the risk to respect.
+- The Source page (M5) renders its own aligned JSON rows — do not entangle
+  it with `BpxTreeModel`; the only Editor link is the double-click jump
+  through `NavigationService`.
 - The inspector reference block sits next to the card commit machinery; the
   Qt pitfalls in the project guide (populate-before-connect, `_reset_draft` ordering)
   are the live hazards.
-- Compare page double-click semantics must not fight row selection for ↑.
+- Source page double-click semantics must not fight row selection or the ←
+  gutter clicks.
 - Offscreen suite cannot disprove on-screen window bugs — drive the real app
   for the new page and the swap dialogs before calling a milestone done.
