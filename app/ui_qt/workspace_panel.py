@@ -90,6 +90,7 @@ class WorkspacePanel(QWidget):
     file_dropped = Signal(str)  # local file path
     open_reference_requested = Signal()
     remove_reference_requested = Signal()
+    make_main_requested = Signal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -274,10 +275,21 @@ class WorkspacePanel(QWidget):
         self._reference_form, self._reference_fields = self._build_kv_form(("Model", "Contents"))
         card_layout.addLayout(self._reference_form)
 
+        # Make main comes first (M4's signed entry point) at the same plain
+        # weight as Remove -- neither is styled as a loud action, so the
+        # card still never reads louder than the document card beside it.
+        action_row = QHBoxLayout()
+        action_row.setSpacing(8)
+        self._reference_make_main_button = QPushButton("Make main")
+        self._reference_make_main_button.setObjectName("ReferenceTileMakeMain")
+        self._reference_make_main_button.clicked.connect(self.make_main_requested)
+        action_row.addWidget(self._reference_make_main_button)
         self._reference_remove_button = QPushButton("Remove")
         self._reference_remove_button.setObjectName("ReferenceTileRemove")
         self._reference_remove_button.clicked.connect(self.remove_reference_requested)
-        card_layout.addWidget(self._reference_remove_button, 0, Qt.AlignLeft)
+        action_row.addWidget(self._reference_remove_button)
+        action_row.addStretch(1)
+        card_layout.addLayout(action_row)
 
         return card
 

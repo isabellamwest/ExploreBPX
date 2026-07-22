@@ -76,6 +76,15 @@ class OpenIntent(Enum):
     CANCEL = "cancel"
 
 
+class SwitchIntent(Enum):
+    """How to handle a dirty main before "Make main" swaps roles
+    (PLAN-multi-file.md M4)."""
+
+    SAVE_AND_SWITCH = "save_and_switch"
+    DISCARD_AND_SWITCH = "discard_and_switch"
+    CANCEL = "cancel"
+
+
 class _IdentityLabel(QLabel):
     """A QLabel that elides its text to whatever width it is given.
 
@@ -342,6 +351,7 @@ class MainWindow(QMainWindow):
         self._workspace.file_dropped.connect(self._on_file_dropped)
         self._workspace.open_reference_requested.connect(self._open_reference)
         self._workspace.remove_reference_requested.connect(self._on_remove_reference_requested)
+        self._workspace.make_main_requested.connect(self._on_make_main_requested)
 
     # --- navigation -----------------------------------------------------
     def _on_view_changed(self, page_index: int) -> None:
@@ -857,6 +867,78 @@ class MainWindow(QMainWindow):
         self._state.remove_reference()
         self._recompute_comparison()
         self._update_workspace_info()
+
+    # --- Make main (multi-file track M4) ---------------------------------
+
+    def _on_make_main_requested(self) -> None:
+        """Handle the reference card's "Make main" button: promote the
+        docked reference to main, demoting today's main to reference -- both
+        loaded fresh from disk (decision 1, PLAN-multi-file.md M4). Role
+        assignment is a Workspace action, never a command: it never touches
+        the undo stack.
+
+        With no main document open, or a never-saved main that gets
+        discarded, there is nothing on disk to demote -- the reference
+        simply becomes the main and is undocked.
+        """
+        reference = self._state.reference
+        if reference is None:
+            return
+        session = self._state.active
+        if session is not None and session.dirty:
+            intent = self._ask_switch_intent(
+                self._fallback_filename(session), reference.filename
+            )
+            if intent is SwitchIntent.CANCEL:
+                return
+            if intent is SwitchIntent.SAVE_AND_SWITCH and not self._save():
+                return
+        # A never-saved main that is then discarded has no file to demote to
+        # a reference snapshot -- same as no main being open at all.
+        demoted_path = session.backing_file if session is not None else None
+        promoted_path = reference.path
+        try:
+            if demoted_path is not None:
+                self._state.swap_roles(promoted_path, demoted_path)
+            else:
+                self._state.open(promoted_path)
+                self._state.remove_reference()
+        except (LoadError, OSError) as exc:
+            QMessageBox.critical(self, "Cannot open file", str(exc))
+            return
+        self._params.reset_expansion_state()
+        self._diagnostics.reset_view_state()
+        self._refresh_all()
+        self._toast.show_message(f"{promoted_path.name} is now the main file")
+
+    def _ask_switch_intent(self, main_name: str, ref_name: str) -> SwitchIntent:
+        """Ask how to handle *main_name*'s unsaved changes before "Make
+        main" swaps roles with *ref_name*.
+
+        Overridable seam (mirrors ``_ask_open_intent``): headless tests
+        monkeypatch this method directly to bypass the real (blocking)
+        dialog; one test exercises the actual ``QMessageBox`` via the
+        zero-delay popup-close idiom instead.
+        """
+        box = QMessageBox(self)
+        box.setWindowTitle("Unsaved changes")
+        box.setText(f"{main_name} has unsaved changes. Save before switching?")
+        box.setInformativeText(
+            f"{ref_name} becomes the main file; {main_name} becomes the read-only reference."
+        )
+        # "&&" because a lone "&" is a mnemonic marker: the native style
+        # would swallow it and render "Save  switch" on screen.
+        save_and_switch = box.addButton("Save && switch", QMessageBox.AcceptRole)
+        discard_and_switch = box.addButton("Discard && switch", QMessageBox.DestructiveRole)
+        box.addButton("Cancel", QMessageBox.RejectRole)
+        box.setDefaultButton(save_and_switch)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked is save_and_switch:
+            return SwitchIntent.SAVE_AND_SWITCH
+        if clicked is discard_and_switch:
+            return SwitchIntent.DISCARD_AND_SWITCH
+        return SwitchIntent.CANCEL
 
     # --- comparison (multi-file track M2) --------------------------------
 

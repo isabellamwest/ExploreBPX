@@ -538,6 +538,19 @@ class AppDriver:
         self._qtbot.mouseClick(self._w._workspace._reference_remove_button, Qt.LeftButton)
         return self
 
+    def click_reference_make_main(self) -> "AppDriver":
+        """Click the docked reference tile's "Make main" button (M4)."""
+        self._qtbot.mouseClick(self._w._workspace._reference_make_main_button, Qt.LeftButton)
+        return self
+
+    def reference_make_main_button_visible(self) -> bool:
+        """Whether the reference card's "Make main" button is reachable --
+        true only while the card itself is shown (the button is never
+        hidden individually; it lives entirely inside the card, so this
+        first checks the card's own hidden flag, same as
+        :meth:`reference_tile_visible`)."""
+        return self.reference_tile_visible() and not self._w._workspace._reference_make_main_button.isHidden()
+
     def reference_heading_visible(self) -> bool:
         return not self._w._workspace._reference_heading.isHidden()
 

@@ -204,10 +204,18 @@ QToolBar { background: #f6f8fa; border-bottom: 1px solid #d0d7de; padding: 4px; 
 QToolBar > QToolButton { background: transparent; border: none; border-radius: 4px; padding: 3px 8px; }
 QToolBar > QToolButton:hover:!disabled { background: #e8eaed; }
 QToolBar > QToolButton:disabled { color: #8c959f; }
-/* Export carries the menu caret: reserve room on the right and centre
-   the caret in it, clear of the label. */
+/* Menu-carrying buttons (Export, the material map's "Material"): reserve
+   room on the right and centre the caret in it, clear of the label. The
+   material button sits in a card's grid button row, not the toolbar, so the
+   flat treatment its padding forfeits is restated for it here. */
 QToolButton#ExportButton { padding-right: 22px; }
-QToolButton#ExportButton::menu-indicator {
+QToolButton#AddMaterialButton {
+    background: transparent; border: none; border-radius: 4px;
+    padding: 3px 8px; padding-right: 22px;
+}
+QToolButton#AddMaterialButton:hover { background: #e8eaed; }
+QToolButton#ExportButton::menu-indicator,
+QToolButton#AddMaterialButton::menu-indicator {
     subcontrol-origin: padding;
     subcontrol-position: center right;
     right: 6px;

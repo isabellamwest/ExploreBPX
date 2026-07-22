@@ -111,3 +111,23 @@ class AppState:
     def remove_reference(self) -> None:
         """Undock the reference, if any."""
         self.reference = None
+
+    def swap_roles(self, promoted_path: Path, demoted_path: Path) -> None:
+        """The "Make main" swap: promote *promoted_path* (today's reference)
+        to the active session, demoting *demoted_path* (today's main) to a
+        fresh reference snapshot -- both loaded from disk (PLAN-multi-file.md
+        M4).
+
+        Loads both files before touching either field: if either raises
+        (``core.bpx_gateway.LoadError``/``OSError``, exactly as ``open`` and
+        ``ReferenceSnapshot.load`` do), ``self.active`` and ``self.reference``
+        are left completely unchanged. The demoted snapshot always reflects
+        what is on disk, so a discarded edit on the old main can never appear
+        in it.
+        """
+        document = BPXDocument.from_bytes(promoted_path.read_bytes(), promoted_path.name)
+        session = DocumentSession(document)
+        session.backing_file = promoted_path
+        reference = ReferenceSnapshot.load(demoted_path)
+        self.active = session
+        self.reference = reference

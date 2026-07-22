@@ -35,6 +35,23 @@ passing** per the app-audit Phase A baseline, 2026-07-21. Implementation starts
   editor) — consistent position whether or not a reference is docked.*
   Signed M3 wireframes:
   (internal design archive)
+- **M4 wireframes signed 2026-07-22** (Concept A, card action — Bella chose A
+  of three concepts; B swap-rail and C role-handoff-dialog rejected, C's
+  role-naming line folded into A's prompt). Signed M4 wireframes:
+  (internal design archive)
+- **M4 built and verified 2026-07-22, uncommitted** (M3 landed first as
+  9ab9bfd). Make main + Remove on the reference card; `SwitchIntent` +
+  `_ask_switch_intent` seam (mirrors `_ask_open_intent`);
+  `AppState.swap_roles` loads both files from disk before mutating either
+  role, so any load failure leaves roles untouched; promote-without-demote
+  fallback (no main open, or never-saved main discarded) promotes and
+  undocks the reference. Independently reviewed (accept; both flagged gaps
+  closed: fallback-branch tests added, real-window pass done). Suite 1373
+  green (15 M4 tests incl. one real-QMessageBox); real-window screenshots
+  match the signed Concept A frames. *As-built note: the dialog button
+  labels need Qt's "&&" escape — a lone "&" is a mnemonic marker and the
+  native style renders "Save  switch"; caught only in the real-window
+  pass, invisible offscreen.*
 - M1 build wireframes (for the record):
   (internal design archive)
 - **Per-milestone workflow (Bella)**: wireframes drawn and approved BEFORE each
@@ -237,6 +254,33 @@ per the working agreements.
 Discard & switch / Cancel (3b); never-saved → Save As routing with the
 default-folder rule, Cancel unwinds the switch (3c); post-swap: fresh session,
 undo reset, diagnostics + pull direction follow the roles (3d). Not undoable.
+*Signed design (Concept A, 2026-07-22; wireframes linked in Status).
+Precondition: land the uncommitted M3 work first so this starts on a clean
+tree.* As signed:
+1. **Entry point**: "Make main" as a plain first button in the reference
+   card's action row, beside Remove, same visual weight (the reference card
+   never reads louder than the document card).
+2. **Dirty prompt**: the standard message box (same anatomy as the existing
+   unsaved-changes prompt): title "Unsaved changes", text "{main} has unsaved
+   changes. Save before switching?", grey informative line "{ref} becomes the
+   main file; {main} becomes the read-only reference.", buttons exactly
+   Save & switch (default) / Discard & switch / Cancel.
+3. **Toast** (existing pill): "{ref filename} is now the main file".
+4. **Post-swap contract**: promoted file opens as a fresh session **from
+   disk** via the normal open path (empty undo, clean dirty flag, live
+   validation); demoted file **re-snapshotted from disk** (mtime, one-shot
+   validation — with Discard & switch the discarded edits are never in the
+   snapshot); Diagnostics reports the new main only; strip/ghosts/Copy up
+   reverse automatically via the shared diff engine.
+5. **Edge cases pinned**: promoted file unreadable on disk → standard
+   "Cannot open file" error, swap aborts, roles unchanged; 3c Save As cancel
+   or failed write unwinds the whole switch (no toast, reference stays
+   docked); an uncommitted card draft belongs to the demoted session and is
+   discarded with it, as on close today.
+Tests at minimum: clean swap round-trip (roles, toast, undo emptied), each
+dirty-dialog branch, 3c cancel unwind, discard-edits-not-in-snapshot,
+diagnostics/pull direction follow roles, swap absent from the undo stack,
+real-window verification per the working agreements.
 
 **M5 — Compare page + polish.** The collapsible structural tree per decision
 13, gutter ↑ invoking the M3 commands, double-click navigation, ⇄ hooked to
