@@ -20,8 +20,10 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QLabel
 
+from .style import DEFAULT_TEXT
 
-def latex_pixmap(latex: str, point_size: float = 11.0, color: str = "#202020") -> QPixmap | None:
+
+def latex_pixmap(latex: str, point_size: float = 11.0, color: str = DEFAULT_TEXT) -> QPixmap | None:
     """Render *latex* (without surrounding ``$``) to a transparent pixmap.
 
     Returns ``None`` when matplotlib is unavailable or the expression does not
@@ -38,7 +40,7 @@ def latex_pixmap(latex: str, point_size: float = 11.0, color: str = "#202020") -
     return pixmap
 
 
-def symbol_label(latex: str, point_size: float = 11.0, color: str = "#202020") -> QLabel:
+def symbol_label(latex: str, point_size: float = 11.0, color: str = DEFAULT_TEXT) -> QLabel:
     """A ``QLabel`` showing *latex* as rendered maths, or its source text if the
     renderer is unavailable -- the symbol is never silently dropped.
 

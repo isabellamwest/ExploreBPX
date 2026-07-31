@@ -27,11 +27,13 @@ default in every case:
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
     QFormLayout,
+    QHeaderView,
     QLabel,
     QPushButton,
     QTableWidget,
@@ -238,6 +240,9 @@ def _preview_table(data: CsvData) -> QTableWidget:
     )
     table.setEditTriggers(QTableWidget.NoEditTriggers)
     table.setSelectionMode(QTableWidget.NoSelection)
+    # Columns stretch to fill the width, matching the NumericGrid this
+    # preview feeds into.
+    table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
     for column_index, column in enumerate(data.columns):
         for row_index in range(shown):
             value = column[row_index]
@@ -245,7 +250,7 @@ def _preview_table(data: CsvData) -> QTableWidget:
             item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             # Flag a non-numeric (kept-as-text) cell so the user spots it.
             if value is not None and not isinstance(value, (int, float)):
-                item.setForeground(Qt.red)
+                item.setForeground(QColor(ERROR))
             table.setItem(row_index, column_index, item)
     table.setMaximumHeight(260)
     return table

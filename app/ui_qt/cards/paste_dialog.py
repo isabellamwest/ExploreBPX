@@ -12,9 +12,11 @@ discard" rule: a value the parser could not read as a number is shown in place
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
+    QHeaderView,
     QLabel,
     QPushButton,
     QTableWidget,
@@ -25,7 +27,7 @@ from PySide6.QtWidgets import (
 from core.paste import ParsedPaste
 from core.values import format_value
 
-from ..style import MUTED
+from ..style import ERROR, MUTED
 
 #: Rows shown in the preview before it notes "and N more". The parse itself is
 #: complete; only the preview is capped, so a thousand-row paste stays instant.
@@ -114,6 +116,9 @@ def _preview_table(parsed: ParsedPaste, headers: tuple[str, ...]) -> QTableWidge
     table.setHorizontalHeaderLabels(list(headers))
     table.setEditTriggers(QTableWidget.NoEditTriggers)
     table.setSelectionMode(QTableWidget.NoSelection)
+    # Columns stretch to fill the width, matching the NumericGrid this
+    # preview feeds into.
+    table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
     for r, row in enumerate(shown):
         for c in range(len(headers)):
             value = row[c] if c < len(row) else None
@@ -121,7 +126,7 @@ def _preview_table(parsed: ParsedPaste, headers: tuple[str, ...]) -> QTableWidge
             item.setTextAlignment(int(Qt.AlignRight | Qt.AlignVCenter))
             # Flag a non-numeric (kept-as-text) cell so the user spots it.
             if value is not None and not isinstance(value, (int, float)):
-                item.setForeground(Qt.red)
+                item.setForeground(QColor(ERROR))
             table.setItem(r, c, item)
     table.setMaximumHeight(260)
     return table
