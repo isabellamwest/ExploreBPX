@@ -38,6 +38,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QPushButton,
     QScrollArea,
@@ -59,6 +60,7 @@ from core.example_library import (
 from core.values import format_value
 
 from ..style import ACCENT, BORDER, ERROR, MUTED
+from ..titles import panel_title
 from .modal import ModeStrip
 from .multi_series_chart import MultiSeriesChart
 
@@ -182,7 +184,7 @@ class _PickerRow(QFrame):
         self.setFocusPolicy(Qt.TabFocus)
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(8, 4, 8, 4)
+        layout.setContentsMargins(8, 5, 8, 5)
         layout.setSpacing(6)
 
         name = QLabel(run.run_name)
@@ -219,7 +221,7 @@ class _PickerRow(QFrame):
         self.setToolTip("Add to the comparison")
 
     def set_added(self, color: str) -> None:
-        self._tick.setStyleSheet(f"color: {color}; font-weight: bold;")
+        self._tick.setStyleSheet(f"color: {color}; font-weight: 600;")
         self._tick.show()
         self.setStyleSheet(
             f"QFrame#ReferencePickerRow {{ border: 2px solid {color}; "
@@ -289,7 +291,7 @@ class _LegendChip(QFrame):
         self._selected = selected
         border = f"2px solid {ACCENT}" if selected else f"1px solid {BORDER}"
         self.setStyleSheet(
-            f"QFrame#DatabaseExampleChip {{ border: {border}; border-radius: 8px; "
+            f"QFrame#DatabaseExampleChip {{ border: {border}; border-radius: 6px; "
             "background: #ffffff; }"
         )
 
@@ -404,8 +406,7 @@ class DatabaseExamplesDialog(QDialog):
         layout.setContentsMargins(0, 0, 8, 0)
         layout.setSpacing(5)
 
-        heading = QLabel("Sample data")
-        heading.setObjectName("Heading")
+        heading = panel_title("Sample data")
         layout.addWidget(heading)
 
         runs_by_document: dict[str, list[ExampleRun]] = {}
@@ -496,6 +497,9 @@ class DatabaseExamplesDialog(QDialog):
 
         self._chart_page = _ChartPage()
         self._table = _build_table()
+        # Raw-data view: columns stretch to fill the width, matching the
+        # NumericGrid look (the numbers table instead fits to its contents).
+        self._table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
 
         self._view_stack = QStackedWidget()
         self._view_stack.addWidget(self._hint_label)
@@ -719,7 +723,7 @@ class DatabaseExamplesDialog(QDialog):
                 item = QTableWidgetItem(format_value(value))
                 item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 if value is not None and not isinstance(value, (int, float)):
-                    item.setForeground(Qt.red)
+                    item.setForeground(QColor(ERROR))
                 table.setItem(r, c, item)
 
     def _refresh_view(self) -> None:

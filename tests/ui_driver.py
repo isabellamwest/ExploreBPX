@@ -376,7 +376,9 @@ class AppDriver:
         return [layout.itemAt(i).widget().text() for i in range(layout.count())]
 
     def diagnostics_section_outstanding_title(self) -> str:
-        return self._w._diagnostics._section_view._outstanding_box._title_label.text()
+        # title_text is the verbatim domain string; the visible label renders
+        # it in the caps panel-title tier (presentation only).
+        return self._w._diagnostics._section_view._outstanding_box.title_text
 
     def diagnostics_section_task_texts(self) -> list[str]:
         return [

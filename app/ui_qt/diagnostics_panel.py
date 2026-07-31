@@ -97,6 +97,7 @@ from core.validation import Severity, merge_union_pair
 
 from . import badges, icons, parameter_row, style
 from .parameter_row import ParameterRowDelegate
+from .titles import panel_title
 
 _MSG_NO_DOCUMENT = "No document open"
 _MSG_NO_ISSUES = style.all_clear("No issues")
@@ -589,9 +590,13 @@ class _GroupBox(QFrame):
         header.setObjectName("DiagnosticsGroupBoxHeader")
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(10, 6, 10, 6)
-        self._title_label = QLabel(title)
-        self._title_label.setObjectName("DiagnosticsGroupBoxTitle")
+        self.title_text = ""
+        self._title_label = panel_title("", object_name="DiagnosticsGroupBoxTitle")
         header_layout.addWidget(self._title_label)
+        self._suffix_label = QLabel()
+        self._suffix_label.setObjectName("DiagnosticsGroupBoxTitleSuffix")
+        header_layout.addWidget(self._suffix_label)
+        self.set_title(title)
         header_layout.addStretch(1)
         self._badge_row = QWidget()
         self._badge_layout = QHBoxLayout(self._badge_row)
@@ -620,7 +625,17 @@ class _GroupBox(QFrame):
         self.updateGeometry()
 
     def set_title(self, text: str) -> None:
-        self._title_label.setText(text)
+        """Render *text* in the panel-title tier: the fixed word before
+        " · " becomes the caps title; any ratio/count tail stays
+        sentence-case in the muted suffix label (counts are information,
+        not chrome). ``title_text`` keeps the verbatim string as the
+        domain-facing seam -- ``tests/ui_driver.py`` reads it, because the
+        caps rendering is presentation only."""
+        self.title_text = text
+        head, _, tail = text.partition(" · ")
+        self._title_label.setText(head.upper())
+        self._suffix_label.setText(f"· {tail}")
+        self._suffix_label.setVisible(bool(tail))
 
     def set_badges(self, specs: list[tuple[str, str, str]]) -> None:
         """Replace the header's badges with one label per ``(text, bg, fg)``

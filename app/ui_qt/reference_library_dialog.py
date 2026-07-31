@@ -41,6 +41,7 @@ from core.document import BPXDocument
 from core.reference_library import ReferenceSet, list_reference_sets, load_reference_raw
 
 from .style import BORDER, MUTED, REFERENCE
+from .titles import panel_title
 
 #: The picker column's fixed width -- the run-comparison dialog's rail width.
 _PICKER_WIDTH = 250
@@ -75,7 +76,7 @@ class _SetRow(QFrame):
         layout.addWidget(model)
 
         self._tick = QLabel("✓")
-        self._tick.setStyleSheet(f"color: {REFERENCE}; font-weight: bold;")
+        self._tick.setStyleSheet(f"color: {REFERENCE}; font-weight: 600;")
         self._tick.hide()
         layout.addWidget(self._tick)
 
@@ -137,8 +138,7 @@ class ReferenceLibraryDialog(QDialog):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(5)
 
-        heading = QLabel("Bundled PyBaMM sets")
-        heading.setObjectName("Heading")
+        heading = panel_title("Bundled PyBaMM sets")
         layout.addWidget(heading)
 
         for ref_set in self._sets:

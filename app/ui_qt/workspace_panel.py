@@ -38,6 +38,7 @@ from state.reference_snapshot import ReferenceSnapshot
 
 from . import icons
 from .style import ERROR, OK, WARNING
+from .titles import panel_title
 
 _INFO_PANEL_EMPTY_STATE_TEXT = "No document open"
 
@@ -283,8 +284,7 @@ class WorkspacePanel(QWidget):
         plainly ("Main document" -- "main" is the app's one role word, per
         the UI copy rule; no tag, the caps MAIN tag read as noise), then
         identity, validity, contents."""
-        title = QLabel("Main document")
-        title.setObjectName("WorkspaceGroupBoxTitle")
+        title = panel_title("Main document")
         box, body = self._build_group_box(
             self._build_header_band(title),
             "WorkspaceGroupBox",
@@ -314,8 +314,9 @@ class WorkspacePanel(QWidget):
         band, and the band's own subtle purple tint
         (``QWidget#ReferenceGroupBoxHeader``) -- the card must never read
         louder than the document's own."""
-        self._reference_heading = QLabel("Reference document")
-        self._reference_heading.setObjectName("ReferenceHeading")
+        self._reference_heading = panel_title(
+            "Reference document", object_name="ReferenceHeading"
+        )
         self._reference_tag = QLabel("Read-only")
         self._reference_tag.setObjectName("ReferenceReadOnlyTag")
         box, body = self._build_group_box(
@@ -392,8 +393,7 @@ class WorkspacePanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
 
-        heading = QLabel("NEW")
-        heading.setObjectName("NewChooserHeading")
+        heading = panel_title("New")
         layout.addWidget(heading)
 
         for model in SUPPORTED_MODELS:
