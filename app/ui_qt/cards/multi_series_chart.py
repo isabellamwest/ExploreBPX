@@ -17,7 +17,9 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPainter, QPen
-from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout, QWidget
+
+from .chart_axes import fit_axis, style_axis
 
 try:  # QtCharts is part of PySide6 but absent from some minimal builds.
     from PySide6.QtCharts import QChart, QChartView, QLineSeries, QValueAxis
@@ -25,9 +27,6 @@ try:  # QtCharts is part of PySide6 but absent from some minimal builds.
     _CHARTS_AVAILABLE = True
 except ImportError:  # pragma: no cover - depends on the PySide6 build
     _CHARTS_AVAILABLE = False
-
-_GRID = "#eaeef2"
-_AXIS_LABEL = "#898781"
 
 
 def charts_available() -> bool:
@@ -60,13 +59,15 @@ class MultiSeriesChart(QWidget):
         self._axis_x = QValueAxis()
         self._axis_y = QValueAxis()
         for axis in (self._axis_x, self._axis_y):
-            axis.setGridLineColor(QColor(_GRID))
-            axis.setLabelsColor(QColor(_AXIS_LABEL))
+            style_axis(axis)
         self._chart.addAxis(self._axis_x, Qt.AlignBottom)
         self._chart.addAxis(self._axis_y, Qt.AlignLeft)
 
         self._view = QChartView(self._chart)
         self._view.setRenderHint(QPainter.Antialiasing)
+        # Drop QGraphicsView's native sunken frame: the chart sits inside a
+        # card that already owns the border, matching the app's flat look.
+        self._view.setFrameShape(QFrame.NoFrame)
         self._view.setFixedHeight(height)
         layout.addWidget(self._view)
 
@@ -144,21 +145,12 @@ class MultiSeriesChart(QWidget):
             return
         xs = [x for x, _ in points]
         ys = [y for _, y in points]
-        self._axis_x.setRange(*_padded(min(xs), max(xs)))
-        self._axis_y.setRange(*_padded(min(ys), max(ys)))
+        fit_axis(self._axis_x, min(xs), max(xs))
+        fit_axis(self._axis_y, min(ys), max(ys))
 
     def _show_empty(self, empty: bool) -> None:
         self._view.setVisible(not empty)
         self._empty.setVisible(empty)
-
-
-def _padded(low: float, high: float) -> tuple[float, float]:
-    """A range with a little headroom, and a sane span when all points coincide."""
-    if low == high:
-        pad = abs(low) * 0.1 or 1.0
-        return low - pad, high + pad
-    margin = (high - low) * 0.05
-    return low - margin, high + margin
 
 
 def _zero_margins():
