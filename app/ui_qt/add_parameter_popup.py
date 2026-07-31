@@ -61,7 +61,6 @@ from PySide6.QtCore import QPoint, QPointF, QRect, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
-    QGraphicsDropShadowEffect,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -78,6 +77,8 @@ from core.parameter_types import extract_unit
 from ui_qt import parameter_row, style
 from ui_qt.cards.modal import ModeStrip
 from ui_qt.dismissal import OutsideDismissFilter
+from ui_qt.floating_card import SHADOW_MARGIN as _SHADOW_MARGIN
+from ui_qt.floating_card import floating_card
 from ui_qt.parameter_row import ParameterRowDelegate
 
 #: The inline custom-parameter form's type picker, in the order the row shows
@@ -113,9 +114,6 @@ _MAX_VISIBLE_ROWS = 10
 
 #: Fixed width of the card's visible content.
 _CARD_WIDTH = 380
-#: Transparent margin around the card, giving the drop shadow room to render
-#: without being clipped by the top-level's bounds.
-_SHADOW_MARGIN = 16
 
 _SUGGESTED_HEADER = "Suggested for this section"
 _OTHER_HEADER = "Other parameters"
@@ -382,29 +380,13 @@ class AddParameterPopup(QWidget):
         self._form = self._build_custom_form()
         self._form.hide()
 
-        card = self._card = QFrame()
-        card.setObjectName("AddParameterCard")
-        card.setFixedWidth(_CARD_WIDTH)
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(8, 8, 8, 8)
-        card_layout.setSpacing(6)
+        card, card_layout = floating_card(self, "AddParameterCard", width=_CARD_WIDTH)
+        self._card = card
         card_layout.addWidget(self._input)
         card_layout.addWidget(self._list)
         card_layout.addWidget(self._divider)
         card_layout.addWidget(self._create_button)
         card_layout.addWidget(self._form)
-
-        shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(24)
-        shadow.setColor(QColor(15, 23, 42, 60))
-        shadow.setOffset(0, 5)
-        card.setGraphicsEffect(shadow)
-
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(
-            _SHADOW_MARGIN, _SHADOW_MARGIN, _SHADOW_MARGIN, _SHADOW_MARGIN
-        )
-        outer.addWidget(card)
 
     # -- opening -----------------------------------------------------
     def open_for_section(

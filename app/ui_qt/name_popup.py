@@ -18,21 +18,18 @@ validator's business.
 from __future__ import annotations
 
 from PySide6.QtCore import QPoint, Qt, Signal
-from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
-    QFrame,
-    QGraphicsDropShadowEffect,
     QLabel,
     QLineEdit,
-    QVBoxLayout,
     QWidget,
 )
 
 from .dismissal import OutsideDismissFilter
+from .floating_card import SHADOW_MARGIN as _SHADOW_MARGIN
+from .floating_card import floating_card
 from .style import ERROR, MUTED
 
 _CARD_WIDTH = 300
-_SHADOW_MARGIN = 16
 
 
 class _NameInput(QLineEdit):
@@ -89,31 +86,14 @@ class NamePopup(QWidget):
 
         self._reason = QLabel("")
         self._reason.setObjectName("NamePopupReason")
-        self._reason.setStyleSheet(f"color: {ERROR}; padding: 2px 4px 4px 4px;")
+        self._reason.setStyleSheet(f"color: {ERROR}; padding: 2px 4px 4px 4px; font-size: 11px;")
         self._reason.setWordWrap(True)
         self._reason.hide()
 
-        card = QFrame()
-        card.setObjectName("AddParameterCard")
-        card.setFixedWidth(_CARD_WIDTH)
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(8, 8, 8, 8)
-        card_layout.setSpacing(6)
+        _, card_layout = floating_card(self, "AddParameterCard", width=_CARD_WIDTH)
         card_layout.addWidget(self._input)
         card_layout.addWidget(self._note)
         card_layout.addWidget(self._reason)
-
-        shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(24)
-        shadow.setColor(QColor(15, 23, 42, 60))
-        shadow.setOffset(0, 5)
-        card.setGraphicsEffect(shadow)
-
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(
-            _SHADOW_MARGIN, _SHADOW_MARGIN, _SHADOW_MARGIN, _SHADOW_MARGIN
-        )
-        outer.addWidget(card)
 
     # -- opening -------------------------------------------------------
     def open_at(

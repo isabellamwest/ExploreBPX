@@ -13,14 +13,10 @@ import html as _html
 from dataclasses import dataclass
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
-    QFrame,
-    QGraphicsDropShadowEffect,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
-    QVBoxLayout,
     QWidget,
 )
 
@@ -29,15 +25,13 @@ from core.tree_model import ParameterItem, TreeNode
 
 from . import icons, parameter_row, style
 from .dismissal import OutsideDismissFilter
+from .floating_card import SHADOW_MARGIN as _SHADOW_MARGIN
+from .floating_card import floating_card
 from .parameter_row import ParameterRowDelegate
 
 _PATH_ROLE = Qt.UserRole
 _MAX_RESULTS = 50
 _MAX_VISIBLE_ROWS = 8
-#: Transparent margin around the card, giving the drop shadow room to render
-#: without being clipped by the top-level's bounds (same treatment as
-#: ``add_parameter_popup._SHADOW_MARGIN``).
-_SHADOW_MARGIN = 16
 
 
 def _entry_html(entry: "_Entry") -> str:
@@ -110,23 +104,8 @@ class SearchPopup(QWidget):
         self._list.setItemDelegate(ParameterRowDelegate(self._list))
         self.itemClicked = self._list.itemClicked
 
-        card = QFrame()
-        card.setObjectName("SearchPopupCard")
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(8, 8, 8, 8)
+        _, card_layout = floating_card(self, "SearchPopupCard")
         card_layout.addWidget(self._list)
-
-        shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(24)
-        shadow.setColor(QColor(15, 23, 42, 60))
-        shadow.setOffset(0, 5)
-        card.setGraphicsEffect(shadow)
-
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(
-            _SHADOW_MARGIN, _SHADOW_MARGIN, _SHADOW_MARGIN, _SHADOW_MARGIN
-        )
-        outer.addWidget(card)
 
     # -- forwarded list surface ---------------------------------------
     def count(self) -> int:
