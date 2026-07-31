@@ -1333,6 +1333,17 @@ class AppDriver:
             if button.objectName().startswith(prefix)
         ]
 
+    def click_workspace_new_from_file(self) -> "AppDriver":
+        """Click the New chooser's "From existing file…" row on the Workspace page."""
+        self._qtbot.mouseClick(self._w._workspace._new_from_file_button, Qt.LeftButton)
+        return self
+
+    def workspace_new_from_file_texts(self) -> tuple[str, str]:
+        """The (label, descriptor) texts of the New chooser's
+        from-existing-file row."""
+        ws = self._w._workspace
+        return ws._new_from_file_button.text(), ws._new_from_file_descriptor.text()
+
     # ------------------------------------------------------------------
     # Readers -- user-visible state only
     # ------------------------------------------------------------------

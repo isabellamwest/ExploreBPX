@@ -9,7 +9,7 @@ from __future__ import annotations
 from enum import Enum
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QSize, Qt
+from PySide6.QtCore import QEvent, QSize, QStandardPaths, Qt
 from PySide6.QtGui import QFontMetrics, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -139,6 +139,11 @@ class MainWindow(QMainWindow):
         #: reference docks or undocks (see ``_open_reference_path``/
         #: ``_on_remove_reference_requested``).
         self._comparison: ComparisonResult | None = None
+        #: Where a never-saved document's Save As dialog starts: the folder
+        #: of the last Save As this run, else the user's Documents folder --
+        #: never a bundled template/example directory (PLAN-multi-file.md
+        #: decision 10). Session-scoped on purpose; not persisted.
+        self._save_dialog_dir: Path | None = None
 
         self._tree = TreePanel()
         self._params = ParameterListPanel()
@@ -367,6 +372,7 @@ class MainWindow(QMainWindow):
         self._workspace.new_requested.connect(self._new)
         self._workspace.file_dropped.connect(self._on_file_dropped)
         self._workspace.open_reference_requested.connect(self._open_reference)
+        self._workspace.new_from_file_requested.connect(self._new_from_file)
         self._workspace.remove_reference_requested.connect(self._on_remove_reference_requested)
         self._workspace.make_main_requested.connect(self._on_make_main_requested)
 
@@ -1128,6 +1134,37 @@ class MainWindow(QMainWindow):
         self._refresh_all()
         self._show_page(_EDITOR_PAGE_INDEX)
 
+    def _new_from_file(self) -> None:
+        """New from an existing file: clone it into a fresh unsaved session
+        and dock the origin as the read-only reference (PLAN-multi-file.md
+        decision 8, signed design 2026-07-31).
+
+        Picker first, then the same guard as New -- nobody should answer a
+        replace prompt before a file is even chosen. The state change is
+        atomic (``AppState.new_from_file`` loads both files before touching
+        state), so a load failure after the guard leaves the previous
+        session open and any docked reference in place. Unlike New, the
+        flow stays on the Workspace page (the signed end state): both role
+        cards confirm at a glance what was just set up.
+        """
+        name, _ = QFileDialog.getOpenFileName(
+            self, "New from Existing File", "", "BPX (*.json *.yaml *.yml)"
+        )
+        if not name:
+            return
+        if not self._confirm_new():
+            return
+        path = Path(name)
+        try:
+            self._state.new_from_file(path)
+        except (LoadError, OSError) as exc:
+            QMessageBox.critical(self, "Cannot open file", str(exc))
+            return
+        self._params.reset_expansion_state()
+        self._diagnostics.reset_view_state()
+        self._refresh_all()
+        self._toast.show_message(f"New document from {path.name} · docked as reference")
+
     def _save(self) -> bool:
         """Write the document to its backing file.
 
@@ -1142,14 +1179,23 @@ class MainWindow(QMainWindow):
             return False
         session = self._state.active
         if session.backing_file is None:
+            # Decision 10 (PLAN-multi-file.md): a never-saved main's Save As
+            # starts in the last Save As folder this run, else Documents --
+            # never wherever the app happens to run from (which could be a
+            # bundled directory). The document's own filename seeds the name.
+            start_dir = self._save_dialog_dir or Path(
+                QStandardPaths.writableLocation(QStandardPaths.DocumentsLocation)
+            )
+            suggested = session.document.filename if session.document else ""
             name, _ = QFileDialog.getSaveFileName(
                 self, "Save BPX",
-                session.document.filename if session.document else "",
+                str(start_dir / suggested) if suggested else str(start_dir),
                 "BPX (*.json *.yaml *.yml)",
             )
             if not name:
                 return False
             session.backing_file = Path(name)
+            self._save_dialog_dir = Path(name).parent
         try:
             session.save()
         except OSError as exc:

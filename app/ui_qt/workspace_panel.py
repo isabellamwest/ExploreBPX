@@ -115,6 +115,7 @@ class WorkspacePanel(QWidget):
     new_requested = Signal(str)  # model name
     file_dropped = Signal(str)  # local file path
     open_reference_requested = Signal()
+    new_from_file_requested = Signal()
     remove_reference_requested = Signal()
     make_main_requested = Signal()
 
@@ -372,6 +373,14 @@ class WorkspacePanel(QWidget):
         for model in SUPPORTED_MODELS:
             layout.addWidget(self._build_model_option(model))
 
+        divider = QFrame()
+        divider.setObjectName("WorkspaceRailDivider")
+        divider.setFixedHeight(1)
+        layout.addSpacing(2)
+        layout.addWidget(divider)
+        layout.addSpacing(2)
+        layout.addWidget(self._build_new_from_file_option())
+
         return container
 
     def _build_model_option(self, model: str) -> QWidget:
@@ -395,6 +404,32 @@ class WorkspacePanel(QWidget):
         descriptor.setObjectName("NewChooserDescriptor")
         descriptor.setWordWrap(True)
         row_layout.addWidget(descriptor)
+
+        return row
+
+    def _build_new_from_file_option(self) -> QWidget:
+        """The chooser's non-model row, below its own divider: clone an
+        existing file into a fresh unsaved document with the origin docked
+        as the reference ("New from source", PLAN-multi-file.md decision 8).
+        Same row anatomy as the model options -- the ``modelOption``
+        property carries the shared flat-row styling."""
+        row = QWidget()
+        row_layout = QVBoxLayout(row)
+        row_layout.setContentsMargins(0, 0, 0, 0)
+        row_layout.setSpacing(0)
+
+        self._new_from_file_button = QPushButton("From existing file…")
+        self._new_from_file_button.setObjectName("NewFromFile")
+        self._new_from_file_button.setProperty("modelOption", True)
+        self._new_from_file_button.clicked.connect(self.new_from_file_requested)
+        row_layout.addWidget(self._new_from_file_button)
+
+        self._new_from_file_descriptor = QLabel(
+            "Start from a copy · the file docks as reference"
+        )
+        self._new_from_file_descriptor.setObjectName("NewChooserDescriptor")
+        self._new_from_file_descriptor.setWordWrap(True)
+        row_layout.addWidget(self._new_from_file_descriptor)
 
         return row
 

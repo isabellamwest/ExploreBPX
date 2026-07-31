@@ -74,6 +74,34 @@ class AppState:
         session.dirty = True
         self.active = session
 
+    def new_from_file(self, path: Path) -> None:
+        """Clone *path* into a fresh unsaved session and dock *path* itself
+        as the read-only reference ("New from source", PLAN-multi-file.md
+        decision 8).
+
+        The clone is built from the file's on-disk bytes under a derived
+        "{stem} (copy)" filename (the Export naming convention), keeping the
+        file's own format, with no backing file and ``dirty`` set -- exactly
+        the never-saved shape ``new_document`` creates, so the first Save
+        routes through Save As and the origin on disk is never at risk.
+
+        Loads the clone and the snapshot before touching either field: a
+        failure (``core.bpx_gateway.LoadError``/``OSError``) leaves the
+        state completely unchanged. A reference already docked at *path*
+        is kept as-is (dedupe by path); any other reference is replaced --
+        the one-reference rule.
+        """
+        clone_name = f"{path.stem} (copy){path.suffix}"
+        document = BPXDocument.from_bytes(path.read_bytes(), clone_name)
+        if self.reference is not None and self.reference.path.resolve() == path.resolve():
+            reference = self.reference
+        else:
+            reference = ReferenceSnapshot.load(path)
+        session = DocumentSession(document)
+        session.dirty = True
+        self.active = session
+        self.reference = reference
+
     def close(self) -> None:
         """Close the active session.
 
