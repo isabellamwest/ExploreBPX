@@ -506,6 +506,11 @@ class SourceView(QAbstractScrollArea):
 
     #: A ← gutter chip was clicked: (path, is_section).
     pull_requested = Signal(object, bool)
+    #: A row was double-clicked (step 7): its path, for the Editor jump
+    #: through ``NavigationService``. Emitted only for rows the main
+    #: document actually has -- a ref-only row names nothing the Editor
+    #: could resolve, and suffix-matching must never guess for it.
+    navigate_requested = Signal(object)
 
     def __init__(self) -> None:
         super().__init__()
@@ -518,7 +523,9 @@ class SourceView(QAbstractScrollArea):
         #: stepper moves it between differences and a row click places it.
         self._selected: tuple[str, ...] | None = None
         self._font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
-        self.setFocusPolicy(Qt.NoFocus)
+        # Focusable for the Up/Down row navigation (step 7) -- still never
+        # an input widget: keys move the selection, nothing edits.
+        self.setFocusPolicy(Qt.StrongFocus)
 
     # -- content ---------------------------------------------------------
 
@@ -601,6 +608,12 @@ class SourceView(QAbstractScrollArea):
             self._closed.discard(path[:depth])
         self._selected = path
         self._rebuild()
+        self._scroll_to(path)
+        self.viewport().update()
+
+    def _scroll_to(self, path: tuple[str, ...]) -> None:
+        """Scroll *path*'s key line into the viewport if it is not already
+        visible (centred, so a jump shows its surroundings too)."""
         line_height = self._line_height()
         for index, line in enumerate(self._lines):
             if line.row_path == path:
@@ -610,7 +623,41 @@ class SourceView(QAbstractScrollArea):
                 if not bar.value() <= top <= bar.value() + view_height - line_height:
                     bar.setValue(max(0, top - view_height // 2))
                 break
+
+    def move_selection(self, delta: int) -> None:
+        """Move the selection one visible row up (-1) or down (+1) -- the
+        Up/Down keys of the signed design (step 7).
+
+        Walks the rows as rendered (a folded section's children are not
+        visited; open-value continuation lines are skipped) and stops at
+        the ends -- arrows do not wrap; cycling is the stepper's job. With
+        nothing selected, Down starts at the first row and Up at the last.
+        """
+        row_paths = [
+            line.row_path for line in self._lines if line.row_path is not None
+        ]
+        if not row_paths:
+            return
+        if self._selected in row_paths:
+            index = row_paths.index(self._selected) + delta
+            if not 0 <= index < len(row_paths):
+                return
+        else:
+            index = 0 if delta > 0 else len(row_paths) - 1
+        self._selected = row_paths[index]
+        self._scroll_to(self._selected)
         self.viewport().update()
+
+    def keyPressEvent(self, event) -> None:  # noqa: N802 - Qt override
+        if event.key() == Qt.Key_Up:
+            self.move_selection(-1)
+            event.accept()
+            return
+        if event.key() == Qt.Key_Down:
+            self.move_selection(+1)
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
     def line_texts(self) -> list[str]:
         """Plain text of every currently rendered main-pane line, top to
@@ -841,6 +888,31 @@ class SourceView(QAbstractScrollArea):
                 return
         super().mousePressEvent(event)
 
+    def mouseDoubleClickEvent(self, event) -> None:  # noqa: N802 - Qt override
+        """Double-click a row: jump to it in the Editor (decision 13).
+
+        Pane cells only -- the gutter stays the ←'s territory (its press
+        already pulled once; a double-click must not pull twice or jump).
+        Only rows the main document has are emitted: a ref-only row names
+        nothing the Editor could reveal, so it stays a Source-page fact.
+        """
+        point = event.position().toPoint()
+        index = (point.y() + self.verticalScrollBar().value()) // self._line_height()
+        if 0 <= index < len(self._lines):
+            line = self._lines[int(index)]
+            pane_width = self._pane_width()
+            in_gutter = (
+                self._two_pane and pane_width <= point.x() < pane_width + _GUTTER_PX
+            )
+            if not in_gutter and line.row_path is not None:
+                row = next(
+                    (r for r in self._rows if r.path == line.row_path), None
+                )
+                if row is not None and row.in_main:
+                    self.navigate_requested.emit(line.row_path)
+                    return
+        super().mouseDoubleClickEvent(event)
+
 
 def _pane_header_text(role: str, filename: str, model: str | None) -> str:
     parts = [part for part in (role, filename, model) if part]
@@ -859,11 +931,15 @@ class SourcePage(QWidget):
     make_main_requested = Signal()
     #: The stale band's Reload link: re-snapshot the reference from disk.
     reload_requested = Signal()
+    #: A row was double-clicked: jump to it in the Editor (step 7). The
+    #: page re-emits; MainWindow routes through ``NavigationService``.
+    navigate_requested = Signal(object)
 
     def __init__(self) -> None:
         super().__init__()
         self._view = SourceView()
         self._view.pull_requested.connect(self.pull_requested)
+        self._view.navigate_requested.connect(self.navigate_requested)
 
         # Single-pane toolbar (frames F3): the main file's identity on the
         # left, the docking hint on the right -- the hint sits exactly where
@@ -1010,6 +1086,11 @@ class SourcePage(QWidget):
         enabled = two_pane and self._view.has_differences()
         self._prev_button.setEnabled(enabled)
         self._next_button.setEnabled(enabled)
+
+    def focus_view(self) -> None:
+        """Give the raw-JSON view keyboard focus, so Up/Down row navigation
+        works immediately on page entry without a click first."""
+        self._view.setFocus()
 
     def set_stale(self, stale: bool) -> None:
         """Show/hide the stale-reference band (MainWindow's on-notice mtime

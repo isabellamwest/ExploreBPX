@@ -659,6 +659,30 @@ class AppDriver:
         self._w._source._reload_button.click()
         return self
 
+    def source_press_key(self, key: str) -> "AppDriver":
+        """Send an Up/Down arrow key to the Source view ("up"/"down")."""
+        from PySide6.QtTest import QTest
+
+        qt_key = {"up": Qt.Key_Up, "down": Qt.Key_Down}[key]
+        QTest.keyClick(self._w._source._view, qt_key)
+        return self
+
+    def source_double_click(self, path: tuple[str, ...]) -> "AppDriver":
+        """Double-click *path*'s key line in the main pane, exactly as a
+        user does (press then double-click at the line's position).
+        Raises if the row is not currently rendered."""
+        from PySide6.QtCore import QPoint
+        from PySide6.QtTest import QTest
+
+        view = self._w._source._view
+        for index, line in enumerate(view._lines):
+            if line.row_path == tuple(path):
+                y = index * view._line_height() + 2
+                point = QPoint(30, y - view.verticalScrollBar().value())
+                QTest.mouseDClick(view.viewport(), Qt.LeftButton, pos=point)
+                return self
+        raise AssertionError(f"no rendered row at {path!r}")
+
     def notice_window_activation(self) -> "AppDriver":
         """Run the window-activation stale-notice check directly (the
         headless suite has no real activation events to deliver)."""

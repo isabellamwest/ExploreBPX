@@ -987,3 +987,127 @@ def test_vanished_file_never_conjures_a_band(app_driver, tmp_path, monkeypatch):
     app_driver.notice_window_activation()
 
     assert app_driver.source_stale_band_visible() is False
+
+
+# ---------------------------------------------------------------------------
+# Step 7: Up/Down row navigation + double-click Editor jump.
+# ---------------------------------------------------------------------------
+
+
+def _key(view, key) -> None:
+    from PySide6.QtTest import QTest
+
+    QTest.keyClick(view, key)
+
+
+def test_arrows_walk_visible_rows_and_stop_at_the_ends(qtbot):
+    from PySide6.QtCore import Qt
+
+    page = _two_pane(qtbot, _DOC_MAIN_ONLY, _REF)
+    view = page._view
+
+    _key(view, Qt.Key_Down)
+    assert view.selected_path() == ("Header",)
+    _key(view, Qt.Key_Up)  # top: stays, no wrap
+    assert view.selected_path() == ("Header",)
+
+    for _ in range(3):
+        _key(view, Qt.Key_Down)
+    assert view.selected_path() == ("Header", "Model")
+
+    # Walk to the very end: ref-only and main-only rows are rows too.
+    for _ in range(20):
+        _key(view, Qt.Key_Down)
+    assert view.selected_path() == (
+        "Parameterisation",
+        "Cell",
+        "Upper voltage cut-off [V]",
+    )
+    _key(view, Qt.Key_Down)  # bottom: stays, no wrap
+    assert view.selected_path() == (
+        "Parameterisation",
+        "Cell",
+        "Upper voltage cut-off [V]",
+    )
+
+
+def test_arrows_skip_folded_children_and_continuation_lines(qtbot):
+    from PySide6.QtCore import Qt
+
+    raw = {
+        "Section": {
+            "A": 1.0,
+            "T": {"x": [1.0, 2.0], "y": [3.0, 4.0]},
+            "B": 2.0,
+        },
+    }
+    page = SourcePage()
+    qtbot.addWidget(page)
+    page.refresh(raw)
+    view = page._view
+
+    # The open table renders several lines; Down from its key line lands
+    # on the next parameter, never inside the entries.
+    view.reveal(("Section", "T"))
+    _key(view, Qt.Key_Down)
+    assert view.selected_path() == ("Section", "B")
+
+    # A folded section's children are not visited.
+    view.toggle_fold(("Section",))
+    view.reveal(("Section",))
+    _key(view, Qt.Key_Down)
+    assert view.selected_path() == ("Section",)
+
+
+def test_arrows_work_in_single_pane_mode(qtbot):
+    from PySide6.QtCore import Qt
+
+    page = SourcePage()
+    qtbot.addWidget(page)
+    page.refresh(_DOC, main_name="main.json", main_model="SPM")
+    view = page._view
+
+    _key(view, Qt.Key_Down)
+    _key(view, Qt.Key_Down)
+    assert view.selected_path() == ("Header", "BPX")
+
+
+def test_double_click_jumps_to_the_parameter_in_the_editor(
+    app_driver, tmp_path, monkeypatch
+):
+    app_driver.open(_write(tmp_path, "main.json", _DOC_MAIN_ONLY))
+    _dock_reference(app_driver, tmp_path, monkeypatch, _REF)
+
+    app_driver.source_double_click(_CAPACITY)
+
+    assert app_driver.current_view_name() == "Editor"
+    assert app_driver.inspector_title() == "Nominal cell capacity [A.h]"
+
+
+def test_double_click_works_without_a_reference(app_driver, tmp_path):
+    app_driver.open(_write(tmp_path, "main.json", _DOC)).show_view("Source")
+
+    app_driver.source_double_click(("Header", "Title"))
+
+    assert app_driver.current_view_name() == "Editor"
+    assert app_driver.inspector_title() == "Title"
+
+
+def test_double_click_on_a_ref_only_row_stays_on_source(
+    app_driver, tmp_path, monkeypatch
+):
+    app_driver.open(_write(tmp_path, "main.json", _DOC_MAIN_ONLY))
+    _dock_reference(app_driver, tmp_path, monkeypatch, _REF)
+
+    app_driver.source_double_click(_LOWER_CUTOFF)
+
+    assert app_driver.current_view_name() == "Source"
+
+
+def test_arrow_keys_reach_the_view_on_page_entry(app_driver, tmp_path):
+    # `show_view` focuses the raw view, so Up/Down work without a click.
+    app_driver.open(_write(tmp_path, "main.json", _DOC)).show_view("Source")
+
+    app_driver.source_press_key("down")
+
+    assert app_driver.source_selected_path() == ("Header",)

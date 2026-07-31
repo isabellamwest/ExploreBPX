@@ -170,6 +170,21 @@ passing** per the app-audit Phase A baseline, 2026-07-21. Implementation starts
     strip (now "Reference · {filename} · {model}"), and the ghost-row
     tag (now "REF ONLY"). Decisions 3/12/13's ◇ mentions read as
     superseded on this point.*
+  - Step 7 (2026-07-31, uncommitted): keyboard + Editor jump. Up/Down move
+    the selection one *visible* row at a time (folded children skipped,
+    open-value continuation lines skipped), stopping at the ends -- arrows
+    do not wrap; cycling stays the stepper's job. `SourceView` is now
+    `StrongFocus` (still no input widget -- keys only move the selection)
+    and `_show_page` focuses it on Source entry, so arrows work without a
+    click. Double-click a row = the page's one Editor link: emits
+    `navigate_requested` -> the shared `NavigationService` (which already
+    switches to the Editor and fans out reveals). Emitted only for rows
+    `in_main` -- a ref-only row navigates nowhere (the service's
+    suffix-match fallback must never guess for it); the gutter is excluded
+    (its press already pulled). 7 new tests incl. a real-key-event
+    focus-on-entry pin; suite 1456 green + the same 4 environment-only
+    failures; real-window run verified focus, a 5-row arrow walk, and the
+    double-click landing on the right Editor card.
   - **Unlocked calls a later session may revisit with Bella**: rail order
     (Workspace·Editor·Source·Diagnostics); "n parameters" always shown on
     headers (not only folded, and per side in two-pane mode); lists close

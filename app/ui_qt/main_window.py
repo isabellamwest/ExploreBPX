@@ -151,6 +151,11 @@ class MainWindow(QMainWindow):
         # card's button (dirty prompt, Save As routing, toast -- M4).
         self._source.make_main_requested.connect(self._on_make_main_requested)
         self._source.reload_requested.connect(self._on_reload_reference)
+        # Double-click Editor jump (step 7): the page's one Editor link,
+        # through the shared NavigationService like every other navigation.
+        self._source.navigate_requested.connect(
+            lambda path: self._navigation.navigate(tuple(path))
+        )
         self._search = SearchBar()
         self._activity_bar = ActivityBar()
         self._identity_label = _IdentityLabel()
@@ -385,6 +390,7 @@ class MainWindow(QMainWindow):
         # other is window activation, see ``changeEvent``).
         if page_index == _SOURCE_PAGE_INDEX:
             self._check_reference_stale()
+            self._source.focus_view()
 
     def navigate_to(self, path: tuple) -> None:
         """Request navigation to *path* through the shared NavigationService.
