@@ -36,6 +36,10 @@ WARNING_TINT = "#fff1e0"
 #: Pale wash behind a REF_ONLY ghost row/the comparison strip (multi-file
 #: track M2) -- the ``REFERENCE`` counterpart to ``ERROR_TINT``/``WARNING_TINT``.
 REFERENCE_TINT = "#f3ecfa"
+#: The reference purple's pale border tone -- already used by the inspector
+#: reference block's chrome in the stylesheet below (#d5cde6); named here so
+#: the Source page's ← pull chip draws its outline from the same tint.
+REFERENCE_BORDER = "#d5cde6"
 #: The Source page's value chip (multi-file track M5, signed frames): the
 #: wash behind a value that differs between the two panes. Warm but its own
 #: tint -- "differs" is information, not a severity, so it is deliberately

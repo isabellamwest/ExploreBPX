@@ -24,7 +24,7 @@ import json
 import re
 from dataclasses import dataclass
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFontDatabase, QPainter
 from PySide6.QtWidgets import (
     QAbstractScrollArea,
@@ -50,6 +50,11 @@ _GUTTER_PX = 40
 
 _CARET_OPEN = "▾"
 _CARET_CLOSED = "▸"
+_PULL_GLYPH = "←"
+#: The ← chip's box inside the gutter column (the frames' 26×20 rounded
+#: rect, centred).
+_PULL_W = 26
+_PULL_H = 20
 
 #: The one-line stand-in for a closed dict/list value (decision 15).
 _CLOSED_SUMMARY = "table"
@@ -99,6 +104,12 @@ class _Line:
     #: section, or a closable dict/list parameter); the fold state is one
     #: shared set, so both panes fold together.
     toggle_path: tuple[str, ...] | None = None
+    #: The ← gutter pull (two-pane only): set on the key line of a
+    #: differs/fillable/ref-only parameter and on a ref-only section
+    #: header -- the frames' rule: absent entirely on equal and main-only
+    #: rows, and on shared section headers.
+    pull_path: tuple[str, ...] | None = None
+    pull_section: bool = False
 
 
 def _gap(depth: int) -> _PaneLine:
@@ -381,7 +392,20 @@ def _build_lines(
                     if row.in_reference
                     else _gap(row.depth)
                 )
-            lines.append(_Line(main=main, ref=ref, toggle_path=row.path))
+            lines.append(
+                _Line(
+                    main=main,
+                    ref=ref,
+                    toggle_path=row.path,
+                    # ← on a section header only when the whole section is
+                    # ref-only: its pull copies the full subtree, one undo
+                    # entry (frames: "State"; shared headers carry no ←).
+                    pull_path=row.path
+                    if two_pane and row.is_difference
+                    else None,
+                    pull_section=two_pane and row.is_difference,
+                )
+            )
         else:
             # Value-chip modes per state (signed frames): differs chips
             # both sides -- token-level for string pairs, whole otherwise;
@@ -437,6 +461,11 @@ def _build_lines(
                             toggle_path=row.path
                             if index == 0 and row.closable
                             else None,
+                            # ← on the parameter's key line; its pull always
+                            # copies the whole value, table or scalar.
+                            pull_path=row.path
+                            if index == 0 and row.is_difference
+                            else None,
                         )
                     )
             else:
@@ -459,7 +488,15 @@ class SourceView(QAbstractScrollArea):
     dict/list parameters), preserved across refreshes so a live re-render
     after an edit or undo never loses where the user folded. In two-pane
     mode the same fold set drives both panes.
+
+    Painting the ← chip is the view's job; *acting* on it is not: a gutter
+    click only emits :attr:`pull_requested` (path, is_section) and the
+    window layer runs the shared M3 command -- the page itself never
+    mutates the document (coexistence rule 14).
     """
+
+    #: A ← gutter chip was clicked: (path, is_section).
+    pull_requested = Signal(object, bool)
 
     def __init__(self) -> None:
         super().__init__()
@@ -506,6 +543,15 @@ class SourceView(QAbstractScrollArea):
         if not self._two_pane:
             return []
         return [line.ref.text if line.ref is not None else "" for line in self._lines]
+
+    def pull_lines(self) -> list[tuple[int, tuple[str, ...], bool]]:
+        """Every line carrying a ← gutter chip as ``(line index, path,
+        is_section)`` -- the test-facing read of the pull affordances."""
+        return [
+            (index, line.pull_path, line.pull_section)
+            for index, line in enumerate(self._lines)
+            if line.pull_path is not None
+        ]
 
     def chipped_texts(self) -> list[tuple[int, str, str]]:
         """Every chip-highlighted segment as ``(line index, "main"/"ref",
@@ -598,6 +644,8 @@ class SourceView(QAbstractScrollArea):
                     h_offset,
                     line_height,
                 )
+            if self._two_pane and line.pull_path is not None:
+                self._paint_pull_chip(painter, pane_width, top, line_height)
         if self._two_pane:
             painter.setPen(QColor(style.NEUTRAL_TINT))
             painter.drawLine(pane_width, 0, pane_width, self.viewport().height())
@@ -646,12 +694,46 @@ class SourceView(QAbstractScrollArea):
             x += advance
         painter.restore()
 
+    def _paint_pull_chip(
+        self, painter: QPainter, pane_width: int, top: int, line_height: int
+    ) -> None:
+        """The ← copy affordance, centred in the gutter column: light
+        purple tint, pointing into the main file (frames F1/F2)."""
+        x = pane_width + (_GUTTER_PX - _PULL_W) // 2
+        y = top + (line_height - _PULL_H) // 2
+        painter.setPen(QColor(style.REFERENCE_BORDER))
+        painter.setBrush(QColor(style.REFERENCE_TINT))
+        painter.drawRoundedRect(x, y, _PULL_W, _PULL_H, 4, 4)
+        painter.setBrush(Qt.NoBrush)
+        painter.setFont(QFontDatabase.systemFont(QFontDatabase.FixedFont))
+        painter.setPen(QColor(style.REFERENCE))
+        painter.drawText(
+            x,
+            y,
+            _PULL_W,
+            _PULL_H,
+            Qt.AlignCenter,
+            _PULL_GLYPH,
+        )
+
     # -- interaction -----------------------------------------------------
 
     def mousePressEvent(self, event) -> None:  # noqa: N802 - Qt override
-        index = (event.position().toPoint().y() + self.verticalScrollBar().value()) // self._line_height()
+        point = event.position().toPoint()
+        index = (point.y() + self.verticalScrollBar().value()) // self._line_height()
         if 0 <= index < len(self._lines):
             line = self._lines[int(index)]
+            pane_width = self._pane_width()
+            in_gutter = (
+                self._two_pane and pane_width <= point.x() < pane_width + _GUTTER_PX
+            )
+            if in_gutter:
+                # The gutter is the ←'s territory alone: no pull chip on
+                # this line means the click does nothing (never a stray
+                # fold toggle).
+                if line.pull_path is not None:
+                    self.pull_requested.emit(line.pull_path, line.pull_section)
+                return
             if line.toggle_path is not None:
                 self.toggle_fold(line.toggle_path)
                 return
@@ -667,9 +749,14 @@ class SourcePage(QWidget):
     """The Source rail page: toolbar strip + pane headers + the raw-JSON
     view (one pane, or two aligned panes with a reference docked)."""
 
+    #: Re-emitted from the view's ← gutter clicks: (path, is_section).
+    #: MainWindow runs the shared pull command; the page never mutates.
+    pull_requested = Signal(object, bool)
+
     def __init__(self) -> None:
         super().__init__()
         self._view = SourceView()
+        self._view.pull_requested.connect(self.pull_requested)
 
         self._hint = QLabel("◇ Open a reference to compare…")
         self._hint.setStyleSheet(f"color: {style.MUTED};")

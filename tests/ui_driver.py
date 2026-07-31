@@ -552,6 +552,25 @@ class AppDriver:
         the same indices as the main pane's lines."""
         return self._w._source._view.ref_line_texts()
 
+    def source_pull_paths(self) -> list[tuple[tuple, bool]]:
+        """(path, is_section) of every ← gutter chip the Source view
+        currently shows, top to bottom."""
+        return [
+            (path, is_section)
+            for _, path, is_section in self._w._source._view.pull_lines()
+        ]
+
+    def source_pull(self, path: tuple[str, ...]) -> "AppDriver":
+        """Click the ← gutter chip on *path*'s line. Raises if that line
+        shows no chip -- pulling an equal/main-only row is impossible in
+        the UI and stays impossible here."""
+        view = self._w._source._view
+        for _, pull_path, is_section in view.pull_lines():
+            if pull_path == tuple(path):
+                view.pull_requested.emit(pull_path, is_section)
+                return self
+        raise AssertionError(f"no ← pull chip on {path!r}")
+
     def source_chipped_texts(self) -> list[tuple[int, str, str]]:
         """Every value-chip highlight as (line index, "main"/"ref", text);
         empty with no reference docked (chips are a two-pane signal)."""

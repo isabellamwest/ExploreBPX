@@ -65,7 +65,7 @@ passing** per the app-audit Phase A baseline, 2026-07-21. Implementation starts
   with a check-in after each step; suite **1409 green** after step 2. Step
   plan: (1) core row model ✔; (2) rail entry + single-pane page ✔;
   (3) two-pane aligned rendering + shared folding + gaps ✔; (4) value-only
-  highlight chips ✔; (5) ← gutter pulls; (6) toolbar (‹ › stepper, ⇄ Make
+  highlight chips ✔; (5) ← gutter pulls ✔; (6) toolbar (‹ › stepper, ⇄ Make
   main, stale band); (7) Up/Down navigation + double-click Editor jump;
   (8) real-window verification. Built so far:
   - `app/core/source_rows.py` (+ `tests/test_source_rows.py`, 14 tests):
@@ -123,6 +123,27 @@ passing** per the app-audit Phase A baseline, 2026-07-21. Implementation starts
     driver `source_chipped_texts()`. 10 new tests; suite 1426 green +
     the same 4 environment-only failures (one toast timing flake passed
     on re-run). Offscreen screenshot matches F1/F2 chip placement.
+  - Step 5 (2026-07-22, uncommitted): ← gutter pulls. `_Line.pull_path`
+    marks the key line of every `is_difference` row (differs/fillable/
+    ref-only params; ref-only section headers -- shared/collapsed headers
+    and equal/main-only rows carry nothing, per the frames); the view
+    paints the 26×20 chip (`REFERENCE_TINT` fill, new named
+    `style.REFERENCE_BORDER` #d5cde6 outline -- the tone the inspector's
+    reference chrome already used) centred in the gutter. A gutter click
+    emits `pull_requested(path, is_section)` -- the gutter is ←-only, a
+    chipless gutter click never toggles a fold -- and `MainWindow.
+    _on_source_pull` resolves the reference's raw value at that path and
+    executes the shared `PullParameter`/`PullSection`, then runs
+    `_on_committed()` (commands do not self-propagate; this is the same
+    post-commit refresh the inspector's Copy up uses -- forgetting it left
+    the page stale, caught by the driver test). Ref-only children inside a
+    ref-only section also carry their own ← (a single-param pull creates
+    missing ancestors, per the M3 command contract). Driver:
+    `source_pull_paths`, `source_pull`. 6 new tests (presence rules,
+    QTest gutter/pane hit-testing, cross-page undo stack, one-undo-entry
+    section pull, live re-render after pull); suite 1432 green + the same
+    4 environment-only failures. Offscreen screenshot matches F1's ←
+    placement.
   - **Unlocked calls a later session may revisit with Bella**: rail order
     (Workspace·Editor·Source·Diagnostics); "n parameters" always shown on
     headers (not only folded, and per side in two-pane mode); lists close

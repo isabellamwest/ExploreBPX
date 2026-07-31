@@ -487,6 +487,96 @@ def test_single_pane_never_chips(qtbot):
 
 
 # ---------------------------------------------------------------------------
+# ← gutter pulls (step 5): presence per state, hit-testing, no page edits.
+# ---------------------------------------------------------------------------
+
+
+def test_pull_chip_presence_follows_the_frames_rules(qtbot):
+    main = {
+        "Header": {"BPX": "0.1.0", "Model": "SPM"},
+        "Parameterisation": {
+            "Cell": {
+                "Equal": 1.0,
+                "Differs": 5.0,
+                "Fillable": None,
+                "Main only": 4.2,
+            },
+            "T": {"x": [1.0], "y": [2.0]},
+        },
+    }
+    ref = {
+        "Header": {"BPX": "0.1.0", "Model": "SPM"},
+        "Parameterisation": {
+            "Cell": {
+                "Equal": 1.0,
+                "Differs": 4.0,
+                "Fillable": 2.0,
+                "Ref only": 2.5,
+            },
+            "T": {"x": [1.0], "y": [3.0]},
+        },
+        "State": {"SOC": 1.0},
+    }
+    page = _two_pane(qtbot, main, ref)
+
+    pulls = {path: is_section for _, path, is_section in page._view.pull_lines()}
+    cell = ("Parameterisation", "Cell")
+    assert pulls[cell + ("Differs",)] is False
+    assert pulls[cell + ("Fillable",)] is False
+    assert pulls[cell + ("Ref only",)] is False
+    # A differing table pulls whole from its key line -- exactly one chip.
+    assert pulls[("Parameterisation", "T")] is False
+    assert [p for _, p, _ in page._view.pull_lines()].count(("Parameterisation", "T")) == 1
+    # A ref-only section pulls whole from its header.
+    assert pulls[("State",)] is True
+    assert pulls[("State", "SOC")] is False
+    # Absent entirely on equal and main-only rows, and on shared headers.
+    assert cell + ("Equal",) not in pulls
+    assert cell + ("Main only",) not in pulls
+    assert cell not in pulls
+    assert ("Header",) not in pulls
+
+
+def test_single_pane_shows_no_pull_chips(qtbot):
+    page = SourcePage()
+    qtbot.addWidget(page)
+    page.refresh(_DOC)
+
+    assert page._view.pull_lines() == []
+
+
+def test_gutter_click_emits_pull_and_pane_click_does_not(qtbot):
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
+
+    page = _two_pane(qtbot, _DOC_MAIN_ONLY, _REF)
+    view = page._view
+    view.resize(600, 400)
+
+    received = []
+    view.pull_requested.connect(lambda path, is_section: received.append((path, is_section)))
+
+    index, path, _ = next(
+        entry for entry in view.pull_lines()
+        if entry[1] == ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
+    )
+    line_height = view._line_height()
+    y = index * line_height + line_height // 2
+    gutter_x = view._pane_width() + 5
+
+    QTest.mouseClick(view.viewport(), Qt.LeftButton, pos=QPoint(gutter_x, y))
+    assert received == [(path, False)]
+
+    # Inside the main pane the same line is not a pull; and the gutter on
+    # an equal row does nothing at all.
+    QTest.mouseClick(view.viewport(), Qt.LeftButton, pos=QPoint(30, y))
+    equal_index = view.line_texts().index('"Reference temperature [K]": 298.15')
+    equal_y = equal_index * line_height + line_height // 2
+    QTest.mouseClick(view.viewport(), Qt.LeftButton, pos=QPoint(gutter_x, equal_y))
+    assert received == [(path, False)]
+
+
+# ---------------------------------------------------------------------------
 # MainWindow wiring, through the driver.
 # ---------------------------------------------------------------------------
 
@@ -555,3 +645,63 @@ def test_source_two_pane_follows_reference_dock(app_driver, tmp_path, monkeypatc
     app_driver.click_reference_remove()
     assert app_driver.source_ref_line_texts() == []
     assert app_driver.source_pane_headers() is None
+
+
+def _dock_reference(app_driver, tmp_path, monkeypatch, ref_raw):
+    _stub_open_dialog(monkeypatch, _write(tmp_path, "reference.json", ref_raw))
+    app_driver.show_view("Workspace").click_workspace_open_reference()
+    return app_driver.show_view("Source")
+
+
+def test_source_pull_copies_value_and_shares_the_undo_stack(
+    app_driver, tmp_path, monkeypatch
+):
+    app_driver.open(_write(tmp_path, "main.json", _DOC_MAIN_ONLY))
+    _dock_reference(app_driver, tmp_path, monkeypatch, _REF)
+    path = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
+
+    app_driver.source_pull(path)
+
+    # The pull landed verbatim; the row is now equal, so its chip and its
+    # ← are both gone -- the page re-rendered live through the same
+    # fan-out as any edit.
+    texts = app_driver.source_line_texts()
+    assert '"Nominal cell capacity [A.h]": 4.0' in texts
+    assert path not in [p for p, _ in app_driver.source_pull_paths()]
+    pulled_line = texts.index('"Nominal cell capacity [A.h]": 4.0')
+    assert not any(
+        index == pulled_line for index, _, _ in app_driver.source_chipped_texts()
+    )
+
+    # One undo entry, on the same stack every page shares.
+    app_driver.undo()
+    assert '"Nominal cell capacity [A.h]": 5.0' in app_driver.source_line_texts()
+    assert path in [p for p, _ in app_driver.source_pull_paths()]
+
+
+def test_source_section_pull_is_one_undo_entry(app_driver, tmp_path, monkeypatch):
+    ref = dict(_REF)
+    ref["State"] = {"SOC": 1.0, "Temperature [K]": 298.15}
+    app_driver.open(_write(tmp_path, "main.json", _DOC_MAIN_ONLY))
+    _dock_reference(app_driver, tmp_path, monkeypatch, ref)
+
+    app_driver.source_pull(("State",))
+
+    texts = app_driver.source_line_texts()
+    assert "State  ·  2 parameters" in texts
+    assert '"SOC": 1.0' in texts
+    assert '"Temperature [K]": 298.15' in texts
+
+    # The whole section arrives -- and leaves -- as one undo entry.
+    app_driver.undo()
+    texts = app_driver.source_line_texts()
+    assert '"SOC": 1.0' not in texts
+    assert ("State",) in [p for p, _ in app_driver.source_pull_paths()]
+
+
+def test_source_pull_of_missing_path_is_impossible(app_driver, tmp_path, monkeypatch):
+    app_driver.open(_write(tmp_path, "main.json", _DOC_MAIN_ONLY))
+    _dock_reference(app_driver, tmp_path, monkeypatch, _REF)
+
+    with pytest.raises(AssertionError):
+        app_driver.source_pull(("Parameterisation", "Cell", "Upper voltage cut-off [V]"))

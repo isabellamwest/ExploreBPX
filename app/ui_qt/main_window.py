@@ -36,6 +36,8 @@ from core.commands import (
     AddSection,
     DuplicateParameter,
     MoveParameter,
+    PullParameter,
+    PullSection,
     RemoveParameter,
     RemoveSection,
     RenameKey,
@@ -144,6 +146,7 @@ class MainWindow(QMainWindow):
         self._diagnostics = DiagnosticsPanel()
         self._workspace = WorkspacePanel()
         self._source = SourcePage()
+        self._source.pull_requested.connect(self._on_source_pull)
         self._search = SearchBar()
         self._activity_bar = ActivityBar()
         self._identity_label = _IdentityLabel()
@@ -1010,6 +1013,27 @@ class MainWindow(QMainWindow):
             main_name=document.filename if document is not None else "",
             main_model=document.identity.model if document is not None else None,
         )
+
+    def _on_source_pull(self, path, is_section: bool) -> None:
+        """A ← gutter pull on the Source page: copy the reference's raw
+        value at *path* into the main document, verbatim, via the shared
+        M3 commands -- one undo entry, undoable from any page."""
+        reference = self._state.reference
+        session = self._state.active
+        if reference is None or session is None:
+            return
+        value = reference.raw
+        for key in path:
+            if not isinstance(value, dict) or key not in value:
+                return  # stale click: the reference no longer has this path
+            value = value[key]
+        path = tuple(path)
+        command = PullSection(path, value) if is_section else PullParameter(path, value)
+        session.execute_command(command)
+        # Commands do not self-propagate: run the same post-commit refresh
+        # the inspector's Copy up path uses (recomputes the comparison and
+        # fans out to every page, this one included).
+        self._on_committed()
 
     def _on_ghost_selected(self, section_path: tuple, key: str) -> None:
         """A REF_ONLY ghost row was selected in the parameter list: show its
