@@ -10,8 +10,11 @@ The Inspector has two responsibilities, split top-to-bottom:
     owns the validation decisions and drives the badge via
     ``ParameterCard.set_validity``.  The badge is *parameter-scoped* in both
     states -- on selection from ``ParameterItem.issues``, while typing from
-    ``DocumentSession.preview_parameter_issues`` -- so a document-level
+    ``DocumentSession.preview_parameter`` -- so a document-level
     diagnostic elsewhere in the file never colours this parameter's badge.
+    When ``bpx`` aborted before judging this parameter's section
+    (``validation_completed`` is False), an issue-free parameter badges as
+    neutral "Not validated" rather than a false green "Valid".
   - **Secondary workspace** (bottom): a collapsible, tabbed panel for
     parameter-centric tools (Issues and Documentation today; Analysis,
     References in future).  Parameter documentation is split by depth: the
@@ -57,7 +60,7 @@ from .cards.parameter_card import ParameterCard
 from .documentation_tab import DocumentationTab
 from .issues_tab import IssuesTab, issue_count
 from .secondary_workspace import SecondaryWorkspace
-from .style import ERROR, OK, WARNING
+from .style import ERROR, MUTED, OK, WARNING
 from .validation_empty_state import ValidationEmptyState
 
 _DEFAULT_PANEL_HEIGHT = 200
@@ -384,7 +387,9 @@ class InspectorPanel(QWidget):
         # so the switch is a single alignment change, no relayout.
         self._content_layout.addWidget(self._card)
         self._content_layout.setAlignment(self._card, Qt.AlignTop)
-        self._render_issues(parameter.issues, parameter.has_errors)
+        self._render_issues(
+            parameter.issues, parameter.has_errors, self._committed_validation_completed()
+        )
         self._card.set_cell_issues(parameter.issues)
 
         # Refresh the secondary workspace's tabs without changing its
@@ -436,11 +441,12 @@ class InspectorPanel(QWidget):
             # a value the user is not looking at, while the editor shows a parse
             # error beside it. Hold the badge instead: the card explains itself.
             return
-        issues = self._state.active.preview_parameter_issues(
+        preview = self._state.active.preview_parameter(
             self._card.parameter.path, self._card.value()
         )
+        issues = preview.issues
         errors = [i for i in issues if i.severity == Severity.ERROR]
-        self._render_issues(issues, bool(errors))
+        self._render_issues(issues, bool(errors), preview.validation_completed)
         self._card.set_cell_issues(issues)
         # Decision Q (reviewed defect M1): the tab badge must count the same
         # merged rows issues_tab.show_parameter renders, not raw diagnostics
@@ -452,7 +458,11 @@ class InspectorPanel(QWidget):
         if self._card is None:
             return
         self._debounce.stop()
-        self._render_issues(self._card.parameter.issues, self._card.parameter.has_errors)
+        self._render_issues(
+            self._card.parameter.issues,
+            self._card.parameter.has_errors,
+            self._committed_validation_completed(),
+        )
         self._card.set_cell_issues(self._card.parameter.issues)
         self._secondary.set_count("issues", issue_count(self._card.parameter.issues))
 
@@ -554,9 +564,23 @@ class InspectorPanel(QWidget):
         self._state.active.execute_command(command)
         self.committed.emit()
 
-    def _render_issues(self, issues, has_errors: bool) -> None:
+    def _committed_validation_completed(self) -> bool:
+        """The committed document's word on whether ``bpx`` judged it fully."""
+        session = self._state.active
+        if session is None or session.document is None:
+            return True
+        return session.document.validation_completed
+
+    def _render_issues(self, issues, has_errors: bool, completed: bool = True) -> None:
         if not issues:
-            self._card.set_validity("Valid", OK)
+            # No issue attached is only a clean bill of health if bpx actually
+            # ran to completion; after a staged abort (bad Header masking the
+            # body, bad Parameterisation masking State/Validation) this
+            # parameter was never judged, and claiming "Valid" would be false.
+            if completed:
+                self._card.set_validity("Valid", OK)
+            else:
+                self._card.set_validity("Not validated", MUTED)
             return
         self._card.set_validity(
             "Invalid" if has_errors else "Warning", ERROR if has_errors else WARNING

@@ -115,6 +115,7 @@ class WorkspacePanel(QWidget):
     new_requested = Signal(str)  # model name
     file_dropped = Signal(str)  # local file path
     open_reference_requested = Signal()
+    open_library_requested = Signal()
     new_from_file_requested = Signal()
     remove_reference_requested = Signal()
     make_main_requested = Signal()
@@ -140,9 +141,12 @@ class WorkspacePanel(QWidget):
         self.refresh(None, None, False)
 
     def _build_rail(self) -> QWidget:
-        """The shaded actions rail: Open/Open-as-reference buttons over the
-        New chooser. No heading over the buttons -- they name themselves
-        (explicit user call: an "Actions" label over buttons is noise)."""
+        """The shaded actions rail: the Open button over the New chooser.
+        No heading over the buttons -- they name themselves (explicit user
+        call: an "Actions" label over buttons is noise). Reference docking
+        lives on the reference card itself (Concept A, signed 2026-07-31),
+        not here: the card is the reference feature's home, so its
+        affordances sit where their result appears."""
         rail = QWidget()
         rail.setObjectName("WorkspaceRail")
         rail.setAttribute(Qt.WA_StyledBackground, True)
@@ -155,10 +159,6 @@ class WorkspacePanel(QWidget):
         self._open_button.setObjectName("WorkspaceOpen")
         self._open_button.clicked.connect(self.open_requested)
         rail_layout.addWidget(self._open_button)
-        self._open_reference_button = QPushButton("Open File as Reference…")
-        self._open_reference_button.setObjectName("WorkspaceOpenReference")
-        self._open_reference_button.clicked.connect(self.open_reference_requested)
-        rail_layout.addWidget(self._open_reference_button)
 
         divider = QFrame()
         divider.setObjectName("WorkspaceRailDivider")
@@ -351,6 +351,32 @@ class WorkspacePanel(QWidget):
         action_row.addStretch(1)
         body.addLayout(action_row)
 
+        # The dock affordances (Concept A, signed 2026-07-31): with no
+        # reference docked the card is the reference library's front door --
+        # the teaching line over these two buttons. Both buttons stay while
+        # a reference is docked: docking over one replaces it silently (a
+        # snapshot is disposable), the flow the reference-open tests pin.
+        self._reference_empty_text = QLabel(
+            "No reference docked. Compare the main document against a "
+            "published set or a file."
+        )
+        self._reference_empty_text.setObjectName("ReferenceEmptyStateText")
+        self._reference_empty_text.setWordWrap(True)
+        body.addWidget(self._reference_empty_text)
+
+        dock_row = QHBoxLayout()
+        dock_row.setSpacing(8)
+        self._reference_library_button = QPushButton("From the reference library…")
+        self._reference_library_button.setObjectName("ReferenceFromLibrary")
+        self._reference_library_button.clicked.connect(self.open_library_requested)
+        dock_row.addWidget(self._reference_library_button)
+        self._open_reference_button = QPushButton("Open BPX file…")
+        self._open_reference_button.setObjectName("WorkspaceOpenReference")
+        self._open_reference_button.clicked.connect(self.open_reference_requested)
+        dock_row.addWidget(self._open_reference_button)
+        dock_row.addStretch(1)
+        body.addLayout(dock_row)
+
         return box
 
     def _build_new_chooser(self) -> QWidget:
@@ -466,13 +492,13 @@ class WorkspacePanel(QWidget):
             self._info_badge.hide()
             for value in self._info_fields.values():
                 value.setText("")
-            self._set_form_visible(False)
+            self._set_form_rows_visible(self._info_form, False)
             return
 
         self._info_title.setEnabled(True)
         identity = document.identity
         self._info_title.setText(identity.title or "Untitled document")
-        self._set_form_visible(True)
+        self._set_form_rows_visible(self._info_form, True)
         self._info_fields["Model"].setText(identity.model or "-")
         self._info_fields["BPX version"].setText(identity.bpx_version or "-")
         self._info_fields["File"].setText(filename or "-")
@@ -483,18 +509,29 @@ class WorkspacePanel(QWidget):
         self._set_validity_badge(error_count, warning_count)
 
     def _set_reference(self, reference: ReferenceSnapshot | None) -> None:
-        """Show/populate or hide the reference group box.
+        """Populate the reference card for the docked or empty state.
 
-        Hidden entirely when no reference is docked -- no empty-state
-        placeholder (explicit user decision). The heading lives on the box's
-        own header band; it is still shown/hidden alongside so its visibility
-        keeps answering "is the reference surface on screen"."""
+        The card is always visible (Concept A, signed 2026-07-31 --
+        superseding the earlier hidden-when-empty call, which predates the
+        card having anything to offer while empty): with no reference docked
+        it is the reference library's front door, the teaching line over the
+        two dock buttons. The dock buttons stay in both states -- see
+        ``_build_reference_card``."""
+        docked = reference is not None
+        self._reference_empty_text.setVisible(not docked)
+        self._reference_filename.setVisible(docked)
+        self._reference_dot.setVisible(docked)
+        self._reference_badge.setVisible(docked)
+        self._set_form_rows_visible(self._reference_form, docked)
+        self._reference_remove_button.setVisible(docked)
+        # "Make main" promotes a file on disk (M4); a bundled library set
+        # has no path to promote, so the button disappears rather than sit
+        # as a disabled placeholder (the standing no-dead-controls rule).
+        self._reference_make_main_button.setVisible(
+            docked and reference.path is not None
+        )
         if reference is None:
-            self._reference_heading.hide()
-            self._reference_tile.hide()
             return
-        self._reference_heading.show()
-        self._reference_tile.show()
         self._reference_filename.setText(reference.filename)
         self._reference_fields["Model"].setText(reference.model or "-")
         self._reference_fields["Contents"].setText(
@@ -522,10 +559,11 @@ class WorkspacePanel(QWidget):
         self._info_dot.show()
         self._info_badge.show()
 
-    def _set_form_visible(self, visible: bool) -> None:
-        for row in range(self._info_form.rowCount()):
+    @staticmethod
+    def _set_form_rows_visible(form: QFormLayout, visible: bool) -> None:
+        for row in range(form.rowCount()):
             for role in (QFormLayout.LabelRole, QFormLayout.FieldRole):
-                item = self._info_form.itemAt(row, role)
+                item = form.itemAt(row, role)
                 if item is not None and item.widget() is not None:
                     item.widget().setVisible(visible)
 

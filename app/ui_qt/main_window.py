@@ -12,6 +12,7 @@ from pathlib import Path
 from PySide6.QtCore import QEvent, QSize, QStandardPaths, Qt
 from PySide6.QtGui import QFontMetrics, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
+    QDialog,
     QFileDialog,
     QHBoxLayout,
     QLabel,
@@ -54,6 +55,7 @@ from .inspector import InspectorPanel
 from .navigation import NavigationService, NavigationTarget
 from .page_header import PageHeader
 from .parameter_list import ParameterListPanel
+from .reference_library_dialog import ReferenceLibraryDialog
 from .search import SearchBar
 from .source_page import SourcePage
 from .style import STYLESHEET
@@ -372,6 +374,7 @@ class MainWindow(QMainWindow):
         self._workspace.new_requested.connect(self._new)
         self._workspace.file_dropped.connect(self._on_file_dropped)
         self._workspace.open_reference_requested.connect(self._open_reference)
+        self._workspace.open_library_requested.connect(self._open_reference_library)
         self._workspace.new_from_file_requested.connect(self._new_from_file)
         self._workspace.remove_reference_requested.connect(self._on_remove_reference_requested)
         self._workspace.make_main_requested.connect(self._on_make_main_requested)
@@ -924,6 +927,47 @@ class MainWindow(QMainWindow):
             self._check_reference_stale()
         self._update_workspace_info()
 
+    def _open_reference_library(self) -> None:
+        """From the reference library…: choose a bundled set and dock it
+        (Concept A, signed 2026-07-31).
+
+        The dialog is a pure chooser holding no app state, so cancelling
+        changes nothing. Kept separate from :meth:`_dock_reference_set` so
+        headless tests can drive the dock path without the blocking
+        ``exec``.
+        """
+        dialog = ReferenceLibraryDialog(self)
+        if dialog.exec() != QDialog.Accepted:
+            return
+        set_id = dialog.selected_set_id()
+        if set_id:
+            self._dock_reference_set(set_id)
+
+    def _dock_reference_set(self, set_id: str) -> None:
+        """Dock library set *set_id*, mirroring ``_open_reference_path``:
+        toast the outcome, and only a genuine dock/replace (``ADDED``)
+        recomputes the comparison. ``IS_MAIN`` cannot occur for a bundled
+        set. The stale re-check matters here too: a band left over from a
+        replaced file reference must not survive the swap (the path-less
+        snapshot itself can never go stale).
+        """
+        try:
+            outcome = self._state.open_reference_set(set_id)
+        except (KeyError, LoadError, OSError) as exc:
+            QMessageBox.critical(self, "Cannot open file", str(exc))
+            return
+        message = {
+            OpenReferenceOutcome.ADDED: (
+                f"{self._state.reference.filename} · docked as reference"
+            ),
+            OpenReferenceOutcome.ALREADY_REFERENCE: "Already docked as reference",
+        }[outcome]
+        self._toast.show_message(message)
+        if outcome is OpenReferenceOutcome.ADDED:
+            self._recompute_comparison()
+            self._check_reference_stale()
+        self._update_workspace_info()
+
     def _on_remove_reference_requested(self) -> None:
         self._state.remove_reference()
         self._recompute_comparison()
@@ -944,6 +988,10 @@ class MainWindow(QMainWindow):
         """
         reference = self._state.reference
         if reference is None:
+            return
+        if reference.path is None:
+            # A bundled library set has no file on disk to promote; the
+            # card hides its "Make main" button, so this is belt-and-braces.
             return
         session = self._state.active
         if session is not None and session.dirty:
@@ -1052,6 +1100,11 @@ class MainWindow(QMainWindow):
         """
         reference = self._state.reference
         if reference is None:
+            return
+        if reference.path is None:
+            # A bundled library set has no file to go stale against; clear
+            # any band left over from a just-replaced file reference.
+            self._source.set_stale(False)
             return
         try:
             on_disk = reference.path.stat().st_mtime

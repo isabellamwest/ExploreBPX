@@ -33,7 +33,27 @@ bundled-examples adapter above, a converted PyBaMM set has no Validation section
 built around Parameterisation comparison, not the run-comparison dialog that
 already exists.
 
-Feasibility has been checked on Chen2020 (converted to BPX, passes the `bpx`
+**Status 2026-07-31 (later the same day): Phase B shipped — the picker UI
+exists.** The design pass ran (three concepts; Concept A signed: the reference
+card's empty state as front door, opening a list-and-detail Reference library
+dialog; silent replace; "Open BPX file…" as sibling button; surface named
+"Reference library"). Docking goes through `ReferenceSnapshot.from_library` /
+`AppState.open_reference_set`; a library reference has no path, so Make main,
+stale detection and Reload are guarded off for it. **Only the Analysis
+inspector tab (Phase C) remains undesigned** — it still requires its own
+design pass before any UI is built. Original Phase A status, kept for the
+record:
+`scripts/generate_reference_library.py` (offline dev tool; needs a venv with
+pybamm + the pinned bpx) generates `app/data/example_documents/pybamm/`
+(Chen2020, Prada2013, Ai2020, Mohtat2020 — all bpx-VALID, round-tripped
+through PyBaMM's own BPX reader within printed fidelity gates; Marquis2019
+cannot round-trip — separator porosity 1.0 — and is deliberately excluded, see
+the directory's NOTICE.md). `core/reference_library.py` exposes them
+(`list_reference_sets` / `load_reference_raw`), tested in
+`tests/test_reference_library.py`, which also pins every bundled file to the
+app's bpx.
+
+Feasibility was first checked on Chen2020 (converted to BPX, passes the `bpx`
 validator, and round-trips back into PyBaMM). Findings that constrain any future
 design — recorded so they are not rediscovered:
 

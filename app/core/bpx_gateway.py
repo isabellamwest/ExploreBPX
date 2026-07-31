@@ -96,6 +96,14 @@ class ValidationResult:
 
     is_valid: bool
     issues: list[ValidatorDiagnostic] = field(default_factory=list)
+    #: False when ``bpx`` aborted before judging the whole document. ``bpx``
+    #: validates in stages -- Header first, then Parameterisation, then the
+    #: rest of the model -- and a failing stage aborts the run, leaving every
+    #: later section unvalidated (a bad Header masks the whole body; a bad
+    #: Parameterisation masks State/Validation). When False, a parameter
+    #: without issues has *not* been checked: absence of an issue is not a
+    #: clean bill of health, and callers must not present it as one.
+    completed: bool = True
 
 
 def load_raw(data: bytes | str, filename: str = "") -> tuple[dict, str]:
@@ -115,6 +123,39 @@ def load_raw(data: bytes | str, filename: str = "") -> tuple[dict, str]:
     return parsed, fmt
 
 
+#: bpx's model-type dispatch abort (``schema.py`` ``_dispatch_param_subclasses``
+#: raising ``ValueError("[Valid|Valid SPM] parameter set does not correspond
+#: with the model type ...")``) surfaces as a pydantic error with ``loc == ()``,
+#: so unlike the other staged aborts it is only recognisable by its message.
+#: Pinned to the installed bpx (see :data:`BPX_VERSION`); behaviour is asserted
+#: in ``tests/test_gateway.py`` so a bpx upgrade that rewords it fails loudly.
+_MODEL_MISMATCH_MARKER = "does not correspond with the model type"
+
+
+def _validation_completed(errors: list[dict]) -> bool:
+    """Whether ``bpx`` ran validation to completion, judged from the shape of
+    a ``ValidationError``'s error list.
+
+    An abort is visible in the report itself: errors escaping a staged
+    validator carry locs *relative to the stage that raised* (``("Model",)``
+    from Header, ``("Cell", ...)`` from Parameterisation), whereas a completed
+    run only reports locs anchored at a top-level BPX property (``("State",
+    ...)``) or model-level checks at ``()``. The top-level property names come
+    from the live schema, not a hand-kept list. The one abort that also
+    reports ``()`` -- the model-type dispatch mismatch -- is recognised by
+    its message (see :data:`_MODEL_MISMATCH_MARKER`).
+    """
+    top_level = set(_schema().get("properties", {}))
+    for error in errors:
+        loc = tuple(error.get("loc") or ())
+        if not loc:
+            if _MODEL_MISMATCH_MARKER in str(error.get("msg", "")):
+                return False
+        elif loc[0] not in top_level:
+            return False
+    return True
+
+
 def validate(raw: dict, v_tol: float = 0.001) -> ValidationResult:
     """Validate a raw BPX dict by attempting to parse it with ``bpx``.
 
@@ -123,6 +164,7 @@ def validate(raw: dict, v_tol: float = 0.001) -> ValidationResult:
     still be explored.
     """
     issues: list[ValidatorDiagnostic] = []
+    completed = True
     # ``parse_bpx_obj`` mutates the dict it is given (it replaces sections with
     # parsed models), so validate against a copy to keep ``raw`` pristine.
     candidate = copy.deepcopy(raw)
@@ -132,13 +174,18 @@ def validate(raw: dict, v_tol: float = 0.001) -> ValidationResult:
             bpx.parse_bpx_obj(candidate, v_tol=v_tol)
             is_valid = True
         except ValidationError as exc:
-            issues.extend(issues_from_pydantic(exc.errors()))
+            errors = exc.errors()
+            issues.extend(issues_from_pydantic(errors))
             is_valid = False
+            completed = _validation_completed(errors)
         except Exception as exc:  # noqa: BLE001 - BPXSchemaError, ValueError, etc.
+            # A raw exception means ``bpx`` died before producing any
+            # field-level judgement at all -- nothing was validated.
             issues.append(BPXExceptionDiagnostic(raw_exception=exc))
             is_valid = False
+            completed = False
     issues.extend(warnings_as_diagnostics(caught))
-    return ValidationResult(is_valid=is_valid, issues=issues)
+    return ValidationResult(is_valid=is_valid, issues=issues, completed=completed)
 
 
 @lru_cache(maxsize=1)

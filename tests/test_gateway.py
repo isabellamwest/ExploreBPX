@@ -607,3 +607,95 @@ def test_field_meta_leaf_parameter_is_not_container():
     meta = bpx_gateway.field_meta(("Parameterisation", "Cell", "Nominal cell capacity [A.h]"))
     assert meta is not None
     assert meta.is_container is False
+
+
+# ---------------------------------------------------------------------------
+# Staged-abort detection: ``ValidationResult.completed``
+#
+# bpx validates Header first, then Parameterisation, then the rest of the
+# model, and a failing stage aborts the whole run -- leaving every later
+# section unvalidated while reporting only the failing stage's errors. These
+# tests pin both halves of that behaviour: the masking itself (so a bpx
+# upgrade that changes it fails loudly) and the gateway's honest reporting of
+# it, so no caller ever presents an unvalidated parameter as "Valid".
+# ---------------------------------------------------------------------------
+
+
+def _locs(result):
+    return [tuple(getattr(issue, "loc", ()) or ()) for issue in result.issues]
+
+
+def test_validate_completed_on_valid_file(valid_spm_dict):
+    assert bpx_gateway.validate(valid_spm_dict).completed is True
+
+
+def test_validate_completed_when_only_body_sections_fail(valid_spm_dict):
+    """A State error comes from the full pydantic pass: the run completed,
+    so siblings without issues genuinely passed."""
+    broken = copy.deepcopy(valid_spm_dict)
+    broken["State"]["Initial conditions"]["Initial temperature [K]"] = "wrong"
+    result = bpx_gateway.validate(broken)
+    assert result.is_valid is False
+    assert result.completed is True
+    assert any(loc[:2] == ("State", "Initial conditions") for loc in _locs(result))
+
+
+def test_validate_header_failure_masks_body_and_reports_incomplete(valid_spm_dict):
+    """A Header failure aborts before the body is dispatched: bpx reports
+    only the Header error (with a Header-relative loc), and the gateway must
+    say the run did not complete."""
+    broken = copy.deepcopy(valid_spm_dict)
+    broken["Header"]["Model"] = "XFN"
+    broken["State"]["Initial conditions"]["Initial temperature [K]"] = "wrong"
+    result = bpx_gateway.validate(broken)
+    assert result.is_valid is False
+    assert result.completed is False
+    locs = _locs(result)
+    assert ("Model",) in locs, "header abort reports a Header-relative loc"
+    assert not any("Initial temperature [K]" in loc for loc in locs), (
+        "bpx no longer masks body errors on a header failure -- "
+        "revisit _validation_completed"
+    )
+
+
+def test_validate_parameterisation_failure_masks_state_and_reports_incomplete(
+    valid_spm_dict,
+):
+    """A Parameterisation failure aborts before State/Validation are
+    validated; the escaping errors carry Parameterisation-relative locs."""
+    broken = copy.deepcopy(valid_spm_dict)
+    broken["Parameterisation"]["Cell"]["Nominal cell capacity [A.h]"] = "bad"
+    broken["State"]["Initial conditions"]["Initial temperature [K]"] = "wrong"
+    result = bpx_gateway.validate(broken)
+    assert result.is_valid is False
+    assert result.completed is False
+    locs = _locs(result)
+    assert any(loc[:1] == ("Cell",) for loc in locs)
+    assert not any("Initial temperature [K]" in loc for loc in locs), (
+        "bpx no longer masks State errors on a Parameterisation failure -- "
+        "revisit _validation_completed"
+    )
+
+
+def test_validate_model_type_mismatch_reports_incomplete(valid_spm_dict):
+    """The model-type dispatch mismatch aborts with ``loc == ()``, so it is
+    recognised by message alone -- this test pins that message against the
+    installed bpx (see ``_MODEL_MISMATCH_MARKER``)."""
+    broken = copy.deepcopy(valid_spm_dict)
+    broken["Header"]["Model"] = "DFN"  # SPM-shaped Parameterisation stays put
+    result = bpx_gateway.validate(broken)
+    assert result.is_valid is False
+    assert result.completed is False
+    assert any(
+        bpx_gateway._MODEL_MISMATCH_MARKER in issue.message for issue in result.issues
+    )
+
+
+def test_validate_raw_exception_reports_incomplete(valid_spm_dict):
+    """A raw (non-pydantic) bpx exception -- e.g. an unparsable version
+    string checked before model validation -- means nothing was validated."""
+    broken = copy.deepcopy(valid_spm_dict)
+    broken["Header"]["BPX"] = "banana"
+    result = bpx_gateway.validate(broken)
+    assert result.is_valid is False
+    assert result.completed is False

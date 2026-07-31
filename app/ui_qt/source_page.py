@@ -1144,7 +1144,12 @@ class SourcePage(QWidget):
         self._prev_button.setVisible(two_pane)
         self._next_button.setVisible(two_pane)
         self._toolbar_sep.setVisible(two_pane)
-        self._make_main_button.setVisible(two_pane)
+        # "Make main" promotes a file on disk; a bundled library-set
+        # reference (path is None, Phase B) has nothing to promote, so the
+        # button hides rather than sit as a dead control.
+        self._make_main_button.setVisible(
+            two_pane and reference.path is not None
+        )
         self._pane_head.setVisible(two_pane)
         if not two_pane:
             # The band is a two-pane notice; an undocked/replaced reference

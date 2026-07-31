@@ -381,3 +381,41 @@ def test_selecting_object_without_parameter_shows_placeholder(app_driver, spm_wo
     d.select_object(("Parameterisation", "Cell"))
     assert d.showing_placeholder() is True
     assert d.parameter_labels()  # the object's parameter list is populated
+
+
+# ---------------------------------------------------------------------------
+# Staged-abort masking: unjudged parameters must not badge "Valid"
+# ---------------------------------------------------------------------------
+
+_TEMPERATURE = ("State", "Initial conditions", "Initial temperature [K]")
+
+
+def test_masked_section_badges_not_validated_instead_of_valid(
+    app_driver, spm_workfile
+):
+    """bpx validates in stages, and a Parameterisation error aborts the run
+    before State is ever judged (see test_gateway.py's staged-abort tests).
+    A parameter bpx never judged must badge neutral "Not validated" -- a
+    green "Valid" there would be a false clean bill of health."""
+    d = app_driver
+    d.open(spm_workfile).go_to(_TEMPERATURE)
+    assert d.validity() == "Valid"
+
+    # Break a Cell parameter: bpx now aborts before reaching State.
+    d.go_to(_CAPACITY).edit_field("nonsense").commit()
+    assert d.validity() == "Invalid"
+
+    d.go_to(_TEMPERATURE)
+    assert d.validity() == "Not validated"
+
+    # The live preview of a draft is equally unjudged while the abort holds.
+    d.edit_field("300")
+    d.wait_for_live_validation()
+    assert d.validity() == "Not validated"
+    d.escape()
+
+    # Repair the Cell parameter: State is judged again and the badge returns.
+    d.go_to(_CAPACITY).edit_field("5").commit()
+    assert d.validity() == "Valid"
+    d.go_to(_TEMPERATURE)
+    assert d.validity() == "Valid"

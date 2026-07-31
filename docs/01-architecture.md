@@ -209,7 +209,11 @@ the command spine (`command_service.py`, `editing.py`, `document_factory.py`) fo
 editing and creation; the Inspector secondary-workspace tab strip for
 parameter-centric tools (Issues, Documentation, future Analysis/References); an
 anti-corruption adapter mirroring `bpx_gateway.py` for external data sources
-(`example_library.py` is the first, real one); `export.py` for simulator hand-off
+(`example_library.py` is the first, real one; `reference_library.py` is the
+second — whole-document PyBaMM-derived reference sets, generated offline by
+`scripts/generate_reference_library.py`, consumed via
+`ReferenceSnapshot.from_library` / `AppState.open_reference_set` and the
+Workspace page's Reference library dialog); `export.py` for simulator hand-off
 writers; and a future `Workspace` object for multi-document comparison. Speculative
 seams and their status live in [05-future.md](05-future.md).
 

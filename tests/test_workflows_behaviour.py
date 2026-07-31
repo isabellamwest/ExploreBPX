@@ -95,10 +95,10 @@ def test_preview_parameter_issues_excludes_document_level_diagnostics(
     # The document-wide preview still sees the Header warning ...
     assert len(session.preview_value(_CAPACITY, 5.0).issues) == 1
     # ... but the parameter-scoped preview does not: the badge stays Valid.
-    assert session.preview_parameter_issues(_CAPACITY, 5.0) == []
+    assert session.preview_parameter(_CAPACITY, 5.0).issues == []
 
     # A genuinely invalid draft for this parameter is still reported on it.
-    assert session.preview_parameter_issues(_CAPACITY, "not-a-number")
+    assert session.preview_parameter(_CAPACITY, "not-a-number").issues
 
 
 def test_committed_invalid_value_resolves_to_a_navigable_parameter(spm_workfile):

@@ -93,7 +93,11 @@ class AppState:
         """
         clone_name = f"{path.stem} (copy){path.suffix}"
         document = BPXDocument.from_bytes(path.read_bytes(), clone_name)
-        if self.reference is not None and self.reference.path.resolve() == path.resolve():
+        if (
+            self.reference is not None
+            and self.reference.path is not None
+            and self.reference.path.resolve() == path.resolve()
+        ):
             reference = self.reference
         else:
             reference = ReferenceSnapshot.load(path)
@@ -125,7 +129,11 @@ class AppState:
         load failure.
         """
         resolved = path.resolve()
-        if self.reference is not None and self.reference.path.resolve() == resolved:
+        if (
+            self.reference is not None
+            and self.reference.path is not None
+            and self.reference.path.resolve() == resolved
+        ):
             return OpenReferenceOutcome.ALREADY_REFERENCE
         if (
             self.active is not None
@@ -134,6 +142,26 @@ class AppState:
         ):
             return OpenReferenceOutcome.IS_MAIN
         self.reference = ReferenceSnapshot.load(path)
+        return OpenReferenceOutcome.ADDED
+
+    def open_reference_set(self, set_id: str) -> OpenReferenceOutcome:
+        """Dock bundled reference-library set *set_id* as the reference,
+        replacing any reference already docked (silent replace -- signed
+        decision, Phase B 2026-07-31: a snapshot is disposable, immutable
+        state, and re-docking the old one is one click).
+
+        Dedupes by set id against the docked reference (returns
+        ``ALREADY_REFERENCE``, quiet no-op). ``IS_MAIN`` can never apply: a
+        bundled set is not a file on disk, so it can never be the active
+        session's backing file.
+
+        Raises ``KeyError`` for an unknown id, exactly as
+        ``ReferenceSnapshot.from_library`` does; the caller decides how to
+        surface it.
+        """
+        if self.reference is not None and self.reference.set_id == set_id:
+            return OpenReferenceOutcome.ALREADY_REFERENCE
+        self.reference = ReferenceSnapshot.from_library(set_id)
         return OpenReferenceOutcome.ADDED
 
     def remove_reference(self) -> None:
@@ -147,8 +175,11 @@ class AppState:
         Raises ``core.bpx_gateway.LoadError``/``OSError`` exactly as
         ``ReferenceSnapshot.load`` does; on failure the docked snapshot is
         left untouched (the caller surfaces the error -- C3).
+
+        A library-set reference (``path`` is None) is a quiet no-op: a
+        bundled set is immutable, so there is nothing on disk to reload.
         """
-        if self.reference is None:
+        if self.reference is None or self.reference.path is None:
             return
         self.reference = ReferenceSnapshot.load(self.reference.path)
 

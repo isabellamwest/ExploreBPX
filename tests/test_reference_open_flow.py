@@ -33,9 +33,11 @@ def _stub_open_dialog(monkeypatch, path) -> None:
     )
 
 
-def test_no_reference_heading_or_tile_with_nothing_docked(app_driver):
-    assert not app_driver.reference_heading_visible()
+def test_reference_card_shows_the_empty_state_with_nothing_docked(app_driver):
+    """Concept A (signed 2026-07-31): with nothing docked the card stays on
+    screen as the reference library's front door, not a docked tile."""
     assert not app_driver.reference_tile_visible()
+    assert app_driver.reference_empty_state_visible()
 
 
 def test_clicking_open_as_reference_docks_and_shows_the_tile(
@@ -46,8 +48,8 @@ def test_clicking_open_as_reference_docks_and_shows_the_tile(
 
     d.click_workspace_open_reference()
 
-    assert d.reference_heading_visible()
     assert d.reference_tile_visible()
+    assert not d.reference_empty_state_visible()
     text = d.reference_tile_text()
     assert "Read-only" in text
     assert valid_spm_path.name in text
@@ -56,7 +58,7 @@ def test_clicking_open_as_reference_docks_and_shows_the_tile(
     assert "Validity: Valid" in text
 
 
-def test_removing_the_reference_hides_the_heading_and_tile(
+def test_removing_the_reference_returns_the_card_to_its_empty_state(
     app_driver, valid_spm_path, monkeypatch
 ):
     d = app_driver
@@ -66,8 +68,8 @@ def test_removing_the_reference_hides_the_heading_and_tile(
 
     d.click_reference_remove()
 
-    assert not d.reference_heading_visible()
     assert not d.reference_tile_visible()
+    assert d.reference_empty_state_visible()
     assert d._w._state.reference is None
 
 

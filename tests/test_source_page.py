@@ -34,10 +34,13 @@ _DOC = {
 class _RefStub:
     """The slice of ``ReferenceSnapshot`` the Source page consumes."""
 
-    def __init__(self, raw, filename="reference.json", model="SPM"):
+    def __init__(self, raw, filename="reference.json", model="SPM", path=Path("reference.json")):
         self.raw = raw
         self.filename = filename
         self.model = model
+        # A file-backed reference by default; pass ``path=None`` to stand in
+        # for a bundled library set (Phase B), which hides ⇄ Make main.
+        self.path = path
 
 
 def _write(tmp_path: Path, name: str, raw: dict) -> Path:
@@ -794,6 +797,19 @@ def test_toolbar_two_pane_shows_stepper_and_make_main_only(qtbot):
     assert not page._toolbar_sep.isHidden()
     assert not page._make_main_button.isHidden()
     assert page._make_main_button.text() == "⇄ Make main"
+
+
+def test_toolbar_hides_make_main_for_a_library_reference(qtbot):
+    """A bundled library-set reference (Phase B) has no file on disk to
+    promote, so ⇄ Make main hides rather than sit as a dead control; the
+    stepper is unaffected."""
+    page = SourcePage()
+    qtbot.addWidget(page)
+    page.refresh(_DOC_MAIN_ONLY, reference=_RefStub(_REF, path=None))
+
+    assert page._make_main_button.isHidden()
+    assert not page._prev_button.isHidden()
+    assert not page._next_button.isHidden()
 
 
 def test_toolbar_empty_without_a_document(qtbot):

@@ -282,12 +282,14 @@ QWidget#WorkspacePage, QWidget#WorkspacePane { background: #ffffff; }
 QWidget#WorkspaceRail { background: #f3f4f6; border-right: 1px solid #c4cdd5; }
 QFrame#WorkspaceRailDivider { background: #d9dee5; border: none; }
 /* Rail action buttons: white chips on the shaded rail, the Diagnostics
-   strip-chip treatment (never native grey widgets). */
-QPushButton#WorkspaceOpen, QPushButton#WorkspaceOpenReference {
+   strip-chip treatment (never native grey widgets). The old
+   Open-as-reference chip moved onto the reference card (Concept A, signed
+   2026-07-31) and takes the tile-button treatment below. */
+QPushButton#WorkspaceOpen {
     background: #ffffff; border: 1px solid #c4cdd5; border-radius: 6px;
     padding: 5px 10px; font-size: 12px; text-align: left;
 }
-QPushButton#WorkspaceOpen:hover, QPushButton#WorkspaceOpenReference:hover { background: #eef1f4; }
+QPushButton#WorkspaceOpen:hover { background: #eef1f4; }
 QLabel#NewChooserHeading { color: #57606a; font-weight: 600; font-size: 11px; }
 /* One New-chooser model row: flat bold name button over a muted descriptor
    (list-row language). Property selector on purpose -- the buttons keep
@@ -320,11 +322,31 @@ QLabel#ReferenceHeading { color: #6f42c1; font-weight: 600; }
 /* Quieter than the heading beside it (explicit user call): a light, small
    annotation, not a badge. */
 QLabel#ReferenceReadOnlyTag { color: #7a63ad; font-size: 10px; }
-QPushButton#ReferenceTileMakeMain, QPushButton#ReferenceTileRemove {
+QPushButton#ReferenceTileMakeMain, QPushButton#ReferenceTileRemove,
+QPushButton#ReferenceFromLibrary, QPushButton#WorkspaceOpenReference {
     background: #ffffff; border: 1px solid #d0d7de; border-radius: 5px;
     padding: 3px 10px; font-size: 12px;
 }
-QPushButton#ReferenceTileMakeMain:hover, QPushButton#ReferenceTileRemove:hover { background: #f6f8fa; }
+QPushButton#ReferenceTileMakeMain:hover, QPushButton#ReferenceTileRemove:hover,
+QPushButton#ReferenceFromLibrary:hover, QPushButton#WorkspaceOpenReference:hover { background: #f6f8fa; }
+/* The reference card's empty state (Concept A, signed 2026-07-31): the
+   teaching line over the two dock buttons -- muted text, never a badge. */
+QLabel#ReferenceEmptyStateText { color: #57606a; font-size: 12px; }
+/* Reference library dialog (Phase B, Concept A signed 2026-07-31): detail
+   card reuses the ReferenceGroupBox chrome above; these are its own bits.
+   The dock button is the dialog's one loud action -- the CopyUpButton's
+   solid style.REFERENCE treatment. */
+QLabel#ReferenceLibraryMeta { color: #57606a; font-size: 12px; }
+QLabel#ReferenceLibraryDescription {
+    color: #454c54; font-size: 12px;
+    border-left: 2px solid #d5cde6; padding-left: 8px;
+}
+QLabel#ReferenceLibraryProvenance { color: #8c959f; font-size: 11px; }
+QPushButton#ReferenceLibraryDockButton {
+    background: #6f42c1; color: #ffffff; font-weight: 600;
+    border: none; border-radius: 4px; padding: 5px 14px;
+}
+QPushButton#ReferenceLibraryDockButton:hover { background: #5a3399; }
 /* Comparison strip (multi-file M2/M3): the slim reference-aware band atop
    the parameter list. Purple identity (style.REFERENCE), muted counts. */
 QWidget#ComparisonStrip { background: #f8f5fc; border-bottom: 1px solid #d0d7de; }

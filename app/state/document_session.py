@@ -29,6 +29,21 @@ class _Selection:
 
 
 @dataclass(frozen=True)
+class ParameterPreview:
+    """A live-edit preview's verdict on one parameter (see
+    :meth:`DocumentSession.preview_parameter`).
+
+    ``validation_completed`` mirrors the candidate document's
+    :attr:`core.document.BPXDocument.validation_completed`: when False,
+    ``bpx`` aborted before judging this parameter's section, so an empty
+    ``issues`` list means *unchecked*, not *clean* -- the badge must not
+    read "Valid"."""
+
+    issues: list[ValidatorDiagnostic]
+    validation_completed: bool
+
+
+@dataclass(frozen=True)
 class _Transition:
     """One undo/redo step: the document on both sides of a command, and the
     selection each side reveals.
@@ -235,10 +250,10 @@ class DocumentSession:
         candidate = editing.set_value(self.document.raw, path, value)
         return bpx_gateway.validate(candidate)
 
-    def preview_parameter_issues(
+    def preview_parameter(
         self, path: tuple[str, ...], value: object
-    ) -> list[ValidatorDiagnostic]:
-        """Validate a candidate edit and return only *this parameter's* issues.
+    ) -> ParameterPreview:
+        """Validate a candidate edit and return *this parameter's* verdict.
 
         The whole document is revalidated (a parameter's legality can depend on
         its siblings), but the result is scoped to the diagnostics that attach
@@ -250,7 +265,10 @@ class DocumentSession:
         A full candidate :class:`BPXDocument` is derived rather than
         suffix-matching the raw diagnostics here, so live preview attaches
         issues through exactly the same path-matching as the committed rebuild
-        and the two can never disagree about what belongs to a parameter.
+        and the two can never disagree about what belongs to a parameter. The
+        candidate's ``validation_completed`` travels with the issues for the
+        same reason: whether an empty issue list means *clean* or *unchecked*
+        is the candidate document's verdict, not the caller's guess.
         """
         if self.document is None:
             raise ValueError("No document loaded")
@@ -259,7 +277,10 @@ class DocumentSession:
             candidate, filename=self.document.filename, fmt=self.document.fmt
         )
         parameter = preview.find_parameter(tuple(path))
-        return list(parameter.issues) if parameter is not None else []
+        return ParameterPreview(
+            issues=list(parameter.issues) if parameter is not None else [],
+            validation_completed=preview.validation_completed,
+        )
 
     def apply_value(self, path: tuple[str, ...], value: object) -> None:
         """Commit an edit as an undoable command.

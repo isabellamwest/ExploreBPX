@@ -701,8 +701,23 @@ class AppDriver:
         return self
 
     def click_workspace_open_reference(self) -> "AppDriver":
-        """Click the "Open File as Reference…" button on the Workspace page."""
+        """Click the "Open BPX file…" button on the reference card (the
+        old rail "Open File as Reference…", moved onto the card by the
+        signed Concept A -- same objectName/flow, so this seam is stable)."""
         self._qtbot.mouseClick(self._w._workspace._open_reference_button, Qt.LeftButton)
+        return self
+
+    def click_reference_from_library(self) -> "AppDriver":
+        """Click the reference card's "From the reference library…" button
+        (opens the modal ReferenceLibraryDialog -- tests stub its ``exec``)."""
+        self._qtbot.mouseClick(self._w._workspace._reference_library_button, Qt.LeftButton)
+        return self
+
+    def dock_library_reference(self, set_id: str) -> "AppDriver":
+        """Dock bundled reference set *set_id* ("pybamm/chen2020"), driving
+        the same post-dialog path the dialog's accept takes -- the seam for
+        testing the dock flow without the blocking modal ``exec``."""
+        self._w._dock_reference_set(set_id)
         return self
 
     def click_reference_remove(self) -> "AppDriver":
@@ -717,17 +732,24 @@ class AppDriver:
 
     def reference_make_main_button_visible(self) -> bool:
         """Whether the reference card's "Make main" button is reachable --
-        true only while the card itself is shown (the button is never
-        hidden individually; it lives entirely inside the card, so this
-        first checks the card's own hidden flag, same as
-        :meth:`reference_tile_visible`)."""
+        a docked reference is showing *and* the button itself is shown (it
+        hides individually for a library-set reference, which has no file
+        on disk to promote)."""
         return self.reference_tile_visible() and not self._w._workspace._reference_make_main_button.isHidden()
 
-    def reference_heading_visible(self) -> bool:
-        return not self._w._workspace._reference_heading.isHidden()
-
     def reference_tile_visible(self) -> bool:
-        return not self._w._workspace._reference_tile.isHidden()
+        """Whether the reference card is showing a *docked* reference.
+
+        The card widget itself is always on screen (Concept A, signed
+        2026-07-31: its empty state is the reference library's front door),
+        so docked-ness is carried by the card's content -- the filename
+        line is the docked state's anchor widget."""
+        return not self._w._workspace._reference_filename.isHidden()
+
+    def reference_empty_state_visible(self) -> bool:
+        """Whether the reference card is showing its empty-state front door
+        (the teaching line; the dock buttons are visible in both states)."""
+        return not self._w._workspace._reference_empty_text.isHidden()
 
     def reference_tile_text(self) -> str:
         """Text of the reference card, flattened -- tag/filename/validity
@@ -1410,7 +1432,8 @@ class AppDriver:
         return self._w._inspector._card._title.text()
 
     def validity(self) -> str:
-        """The Inspector validity badge: '', 'Valid', 'Warning' or 'Invalid'."""
+        """The Inspector validity badge: '', 'Valid', 'Warning', 'Invalid'
+        or 'Not validated' (bpx aborted before judging this parameter)."""
         return self._w._inspector._card._badge.text()
 
     def field_value(self):
