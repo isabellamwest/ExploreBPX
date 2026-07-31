@@ -71,15 +71,25 @@ RAIL_BG = "#f3f4f6"
 RAIL_SELECTED_BG = "#e3edfd"
 RAIL_HOVER_BG = "#e8eaed"
 #: Crisper-boxes polish round: one step darker than the app's usual
-#: ``#d0d7de``/``#d9dee5`` border tones, used only on the Diagnostics page's
+#: ``#d0d7de`` border tone, used only on the Diagnostics page's
 #: own chrome (group-box border, rail's right edge, strip's bottom edge,
 #: chip borders) so those regions read a touch more defined without raising
 #: contrast anywhere else in the app. Fills/palette are otherwise unchanged
 #: -- flat colour only, no shadows.
 BORDER_STRONG = "#c4cdd5"
+#: The faintest border tone: dividers and disabled-control outlines. One of
+#: exactly three border greys (with ``BORDER`` and ``BORDER_STRONG``) after
+#: the 2026-07-31 consolidation absorbed the strays (#d9dee5 -> BORDER;
+#: #e4e8ec/#e1e4e8 -> this).
+BORDER_FAINT = "#eaecef"
 #: Slightly stronger shaded band for the Diagnostics group-box header row --
 #: one step darker than the app's usual ``#f6f8fa`` banded-header tone.
 HEADER_BAND_STRONG = "#eef1f4"
+#: Chart grid lines (both QtCharts widgets: ``TablePreview`` and
+#: ``MultiSeriesChart``). Lighter than ``BORDER`` so the grid recedes behind
+#: the data; named here so the two charts draw from one source instead of
+#: re-declaring it locally (they once drifted apart doing exactly that).
+CHART_GRID = "#eaeef2"
 
 # ---------------------------------------------------------------------------
 # Tooltip vocabulary (F5 polish round): the app's four completion/severity
@@ -186,7 +196,7 @@ def validity_pill_qss(background: str) -> str:
     *background*) -- the parameter card's per-card badge. (The workspace
     panel used to share this; its Concept A restyle replaced the pill with
     the dot-plus-plain-text language.)"""
-    return f"color: white; background: {background}; padding: 2px 9px; border-radius: 3px;"
+    return f"color: white; background: {background}; padding: 2px 9px; border-radius: 4px;"
 
 
 #: The toast pill's action link -- ``ACCENT`` is illegible on the pill's
@@ -255,7 +265,13 @@ QListWidget#ParameterListView::item { padding: 6px 8px; border-radius: 4px; }
 QSplitter#EditorSplitter::handle { background: #d0d7de; }
 QLabel#CardTitle { font-size: 15px; font-weight: 600; }
 QLabel#CardSymbol { margin-left: 8px; }
-QLabel#Heading { color: #57606a; font-weight: 600; }
+/* Heading tiers (Concept B "VS Code chrome", signed 2026-07-31). Fixed
+   panel/section labels the app authors are one caps tier -- 11px MUTED
+   caps, letter-spaced in code via titles.panel_title (QSS has no
+   text-transform). Data-derived headings (document names, parse summaries)
+   stay sentence-case ink as QLabel#Heading, the content tier. */
+QLabel#PanelTitle { color: #57606a; font-weight: 600; font-size: 11px; }
+QLabel#Heading { color: #1f2328; font-weight: 600; }
 QLabel#CardDescription { color: #57606a; }
 /* Structured-page inspector (signed off 2026-07-22): the editing pane is a
    white page -- frameless scroll area, white content surface -- with each
@@ -268,7 +284,7 @@ QLabel#InspectorPlaceholder { color: #57606a; }
 /* Unit labels sit directly beside their input (never at the pane edge) and
    stay quiet: they annotate the value, they are not part of it. */
 QLabel#UnitLabel, QLabel#ReferenceUnitLabel { color: #57606a; }
-QFrame#Card { border: 1px solid #d0d7de; }
+QFrame#Card { border: 1px solid #d0d7de; border-radius: 6px; }
 /* Workspace page (Concept A restyle, signed 2026-07-22): the Diagnostics
    page's own anatomy reused -- a shaded fixed-width actions rail beside a
    white pane holding the document and reference as banded-header group
@@ -280,7 +296,7 @@ QFrame#Card { border: 1px solid #d0d7de; }
    document box. */
 QWidget#WorkspacePage, QWidget#WorkspacePane { background: #ffffff; }
 QWidget#WorkspaceRail { background: #f3f4f6; border-right: 1px solid #c4cdd5; }
-QFrame#WorkspaceRailDivider { background: #d9dee5; border: none; }
+QFrame#WorkspaceRailDivider { background: #d0d7de; border: none; }
 /* Rail action buttons: white chips on the shaded rail, the Diagnostics
    strip-chip treatment (never native grey widgets). The old
    Open-as-reference chip moved onto the reference card (Concept A, signed
@@ -290,7 +306,6 @@ QPushButton#WorkspaceOpen {
     padding: 5px 10px; font-size: 12px; text-align: left;
 }
 QPushButton#WorkspaceOpen:hover { background: #eef1f4; }
-QLabel#NewChooserHeading { color: #57606a; font-weight: 600; font-size: 11px; }
 /* One New-chooser model row: flat bold name button over a muted descriptor
    (list-row language). Property selector on purpose -- the buttons keep
    their per-model NewButton_{model} objectNames as the test/driver seam,
@@ -309,7 +324,6 @@ QWidget#WorkspaceGroupBoxHeader {
     background: #eef1f4; border-bottom: 1px solid #c4cdd5;
     border-top-left-radius: 6px; border-top-right-radius: 6px;
 }
-QLabel#WorkspaceGroupBoxTitle { font-weight: 600; }
 QFrame#ReferenceGroupBox { background: #ffffff; border: 1px solid #d5cde6; border-radius: 6px; }
 QWidget#ReferenceGroupBoxHeader {
     background: #f6f2fb; border-bottom: 1px solid #d5cde6;
@@ -318,13 +332,15 @@ QWidget#ReferenceGroupBoxHeader {
 QLabel#WorkspaceCardTitle { font-size: 15px; font-weight: 600; }
 QLabel#WorkspaceCardTitle:disabled { color: #8c959f; font-weight: 400; }
 QLabel#WorkspaceCardKey { color: #57606a; }
-QLabel#ReferenceHeading { color: #6f42c1; font-weight: 600; }
+/* The reference box's panel title keeps its purple identity while joining
+   the caps tier -- colour is identity, caps is hierarchy. */
+QLabel#ReferenceHeading { color: #6f42c1; font-weight: 600; font-size: 11px; }
 /* Quieter than the heading beside it (explicit user call): a light, small
    annotation, not a badge. */
 QLabel#ReferenceReadOnlyTag { color: #7a63ad; font-size: 10px; }
 QPushButton#ReferenceTileMakeMain, QPushButton#ReferenceTileRemove,
 QPushButton#ReferenceFromLibrary, QPushButton#WorkspaceOpenReference {
-    background: #ffffff; border: 1px solid #d0d7de; border-radius: 5px;
+    background: #ffffff; border: 1px solid #d0d7de; border-radius: 4px;
     padding: 3px 10px; font-size: 12px;
 }
 QPushButton#ReferenceTileMakeMain:hover, QPushButton#ReferenceTileRemove:hover,
@@ -360,7 +376,7 @@ QLabel#ComparisonStripCounts { color: #57606a; font-size: 12px; }
    main" faint style reuses the app's muted-text tone via a dynamic
    property, the same pattern QLabel#DiagnosticsChip[chipOff="true"]
    already uses below. */
-QLabel#MainFileHeading { font-weight: 600; font-size: 11px; }
+QLabel#MainFileHeading { color: #57606a; font-weight: 600; font-size: 11px; }
 QLabel#ReferenceFileHeading { color: #6f42c1; font-weight: 600; font-size: 11px; }
 QFrame#ReferenceValueBox { border: 1px solid #6f42c1; border-radius: 6px; background: #f8f5fc; }
 QLabel#ReferenceBlockValue[same="true"] { color: #8c959f; }
@@ -385,13 +401,13 @@ QLabel#GhostCardHeading { color: #6f42c1; font-weight: 600; }
 QLabel#SourceFileLabel { color: #57606a; font-size: 12px; }
 QLabel#SourceHint { color: #6f42c1; font-size: 12px; }
 QPushButton#SourceStepButton, QPushButton#SourceMakeMain {
-    background: #ffffff; border: 1px solid #d0d7de; border-radius: 5px;
+    background: #ffffff; border: 1px solid #d0d7de; border-radius: 4px;
     padding: 2px 10px; font-size: 12px;
 }
 QPushButton#SourceStepButton { padding: 2px 8px; min-width: 14px; }
 QPushButton#SourceStepButton:hover:!disabled,
 QPushButton#SourceMakeMain:hover { background: #f6f8fa; }
-QPushButton#SourceStepButton:disabled { color: #c4cdd5; border-color: #e4e8ec; }
+QPushButton#SourceStepButton:disabled { color: #c4cdd5; border-color: #eaecef; }
 QWidget#SourceToolbarSep { background: #d0d7de; }
 /* Stale-reference band (frames F4): slim, neutral, under the pane
    headers; the Reload link is the page's only blue. */
@@ -432,14 +448,14 @@ QListWidget#SearchPopupList {
     background: transparent;
     outline: none;
 }
-QListWidget#SearchPopupList::item { padding: 6px 8px; border-radius: 6px; }
+QListWidget#SearchPopupList::item { padding: 6px 8px; border-radius: 4px; }
 QListWidget#SearchPopupList::item:selected { background: #ddeeff; color: #1f2328; }
 /* The Diagnostics page (rail redesign, F2): a summary strip over a
    fixed-width rail beside a detail pane. The rail's own background is
    distinct from the white pane so the two read as separate surfaces, like
    the activity bar beside the editor. Crisper-boxes polish round: the
    strip/rail/group-box/chip border lines use BORDER_STRONG (#c4cdd5), one
-   step darker than the app's usual #d0d7de/#d9dee5, so this page's own
+   step darker than the app's usual #d0d7de, so this page's own
    regions read a touch more defined -- flat colour only, no shadows, and
    nothing outside this page's chrome changed. */
 QWidget#DiagnosticsSummaryStrip { background: #f9fafb; border-bottom: 1px solid #c4cdd5; }
@@ -454,7 +470,7 @@ QWidget#DiagnosticsSummaryStrip { background: #f9fafb; border-bottom: 1px solid 
 QLabel#DiagnosticsChip {
     background: #ffffff; border: 1px solid #c4cdd5; border-radius: 6px; padding: 4px 10px;
 }
-QLabel#DiagnosticsChip[chipOff="true"] { background: #eef0f2; border: 1px solid #d9dee5; }
+QLabel#DiagnosticsChip[chipOff="true"] { background: #eef0f2; border: 1px solid #d0d7de; }
 QListWidget#DiagnosticsRail { background: #f3f4f6; border: none; border-right: 1px solid #c4cdd5; outline: none; }
 QListWidget#DiagnosticsRail::item { padding: 0; border: none; }
 QLabel#DiagnosticsPaneHeader { font-size: 14px; padding-bottom: 2px; }
@@ -471,7 +487,10 @@ QWidget#DiagnosticsGroupBoxHeader {
     background: #eef1f4; border-bottom: 1px solid #c4cdd5;
     border-top-left-radius: 6px; border-top-right-radius: 6px;
 }
-QLabel#DiagnosticsGroupBoxTitle { font-weight: 600; }
+QLabel#DiagnosticsGroupBoxTitle { color: #57606a; font-weight: 600; font-size: 11px; }
+/* The ratio/count tail ("· 3 of 6 added") stays sentence-case beside the
+   caps title -- counts are information, not chrome. */
+QLabel#DiagnosticsGroupBoxTitleSuffix { color: #57606a; font-size: 11px; }
 QListWidget#DiagnosticsGroupBoxList { border: none; background: transparent; }
 QListWidget#DiagnosticsGroupBoxList::item { padding: 6px 8px; border-radius: 4px; }
 QListWidget#DiagnosticsGroupBoxList::item:hover { background: #f0f2f4; }
@@ -506,7 +525,7 @@ QPushButton#AddParameterButton {
 }
 QPushButton#AddParameterButton:hover:!disabled { background: #e8eaed; }
 QPushButton#AddParameterButton:disabled {
-    color: #8c959f; background: #f6f8fa; border: 1px solid #e1e4e8;
+    color: #8c959f; background: #f6f8fa; border: 1px solid #eaecef;
 }
 
 /* Add-parameter popup: a floating "command palette" surface. The frameless
@@ -519,7 +538,7 @@ QFrame#AddParameterCard {
 }
 QLineEdit#AddParameterInput {
     border: 1px solid #d0d7de;
-    border-radius: 6px;
+    border-radius: 4px;
     padding: 6px 8px;
     background: #ffffff;
     font-size: 12px;
@@ -533,7 +552,7 @@ QListWidget#AddParameterList {
     outline: none;
     font-size: 12px;
 }
-QListWidget#AddParameterList::item { padding: 8px; border-radius: 6px; }
+QListWidget#AddParameterList::item { padding: 8px; border-radius: 4px; }
 QListWidget#AddParameterList::item:selected { background: #ddeeff; color: #1f2328; }
 QFrame#AddParameterDivider { background: #eaecef; border: none; }
 /* The pinned "Create custom parameter" action -- accent-tinted escape hatch,
@@ -542,7 +561,7 @@ QPushButton#AddParameterCreate {
     text-align: left;
     padding: 8px 10px;
     border: none;
-    border-radius: 6px;
+    border-radius: 4px;
     background: transparent;
     color: #1f6feb;
     font-weight: 500;
