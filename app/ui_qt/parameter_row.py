@@ -68,7 +68,7 @@ SEVERITY_ROLE = Qt.UserRole + 103
 ACTION_ROLE = Qt.UserRole + 104
 #: Item-data role marking a REF_ONLY ghost row (multi-file track M2): the
 #: delegate paints a dashed purple border (:data:`~ui_qt.style.REFERENCE`)
-#: around the row on top of its normal content. The "◇ REF ONLY" tag is not
+#: around the row on top of its normal content. The "REF ONLY" tag is not
 #: a delegate concern -- it is baked into the row's own :data:`HTML_ROLE`
 #: fragment (see :func:`build_ghost_row_html`).
 REF_ONLY_ROLE = Qt.UserRole + 105
@@ -250,7 +250,7 @@ def build_parameter_row_html(label: str, *, severity: str | None = None, is_empt
 def build_ghost_row_html(label: str) -> str:
     """Compose a REF_ONLY ghost row's rich-text fragment (multi-file track
     M2): bold name, muted unit -- the same plain-text styling as a real row
-    -- followed by the small "◇ REF ONLY" tag in the reference accent
+    -- followed by the small "REF ONLY" tag in the reference accent
     (:data:`~ui_qt.style.REFERENCE`). The row's other two ghost signals (the
     dashed border, the pale background wash) are not part of this fragment;
     see :data:`REF_ONLY_ROLE`."""
@@ -258,7 +258,7 @@ def build_ghost_row_html(label: str) -> str:
     fragment = _span(name, color=style.DEFAULT_TEXT, bold=True)
     if unit:
         fragment += _span(f" [{unit}]", color=style.MUTED)
-    fragment += "  " + _span("◇ REF ONLY", color=style.REFERENCE)
+    fragment += "  " + _span("REF ONLY", color=style.REFERENCE)
     return fragment
 
 

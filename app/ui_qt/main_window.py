@@ -9,7 +9,7 @@ from __future__ import annotations
 from enum import Enum
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QEvent, QSize, Qt
 from PySide6.QtGui import QFontMetrics, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -147,6 +147,10 @@ class MainWindow(QMainWindow):
         self._workspace = WorkspacePanel()
         self._source = SourcePage()
         self._source.pull_requested.connect(self._on_source_pull)
+        # The page's ⇄ is the same full Make-main flow as the Workspace
+        # card's button (dirty prompt, Save As routing, toast -- M4).
+        self._source.make_main_requested.connect(self._on_make_main_requested)
+        self._source.reload_requested.connect(self._on_reload_reference)
         self._search = SearchBar()
         self._activity_bar = ActivityBar()
         self._identity_label = _IdentityLabel()
@@ -376,6 +380,11 @@ class MainWindow(QMainWindow):
         self._stack.setCurrentIndex(page_index)
         self._activity_bar.select(page_index)
         self._page_header.set_title(self._activity_bar.label_for(page_index))
+        # Stale-on-disk is checked on notice, never watched (decision 11);
+        # entering the Source page is one of the two notice points (the
+        # other is window activation, see ``changeEvent``).
+        if page_index == _SOURCE_PAGE_INDEX:
+            self._check_reference_stale()
 
     def navigate_to(self, path: tuple) -> None:
         """Request navigation to *path* through the shared NavigationService.
@@ -898,6 +907,9 @@ class MainWindow(QMainWindow):
         self._toast.show_message(message)
         if outcome is OpenReferenceOutcome.ADDED:
             self._recompute_comparison()
+            # A fresh dock/replace re-truths the stale band (a leftover
+            # band from the previous reference must not survive it).
+            self._check_reference_stale()
         self._update_workspace_info()
 
     def _on_remove_reference_requested(self) -> None:
@@ -946,6 +958,8 @@ class MainWindow(QMainWindow):
         self._params.reset_expansion_state()
         self._diagnostics.reset_view_state()
         self._refresh_all()
+        # Both roles were just (re)loaded from disk: re-truth the band.
+        self._check_reference_stale()
         self._toast.show_message(f"{promoted_path.name} is now the main file")
 
     def _ask_switch_intent(self, main_name: str, ref_name: str) -> SwitchIntent:
@@ -1013,6 +1027,49 @@ class MainWindow(QMainWindow):
             main_name=document.filename if document is not None else "",
             main_model=document.identity.model if document is not None else None,
         )
+
+    def _check_reference_stale(self) -> None:
+        """Compare the docked reference's recorded mtime against disk and
+        show/hide the Source page's stale band accordingly.
+
+        On notice only (Source page entry, window activation, reference
+        dock/swap/reload) -- decision 11: no file watching. A stat failure
+        (file vanished, permissions) never conjures a band: the snapshot in
+        the panes is still exactly what the user is reading, and Reload's
+        own error path (C3) is where an unreadable file gets surfaced.
+        """
+        reference = self._state.reference
+        if reference is None:
+            return
+        try:
+            on_disk = reference.path.stat().st_mtime
+        except OSError:
+            return
+        self._source.set_stale(on_disk != reference.mtime)
+
+    def _on_reload_reference(self) -> None:
+        """The stale band's Reload: re-snapshot the reference from disk and
+        recompute -- never silently (the band's click is the consent).
+
+        C3: an unreadable file gets the standard "Cannot open file" error;
+        the docked snapshot and the band stay exactly as they were.
+        """
+        try:
+            self._state.reload_reference()
+        except (LoadError, OSError) as exc:
+            QMessageBox.critical(self, "Cannot open file", str(exc))
+            return
+        self._recompute_comparison()
+        self._check_reference_stale()
+        self._update_workspace_info()
+
+    def changeEvent(self, event) -> None:  # noqa: N802 - Qt override
+        """Window activation is the second stale-notice point (frames F4):
+        coming back from another app is exactly when the file may have
+        changed underneath the snapshot."""
+        super().changeEvent(event)
+        if event.type() == QEvent.ActivationChange and self.isActiveWindow():
+            self._check_reference_stale()
 
     def _on_source_pull(self, path, is_section: bool) -> None:
         """A ← gutter pull on the Source page: copy the reference's raw

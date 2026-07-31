@@ -304,7 +304,7 @@ def test_strip_appears_with_correct_counts_after_docking(app_driver, main_and_re
     _dock_reference(app_driver, ref_path, monkeypatch)
 
     assert app_driver.comparison_strip_visible()
-    assert app_driver.comparison_strip_identity_text() == f"◇ {ref_path.name} · SPM"
+    assert app_driver.comparison_strip_identity_text() == f"Reference · {ref_path.name} · SPM"
     assert app_driver.comparison_strip_counts_text() == "2 differ · 1 ref only"
 
 
@@ -725,5 +725,5 @@ def test_end_to_end_with_bundled_about_energy_examples(app_driver, monkeypatch):
     _dock_reference(app_driver, ref_path, monkeypatch)
 
     assert app_driver.comparison_strip_visible()
-    assert app_driver.comparison_strip_identity_text().startswith(f"◇ {ref_path.name}")
+    assert app_driver.comparison_strip_identity_text().startswith(f"Reference · {ref_path.name}")
     assert app_driver.comparison_strip_counts_text() != "no differences"

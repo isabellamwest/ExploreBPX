@@ -112,6 +112,18 @@ class AppState:
         """Undock the reference, if any."""
         self.reference = None
 
+    def reload_reference(self) -> None:
+        """Re-snapshot the docked reference from its own path on disk (the
+        Source page's stale-band Reload, PLAN-multi-file.md decision 11).
+
+        Raises ``core.bpx_gateway.LoadError``/``OSError`` exactly as
+        ``ReferenceSnapshot.load`` does; on failure the docked snapshot is
+        left untouched (the caller surfaces the error -- C3).
+        """
+        if self.reference is None:
+            return
+        self.reference = ReferenceSnapshot.load(self.reference.path)
+
     def swap_roles(self, promoted_path: Path, demoted_path: Path) -> None:
         """The "Make main" swap: promote *promoted_path* (today's reference)
         to the active session, demoting *demoted_path* (today's main) to a

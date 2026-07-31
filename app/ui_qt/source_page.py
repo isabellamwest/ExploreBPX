@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
     QAbstractScrollArea,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QVBoxLayout,
     QWidget,
 )
@@ -110,6 +111,11 @@ class _Line:
     #: rows, and on shared section headers.
     pull_path: tuple[str, ...] | None = None
     pull_section: bool = False
+    #: The owning row's path, set on the row's first painted line only (a
+    #: parameter's key line, a section's header line). This is the line the
+    #: selection outline anchors to: the ‹ › stepper and row clicks select
+    #: by path, so the selection survives re-renders and fold changes.
+    row_path: tuple[str, ...] | None = None
 
 
 def _gap(depth: int) -> _PaneLine:
@@ -404,6 +410,7 @@ def _build_lines(
                     if two_pane and row.is_difference
                     else None,
                     pull_section=two_pane and row.is_difference,
+                    row_path=row.path,
                 )
             )
         else:
@@ -466,6 +473,7 @@ def _build_lines(
                             pull_path=row.path
                             if index == 0 and row.is_difference
                             else None,
+                            row_path=row.path if index == 0 else None,
                         )
                     )
             else:
@@ -476,6 +484,7 @@ def _build_lines(
                             toggle_path=row.path
                             if index == 0 and row.closable
                             else None,
+                            row_path=row.path if index == 0 else None,
                         )
                     )
     return lines
@@ -504,6 +513,10 @@ class SourceView(QAbstractScrollArea):
         self._two_pane = False
         self._closed: set[tuple[str, ...]] = set()
         self._lines: list[_Line] = []
+        #: The selected row's path, or ``None``. Selection is by path, not
+        #: line index, so it survives re-renders, folds and edits; the ‹ ›
+        #: stepper moves it between differences and a row click places it.
+        self._selected: tuple[str, ...] | None = None
         self._font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
         self.setFocusPolicy(Qt.NoFocus)
 
@@ -520,6 +533,12 @@ class SourceView(QAbstractScrollArea):
             if row.kind is RowKind.SECTION or row.closable
         }
         self._closed &= foldable
+        # A selection whose row vanished (edit, undo, reference change) is
+        # dropped rather than left pointing at nothing.
+        if self._selected is not None and self._selected not in {
+            row.path for row in rows
+        }:
+            self._selected = None
         self._rebuild()
 
     def toggle_fold(self, path: tuple[str, ...]) -> None:
@@ -530,6 +549,68 @@ class SourceView(QAbstractScrollArea):
         else:
             self._closed.add(path)
         self._rebuild()
+
+    # -- selection & the ‹ › difference stepper --------------------------
+
+    def selected_path(self) -> tuple[str, ...] | None:
+        """The selected row's path, or ``None`` (test/driver read)."""
+        return self._selected
+
+    def has_differences(self) -> bool:
+        """Whether any stepper target exists -- drives the toolbar's ‹ ›
+        enabled state (call C1: disabled, never hidden, at zero)."""
+        return any(row.is_difference for row in self._rows)
+
+    def step(self, delta: int) -> None:
+        """Move the selection to the next (+1) / previous (-1) difference.
+
+        Targets are exactly the rows the row model marks ``is_difference``
+        (differs / fillable / ref-only parameters, ref-only section
+        headers), visited in file order and wrapping at both ends (call
+        C2). A selection resting on a non-target row steps to the nearest
+        difference past it in the chosen direction.
+        """
+        targets = [row.path for row in self._rows if row.is_difference]
+        if not targets:
+            return
+        if self._selected in targets:
+            index = (targets.index(self._selected) + delta) % len(targets)
+        elif self._selected is not None:
+            order = {row.path: i for i, row in enumerate(self._rows)}
+            position = order.get(self._selected, -1)
+            if delta > 0:
+                following = [t for t in targets if order[t] > position]
+                index = targets.index(following[0]) if following else 0
+            else:
+                preceding = [t for t in targets if order[t] < position]
+                index = (
+                    targets.index(preceding[-1])
+                    if preceding
+                    else len(targets) - 1
+                )
+        else:
+            index = 0 if delta > 0 else len(targets) - 1
+        self.reveal(targets[index])
+
+    def reveal(self, path: tuple[str, ...]) -> None:
+        """Select the row at *path*, unfolding any closed ancestor section
+        and scrolling its key line into view (the stepper's contract; a
+        closed table's own key line is already visible, so only ancestors
+        ever unfold)."""
+        for depth in range(1, len(path)):
+            self._closed.discard(path[:depth])
+        self._selected = path
+        self._rebuild()
+        line_height = self._line_height()
+        for index, line in enumerate(self._lines):
+            if line.row_path == path:
+                top = index * line_height
+                bar = self.verticalScrollBar()
+                view_height = self.viewport().height()
+                if not bar.value() <= top <= bar.value() + view_height - line_height:
+                    bar.setValue(max(0, top - view_height // 2))
+                break
+        self.viewport().update()
 
     def line_texts(self) -> list[str]:
         """Plain text of every currently rendered main-pane line, top to
@@ -646,6 +727,20 @@ class SourceView(QAbstractScrollArea):
                 )
             if self._two_pane and line.pull_path is not None:
                 self._paint_pull_chip(painter, pane_width, top, line_height)
+            if line.row_path is not None and line.row_path == self._selected:
+                # The frames' selection: a thin accent outline on the row's
+                # pane cell(s) -- both panes in two-pane mode, never the
+                # gutter between them.
+                painter.setPen(QColor(style.ACCENT))
+                painter.setBrush(Qt.NoBrush)
+                painter.drawRect(0, top, pane_width - 1, line_height - 1)
+                if self._two_pane:
+                    painter.drawRect(
+                        pane_width + _GUTTER_PX,
+                        top,
+                        pane_width - 1,
+                        line_height - 1,
+                    )
         if self._two_pane:
             painter.setPen(QColor(style.NEUTRAL_TINT))
             painter.drawLine(pane_width, 0, pane_width, self.viewport().height())
@@ -734,6 +829,13 @@ class SourceView(QAbstractScrollArea):
                 if line.pull_path is not None:
                     self.pull_requested.emit(line.pull_path, line.pull_section)
                 return
+            # A pane click places the selection on the clicked row (its key
+            # line carries the path; continuation lines of an open value
+            # leave the selection where it is). Shared state with the ‹ ›
+            # stepper, so stepping continues from a clicked row.
+            if line.row_path is not None and line.row_path != self._selected:
+                self._selected = line.row_path
+                self.viewport().update()
             if line.toggle_path is not None:
                 self.toggle_fold(line.toggle_path)
                 return
@@ -752,20 +854,65 @@ class SourcePage(QWidget):
     #: Re-emitted from the view's ← gutter clicks: (path, is_section).
     #: MainWindow runs the shared pull command; the page never mutates.
     pull_requested = Signal(object, bool)
+    #: The toolbar's ⇄ button: run the full Make-main flow (M4) -- the
+    #: page only asks; MainWindow owns the dialogs and the swap.
+    make_main_requested = Signal()
+    #: The stale band's Reload link: re-snapshot the reference from disk.
+    reload_requested = Signal()
 
     def __init__(self) -> None:
         super().__init__()
         self._view = SourceView()
         self._view.pull_requested.connect(self.pull_requested)
 
-        self._hint = QLabel("◇ Open a reference to compare…")
-        self._hint.setStyleSheet(f"color: {style.MUTED};")
+        # Single-pane toolbar (frames F3): the main file's identity on the
+        # left, the docking hint on the right -- the hint sits exactly where
+        # the ‹ › stepper appears in two-pane mode, so the toolbar never
+        # changes shape when a reference docks.
+        self._file_label = QLabel()
+        self._file_label.setObjectName("SourceFileLabel")
+        self._hint = QLabel("Open a reference to compare…")
+        self._hint.setObjectName("SourceHint")
+
+        # Two-pane toolbar (frames F1): ‹ › difference stepper, thin
+        # separator, ⇄ Make main. No counts anywhere on the page (signed).
+        self._prev_button = QPushButton("‹")
+        self._prev_button.setObjectName("SourceStepButton")
+        self._prev_button.setToolTip("Previous difference")
+        self._prev_button.clicked.connect(lambda: self._view.step(-1))
+        self._next_button = QPushButton("›")
+        self._next_button.setObjectName("SourceStepButton")
+        self._next_button.setToolTip("Next difference")
+        self._next_button.clicked.connect(lambda: self._view.step(+1))
+        self._toolbar_sep = QWidget()
+        self._toolbar_sep.setObjectName("SourceToolbarSep")
+        self._toolbar_sep.setFixedSize(1, 18)
+        self._make_main_button = QPushButton("⇄ Make main")
+        self._make_main_button.setObjectName("SourceMakeMain")
+        self._make_main_button.clicked.connect(self.make_main_requested)
 
         toolbar = QWidget()
         toolbar_layout = QHBoxLayout(toolbar)
         toolbar_layout.setContentsMargins(10, 6, 10, 6)
+        toolbar_layout.setSpacing(8)
+        toolbar_layout.addWidget(self._file_label)
         toolbar_layout.addStretch(1)
         toolbar_layout.addWidget(self._hint)
+        toolbar_layout.addWidget(self._prev_button)
+        toolbar_layout.addWidget(self._next_button)
+        toolbar_layout.addWidget(self._toolbar_sep)
+        toolbar_layout.addWidget(self._make_main_button)
+        # Everything mode-dependent starts hidden; ``refresh`` shows the
+        # right set for the current mode.
+        for control in (
+            self._file_label,
+            self._hint,
+            self._prev_button,
+            self._next_button,
+            self._toolbar_sep,
+            self._make_main_button,
+        ):
+            control.setVisible(False)
 
         self._main_head = QLabel()
         self._main_head.setStyleSheet(
@@ -785,11 +932,32 @@ class SourcePage(QWidget):
         head_layout.addWidget(self._ref_head, 1)
         self._pane_head.setVisible(False)
 
+        # Stale-reference band (frames F4): a slim neutral notice directly
+        # under the pane headers. Shown/hidden by MainWindow's on-notice
+        # mtime check (page entry, window activation -- decision 11: no
+        # file watching, never a silent refresh).
+        self._stale_band = QWidget()
+        self._stale_band.setObjectName("SourceStaleBand")
+        stale_layout = QHBoxLayout(self._stale_band)
+        stale_layout.setContentsMargins(12, 3, 12, 3)
+        stale_layout.setSpacing(8)
+        stale_text = QLabel("The reference changed on disk")
+        stale_text.setObjectName("SourceStaleText")
+        stale_layout.addWidget(stale_text)
+        self._reload_button = QPushButton("Reload")
+        self._reload_button.setObjectName("SourceReloadLink")
+        self._reload_button.setCursor(Qt.PointingHandCursor)
+        self._reload_button.clicked.connect(self.reload_requested)
+        stale_layout.addWidget(self._reload_button)
+        stale_layout.addStretch(1)
+        self._stale_band.setVisible(False)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         layout.addWidget(toolbar)
         layout.addWidget(self._pane_head)
+        layout.addWidget(self._stale_band)
         layout.addWidget(self._view, 1)
 
     def refresh(
@@ -808,16 +976,43 @@ class SourcePage(QWidget):
         comparison; *main_name*/*main_model* label the main pane's header.
         """
         two_pane = main_raw is not None and reference is not None
-        self._hint.setVisible(main_raw is not None and reference is None)
+        single_pane = main_raw is not None and reference is None
+        self._hint.setVisible(single_pane)
+        self._file_label.setVisible(single_pane)
+        self._file_label.setText(
+            "  ·  ".join(part for part in (main_name, main_model) if part)
+            if single_pane
+            else ""
+        )
+        self._prev_button.setVisible(two_pane)
+        self._next_button.setVisible(two_pane)
+        self._toolbar_sep.setVisible(two_pane)
+        self._make_main_button.setVisible(two_pane)
         self._pane_head.setVisible(two_pane)
+        if not two_pane:
+            # The band is a two-pane notice; an undocked/replaced reference
+            # takes it with it (a fresh dock re-checks from MainWindow).
+            self._stale_band.setVisible(False)
         if two_pane:
             self._main_head.setText(
                 _pane_header_text("Main", main_name, main_model)
             )
             self._ref_head.setText(
-                "◇ " + _pane_header_text("Reference", reference.filename, reference.model)
+                _pane_header_text("Reference", reference.filename, reference.model)
             )
             rows = build_rows(main_raw, reference.raw)
         else:
             rows = build_rows(main_raw) if main_raw is not None else []
         self._view.set_rows(rows, two_pane=two_pane)
+        # C1: at zero differences the stepper greys out, it never hides --
+        # the toolbar keeps its shape as edits create/remove the last
+        # difference.
+        enabled = two_pane and self._view.has_differences()
+        self._prev_button.setEnabled(enabled)
+        self._next_button.setEnabled(enabled)
+
+    def set_stale(self, stale: bool) -> None:
+        """Show/hide the stale-reference band (MainWindow's on-notice mtime
+        check owns the decision; the page only renders it). Meaningless
+        without a docked reference -- ``refresh`` hides it with the panes."""
+        self._stale_band.setVisible(stale and not self._pane_head.isHidden())

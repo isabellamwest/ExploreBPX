@@ -144,6 +144,32 @@ passing** per the app-audit Phase A baseline, 2026-07-21. Implementation starts
     section pull, live re-render after pull); suite 1432 green + the same
     4 environment-only failures. Offscreen screenshot matches F1's ←
     placement.
+  - Step 6 (2026-07-31, uncommitted): toolbar + stale band, per the
+    step-6 build frames (signed rev 2, as built:
+    (internal design archive)).
+    Two-pane toolbar: ‹ › difference stepper + thin separator + "⇄ Make
+    main" (routes to the existing M4 `_on_make_main_requested`; the page
+    adds no swap logic). Single-pane toolbar gains the F3 "filename ·
+    model" label the step-2 build lacked. Stepper: targets are the row
+    model's `is_difference` rows in file order; stepping unfolds closed
+    ancestors, scrolls, and lands a `style.ACCENT` outline on both pane
+    cells -- selection is NEW machinery (path-based, click-to-select,
+    pruned when the row vanishes) that step 7's Up/Down will reuse.
+    Settled calls: C1 zero differences = ‹ › disabled never hidden; C2
+    wrap at both ends; C3 unreadable file at Reload = standard "Cannot
+    open file" error, snapshot + band untouched (and a stat failure never
+    conjures a band). Stale band under the pane headers ("The reference
+    changed on disk · Reload"); mtime compared on notice only -- Source
+    page entry, window activation (`changeEvent`), reference
+    dock/swap/reload -- via `MainWindow._check_reference_stale`;
+    `AppState.reload_reference` re-snapshots in the state layer. 17 new
+    tests; suite 1449 green + the same 4 environment-only failures;
+    real-window screenshots match all three frames.
+    *Amendment (Bella, 2026-07-31): the ◇ reference glyph is dropped
+    app-wide -- Source pane header and hint, the Editor comparison
+    strip (now "Reference · {filename} · {model}"), and the ghost-row
+    tag (now "REF ONLY"). Decisions 3/12/13's ◇ mentions read as
+    superseded on this point.*
   - **Unlocked calls a later session may revisit with Bella**: rail order
     (Workspace·Editor·Source·Diagnostics); "n parameters" always shown on
     headers (not only folded, and per side in two-pane mode); lists close

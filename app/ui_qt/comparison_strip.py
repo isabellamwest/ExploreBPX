@@ -63,5 +63,5 @@ class ComparisonStrip(QWidget):
             self.hide()
             return
         self.show()
-        self._identity.setText(f"◇ {reference.filename} · {reference.model or '-'}")
+        self._identity.setText(f"Reference · {reference.filename} · {reference.model or '-'}")
         self._counts.setText(_counts_text(comparison) if comparison is not None else "")

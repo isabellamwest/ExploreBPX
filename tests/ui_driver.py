@@ -577,7 +577,7 @@ class AppDriver:
         return self._w._source._view.chipped_texts()
 
     def source_pane_headers(self) -> tuple[str, str] | None:
-        """The two pane-header labels ("Main · …", "◇ Reference · …"), or
+        """The two pane-header labels ("Main · …", "Reference · …"), or
         ``None`` while the header row is hidden (no reference docked)."""
         page = self._w._source
         if page._pane_head.isHidden():
@@ -608,6 +608,62 @@ class AppDriver:
             or page.findChildren(QTextEdit)
             or page.findChildren(QPlainTextEdit)
         )
+
+    def source_file_label(self) -> str | None:
+        """The single-pane toolbar's "filename · model" label text, or
+        ``None`` while it is hidden (two-pane mode, or no document)."""
+        label = self._w._source._file_label
+        return None if label.isHidden() else label.text()
+
+    def source_stepper_visible(self) -> bool:
+        """Whether the ‹ › difference stepper is in the toolbar (two-pane
+        mode only)."""
+        page = self._w._source
+        return not page._prev_button.isHidden() and not page._next_button.isHidden()
+
+    def source_stepper_enabled(self) -> bool:
+        """Whether the ‹ › buttons are enabled (call C1: disabled, never
+        hidden, when no difference exists)."""
+        page = self._w._source
+        return page._prev_button.isEnabled() and page._next_button.isEnabled()
+
+    def source_step(self, delta: int) -> "AppDriver":
+        """Click the › (+1) or ‹ (-1) stepper button. A disabled button
+        swallows the click, exactly as on screen."""
+        page = self._w._source
+        (page._next_button if delta > 0 else page._prev_button).click()
+        return self
+
+    def source_selected_path(self) -> tuple | None:
+        """The Source view's selected row path (stepper target / clicked
+        row), or ``None``."""
+        return self._w._source._view.selected_path()
+
+    def source_make_main_visible(self) -> bool:
+        """Whether the toolbar's ⇄ Make main button is shown (two-pane
+        mode only)."""
+        return not self._w._source._make_main_button.isHidden()
+
+    def source_make_main(self) -> "AppDriver":
+        """Click the Source toolbar's ⇄ Make main button (the full M4
+        flow, same as the Workspace card's button)."""
+        self._w._source._make_main_button.click()
+        return self
+
+    def source_stale_band_visible(self) -> bool:
+        """Whether the "The reference changed on disk" band is shown."""
+        return not self._w._source._stale_band.isHidden()
+
+    def source_reload(self) -> "AppDriver":
+        """Click the stale band's Reload link."""
+        self._w._source._reload_button.click()
+        return self
+
+    def notice_window_activation(self) -> "AppDriver":
+        """Run the window-activation stale-notice check directly (the
+        headless suite has no real activation events to deliver)."""
+        self._w._check_reference_stale()
+        return self
 
     def click_workspace_open(self) -> "AppDriver":
         """Click the Open File button on the Workspace page."""

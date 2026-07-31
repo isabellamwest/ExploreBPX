@@ -349,6 +349,31 @@ QPushButton#CopyUpButton {
 QPushButton#CopyUpButton:hover:!disabled { background: #5a3399; }
 QPushButton#CopyUpButton:disabled { background: #d5cde6; color: #8c959f; font-weight: 400; }
 QLabel#GhostCardHeading { color: #6f42c1; font-weight: 600; }
+/* Source page toolbar (multi-file M5, signed frames): single-pane shows
+   the main file's identity + the purple docking hint; two-pane shows the
+   ‹ › difference stepper and ⇄ Make main. The bordered buttons reuse the
+   reference tile's flat treatment; disabled ‹ › (no differences, call C1)
+   fades border and glyph together rather than hiding. */
+QLabel#SourceFileLabel { color: #57606a; font-size: 12px; }
+QLabel#SourceHint { color: #6f42c1; font-size: 12px; }
+QPushButton#SourceStepButton, QPushButton#SourceMakeMain {
+    background: #ffffff; border: 1px solid #d0d7de; border-radius: 5px;
+    padding: 2px 10px; font-size: 12px;
+}
+QPushButton#SourceStepButton { padding: 2px 8px; min-width: 14px; }
+QPushButton#SourceStepButton:hover:!disabled,
+QPushButton#SourceMakeMain:hover { background: #f6f8fa; }
+QPushButton#SourceStepButton:disabled { color: #c4cdd5; border-color: #e4e8ec; }
+QWidget#SourceToolbarSep { background: #d0d7de; }
+/* Stale-reference band (frames F4): slim, neutral, under the pane
+   headers; the Reload link is the page's only blue. */
+QWidget#SourceStaleBand { background: #eef0f2; }
+QLabel#SourceStaleText { color: #57606a; font-size: 12px; }
+QPushButton#SourceReloadLink {
+    background: transparent; border: none; color: #1f6feb;
+    font-size: 12px; padding: 0;
+}
+QPushButton#SourceReloadLink:hover { color: #1a5fd0; }
 QStatusBar { background: #f6f8fa; border-top: 1px solid #d0d7de; font-size: 12px; color: #57606a; }
 QWidget#ActivityBar { background: #f6f8fa; border-right: 1px solid #d0d7de; }
 QToolButton#ActivityButton { background: transparent; border: none; border-left: 2px solid transparent; }

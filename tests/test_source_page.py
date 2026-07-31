@@ -337,7 +337,7 @@ def test_pane_headers_show_roles_names_and_models(qtbot):
     )
     assert not page._pane_head.isHidden()
     assert page._main_head.text() == "Main  ·  nmc.json  ·  DFN"
-    assert page._ref_head.text() == "◇ Reference  ·  lfp.json  ·  SPMe"
+    assert page._ref_head.text() == "Reference  ·  lfp.json  ·  SPMe"
 
 
 def test_two_pane_page_still_has_no_input_widget(qtbot):
@@ -705,3 +705,285 @@ def test_source_pull_of_missing_path_is_impossible(app_driver, tmp_path, monkeyp
 
     with pytest.raises(AssertionError):
         app_driver.source_pull(("Parameterisation", "Cell", "Upper voltage cut-off [V]"))
+
+
+# ---------------------------------------------------------------------------
+# Step 6: toolbar (‹ › stepper, ⇄ Make main, single-pane label) + stale band.
+# ---------------------------------------------------------------------------
+
+_CAPACITY = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
+_LOWER_CUTOFF = ("Parameterisation", "Cell", "Lower voltage cut-off [V]")
+
+
+def test_toolbar_single_pane_shows_label_and_hint_only(qtbot):
+    page = SourcePage()
+    qtbot.addWidget(page)
+
+    page.refresh(_DOC, main_name="main.json", main_model="SPM")
+
+    assert not page._file_label.isHidden()
+    assert page._file_label.text() == "main.json  ·  SPM"
+    assert not page._hint.isHidden()
+    assert page._prev_button.isHidden()
+    assert page._next_button.isHidden()
+    assert page._toolbar_sep.isHidden()
+    assert page._make_main_button.isHidden()
+
+
+def test_toolbar_two_pane_shows_stepper_and_make_main_only(qtbot):
+    page = _two_pane(qtbot, _DOC_MAIN_ONLY, _REF)
+
+    assert page._file_label.isHidden()
+    assert page._hint.isHidden()
+    assert not page._prev_button.isHidden()
+    assert not page._next_button.isHidden()
+    assert not page._toolbar_sep.isHidden()
+    assert not page._make_main_button.isHidden()
+    assert page._make_main_button.text() == "⇄ Make main"
+
+
+def test_toolbar_empty_without_a_document(qtbot):
+    page = SourcePage()
+    qtbot.addWidget(page)
+
+    page.refresh(None)
+
+    assert page._file_label.isHidden()
+    assert page._hint.isHidden()
+    assert page._prev_button.isHidden()
+    assert page._make_main_button.isHidden()
+
+
+def test_single_pane_label_omits_a_missing_model(qtbot):
+    page = SourcePage()
+    qtbot.addWidget(page)
+
+    page.refresh(_DOC, main_name="main.json", main_model=None)
+
+    assert page._file_label.text() == "main.json"
+
+
+def test_stepper_disabled_not_hidden_without_differences(qtbot):
+    # Call C1: identical files keep the ‹ › buttons in place, greyed.
+    page = _two_pane(qtbot, _DOC, _DOC)
+
+    assert not page._prev_button.isHidden()
+    assert not page._next_button.isHidden()
+    assert not page._prev_button.isEnabled()
+    assert not page._next_button.isEnabled()
+
+    # Still visible, and no page ever steps: a disabled click is inert.
+    page._next_button.click()
+    assert page._view.selected_path() is None
+
+
+def test_stepper_walks_differences_in_file_order_and_wraps(qtbot):
+    page = _two_pane(qtbot, _DOC_MAIN_ONLY, _REF)
+    view = page._view
+
+    assert page._next_button.isEnabled()
+    page._next_button.click()
+    assert view.selected_path() == ("Header", "Title")
+    page._next_button.click()
+    assert view.selected_path() == _CAPACITY
+    page._next_button.click()
+    assert view.selected_path() == _LOWER_CUTOFF
+    page._next_button.click()  # call C2: wraps to the first difference
+    assert view.selected_path() == ("Header", "Title")
+    page._prev_button.click()  # and backwards off the front, to the last
+    assert view.selected_path() == _LOWER_CUTOFF
+
+
+def test_stepper_steps_into_a_collapsed_section(qtbot):
+    page = _two_pane(qtbot, _DOC_MAIN_ONLY, _REF)
+    view = page._view
+
+    view.toggle_fold(("Parameterisation", "Cell"))
+    assert '"Nominal cell capacity [A.h]": 5.0' not in view.line_texts()
+
+    page._next_button.click()  # Title
+    page._next_button.click()  # capacity -- inside the folded Cell
+    assert view.selected_path() == _CAPACITY
+    assert '"Nominal cell capacity [A.h]": 5.0' in view.line_texts()
+
+
+def test_pane_click_places_the_selection(qtbot):
+    page = _two_pane(qtbot, _DOC_MAIN_ONLY, _REF)
+    view = page._view
+    view.resize(900, 500)
+
+    # Line 2 is '"Title": …' (0 Header, 1 BPX, 2 Title); click its main pane.
+    from PySide6.QtCore import QPoint, Qt
+
+    y = 2 * view._line_height() + 2
+    qtbot.mouseClick(view.viewport(), Qt.LeftButton, pos=QPoint(120, y))
+
+    assert view.selected_path() == ("Header", "Title")
+
+    # Stepping continues from the clicked row, not from the top.
+    page._next_button.click()
+    assert view.selected_path() == _CAPACITY
+
+
+def test_selection_prunes_when_its_row_vanishes(qtbot):
+    page = _two_pane(qtbot, _DOC_MAIN_ONLY, _REF)
+    page._view.reveal(("Header", "Title"))
+    assert page._view.selected_path() == ("Header", "Title")
+
+    without_title = {
+        "Header": {"BPX": "0.1.0", "Model": "SPM"},
+        "Parameterisation": _DOC_MAIN_ONLY["Parameterisation"],
+    }
+    page.refresh(without_title, reference=_RefStub(without_title))
+
+    assert page._view.selected_path() is None
+
+
+def test_selection_paint_smoke(qtbot):
+    # Offscreen render with a selection outline must not crash (the text
+    # readers cannot disprove paint-path bugs).
+    page = _two_pane(qtbot, _DOC_MAIN_ONLY, _REF)
+    page.resize(900, 500)
+    page._view.reveal(("Header", "Title"))
+    page.grab()
+
+
+def test_set_stale_needs_a_docked_reference(qtbot):
+    page = SourcePage()
+    qtbot.addWidget(page)
+
+    page.refresh(_DOC, main_name="main.json")
+    page.set_stale(True)
+    assert page._stale_band.isHidden()
+
+    page.refresh(_DOC, reference=_RefStub(_REF))
+    page.set_stale(True)
+    assert not page._stale_band.isHidden()
+
+    # Undocking takes the band with it.
+    page.refresh(_DOC, main_name="main.json")
+    assert page._stale_band.isHidden()
+
+
+# -- MainWindow wiring (driver level) ---------------------------------------
+
+
+def test_stepper_disables_once_pulls_remove_every_difference(
+    app_driver, tmp_path, monkeypatch
+):
+    app_driver.open(_write(tmp_path, "main.json", _DOC_MAIN_ONLY))
+    _dock_reference(app_driver, tmp_path, monkeypatch, _REF)
+
+    assert app_driver.source_stepper_visible() is True
+    assert app_driver.source_stepper_enabled() is True
+
+    app_driver.source_pull(("Header", "Title"))
+    app_driver.source_pull(_CAPACITY)
+    assert app_driver.source_stepper_enabled() is True
+    app_driver.source_pull(_LOWER_CUTOFF)
+
+    # Only the main-only row differs now -- not a target (frames rule).
+    assert app_driver.source_stepper_enabled() is False
+
+
+def test_source_make_main_runs_the_full_swap(app_driver, tmp_path, monkeypatch):
+    app_driver.open(_write(tmp_path, "main.json", _DOC_MAIN_ONLY))
+    _dock_reference(app_driver, tmp_path, monkeypatch, _REF)
+    assert app_driver.source_make_main_visible() is True
+
+    app_driver.source_make_main()
+
+    headers = app_driver.source_pane_headers()
+    assert headers is not None
+    assert "reference.json" in headers[0]  # promoted to Main
+    assert "main.json" in headers[1]  # demoted to the reference pane
+
+
+def _bump_on_disk(path: Path, raw: dict) -> None:
+    """Rewrite *path* with *raw* and force a visibly newer mtime (coarse
+    filesystem timestamps must not make the change invisible)."""
+    import os
+
+    path.write_text(json.dumps(raw), encoding="utf-8")
+    stamp = path.stat().st_mtime + 10
+    os.utime(path, (stamp, stamp))
+
+
+def test_stale_band_appears_on_page_entry_and_reload_resnapshots(
+    app_driver, tmp_path, monkeypatch
+):
+    app_driver.open(_write(tmp_path, "main.json", _DOC_MAIN_ONLY))
+    _dock_reference(app_driver, tmp_path, monkeypatch, _REF)
+    assert app_driver.source_stale_band_visible() is False
+
+    changed = {
+        "Header": dict(_REF["Header"]),
+        "Parameterisation": {
+            "Cell": dict(
+                _REF["Parameterisation"]["Cell"],
+                **{"Nominal cell capacity [A.h]": 3.5},
+            ),
+        },
+    }
+    _bump_on_disk(tmp_path / "reference.json", changed)
+
+    # No watcher: nothing notices until the page is (re-)entered.
+    assert app_driver.source_stale_band_visible() is False
+    app_driver.show_view("Workspace")
+    app_driver.show_view("Source")
+    assert app_driver.source_stale_band_visible() is True
+
+    # The panes still show the docked snapshot until Reload is chosen.
+    assert '"Nominal cell capacity [A.h]": 4.0' in app_driver.source_ref_line_texts()
+
+    app_driver.source_reload()
+    assert app_driver.source_stale_band_visible() is False
+    assert '"Nominal cell capacity [A.h]": 3.5' in app_driver.source_ref_line_texts()
+
+
+def test_window_activation_is_a_stale_notice_point(app_driver, tmp_path, monkeypatch):
+    app_driver.open(_write(tmp_path, "main.json", _DOC_MAIN_ONLY))
+    _dock_reference(app_driver, tmp_path, monkeypatch, _REF)
+
+    _bump_on_disk(tmp_path / "reference.json", _REF)
+    assert app_driver.source_stale_band_visible() is False
+
+    app_driver.notice_window_activation()
+    assert app_driver.source_stale_band_visible() is True
+
+
+def test_reload_failure_keeps_snapshot_and_band(app_driver, tmp_path, monkeypatch):
+    # Call C3: an unreadable file at Reload surfaces the standard error;
+    # nothing mutates.
+    app_driver.open(_write(tmp_path, "main.json", _DOC_MAIN_ONLY))
+    _dock_reference(app_driver, tmp_path, monkeypatch, _REF)
+
+    ref_path = tmp_path / "reference.json"
+    _bump_on_disk(ref_path, _REF)
+    app_driver.notice_window_activation()
+    assert app_driver.source_stale_band_visible() is True
+
+    ref_path.unlink()
+    errors = []
+    monkeypatch.setattr(
+        main_window_module.QMessageBox,
+        "critical",
+        lambda *args, **kwargs: errors.append(args),
+    )
+    app_driver.source_reload()
+
+    assert errors, "the standard Cannot-open-file error must surface"
+    assert app_driver.source_stale_band_visible() is True
+    assert '"Nominal cell capacity [A.h]": 4.0' in app_driver.source_ref_line_texts()
+
+
+def test_vanished_file_never_conjures_a_band(app_driver, tmp_path, monkeypatch):
+    app_driver.open(_write(tmp_path, "main.json", _DOC_MAIN_ONLY))
+    _dock_reference(app_driver, tmp_path, monkeypatch, _REF)
+
+    (tmp_path / "reference.json").unlink()
+    app_driver.show_view("Workspace")
+    app_driver.show_view("Source")
+    app_driver.notice_window_activation()
+
+    assert app_driver.source_stale_band_visible() is False
