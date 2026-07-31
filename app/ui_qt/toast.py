@@ -8,6 +8,9 @@ inventing its own.
 
 from __future__ import annotations
 
+import html
+from typing import Callable
+
 from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtWidgets import QLabel, QWidget
 
@@ -43,15 +46,60 @@ class Toast(QLabel):
         self._timer.setSingleShot(True)
         self._timer.timeout.connect(self.hide)
 
-    def show_message(self, text: str) -> None:
+        self._message = ""
+        self._action_text: str | None = None
+        self._action: Callable[[], None] | None = None
+        self.linkActivated.connect(self._on_link_activated)
+
+    def show_message(
+        self,
+        text: str,
+        action_text: str | None = None,
+        action: Callable[[], None] | None = None,
+    ) -> None:
         """Show *text*, replacing any message currently visible, and
-        (re)start the auto-dismiss timer."""
-        self.setText(text)
+        (re)start the auto-dismiss timer.
+
+        With *action_text*/*action* the pill gains one trailing link that
+        runs *action* and dismisses. A plain message stays mouse-transparent
+        (clicks fall through to the window beneath); only a message carrying
+        an action accepts the mouse at all.
+        """
+        self._message = text
+        self._action_text = action_text if action is not None else None
+        self._action = action
+        if self._action is not None and action_text:
+            self.setTextFormat(Qt.RichText)
+            self.setTextInteractionFlags(Qt.LinksAccessibleByMouse)
+            self.setText(
+                f"{html.escape(text)}&nbsp;&nbsp;"
+                f'<a href="action" style="color: {style.TOAST_ACTION};'
+                f' font-weight: 600;">{html.escape(action_text)}</a>'
+            )
+        else:
+            self.setTextFormat(Qt.PlainText)
+            self.setTextInteractionFlags(Qt.NoTextInteraction)
+            self.setText(text)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents, self._action is None)
         self.adjustSize()
         self._reposition()
         self.show()
         self.raise_()
         self._timer.start(DISMISS_DELAY_MS)
+
+    def message(self) -> str:
+        """The plain message text, without any action-link markup."""
+        return self._message
+
+    def action_text(self) -> str | None:
+        """The action link's label, or ``None`` for a plain message."""
+        return self._action_text
+
+    def _on_link_activated(self, _href: str) -> None:
+        action = self._action
+        self.hide()
+        if action is not None:
+            action()
 
     def eventFilter(self, watched, event) -> bool:  # noqa: N802 - Qt override
         if watched is self.parentWidget() and event.type() == QEvent.Resize:

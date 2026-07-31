@@ -1086,7 +1086,14 @@ class MainWindow(QMainWindow):
     def _on_source_pull(self, path, is_section: bool) -> None:
         """A ← gutter pull on the Source page: copy the reference's raw
         value at *path* into the main document, verbatim, via the shared
-        M3 commands -- one undo entry, undoable from any page."""
+        M3 commands -- one undo entry, undoable from any page.
+
+        The pull stays on the Source page (signed concept 1): its rhythm
+        is next ›, pull, next ›, pull, so unlike ``_on_committed`` this
+        never navigates -- confirmation is the row's transient "Pulled"
+        tag plus a toast, and the Editor is opt-in via the toast's Show
+        in Editor action (or a row double-click, as ever).
+        """
         reference = self._state.reference
         session = self._state.active
         if reference is None or session is None:
@@ -1099,10 +1106,16 @@ class MainWindow(QMainWindow):
         path = tuple(path)
         command = PullSection(path, value) if is_section else PullParameter(path, value)
         session.execute_command(command)
-        # Commands do not self-propagate: run the same post-commit refresh
-        # the inspector's Copy up path uses (recomputes the comparison and
-        # fans out to every page, this one included).
-        self._on_committed()
+        # Commands do not self-propagate: fan the commit out to every page
+        # (recomputing the comparison, so this page re-renders the row as
+        # equal) -- then confirm in place instead of navigating.
+        self._refresh_all()
+        self._source.flash_pulled(path)
+        self._toast.show_message(
+            f"Pulled {path[-1]}",
+            action_text="Show in Editor",
+            action=lambda: self._navigation.navigate(path),
+        )
 
     def _on_ghost_selected(self, section_path: tuple, key: str) -> None:
         """A REF_ONLY ghost row was selected in the parameter list: show its

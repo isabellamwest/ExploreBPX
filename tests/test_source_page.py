@@ -707,6 +707,60 @@ def test_source_pull_of_missing_path_is_impossible(app_driver, tmp_path, monkeyp
         app_driver.source_pull(("Parameterisation", "Cell", "Upper voltage cut-off [V]"))
 
 
+def test_source_pull_stays_on_the_source_page(app_driver, tmp_path, monkeypatch):
+    app_driver.open(_write(tmp_path, "main.json", _DOC_MAIN_ONLY))
+    _dock_reference(app_driver, tmp_path, monkeypatch, _REF)
+    path = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
+
+    app_driver.source_pull(path)
+
+    # Concept 1 (signed): the page's rhythm is next ›, pull, next ›, pull
+    # -- confirmation happens in place (the row's transient "Pulled" tag),
+    # never a page switch. The Editor is opt-in: the toast's action, or a
+    # double-click.
+    assert app_driver.current_view_name() == "Source"
+    assert app_driver.source_flash_path() == path
+
+
+def test_source_pull_toast_offers_the_editor(app_driver, tmp_path, monkeypatch):
+    app_driver.open(_write(tmp_path, "main.json", _DOC_MAIN_ONLY))
+    _dock_reference(app_driver, tmp_path, monkeypatch, _REF)
+
+    app_driver.source_pull(("Parameterisation", "Cell", "Nominal cell capacity [A.h]"))
+
+    assert app_driver.toast_text() == "Pulled Nominal cell capacity [A.h]"
+    assert app_driver.toast_action_text() == "Show in Editor"
+
+    # The action is the one deliberate road to the Editor -- and it lands
+    # on the pulled parameter, exactly where the old forced jump did.
+    app_driver.toast_click_action()
+    assert app_driver.current_view_name() == "Editor"
+    assert app_driver.inspector_title() == "Nominal cell capacity [A.h]"
+
+
+def test_enter_pulls_the_selected_difference(app_driver, tmp_path, monkeypatch):
+    app_driver.open(_write(tmp_path, "main.json", _DOC_MAIN_ONLY))
+    _dock_reference(app_driver, tmp_path, monkeypatch, _REF)
+
+    app_driver.source_step(+1)
+    selected = app_driver.source_selected_path()
+    assert selected in [p for p, _ in app_driver.source_pull_paths()]
+
+    app_driver.source_press_key("enter")
+
+    # The keyboard counterpart of the ← chip: the value landed, the chip
+    # is gone, and the page stayed put for the next › / Enter.
+    assert app_driver.current_view_name() == "Source"
+    assert selected not in [p for p, _ in app_driver.source_pull_paths()]
+    assert app_driver.source_flash_path() == selected
+
+    # Enter on the now-equal row is inert -- equal rows stay as impossible
+    # to pull from the keyboard as from the gutter.
+    before = app_driver.source_pull_paths()
+    app_driver.source_press_key("enter")
+    assert app_driver.source_pull_paths() == before
+
+
 # ---------------------------------------------------------------------------
 # Step 6: toolbar (‹ › stepper, ⇄ Make main, single-pane label) + stale band.
 # ---------------------------------------------------------------------------
@@ -882,6 +936,9 @@ def test_stepper_disables_once_pulls_remove_every_difference(
     assert app_driver.source_stepper_enabled() is True
     app_driver.source_pull(_LOWER_CUTOFF)
 
+    # Three pulls, one visit: the page never navigated away between them
+    # (the whole point of the stay-put pull -- concept 1, signed).
+    assert app_driver.current_view_name() == "Source"
     # Only the main-only row differs now -- not a target (frames rule).
     assert app_driver.source_stepper_enabled() is False
 

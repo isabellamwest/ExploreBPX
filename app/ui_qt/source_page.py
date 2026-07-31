@@ -24,7 +24,7 @@ import json
 import re
 from dataclasses import dataclass
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFontDatabase, QPainter
 from PySide6.QtWidgets import (
     QAbstractScrollArea,
@@ -59,6 +59,11 @@ _PULL_H = 20
 
 #: The one-line stand-in for a closed dict/list value (decision 15).
 _CLOSED_SUMMARY = "table"
+
+#: How long the just-pulled row's gutter shows its "Pulled" tag. Long
+#: enough to register where the eye already is, short enough that a
+#: stepper rhythm (next, pull, next, pull) never shows a stale tag.
+_PULLED_FLASH_MS = 2500
 
 
 @dataclass(frozen=True)
@@ -522,6 +527,13 @@ class SourceView(QAbstractScrollArea):
         #: line index, so it survives re-renders, folds and edits; the ‹ ›
         #: stepper moves it between differences and a row click places it.
         self._selected: tuple[str, ...] | None = None
+        #: The just-pulled row's path while its gutter "Pulled" tag shows
+        #: (concept 1's stay-put confirmation); cleared by the single-shot
+        #: timer, or by ``set_rows`` if the row itself vanishes (undo).
+        self._flash_path: tuple[str, ...] | None = None
+        self._flash_timer = QTimer(self)
+        self._flash_timer.setSingleShot(True)
+        self._flash_timer.timeout.connect(self._clear_flash)
         self._font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
         # Focusable for the Up/Down row navigation (step 7) -- still never
         # an input widget: keys move the selection, nothing edits.
@@ -546,7 +558,31 @@ class SourceView(QAbstractScrollArea):
             row.path for row in rows
         }:
             self._selected = None
+        # A pulled row survives its own re-render (it merely turns equal),
+        # but an undo removes it -- take the tag with it.
+        if self._flash_path is not None and self._flash_path not in {
+            row.path for row in rows
+        }:
+            self._clear_flash()
         self._rebuild()
+
+    def flash_pulled(self, path: tuple[str, ...]) -> None:
+        """Show the transient "Pulled" tag in *path*'s gutter slot -- the
+        stay-put confirmation of a completed ← pull. One at a time: a new
+        pull moves the tag and restarts its clock."""
+        self._flash_path = tuple(path)
+        self._flash_timer.start(_PULLED_FLASH_MS)
+        self.viewport().update()
+
+    def flash_path(self) -> tuple[str, ...] | None:
+        """The row currently showing the "Pulled" tag, or ``None``
+        (test/driver read)."""
+        return self._flash_path
+
+    def _clear_flash(self) -> None:
+        self._flash_timer.stop()
+        self._flash_path = None
+        self.viewport().update()
 
     def toggle_fold(self, path: tuple[str, ...]) -> None:
         """Fold/unfold the section or closable value at *path* -- in both
@@ -655,6 +691,23 @@ class SourceView(QAbstractScrollArea):
             return
         if event.key() == Qt.Key_Down:
             self.move_selection(+1)
+            event.accept()
+            return
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+            # Enter pulls the selected row -- the keyboard counterpart of
+            # its ← chip, completing the stepper rhythm (next ›, Enter,
+            # next ›, Enter). A row with no chip ignores the key: equal
+            # and main-only rows stay as impossible to pull as ever.
+            line = next(
+                (
+                    l
+                    for l in self._lines
+                    if l.row_path is not None and l.row_path == self._selected
+                ),
+                None,
+            )
+            if line is not None and line.pull_path is not None:
+                self.pull_requested.emit(line.pull_path, line.pull_section)
             event.accept()
             return
         super().keyPressEvent(event)
@@ -774,6 +827,14 @@ class SourceView(QAbstractScrollArea):
                 )
             if self._two_pane and line.pull_path is not None:
                 self._paint_pull_chip(painter, pane_width, top, line_height)
+            elif (
+                self._two_pane
+                and line.row_path is not None
+                and line.row_path == self._flash_path
+            ):
+                # The pulled row's chip is gone (it is equal now); its
+                # gutter slot briefly says what just happened instead.
+                self._paint_pulled_tag(painter, pane_width, top, line_height)
             if line.row_path is not None and line.row_path == self._selected:
                 # The frames' selection: a thin accent outline on the row's
                 # pane cell(s) -- both panes in two-pane mode, never the
@@ -857,6 +918,26 @@ class SourceView(QAbstractScrollArea):
             Qt.AlignCenter,
             _PULL_GLYPH,
         )
+
+    def _paint_pulled_tag(
+        self, painter: QPainter, pane_width: int, top: int, line_height: int
+    ) -> None:
+        """The transient "Pulled" confirmation, in the ← chip's own slot
+        and palette -- a role word, not a glyph, per the app's signed
+        no-decorative-glyphs rule."""
+        width = _GUTTER_PX - 4
+        x = pane_width + (_GUTTER_PX - width) // 2
+        y = top + (line_height - _PULL_H) // 2
+        painter.setPen(QColor(style.REFERENCE_BORDER))
+        painter.setBrush(QColor(style.REFERENCE_TINT))
+        painter.drawRoundedRect(x, y, width, _PULL_H, 4, 4)
+        painter.setBrush(Qt.NoBrush)
+        font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
+        font.setPixelSize(9)
+        font.setBold(True)
+        painter.setFont(font)
+        painter.setPen(QColor(style.REFERENCE))
+        painter.drawText(x, y, width, _PULL_H, Qt.AlignCenter, "Pulled")
 
     # -- interaction -----------------------------------------------------
 
@@ -1091,6 +1172,12 @@ class SourcePage(QWidget):
         """Give the raw-JSON view keyboard focus, so Up/Down row navigation
         works immediately on page entry without a click first."""
         self._view.setFocus()
+
+    def flash_pulled(self, path: tuple[str, ...]) -> None:
+        """Show the view's transient "Pulled" tag on *path*'s row (called
+        by MainWindow after the pull command commits and the page has
+        re-rendered)."""
+        self._view.flash_pulled(path)
 
     def set_stale(self, stale: bool) -> None:
         """Show/hide the stale-reference band (MainWindow's on-notice mtime

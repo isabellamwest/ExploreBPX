@@ -189,6 +189,12 @@ def validity_pill_qss(background: str) -> str:
     return f"color: white; background: {background}; padding: 2px 9px; border-radius: 3px;"
 
 
+#: The toast pill's action link -- ``ACCENT`` is illegible on the pill's
+#: dark ink ground, so the link carries the accent's light-on-dark tone
+#: instead (QSS cannot reach into rich text; the toast inlines this).
+TOAST_ACTION = "#79b8ff"
+
+
 def toast_qss() -> str:
     """Inline stylesheet for the app's one toast pill (``ui_qt.toast.Toast``):
     a dark, ink-coloured pill with light text, matching the app's other

@@ -660,12 +660,18 @@ class AppDriver:
         return self
 
     def source_press_key(self, key: str) -> "AppDriver":
-        """Send an Up/Down arrow key to the Source view ("up"/"down")."""
+        """Send a navigation key to the Source view ("up"/"down"/"enter" --
+        Enter pulls the selected row, the ← chip's keyboard counterpart)."""
         from PySide6.QtTest import QTest
 
-        qt_key = {"up": Qt.Key_Up, "down": Qt.Key_Down}[key]
+        qt_key = {"up": Qt.Key_Up, "down": Qt.Key_Down, "enter": Qt.Key_Return}[key]
         QTest.keyClick(self._w._source._view, qt_key)
         return self
+
+    def source_flash_path(self) -> tuple[str, ...] | None:
+        """The row currently showing the transient "Pulled" gutter tag,
+        or ``None`` once it has faded (or before any pull)."""
+        return self._w._source._view.flash_path()
 
     def source_double_click(self, path: tuple[str, ...]) -> "AppDriver":
         """Double-click *path*'s key line in the main pane, exactly as a
@@ -736,9 +742,25 @@ class AppDriver:
         return "\n".join(lines)
 
     def toast_text(self) -> str | None:
-        """The toast's current message, or None while it is hidden."""
+        """The toast's current message (action-link markup excluded), or
+        None while it is hidden."""
         toast = self._w._toast
-        return toast.text() if not toast.isHidden() else None
+        return toast.message() if not toast.isHidden() else None
+
+    def toast_action_text(self) -> str | None:
+        """The visible toast's action-link label, or None (hidden toast,
+        or a plain message with no action)."""
+        toast = self._w._toast
+        return toast.action_text() if not toast.isHidden() else None
+
+    def toast_click_action(self) -> "AppDriver":
+        """Click the visible toast's action link. Raises if no toast is
+        showing or the message carries no action."""
+        toast = self._w._toast
+        assert not toast.isHidden(), "no toast is showing"
+        assert toast.action_text() is not None, "toast has no action"
+        toast._on_link_activated("action")
+        return self
 
     # ------------------------------------------------------------------
     # Comparison (multi-file track M2): strip, row decoration, ghost rows,
