@@ -61,13 +61,22 @@ passing** per the app-audit Phase A baseline, 2026-07-21. Implementation starts
   Decisions 2/13/15 amended below; the Workspace doorway idea (counts line +
   Compare action on the reference card) is rejected. Build awaits Bella's
   explicit go.
-- **M5 build IN PROGRESS 2026-07-22, uncommitted** — building step by step
-  with a check-in after each step; suite **1409 green** after step 2. Step
-  plan: (1) core row model ✔; (2) rail entry + single-pane page ✔;
-  (3) two-pane aligned rendering + shared folding + gaps ✔; (4) value-only
-  highlight chips ✔; (5) ← gutter pulls ✔; (6) toolbar (‹ › stepper, ⇄ Make
-  main, stale band); (7) Up/Down navigation + double-click Editor jump;
-  (8) real-window verification. Built so far:
+- **M5 COMPLETE 2026-07-31** — built step by step with a check-in after
+  each step. Step plan: (1) core row model ✔; (2) rail entry + single-pane
+  page ✔; (3) two-pane aligned rendering + shared folding + gaps ✔;
+  (4) value-only highlight chips ✔; (5) ← gutter pulls ✔ (steps 1–5
+  committed a341074/294fcb9/8ede5ed and earlier); (6) toolbar — ‹ ›
+  stepper, ⇄ Make main, stale band — ✔ committed `6a7ed91`; (7) Up/Down
+  navigation + double-click Editor jump ✔ committed `02f451f`; (8) final
+  real-window verification ✔ 2026-07-31: demo files mirroring the signed
+  F1 fictional data (cross-model DFN/SPMe, fillable null, ref-only State
+  section + ref-only table, main-only param, differing table/function)
+  put every F2 row state on screen at once — all matched the signed
+  frames, including chipped-⋯-only-when-differences on collapsed headers
+  and per-entry table chips. *As-built note: tables render in the true
+  BPX raw shape (`{"x": […], "y": […]}`), not the frames' illustrative
+  `[[x, y], …]` pairs — the page shows the real file verbatim; the
+  frames' fictional data was drawn as pairs.* Build log:
   - `app/core/source_rows.py` (+ `tests/test_source_rows.py`, 14 tests):
     pure aligned row model. `build_rows(main_raw, ref_raw=None)` walks the
     raw dicts in true document order (sections/leaves interleaved); ref-only
