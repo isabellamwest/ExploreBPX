@@ -77,6 +77,22 @@ def test_non_numeric_cells_are_skipped_never_coerced():
 
 
 @requires_charts
+def test_non_finite_cells_are_skipped_and_axes_fit_the_rest():
+    """A typed ``nan`` or ``inf`` reaches the grid as a float, but QtCharts
+    refuses such points -- passing them to the axis fit anyway would desync the
+    visible range from the line actually drawn."""
+    preview = TablePreview(mode="xy")
+    preview.update_rows([[1, 2.0], [float("nan"), 5.0], [2, float("inf")], [3, 4.0]])
+    assert preview._line.count() == 2  # only the two finite rows
+    assert preview._axis_y.min() <= 2.0
+    assert preview._axis_y.max() >= 4.0
+
+    # All rows non-finite is "nothing to plot", not a broken chart.
+    preview.update_rows([[float("nan"), float("inf")]])
+    assert preview._empty.isVisibleTo(preview)
+
+
+@requires_charts
 def test_bool_cells_are_not_plotted():
     """A bool is not a data point (it round-trips as text elsewhere)."""
     preview = TablePreview(mode="series")

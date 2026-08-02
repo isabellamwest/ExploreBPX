@@ -17,12 +17,17 @@ builds omit it. If it cannot be imported the preview quietly disables itself
 enhancement, never a dependency of editing.
 
 **Only numeric points are plotted.** A cell holding ``oops`` or ``None`` has no
-position on an axis; such rows are skipped, never coerced to zero. The grid and
+position on an axis; such rows are skipped, never coerced to zero. A non-finite
+``nan``/``inf`` (which the lenient parser lets through as a float) is skipped
+for the same reason -- QtCharts refuses the point anyway, and feeding it to the
+axis fit would desync the visible range from the plotted line. The grid and
 the validator remain the source of truth for those; the plot just shows what
 can be shown.
 """
 
 from __future__ import annotations
+
+import math
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPainter, QPen
@@ -164,10 +169,10 @@ class TablePreview(QWidget):
 
 
 def _as_number(value: object) -> float | None:
-    """A plottable float, or ``None`` for a string/blank/bool cell."""
+    """A plottable float, or ``None`` for a string/blank/bool/non-finite cell."""
     if isinstance(value, bool) or value is None:
         return None
-    if isinstance(value, (int, float)):
+    if isinstance(value, (int, float)) and math.isfinite(value):
         return float(value)
     return None
 
