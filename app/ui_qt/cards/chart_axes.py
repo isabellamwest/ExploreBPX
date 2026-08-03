@@ -1,18 +1,56 @@
-"""Shared axis cosmetics for the app's two QtCharts widgets.
+"""Shared chart conventions for the app's two QtCharts widgets.
 
-``TablePreview`` and ``MultiSeriesChart`` are deliberately independent,
-import-guarded widgets, but their axes must not drift apart -- they once used
-two different "muted" greys for the same tick-label role. This module is
-QtCharts-free (it only sets fonts, colours and label format on whatever axis
-it is handed), so both widgets share it without weakening their own import
-guards.
+``TablePreview`` and ``MultiSeriesChart`` are independent, import-guarded
+widgets that must still look identical and judge numbers the same way, so
+their shared chart/view/axis setup and numeric-cell filtering live here
+instead of being duplicated in both. QtCharts-free itself, so both widgets
+can share it without weakening their own import guards.
 """
 
 from __future__ import annotations
 
-from PySide6.QtGui import QBrush, QColor, QFont
+import math
+
+from PySide6.QtCore import QMargins
+from PySide6.QtGui import QBrush, QColor, QFont, QPainter
+from PySide6.QtWidgets import QFrame
 
 from ..style import CHART_GRID, MUTED
+
+
+def as_plot_number(value: object) -> float | None:
+    """A plottable float, or ``None`` for a string/blank/bool/non-finite cell.
+
+    The single definition of "what may be plotted": a cell holding ``oops``
+    or ``None`` has no position on an axis, and a non-finite ``nan``/``inf``
+    (which the lenient parser lets through as a float) would desync the axis
+    fit from the drawn line -- QtCharts refuses the point anyway. Skipped,
+    never coerced: the grid and the validator remain the only places a bad
+    cell is ever flagged.
+    """
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, (int, float)) and math.isfinite(value):
+        return float(value)
+    return None
+
+
+def setup_chart(chart) -> None:
+    """The app's ``QChart`` baseline: no built-in legend (each widget's host
+    already labels the data -- the grid header, or the dialog's removable
+    chips), no background, no margins."""
+    chart.legend().setVisible(False)
+    chart.setBackgroundVisible(False)
+    chart.setMargins(QMargins(0, 0, 0, 0))
+
+
+def setup_chart_view(view, height: int) -> None:
+    """The app's ``QChartView`` baseline: antialiased, fixed-height, and
+    without QGraphicsView's native sunken frame -- the chart sits inside a
+    card that already owns the border, matching the app's flat look."""
+    view.setRenderHint(QPainter.Antialiasing)
+    view.setFrameShape(QFrame.NoFrame)
+    view.setFixedHeight(height)
 
 
 def style_axis(axis) -> None:

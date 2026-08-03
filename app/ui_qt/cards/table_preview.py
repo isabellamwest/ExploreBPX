@@ -16,25 +16,26 @@ builds omit it. If it cannot be imported the preview quietly disables itself
 (``available`` is False) and the grid works exactly as before -- a plot is an
 enhancement, never a dependency of editing.
 
-**Only numeric points are plotted.** A cell holding ``oops`` or ``None`` has no
-position on an axis; such rows are skipped, never coerced to zero. A non-finite
-``nan``/``inf`` (which the lenient parser lets through as a float) is skipped
-for the same reason -- QtCharts refuses the point anyway, and feeding it to the
-axis fit would desync the visible range from the plotted line. The grid and
-the validator remain the source of truth for those; the plot just shows what
-can be shown.
+**Only numeric points are plotted.** Non-numeric, blank or non-finite cells
+are skipped rather than coerced (``chart_axes.as_plot_number``) -- the grid
+and the validator remain the source of truth for those; the plot just shows
+what can be shown.
 """
 
 from __future__ import annotations
 
-import math
-
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QPainter, QPen
-from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout, QWidget
+from PySide6.QtGui import QColor, QPen
+from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
 from ..style import ACCENT
-from .chart_axes import fit_axis, style_axis
+from .chart_axes import (
+    as_plot_number,
+    fit_axis,
+    setup_chart,
+    setup_chart_view,
+    style_axis,
+)
 
 try:  # QtCharts is part of PySide6 but absent from some minimal builds.
     from PySide6.QtCharts import (
@@ -77,9 +78,7 @@ class TablePreview(QWidget):
             return
 
         self._chart = QChart()
-        self._chart.legend().hide()
-        self._chart.setBackgroundVisible(False)
-        self._chart.setMargins(_zero_margins())
+        setup_chart(self._chart)
 
         self._line = QLineSeries()
         pen = QPen(QColor(_LINE))
@@ -103,11 +102,7 @@ class TablePreview(QWidget):
             series.attachAxis(self._axis_y)
 
         self._view = QChartView(self._chart)
-        self._view.setRenderHint(QPainter.Antialiasing)
-        # Drop QGraphicsView's native sunken frame: the chart sits inside a
-        # card that already owns the border, matching the app's flat look.
-        self._view.setFrameShape(QFrame.NoFrame)
-        self._view.setFixedHeight(height)
+        setup_chart_view(self._view, height)
         layout.addWidget(self._view)
 
         self._empty = QLabel("No numeric points to plot yet.")
@@ -144,14 +139,14 @@ class TablePreview(QWidget):
         points: list[tuple[float, float]] = []
         if self._mode == "series":
             for index, row in enumerate(rows):
-                y = _as_number(row[0]) if row else None
+                y = as_plot_number(row[0]) if row else None
                 if y is not None:
                     points.append((float(index), y))
         else:  # xy
             for row in rows:
                 if len(row) < 2:
                     continue
-                x, y = _as_number(row[0]), _as_number(row[1])
+                x, y = as_plot_number(row[0]), as_plot_number(row[1])
                 if x is not None and y is not None:
                     points.append((x, y))
             points.sort(key=lambda p: p[0])  # a line reads left-to-right
@@ -166,18 +161,3 @@ class TablePreview(QWidget):
     def _show_empty(self, empty: bool) -> None:
         self._view.setVisible(not empty)
         self._empty.setVisible(empty)
-
-
-def _as_number(value: object) -> float | None:
-    """A plottable float, or ``None`` for a string/blank/bool/non-finite cell."""
-    if isinstance(value, bool) or value is None:
-        return None
-    if isinstance(value, (int, float)) and math.isfinite(value):
-        return float(value)
-    return None
-
-
-def _zero_margins():
-    from PySide6.QtCore import QMargins
-
-    return QMargins(0, 0, 0, 0)
