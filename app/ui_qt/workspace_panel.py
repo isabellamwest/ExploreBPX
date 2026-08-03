@@ -9,11 +9,17 @@ other views.
 This is the activity-bar page shell, the inline New model-chooser and
 drag-and-drop file opening.
 
-The Diagnostics page's own anatomy is reused here -- a shaded fixed-width
-actions rail (Open buttons + the New chooser) beside a white pane holding
-the document and reference as banded-header group boxes. The earlier
-floating-cards-on-a-canvas treatment is gone: no page background tint, no
-vertically centred actions card, no solid validity pill.
+The Diagnostics page's actions-rail anatomy is reused here -- a shaded
+fixed-width rail (Open buttons + the New chooser) beside a white pane. The
+pane itself (Phase 3) is a full-width whitespace-structured page: two
+stacked, borderless tinted section washes (``group_box.TintedSection``),
+top-aligned, with a 16px white gap between them and the tail stretch left
+white. No lines anywhere in the pane -- no hairlines, borders, rounded
+corners or shadows; the bordered ``GroupBox`` chrome used elsewhere in the
+app is not used on this page. The earlier fixed-width centred card column
+is gone, and before that the floating-cards-on-a-canvas treatment (no page
+background tint, no vertically centred actions card, no solid validity
+pill).
 """
 
 from __future__ import annotations
@@ -37,7 +43,7 @@ from core.document_factory import SUPPORTED_MODELS
 from state.reference_snapshot import ReferenceSnapshot
 
 from . import icons
-from .group_box import GroupBox
+from .group_box import TintedSection
 from .style import ERROR, OK, WARNING
 from .titles import panel_title
 
@@ -47,14 +53,13 @@ _INFO_PANEL_EMPTY_STATE_TEXT = "No document open"
 # in main_window.py; both describe the same supported set of file extensions.
 SUPPORTED_BPX_EXTENSIONS = (".json", ".yaml", ".yml")
 
-#: The actions rail's fixed width. Wider than the content strictly needs
-#: (explicit user call): the rail/pane divider sits further right so the
-#: centred document column doesn't leave a lopsided field on its right.
+#: The actions rail's fixed width (explicit user call): wider than the
+#: New chooser's rows strictly need, so the rail/pane divider sits further
+#: right than the bare minimum.
 _RAIL_WIDTH = 340
 
-#: The document column's fixed width -- one width for both group boxes so
-#: the main and reference cards always read as the same component.
-_CARD_COLUMN_WIDTH = 440
+#: The white gap between the main and reference tinted sections.
+_SECTION_GAP = 16
 
 
 def _first_supported_local_file(mime_data: QMimeData) -> Path | None:
@@ -84,7 +89,7 @@ _MODEL_DESCRIPTORS: dict[str, str] = {
 
 
 def _reference_validity_text(errors: int, warnings: int) -> tuple[str, str]:
-    """The reference card's validity text and dot colour, matching the
+    """The reference section's validity text and dot colour, matching the
     document badge's own wording and format exactly ("Valid", "2 errors,
     1 warning") with one deliberate exception: never ``ERROR`` red -- a
     docked reference is read-only and never blocks anything, so amber is
@@ -146,7 +151,7 @@ class WorkspacePanel(QWidget):
         """The shaded actions rail: the Open button over the New chooser.
         No heading over the buttons -- they name themselves (an "Actions"
         label over buttons is noise). Reference docking lives on the
-        reference card itself, not here: the card is the reference
+        reference section itself, not here: the section is the reference
         feature's home, so its affordances sit where their result appears."""
         rail = QWidget()
         rail.setObjectName("WorkspaceRail")
@@ -173,42 +178,36 @@ class WorkspacePanel(QWidget):
         return rail
 
     def _build_pane(self) -> QWidget:
-        """The white pane: the current-document and reference group boxes,
-        hanging from the top like every other page's content. The future
-        multi-document Workspace stacks one box per document here, so the
-        single box today already has that shape. The reference box is hidden
-        when no reference is docked -- no empty-state placeholder (explicit
-        user decision)."""
+        """The white pane: the main-document and reference tinted sections,
+        stacked full-width from the top, a 16px white gap between them and
+        the tail stretch left white (nothing expands to fill the pane). The
+        future multi-document Workspace stacks one section per document
+        here, so the single section today already has that shape. The
+        reference section is always shown, even with no reference docked --
+        no empty-state placeholder is needed since its body is itself the
+        reference library's front door."""
         pane = QWidget()
         pane.setObjectName("WorkspacePane")
         pane.setAttribute(Qt.WA_StyledBackground, True)
-        # The boxes live in one fixed-width column centred between the rail
-        # and the window edge (explicit user call): left-hugging the divider
-        # left an awkward empty field on the column's right.
-        pane_layout = QHBoxLayout(pane)
-        pane_layout.setContentsMargins(24, 24, 24, 24)
-        column = QWidget()
-        column.setFixedWidth(_CARD_COLUMN_WIDTH)
-        column_layout = QVBoxLayout(column)
-        column_layout.setContentsMargins(0, 0, 0, 0)
-        column_layout.setSpacing(16)
+        pane_layout = QVBoxLayout(pane)
+        pane_layout.setContentsMargins(0, 0, 0, 0)
+        pane_layout.setSpacing(0)
 
-        self._info_card = self._build_info_card()
-        column_layout.addWidget(self._info_card)
+        self._info_section = self._build_info_section()
+        pane_layout.addWidget(self._info_section)
 
-        self._reference_tile = self._build_reference_card()
-        column_layout.addWidget(self._reference_tile)
+        pane_layout.addSpacing(_SECTION_GAP)
 
-        column_layout.addStretch(1)
-        pane_layout.addStretch(1)
-        pane_layout.addWidget(column)
+        self._reference_section = self._build_reference_section()
+        pane_layout.addWidget(self._reference_section)
+
         pane_layout.addStretch(1)
         return pane
 
     @staticmethod
     def _build_kv_form(keys: tuple[str, ...]) -> tuple[QFormLayout, dict[str, QLabel]]:
-        """A card's keyed record rows -- one shared recipe so the document
-        and reference cards can never drift apart. Explicit left alignment
+        """A section's keyed record rows -- one shared recipe so the document
+        and reference sections can never drift apart. Explicit left alignment
         throughout: macOS's native form style centres the rows and
         right-aligns the labels, which reads as scattered text rather than
         a keyed record. Growing fields keep a long value ("11 sections · 44
@@ -235,7 +234,10 @@ class WorkspacePanel(QWidget):
         """The dot-plus-text validity line: a coloured mark from the shared
         dot family beside a plain-text label. Two widgets on purpose -- the
         text label keeps returning the bare wording ("3 warnings") from
-        ``text()``, which the tests and the driver read."""
+        ``text()``, which the tests and the driver read. Used for the
+        reference section's own validity line, still shown in its body (only
+        the main section's validity summary moved into its title row --
+        see :meth:`_build_validity_suffix`)."""
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(6)
@@ -247,46 +249,63 @@ class WorkspacePanel(QWidget):
         row.addStretch(1)
         return row, dot, text
 
-    def _build_info_card(self) -> QWidget:
-        """The main-document group box: banded header naming the role
+    def _build_validity_suffix(self) -> tuple[QWidget, QLabel, QLabel]:
+        """The main section's title-row suffix: the same dot-plus-text
+        validity mark as :meth:`_build_validity_row`, wrapped in a plain
+        widget (``TintedSection.suffix`` takes a widget, not a layout) and
+        sized to its own content -- no trailing stretch, since it sits
+        compactly after the title row's own stretch rather than filling a
+        full-width body row."""
+        widget = QWidget()
+        row = QHBoxLayout(widget)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(6)
+        dot = _validity_dot_label()
+        text = QLabel()
+        text.setObjectName("DocInfoBadge")
+        row.addWidget(dot, 0, Qt.AlignVCenter)
+        row.addWidget(text, 0, Qt.AlignVCenter)
+        return widget, dot, text
+
+    def _build_info_section(self) -> QWidget:
+        """The main-document tinted section: caps title naming the role
         plainly ("Main document" -- "main" is the app's one role word, per
-        the UI copy rule; no tag, the caps MAIN tag read as noise), then
-        identity, validity, contents."""
-        box = GroupBox("Main document")
-        body = box.body_layout
+        the UI copy rule), its validity summary in the title row's suffix,
+        then identity and contents in the body."""
+        suffix, self._info_dot, self._info_badge = self._build_validity_suffix()
+        section = TintedSection(
+            "Main document", object_name="WorkspaceMainSection", suffix=suffix
+        )
+        body = section.body_layout
 
         self._info_title = QLabel()
         self._info_title.setObjectName("WorkspaceCardTitle")
         self._info_title.setWordWrap(True)
         body.addWidget(self._info_title)
 
-        badge_row, self._info_dot, self._info_badge = self._build_validity_row()
-        body.addLayout(badge_row)
-
         self._info_form, self._info_fields = self._build_kv_form(
             ("Model", "BPX version", "File", "State", "Contents")
         )
         body.addLayout(self._info_form)
-        return box
+        return section
 
-    def _build_reference_card(self) -> QWidget:
-        """The docked-reference group box: the exact anatomy of the
-        current-document box -- header band, title, validity line, key/value
-        rows -- so the two read as the same component. Its header mirrors the
-        primary box's format ("Reference document"); the reference-specific
-        marks are that title's purple, the small light Read-only tag on the
-        band, and the band's own subtle purple tint
-        (``QWidget#ReferenceGroupBoxHeader``) -- the card must never read
-        louder than the document's own."""
+    def _build_reference_section(self) -> QWidget:
+        """The reference tinted section: the same anatomy as the main
+        section -- caps title, identity, validity line, key/value rows --
+        so the two read as the same component. Its title mirrors the
+        primary section's format ("Reference document"); the reference-
+        specific marks are that title's purple and the small light
+        Read-only tag as its suffix -- the section must never read louder
+        than the document's own."""
         self._reference_tag = QLabel("Read-only")
         self._reference_tag.setObjectName("ReferenceReadOnlyTag")
-        box = GroupBox(
+        section = TintedSection(
             "Reference document",
-            variant="reference",
+            object_name="WorkspaceReferenceSection",
             title_object_name="ReferenceHeading",
-            trailing=self._reference_tag,
+            suffix=self._reference_tag,
         )
-        body = box.body_layout
+        body = section.body_layout
 
         self._reference_filename = QLabel()
         self._reference_filename.setObjectName("WorkspaceCardTitle")
@@ -300,8 +319,8 @@ class WorkspacePanel(QWidget):
         body.addLayout(self._reference_form)
 
         # Make main comes first, at the same plain weight as Remove --
-        # neither is styled as a loud action, so the card still never
-        # reads louder than the document card above it.
+        # neither is styled as a loud action, so the section still never
+        # reads louder than the document section above it.
         action_row = QHBoxLayout()
         action_row.setSpacing(8)
         self._reference_make_main_button = QPushButton("Make main")
@@ -315,7 +334,7 @@ class WorkspacePanel(QWidget):
         action_row.addStretch(1)
         body.addLayout(action_row)
 
-        # The dock affordances: with no reference docked the card is the
+        # The dock affordances: with no reference docked the section is the
         # reference library's front door --
         # the teaching line over these two buttons. Both buttons stay while
         # a reference is docked: docking over one replaces it silently (a
@@ -341,7 +360,7 @@ class WorkspacePanel(QWidget):
         dock_row.addStretch(1)
         body.addLayout(dock_row)
 
-        return box
+        return section
 
     def _build_new_chooser(self) -> QWidget:
         """Inline "New" surface: one flat, name-first row per supported model
@@ -430,7 +449,7 @@ class WorkspacePanel(QWidget):
         warning_count: int = 0,
         reference: ReferenceSnapshot | None = None,
     ) -> None:
-        """Update the info card and reference tile from current state.
+        """Update the main-document and reference sections from current state.
 
         Identity (Title/Model/BPX version) and the section/parameter counts are
         read only through the document's own properties; ``filename``/``dirty``
@@ -442,8 +461,8 @@ class WorkspacePanel(QWidget):
         disagree with the Diagnostics rail badge over an absorbed diagnostic.
 
         ``reference`` is independent of ``document``: a reference may be
-        docked with no main document open, so its tile is updated regardless
-        of which branch below runs.
+        docked with no main document open, so its section is updated
+        regardless of which branch below runs.
         """
         self._set_reference(reference)
 
@@ -471,12 +490,12 @@ class WorkspacePanel(QWidget):
         self._set_validity_badge(error_count, warning_count)
 
     def _set_reference(self, reference: ReferenceSnapshot | None) -> None:
-        """Populate the reference card for the docked or empty state.
+        """Populate the reference section for the docked or empty state.
 
-        The card is always visible, even with no reference docked, since
+        The section is always visible, even with no reference docked, since
         it is then the reference library's front door -- the teaching line
         over the two dock buttons. The dock buttons stay in both states --
-        see ``_build_reference_card``."""
+        see ``_build_reference_section``."""
         docked = reference is not None
         self._reference_empty_text.setVisible(not docked)
         self._reference_filename.setVisible(docked)

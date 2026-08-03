@@ -73,6 +73,19 @@ REFERENCE_TINT = "#f3ecfa"
 #: reference block's chrome in the stylesheet below (#d5cde6); named here so
 #: the Source page's ← pull chip draws its outline from the same tint.
 REFERENCE_BORDER = "#d5cde6"
+#: The app's baseline pale-neutral wash -- the same tone already used
+#: throughout as a "shaded band" (the toolbar, ``GroupBoxHeader``, hover
+#: washes), named here so a full-bleed page section can share it
+#: explicitly instead of re-spelling the literal. Used by the Workspace
+#: page's main-document section (``QWidget#WorkspaceMainSection`` below).
+NEUTRAL_WASH = "#f6f8fa"
+#: The reference feature's pale full-bleed wash -- the same hue already
+#: used by the Comparison strip and the reference value box
+#: (``QWidget#ComparisonStrip``/``QFrame#ReferenceValueBox`` below), named
+#: here so the Workspace page's reference-document section
+#: (``QWidget#WorkspaceReferenceSection``) can reuse it explicitly instead
+#: of re-spelling the literal a third time.
+REFERENCE_WASH = "#f8f5fc"
 #: Mid reference tone between ``REFERENCE`` and ``REFERENCE_BORDER``: the
 #: outline of the hollow "reference only" gutter bar in the parameter list
 #: (:data:`~ui_qt.parameter_row.REF_BAR_ROLE`) -- lighter than the solid
@@ -324,16 +337,23 @@ QLabel#InspectorPlaceholder { color: #57606a; }
    stay quiet: they annotate the value, they are not part of it. */
 QLabel#UnitLabel, QLabel#ReferenceUnitLabel { color: #57606a; }
 QFrame#Card { border: 1px solid #d0d7de; border-radius: 6px; }
-/* Workspace page: the Diagnostics page's own anatomy reused -- a shaded
-   fixed-width actions rail beside a
-   white pane holding the document and reference as banded-header group
-   boxes. White ground; the earlier canvas tint, floating cards and solid
-   validity pill are gone. Validity is the dot language (ui_qt.icons.DOT
-   beside plain text), exactly as the Diagnostics strip chips draw it. The
-   reference box carries the feature's purple (style.REFERENCE) on its
-   header band, heading and Read-only tag only -- never louder than the
-   document box. */
+/* Workspace page: a shaded fixed-width actions rail beside a white pane.
+   The pane is a full-width whitespace-structured page (Phase 3), not the
+   Diagnostics page's bordered group boxes: two stacked, borderless tinted
+   section washes (``ui_qt.group_box.TintedSection``) -- style.NEUTRAL_WASH
+   for the main document, style.REFERENCE_WASH for the reference -- each a
+   caps title row over a measure-capped body, no lines/corners/shadows
+   anywhere in the pane. Validity is the dot language (ui_qt.icons.DOT
+   beside plain text), exactly as the Diagnostics strip chips draw it, now
+   living in the main section's title-row suffix rather than its body. The
+   reference section carries the feature's purple (style.REFERENCE) on its
+   heading and Read-only tag only -- never louder than the document
+   section. */
 QWidget#WorkspacePage, QWidget#WorkspacePane { background: #ffffff; }
+/* style.NEUTRAL_WASH / style.REFERENCE_WASH, spelled as literals (see each
+   constant's comment for why). */
+QWidget#WorkspaceMainSection { background: #f6f8fa; }
+QWidget#WorkspaceReferenceSection { background: #f8f5fc; }
 QWidget#WorkspaceRail { background: #f3f4f6; border-right: 1px solid #c4cdd5; }
 QFrame#WorkspaceRailDivider { background: #d0d7de; border: none; }
 /* Rail action buttons: white chips on the shaded rail, the Diagnostics
@@ -356,10 +376,10 @@ QPushButton[modelOption="true"] {
 QPushButton[modelOption="true"]:hover { background: #e8eaed; }
 QLabel#NewChooserDescriptor { color: #57606a; font-size: 12px; padding: 0 6px 2px 6px; }
 /* The shared banded group-box chrome (``ui_qt.group_box.GroupBox``):
-   bordered rounded card, shaded banded header -- the Workspace document
-   card and the Diagnostics Issues/Outstanding boxes alike. The reference
-   variant swaps the band and border to the reference purple's own pale
-   tints. */
+   bordered rounded card, shaded banded header -- the Diagnostics Issues/
+   Outstanding boxes and the reference-library dialog's detail card alike.
+   The reference variant swaps the band and border to the reference
+   purple's own pale tints. */
 QFrame#GroupBox { background: #ffffff; border: 1px solid #c4cdd5; border-radius: 6px; }
 QWidget#GroupBoxHeader {
     background: #eef1f4; border-bottom: 1px solid #c4cdd5;
@@ -406,7 +426,10 @@ QPushButton#ReferenceLibraryDockButton {
 }
 QPushButton#ReferenceLibraryDockButton:hover { background: #5a3399; }
 /* Comparison strip: the slim reference-aware band atop the parameter
-   list. Purple identity (style.REFERENCE), muted counts. */
+   list. Purple identity (style.REFERENCE), muted counts. #f8f5fc below is
+   style.REFERENCE_WASH, spelled as a literal (also reused by
+   QWidget#WorkspaceReferenceSection above and QFrame#ReferenceValueBox
+   below). */
 QWidget#ComparisonStrip { background: #f8f5fc; border-bottom: 1px solid #d0d7de; }
 QLabel#ComparisonStripIdentity { color: #6f42c1; font-weight: 600; font-size: 12px; }
 QLabel#ComparisonStripCounts { color: #57606a; font-size: 12px; }
