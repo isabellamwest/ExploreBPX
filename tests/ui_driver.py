@@ -111,14 +111,14 @@ class AppDriver:
         self._qtbot.mouseClick(button, Qt.LeftButton)
         return self
 
-    # -- Diagnostics page (rail redesign: strip + rail + detail pane) ---
+    # -- Diagnostics page: strip + rail + detail pane ----------------------
     #
     # The default surface for driver reads that don't care which rail entry
     # is selected is the "All sections" view (``_all_view``) -- it is both
     # the default selection on a freshly opened document (matching most
-    # existing call sites, which never touch the rail first) and the F3
+    # existing call sites, which never touch the rail first) and the
     # backup view that always contains every issue/task row, so scanning it
-    # preserves the old single-list driver semantics almost exactly.
+    # preserves single-list driver semantics almost exactly.
     # ``_validation_rows``/``validation_issue_texts``/``outstanding_tasks``/
     # etc. below all read it. Rail- and section-pane-specific behaviour gets
     # its own ``diagnostics_*``-prefixed methods further down.
@@ -164,7 +164,7 @@ class AppDriver:
 
     def outstanding_task_row_text(self, task) -> str:
         """Plain text of the Outstanding row for *task* -- includes any
-        absorbed validator messages appended as secondary text (decision O)."""
+        absorbed validator messages appended as secondary text."""
         from ui_qt import diagnostics_panel as dp
 
         for item in self._validation_rows("task"):
@@ -174,16 +174,15 @@ class AppDriver:
 
     def validation_group_headers(self) -> list[str]:
         """Text of every All-sections sub-head row, in order (e.g.
-        "Cell - 2 of 5 remaining", "Separator - section absent",
-        "Cell · optional - 1 unfilled") -- the pinned copy from S3."""
+        "Cell · 2 of 5 remaining", "Separator - section absent",
+        "Cell · optional · 1 unfilled")."""
         return [item.text() for item in self._validation_rows("subhead")]
 
     def validation_task_row_count_under_header(self, header_text: str) -> int:
         """Number of "task" rows directly beneath the sub-head/fold-header
         row whose text is *header_text*, up to (not including) the next such
-        row (decision R's ratio-integrity check: a required group's stated N
-        must equal this count exactly, never an optional row sitting in
-        between)."""
+        row (a required group's stated N must equal this count exactly,
+        never an optional row sitting in between)."""
         from ui_qt import diagnostics_panel as dp
 
         lst = self._w._diagnostics._all_view._list
@@ -210,7 +209,7 @@ class AppDriver:
 
     def activate_validation_group_header(self, index: int = 0) -> "AppDriver":
         """Activate a sub-head row directly -- proves it is a structural
-        no-op (decision L: only issue/task rows act)."""
+        no-op; only issue/task rows act."""
         return self.activate_validation_row(self._validation_rows("subhead")[index])
 
     def activate_fold_header(self, index: int = 0) -> "AppDriver":
@@ -282,7 +281,7 @@ class AppDriver:
     def diagnostics_strip_counts(self) -> tuple[int, int, int]:
         """``(errors, warnings, outstanding)`` -- the summary strip's own
         totals, straight from the ``PageBuckets`` the rail/pane also render
-        from (F3's reconciliation invariant: these can never disagree)."""
+        from, so these can never disagree."""
         buckets = self._w._diagnostics._buckets
         if buckets is None:
             return (0, 0, 0)
@@ -308,7 +307,7 @@ class AppDriver:
 
     def diagnostics_rail_has_badge(self, label: str) -> bool:
         """True when rail entry *label* carries at least one painted count
-        badge (F4: a clean bucket carries none at all)."""
+        badge -- a clean bucket carries none at all."""
         from ui_qt import diagnostics_panel as dp
 
         return bool(self._diagnostics_rail_item(label).data(dp._RAIL_BADGE_ROLE))
@@ -406,14 +405,14 @@ class AppDriver:
         (e.g. "✓ Nothing outstanding"), or None if it holds real rows."""
         return self._first_message_text(self._w._diagnostics._section_view._outstanding_box.list)
 
-    # -- Diagnostics filters (F8) ------------------------------------------
+    # -- Diagnostics filters ------------------------------------------------
 
     def diagnostics_chip_is_on(self, name: str) -> bool:
         """*name* is "errors"/"warnings"/"outstanding"."""
         return self._diagnostics_chip(name).is_on()
 
     def diagnostics_toggle_chip(self, name: str) -> "AppDriver":
-        """Click the named strip chip, as a real mouse click would (F8)."""
+        """Click the named strip chip, as a real mouse click would."""
         self._qtbot.mouseClick(self._diagnostics_chip(name), Qt.LeftButton)
         return self
 
@@ -473,7 +472,7 @@ class AppDriver:
     def validation_issues_empty_text(self) -> str | None:
         """Pinned empty-state text of the currently selected SECTION pane's
         Issues box (e.g. "✓ No issues"), or None if it holds real rows, or
-        the All-sections view is showing -- that view is the quiet F3 backup
+        the All-sections view is showing -- that view is the quiet backup
         (no pinned empty-state copy of its own; see
         :meth:`diagnostics_section_issues_empty_text` for the direct form of
         this same read)."""
@@ -530,11 +529,11 @@ class AppDriver:
         """Label of the rail entry for whichever stack page is current."""
         return self._w._activity_bar.label_for(self._w._stack.currentIndex())
 
-    # -- Source page (multi-file track M5) --------------------------------
+    # -- Source page --------------------------------------------------------
 
     def source_rail_enabled(self) -> bool:
         """Whether the Source rail entry is currently clickable (gated on an
-        open document, decision 13)."""
+        open document)."""
         return self._w._btn_source.isEnabled()
 
     def source_line_texts(self) -> list[str]:
@@ -624,8 +623,8 @@ class AppDriver:
         return not page._prev_button.isHidden() and not page._next_button.isHidden()
 
     def source_stepper_enabled(self) -> bool:
-        """Whether the ‹ › buttons are enabled (call C1: disabled, never
-        hidden, when no difference exists)."""
+        """Whether the ‹ › buttons are enabled (disabled, never hidden, when
+        no difference exists)."""
         page = self._w._source
         return page._prev_button.isEnabled() and page._next_button.isEnabled()
 
@@ -647,8 +646,8 @@ class AppDriver:
         return not self._w._source._make_main_button.isHidden()
 
     def source_make_main(self) -> "AppDriver":
-        """Click the Source toolbar's ⇄ Make main button (the full M4
-        flow, same as the Workspace card's button)."""
+        """Click the Source toolbar's ⇄ Make main button (the same flow as
+        the Workspace card's button)."""
         self._w._source._make_main_button.click()
         return self
 
@@ -704,8 +703,8 @@ class AppDriver:
 
     def click_workspace_open_reference(self) -> "AppDriver":
         """Click the "Open BPX file…" button on the reference card (the
-        old rail "Open File as Reference…", moved onto the card by the
-        signed Concept A -- same objectName/flow, so this seam is stable)."""
+        old rail "Open File as Reference…" moved onto the card; same
+        objectName/flow, so this seam is stable)."""
         self._qtbot.mouseClick(self._w._workspace._open_reference_button, Qt.LeftButton)
         return self
 
@@ -728,7 +727,7 @@ class AppDriver:
         return self
 
     def click_reference_make_main(self) -> "AppDriver":
-        """Click the docked reference tile's "Make main" button (M4)."""
+        """Click the docked reference tile's "Make main" button."""
         self._qtbot.mouseClick(self._w._workspace._reference_make_main_button, Qt.LeftButton)
         return self
 
@@ -742,10 +741,10 @@ class AppDriver:
     def reference_tile_visible(self) -> bool:
         """Whether the reference card is showing a *docked* reference.
 
-        The card widget itself is always on screen (Concept A, signed
-        2026-07-31: its empty state is the reference library's front door),
-        so docked-ness is carried by the card's content -- the filename
-        line is the docked state's anchor widget."""
+        The card widget itself is always on screen (its empty state is the
+        reference library's front door), so docked-ness is carried by the
+        card's content -- the filename line is the docked state's anchor
+        widget."""
         return not self._w._workspace._reference_filename.isHidden()
 
     def reference_empty_state_visible(self) -> bool:
@@ -787,8 +786,8 @@ class AppDriver:
         return self
 
     # ------------------------------------------------------------------
-    # Comparison (multi-file track M2): strip, row decoration, ghost rows,
-    # tree marks, reference block, ghost card.
+    # Comparison: strip, row decoration, ghost rows, tree marks, reference
+    # block, ghost card.
     # ------------------------------------------------------------------
 
     def comparison_strip_visible(self) -> bool:
@@ -882,7 +881,7 @@ class AppDriver:
 
     def tree_node_display_text(self, path: tuple[str, ...]) -> str:
         """The tree's own painted DisplayRole text for the node at *path*
-        (e.g. carries the "≠ N" mark, multi-file track M2)."""
+        (e.g. carries the "≠ N" mark)."""
         view = self._w._tree._view
         model = view.model()
         index = model.index_for_path(tuple(path))
@@ -1097,7 +1096,7 @@ class AppDriver:
     def fields_to_add_header_text(self) -> str | None:
         """Text of the parameter list's "fields to add" group header row
         (e.g. "▸ 2 fields to add"), or None if the group isn't shown at all
-        (no missing fields, or the model doesn't qualify -- decision C)."""
+        (no missing fields, or the model doesn't qualify)."""
         panel = self._w._params
         lst = panel._list
         for i in range(lst.count()):
@@ -1196,7 +1195,7 @@ class AppDriver:
                 return self
         raise AssertionError(f"No {label!r} action on row {index}'s context menu.")
 
-    # -- Card-header inline rename editor (Concept A pencil) --------------
+    # -- Card-header inline rename editor ------------------------------------
 
     def card_rename_pencil_present(self) -> bool:
         """True when the active card offers the "✎" rename button."""
@@ -1465,9 +1464,9 @@ class AppDriver:
 
     def parameter_row_is_grey(self, label: str) -> bool:
         """True when the real parameter row starting with *label*'s rich-text
-        (decision P: a committed-null value renders grey/muted) colours its
-        *name* span (the first, bold one) with the muted colour rather than
-        the normal one. Checking only the leading span matters: the unit
+        colours its *name* span (the first, bold one) with the muted colour
+        rather than the normal one -- a committed-null value renders
+        grey/muted. Checking only the leading span matters: the unit
         suffix is always muted regardless (``build_parameter_row_html``), so
         a naive "is MUTED anywhere in the html" check is always true for any
         row with a unit. Real rows only -- matched by role-256 path presence.
@@ -1486,11 +1485,11 @@ class AppDriver:
 
     def parameter_row_has_warning_marker(self, label: str) -> bool:
         """True when the real parameter row starting with *label* shows its
-        severity dot (decision P: page-visible issues only, not validator-
-        verbatim). The row's own ``text()`` carries only the label now (the
-        marker is a painted ``<img>`` in :data:`~ui_qt.parameter_row.HTML_ROLE`,
-        unified symbol system Concept A), so this checks the HTML for either
-        severity colour's dot rather than a plain-text glyph."""
+        severity dot (page-visible issues only, not validator-verbatim). The
+        row's own ``text()`` carries only the label now (the marker is a
+        painted ``<img>`` in :data:`~ui_qt.parameter_row.HTML_ROLE`), so this
+        checks the HTML for either severity colour's dot rather than a
+        plain-text glyph."""
         from ui_qt import icons, parameter_row, style
 
         lst = self._w._params._list
@@ -1546,11 +1545,11 @@ class AppDriver:
         Deliberately distinct from :meth:`issues_tab_count` (which reads the
         tab's own row *list*) -- the two are set by different code paths
         (``SecondaryWorkspace.set_count`` vs ``IssuesTab.show_parameter``'s
-        row-building) and must always agree. M1 (reviewed defect): two
-        Inspector call-sites (``_validate_draft``, ``_on_reset``) used to push
-        the *unmerged* diagnostic count into this badge while the list stayed
-        merged, so this reader exists specifically to catch that class of bug
-        -- a test using only ``issues_tab_count()`` cannot see it.
+        row-building) and must always agree. Two Inspector call-sites
+        (``_validate_draft``, ``_on_reset``) used to push the *unmerged*
+        diagnostic count into this badge while the list stayed merged, so
+        this reader exists specifically to catch that class of bug -- a test
+        using only ``issues_tab_count()`` cannot see it.
         """
         text = self._w._inspector._secondary._buttons["issues"].text()
         if "(" not in text:
@@ -1561,9 +1560,9 @@ class AppDriver:
         return self._w._inspector._issues_tab._list.count()
 
     def issues_tab_texts(self) -> list[str]:
-        """Text of every row currently listed in the Issues tab (decision Q:
-        a null/bad FloatInt value's float_type+int_type pair displays merged
-        to one row here)."""
+        """Text of every row currently listed in the Issues tab (a null/bad
+        FloatInt value's float_type+int_type pair displays merged to one row
+        here)."""
         lst = self._w._inspector._issues_tab._list
         return [lst.item(i).text() for i in range(lst.count())]
 
@@ -1579,7 +1578,7 @@ class AppDriver:
 
     def validation_issue_count(self) -> int:
         """Count of Issues-section rows only (the page also always renders
-        two section headers plus the Outstanding section -- Phase 5)."""
+        two section headers plus the Outstanding section)."""
         return len(self._validation_rows("issue"))
 
     def validation_outstanding_count(self) -> int:
@@ -1897,7 +1896,7 @@ class AppDriver:
         return self
 
     def experiment_dropzone_shown(self) -> bool:
-        """Whether the import-first dropzone is currently visible (Phase 3).
+        """Whether the import-first dropzone is currently visible.
 
         ``isHidden()``, not ``isVisible()``: the window is never shown in
         this suite, so ``isVisible()`` would read ``False`` regardless of
@@ -1935,7 +1934,7 @@ class AppDriver:
         return dialog
 
     # ------------------------------------------------------------------
-    # ValidationEmptyState (zero-run Validation container, Phase 4)
+    # ValidationEmptyState (zero-run Validation container)
     # ------------------------------------------------------------------
 
     def validation_empty_state_shown(self) -> bool:

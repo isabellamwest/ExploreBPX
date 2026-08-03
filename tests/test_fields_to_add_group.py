@@ -93,6 +93,30 @@ def test_group_header_renders_after_real_rows_with_correct_count(panel):
     assert header.text() == "▸ 2 fields to add"
 
 
+def test_group_is_suppressed_for_a_validation_run_node(panel):
+    """A run's ExperimentCard already renders every schema column (required
+    ones as typable columns, Temperature behind its own "+"), so the run
+    node gets no "fields to add" group: its "+ Time [s]" suggestion used to
+    write [] while the card looked identical before and after."""
+    from core.parameter_types import ParameterKind
+    from core.tree_model import ParameterItem
+
+    run_path = ("Validation", "My run")
+    real = [
+        ParameterItem(
+            label="Time [s]", path=run_path + ("Time [s]",), kind=ParameterKind.SERIES
+        )
+    ]
+    panel.show_node(
+        _section_node(
+            path=run_path, label="My run", value={"Time [s]": [0, 1]}, parameters=real
+        ),
+        model="SPM",
+    )
+
+    assert _group_header(panel) is None
+
+
 def test_group_absent_when_no_missing_fields(panel):
     panel.show_node(_section_node(value=_CELL_FULL), model="SPM")
     assert _group_header(panel) is None

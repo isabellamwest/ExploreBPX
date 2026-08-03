@@ -1,29 +1,21 @@
 """``DatabaseExamplesDialog``: compare a Validation run against reference data.
 
-A read-only, disposable viewer -- it never mutates anything passed to it,
-never commits, and holds no state that survives being closed (reopening
-starts fresh: no persistence, no ``DocumentSession``, no new state-layer
-object of any kind). That is an explicit architecture decision, not an
-oversight: this dialog exists purely to let a modeller eyeball their own run
-beside reference runs -- the bundled sample cells from
-:mod:`core.example_library`, or any BPX file they open -- nothing more.
+A read-only, disposable viewer: it never mutates anything passed to it,
+never commits, and holds no state once closed -- reopening starts fresh,
+with no persistence or state-layer object of any kind. It exists purely to
+let a modeller eyeball their own run beside reference runs from
+:mod:`core.example_library` or any BPX file they open.
 
-**Layout** (Concept A, approved 2026-07-20). A picker on the left: the
-bundled sample runs grouped by cell, then any user-opened files, then an
-"Open BPX file…" button. A run is added/removed by clicking its row -- the
-row is a plain box that gains a border in its series colour and a small
-tick while added (standing rule: never circled tick/cross badges anywhere
-in the app). On the right: a Chart/Table toggle and a removable-chip
-legend, over either three stacked
-:class:`~.multi_series_chart.MultiSeriesChart` small multiples (Voltage,
-Current, Temperature, all against Time) with a key-numbers table beneath
-(points, duration, current/voltage range -- stated facts only, no computed
-diffs), or a single read-only table of whichever series is selected.
+**Layout.** A picker on the left (bundled sample runs, then user-opened
+files, then "Open BPX file…"); clicking a row adds or removes it from the
+comparison. On the right, a Chart/Table toggle and a removable-chip legend
+over either three stacked :class:`~.multi_series_chart.MultiSeriesChart`
+small multiples (Voltage, Current, Temperature against Time) with a
+key-numbers table beneath, or a single read-only table of the selected run.
 
-**Colour policy.** "You" (the card's own live draft, when it has any data)
-always renders in the app's own ``ACCENT`` and never competes for a slot in
-``_REFERENCE_COLORS``; reference runs take the lowest free slot in that
-fixed list, capped at :data:`MAX_REFERENCE_RUNS` concurrently-added runs.
+**Colour policy.** "You" (the card's own live draft) always renders in
+``ACCENT`` and never takes a slot in ``_REFERENCE_COLORS``; reference runs
+take the lowest free slot, capped at :data:`MAX_REFERENCE_RUNS`.
 """
 
 from __future__ import annotations
@@ -61,6 +53,7 @@ from core.values import format_value
 
 from ..style import ACCENT, BORDER, ERROR, MUTED
 from ..titles import panel_title
+from .chart_axes import as_plot_number
 from .modal import ModeStrip
 from .multi_series_chart import MultiSeriesChart
 
@@ -99,7 +92,11 @@ MAX_REFERENCE_RUNS = len(_REFERENCE_COLORS)
 _YOU_WIDTH = 3.0
 _REFERENCE_WIDTH = 2.0
 
-_NO_OWN_DATA_NOTICE = "No data in this experiment yet - showing reference data only."
+#: Worded to hold in both empty-run states: before any reference run is
+#: added (when the hint label is what fills the right pane) and after.
+_NO_OWN_DATA_NOTICE = (
+    "No data in this experiment yet. Pick a reference run on the left to view it."
+)
 
 
 @dataclass(frozen=True)
@@ -113,23 +110,21 @@ class _AddedSeries:
     color: str
 
 
-def _is_plottable(value: object) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool)
-
-
 def _points(data: dict[str, list], y_key: str) -> list[tuple[float, float]]:
     """Numeric ``(Time, y)`` pairs from *data*, x-sorted -- the exact
-    contract ``MultiSeriesChart.set_series`` documents. A non-numeric or
-    missing cell is dropped, never plotted as garbage or coerced: this is a
-    read-only comparison viewer, not a validity judgement, so the grid and
-    the validator remain the only places a bad cell is ever flagged."""
+    contract ``MultiSeriesChart.set_series`` documents. A non-numeric,
+    non-finite or missing cell is dropped (``chart_axes.as_plot_number``,
+    the same judgement ``TablePreview`` applies), never plotted as garbage
+    or coerced: this is a read-only comparison viewer, not a validity
+    judgement, so the grid and the validator remain the only places a bad
+    cell is ever flagged."""
     time = data.get(_TIME) or []
     values = data.get(y_key) or []
-    pairs = [
-        (float(t), float(v))
-        for t, v in zip(time, values)
-        if _is_plottable(t) and _is_plottable(v)
-    ]
+    pairs = []
+    for t, v in zip(time, values):
+        x, y = as_plot_number(t), as_plot_number(v)
+        if x is not None and y is not None:
+            pairs.append((x, y))
     pairs.sort(key=lambda point: point[0])
     return pairs
 
@@ -138,7 +133,11 @@ def _numeric(values: object) -> list[float]:
     """The plottable numbers in one raw column, order preserved."""
     if not isinstance(values, list):
         return []
-    return [float(v) for v in values if _is_plottable(v)]
+    return [
+        number
+        for number in (as_plot_number(v) for v in values)
+        if number is not None
+    ]
 
 
 def _format_duration(seconds: float) -> str:
@@ -172,8 +171,8 @@ class _PickerRow(QFrame):
     """One selectable reference run: a plain box row that gains a border in
     its series colour plus a small tick while the run is in the comparison.
 
-    Standing rule (Bella, 2026-07-20): selection is a highlighted box with
-    at most a small plain tick -- never a circled +/tick/cross badge."""
+    Standing rule: selection is a highlighted box with at most a small
+    plain tick -- never a circled +/tick/cross badge."""
 
     clicked = Signal()
 
@@ -239,8 +238,8 @@ class _LegendChip(QFrame):
 
     The active document's own run is **not** removable: it is the anchor the
     whole dialog compares against, and -- unlike a reference run -- it has no
-    picker row to add it back from, so a removed one would be gone for good
-    (the bug Bella hit 2026-07-20). Its chip therefore has no "x"."""
+    picker row to add it back from, so removing it would be irreversible.
+    Its chip therefore has no "x"."""
 
     clicked = Signal()
     remove_requested = Signal()
@@ -318,6 +317,12 @@ class _ChartPage(QWidget):
         self.current.set_axis_titles(_TIME, "Current [A]")
         self.temperature = MultiSeriesChart(height=180)
         self.temperature.set_axis_titles(_TIME, _TEMPERATURE)
+        # Each panel names its own missing array: the generic "No comparison
+        # data yet." read as a contradiction on, say, the Current panel while
+        # a comparison was plainly in progress on the Voltage panel above it.
+        self.voltage.set_empty_text("No Voltage [V] data in the added runs.")
+        self.current.set_empty_text("No Current [A] data in the added runs.")
+        self.temperature.set_empty_text("No Temperature [K] data in the added runs.")
 
         layout.addWidget(self.voltage)
         layout.addWidget(self.current)
@@ -338,8 +343,8 @@ def _build_table() -> QTableWidget:
 
 class DatabaseExamplesDialog(QDialog):
     """Overlay reference runs against the active document's own run (the
-    card's live draft, labelled by file name -- never "You", Bella's call
-    2026-07-20), by chart or by table -- see the module docstring."""
+    card's live draft, labelled by file name, never "You"), by chart or by
+    table -- see the module docstring."""
 
     def __init__(
         self,
@@ -349,8 +354,10 @@ class DatabaseExamplesDialog(QDialog):
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
+        # One separator convention ("·", matching the card title and legend
+        # labels), and a fallback that is the same title minus the run.
         self.setWindowTitle(
-            f"Compare - Experiment · {run_label}" if run_label else "Compare experiment data"
+            f"Compare · Experiment · {run_label}" if run_label else "Compare · Experiment"
         )
         self.resize(1000, 760)
 
@@ -371,6 +378,11 @@ class DatabaseExamplesDialog(QDialog):
         #: ``document_id`` unique even for the same file twice.
         self._file_data: dict[str, dict] = {}
         self._file_count = 0
+        #: ``(label, run names)`` of every file group already appended --
+        #: opening the same file twice used to append a second, visually
+        #: identical group with no way to tell the two apart or remove
+        #: either, so a repeat open is refused with a message instead.
+        self._file_signatures: set[tuple[str, tuple[str, ...]]] = set()
 
         layout = QVBoxLayout(self)
         body = QHBoxLayout()
@@ -392,7 +404,7 @@ class DatabaseExamplesDialog(QDialog):
         if has_own_data:
             self._added[_YOU_ID] = _AddedSeries(own_label, dict(own_run), ACCENT)
         # An empty run is stated plainly rather than silently lacking a
-        # "You" curve -- the exact confusion the pre-redesign dialog caused.
+        # "You" curve.
         self._own_notice.setVisible(not has_own_data)
         self._after_change()
 
@@ -406,7 +418,9 @@ class DatabaseExamplesDialog(QDialog):
         layout.setContentsMargins(0, 0, 8, 0)
         layout.setSpacing(5)
 
-        heading = panel_title("Sample data")
+        # "Reference runs", not "Sample data": the rail also holds the
+        # user's own opened files, not only the bundled samples.
+        heading = panel_title("Reference runs")
         layout.addWidget(heading)
 
         runs_by_document: dict[str, list[ExampleRun]] = {}
@@ -420,6 +434,16 @@ class DatabaseExamplesDialog(QDialog):
         for document_id in document_order:
             runs = runs_by_document[document_id]
             self._add_picker_group(layout, runs[0].short_title, runs)
+
+        # Muted (a stated limit, not an error) and placed right under the
+        # picker rows it is about -- it used to sit red at the rail's very
+        # bottom, beside the "Open BPX file…" button, where it read as a
+        # file-loading error.
+        self._cap_message = QLabel("")
+        self._cap_message.setStyleSheet(f"color: {MUTED}; font-size: 11px;")
+        self._cap_message.setWordWrap(True)
+        self._cap_message.hide()
+        layout.addWidget(self._cap_message)
 
         #: User-opened files append their groups here, between the bundled
         #: samples and the "Open BPX file…" button.
@@ -440,12 +464,6 @@ class DatabaseExamplesDialog(QDialog):
         self._file_message.setWordWrap(True)
         self._file_message.hide()
         layout.addWidget(self._file_message)
-
-        self._cap_message = QLabel("")
-        self._cap_message.setStyleSheet(f"color: {ERROR}; font-size: 11px;")
-        self._cap_message.setWordWrap(True)
-        self._cap_message.hide()
-        layout.addWidget(self._cap_message)
         layout.addStretch(1)
 
         # Scrollable so opened files can never push rows out of reach; the
@@ -525,7 +543,7 @@ class DatabaseExamplesDialog(QDialog):
         slot = next((i for i, occupant in enumerate(self._reference_slots) if occupant is None), None)
         if slot is None:
             self._cap_message.setText(
-                f"Up to {MAX_REFERENCE_RUNS} reference runs at a time -- remove one to add another."
+                f"Up to {MAX_REFERENCE_RUNS} reference runs at a time. Remove one to add another."
             )
             self._cap_message.show()
             return
@@ -576,6 +594,9 @@ class DatabaseExamplesDialog(QDialog):
     # ------------------------------------------------------------------
 
     def _open_reference_file(self) -> None:
+        # A previous open's failure message must not outlive the attempt it
+        # describes -- it used to stay pinned for the dialog's whole life.
+        self._file_message.hide()
         path, _ = QFileDialog.getOpenFileName(
             self,
             "Open BPX file",
@@ -607,6 +628,13 @@ class DatabaseExamplesDialog(QDialog):
                 f"{file_path.name} has no validation runs to compare."
             )
             return
+        signature = (document.label, tuple(run.run_name for run in document.runs))
+        if signature in self._file_signatures:
+            self._show_file_message(
+                f"{file_path.name} is already in the list of reference runs."
+            )
+            return
+        self._file_signatures.add(signature)
         self._file_message.hide()
         for run in document.runs:
             self._file_data[run.id] = document.data[run.run_name]
@@ -622,6 +650,10 @@ class DatabaseExamplesDialog(QDialog):
 
     def _on_mode_clicked(self, index: int) -> None:
         self._view_mode = "table" if index == 1 else "chart"
+        # The legend repaints because the selection ring is Table-mode-only
+        # (see _refresh_legend) -- entering Table mode draws it, leaving
+        # clears it.
+        self._refresh_legend()
         self._refresh_view()
 
     # ------------------------------------------------------------------
@@ -646,7 +678,12 @@ class DatabaseExamplesDialog(QDialog):
             chip = _LegendChip(
                 series_id, added.label, added.color, removable=series_id != _YOU_ID
             )
-            chip.set_selected(series_id == self._selected_table_id)
+            # The ring means "shown in the table", so it only paints in
+            # Table mode -- in Chart mode a clicked chip used to gain a ring
+            # that suggested a highlight the chart never draws.
+            chip.set_selected(
+                self._view_mode == "table" and series_id == self._selected_table_id
+            )
             chip.clicked.connect(lambda sid=series_id: self._select_table_series(sid))
             chip.remove_requested.connect(lambda sid=series_id: self._remove_series(sid))
             self._legend_layout.addWidget(chip)
@@ -676,7 +713,7 @@ class DatabaseExamplesDialog(QDialog):
         computed diff or a validity judgement."""
         table = self._chart_page.numbers
         table.clear()
-        headers = ("Run", "Points", "Duration", "Current", "Voltage")
+        headers = ("Run", "Points", "Duration", "Current range", "Voltage range")
         table.setColumnCount(len(headers))
         table.setHorizontalHeaderLabels(headers)
         table.setRowCount(len(self._added))
@@ -686,9 +723,12 @@ class DatabaseExamplesDialog(QDialog):
             duration = _format_duration(max(time) - min(time)) if time else "-"
             name = QTableWidgetItem(added.label)
             name.setData(Qt.DecorationRole, QColor(added.color))
+            # Points counts the plottable Time samples (the x-axis every
+            # chart shares), not raw cells -- so it can never disagree with
+            # the duration computed from the same list.
             cells = (
                 name,
-                QTableWidgetItem(str(len(added.data.get(_TIME) or []))),
+                QTableWidgetItem(str(len(time))),
                 QTableWidgetItem(duration),
                 QTableWidgetItem(_format_range(_numeric(added.data.get("Current [A]")), "A")),
                 QTableWidgetItem(_format_range(_numeric(added.data.get("Voltage [V]")), "V")),

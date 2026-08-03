@@ -16,10 +16,10 @@ responsibility ``TablePreview`` has with the grid it previews.
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QPainter, QPen
-from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout, QWidget
+from PySide6.QtGui import QColor, QPen
+from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
-from .chart_axes import fit_axis, style_axis
+from .chart_axes import fit_axis, setup_chart, setup_chart_view, style_axis
 
 try:  # QtCharts is part of PySide6 but absent from some minimal builds.
     from PySide6.QtCharts import QChart, QChartView, QLineSeries, QValueAxis
@@ -48,13 +48,7 @@ class MultiSeriesChart(QWidget):
             return
 
         self._chart = QChart()
-        # The dialog renders its own legend as removable chips (it needs the
-        # click-to-remove affordance QChart's built-in legend doesn't give
-        # us), so the chart's own legend stays off to avoid showing the same
-        # information twice.
-        self._chart.legend().setVisible(False)
-        self._chart.setBackgroundVisible(False)
-        self._chart.setMargins(_zero_margins())
+        setup_chart(self._chart)
 
         self._axis_x = QValueAxis()
         self._axis_y = QValueAxis()
@@ -64,11 +58,7 @@ class MultiSeriesChart(QWidget):
         self._chart.addAxis(self._axis_y, Qt.AlignLeft)
 
         self._view = QChartView(self._chart)
-        self._view.setRenderHint(QPainter.Antialiasing)
-        # Drop QGraphicsView's native sunken frame: the chart sits inside a
-        # card that already owns the border, matching the app's flat look.
-        self._view.setFrameShape(QFrame.NoFrame)
-        self._view.setFixedHeight(height)
+        setup_chart_view(self._view, height)
         layout.addWidget(self._view)
 
         self._empty = QLabel("No comparison data yet.")
@@ -85,6 +75,14 @@ class MultiSeriesChart(QWidget):
             return
         self._axis_x.setTitleText(x_title)
         self._axis_y.setTitleText(y_title)
+
+    def set_empty_text(self, text: str) -> None:
+        """Replace the default empty-state caption -- a caller stacking
+        several of these panels names each panel's own missing array, so an
+        empty panel never reads as "no comparison at all"."""
+        if not self.available:
+            return
+        self._empty.setText(text)
 
     def set_series(
         self,
@@ -151,9 +149,3 @@ class MultiSeriesChart(QWidget):
     def _show_empty(self, empty: bool) -> None:
         self._view.setVisible(not empty)
         self._empty.setVisible(empty)
-
-
-def _zero_margins():
-    from PySide6.QtCore import QMargins
-
-    return QMargins(0, 0, 0, 0)

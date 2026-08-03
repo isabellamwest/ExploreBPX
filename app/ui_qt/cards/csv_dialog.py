@@ -51,8 +51,8 @@ from .paste_dialog import PastePreviewResult
 #: the paste preview).
 _PREVIEW_ROWS = 100
 
-#: The combo entry meaning "leave this parameter untouched".
-_SKIP = "- skip -"
+#: The combo entry meaning "leave this target untouched".
+_SKIP = "(skip)"
 
 
 class CsvImportDialog(QDialog):
@@ -189,10 +189,13 @@ class CsvImportDialog(QDialog):
                     f"{_join_targets(self._targets)} each need one."
                 )
             return f"Choose a column for {_join_targets(self._targets)}."
+        # "Field", not "parameter": the form rows are labelled with whatever
+        # aliases the caller targets (array names for an Experiment run,
+        # parameter names elsewhere), so the generic word has to cover both.
         if not self._require_all_targets and not chosen:
-            return "Choose a column for at least one parameter."
+            return "Choose a column for at least one field."
         if len(set(chosen)) != len(chosen):
-            return "Each column can fill only one parameter."
+            return "Each column can fill only one field."
         return None
 
     def _refresh_gate(self, *_args) -> None:

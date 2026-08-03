@@ -439,3 +439,77 @@ def test_read_only_construction_blocks_edits(valid_spm_dict):
     assert not model.flags(model.index(0, 0)) & Qt.ItemIsEditable
     assert model.setData(model.index(0, 0), "999", Qt.EditRole) is False
     assert card.is_dirty is False
+
+
+# ----------------------------------------------------------------------
+# CSV import: targets and feedback
+# ----------------------------------------------------------------------
+
+
+_PLAIN_RUN = {
+    "Time [s]": [0, 1],
+    "Current [A]": [-1.0, -1.0],
+    "Voltage [V]": [4.0, 3.9],
+}
+
+
+def test_csv_targets_offer_temperature_before_the_column_exists(valid_spm_dict):
+    """A 4-column CSV must be mappable from the card's own import too --
+    the empty state's flow always offered all four aliases, while this
+    card's used to silently drop Temperature whenever the column was
+    absent. Two entry points, one outcome."""
+    doc = dict(valid_spm_dict)
+    doc["Validation"] = {"C/20 discharge": dict(_PLAIN_RUN)}
+    card = ExperimentCard(_run_node(doc))
+
+    targets = card._csv_targets()
+
+    assert tuple(label for label, _ in targets) == KNOWN_ALIASES
+    assert dict(targets)["Temperature [K]"] == (
+        "Validation",
+        "C/20 discharge",
+        "Temperature [K]",
+    )
+
+
+def test_unreadable_and_empty_csv_show_a_message_instead_of_doing_nothing(
+    valid_spm_dict, monkeypatch
+):
+    from types import SimpleNamespace
+
+    from ui_qt.cards import experiment as experiment_module
+
+    doc = dict(valid_spm_dict)
+    doc["Validation"] = {"C/20 discharge": dict(_PLAIN_RUN)}
+    card = ExperimentCard(_run_node(doc))
+    assert card._import_message.isHidden()
+
+    def raise_oserror(_path):
+        raise OSError("locked")
+
+    monkeypatch.setattr(experiment_module, "read_csv_file", raise_oserror)
+    card._import_csv_from_path("C:/somewhere/data.csv")
+    assert not card._import_message.isHidden()
+    assert "data.csv" in card._import_message.text()
+
+    monkeypatch.setattr(
+        experiment_module, "read_csv_file", lambda _path: SimpleNamespace(row_count=0)
+    )
+    card._import_csv_from_path("C:/somewhere/empty.csv")
+    assert not card._import_message.isHidden()
+    assert "empty.csv" in card._import_message.text()
+    assert "no data rows" in card._import_message.text()
+
+
+def test_import_button_is_disabled_not_hidden_while_the_run_is_empty(valid_spm_dict):
+    """Disabling keeps the header row stable: hiding made "Compare…" jump
+    sideways the moment a first cell was typed."""
+    doc = dict(valid_spm_dict)
+    doc["Validation"] = {"C/20 discharge": {}}
+    card = ExperimentCard(_run_node(doc))
+    assert card._import_button.isEnabled() is False
+
+    doc = dict(valid_spm_dict)
+    doc["Validation"] = {"C/20 discharge": dict(_PLAIN_RUN)}
+    card = ExperimentCard(_run_node(doc))
+    assert card._import_button.isEnabled() is True

@@ -18,7 +18,7 @@ shaped around exactly one parameter); it re-implements the small slice of
 that contract (Enter commits, Escape reverts) that still applies, adapted to
 several independently-dirty columns.
 
-**Commit path.** All columns are always editable (decision D1a); a navigated-
+**Commit path.** All columns are always editable; a navigated-
 to array only changes which column starts focused. Enter compares every
 column's current grid contents against its own committed baseline and commits
 *only the ones that changed* as one :class:`~core.commands.SetValues` --
@@ -53,7 +53,7 @@ from core.parameter_types import ParameterKind
 from core.tree_model import ParameterItem, TreeNode
 from core.values import values_equal
 
-from ..style import MUTED
+from ..style import ERROR, MUTED
 from .cell_issues import experiment_cells
 from .csv_dialog import CsvImportDialog
 from .database_examples_dialog import DatabaseExamplesDialog
@@ -112,16 +112,18 @@ def _first_csv_file(mime_data: QMimeData) -> Path | None:
 
 
 class _CsvDropzone(QFrame):
-    """Import-first affordance shown above an empty run's grid (Phase 3).
+    """Import-first affordance shown above an empty run's grid.
 
-    One "Upload data…" button on a frame that also accepts a dropped file;
+    One "Import CSV…" button (the same label as the header toolbar's and the
+    empty state's import actions -- one operation, one name) on a frame that
+    also accepts a dropped file;
     both funnel into the same file path: this widget's whole job is obtaining
     *a path*, never reading or mapping the file itself -- that stays in
     ``ExperimentCard``'s existing CSV pipeline (``read_csv_file`` ->
     ``auto_map`` -> ``CsvImportDialog`` -> one ``SetValues``), so mapping
     logic lives in exactly one place. Getting data in is this widget's ONLY
-    job (redesign 2026-07-20): comparison lives solely behind the card
-    toolbar's always-visible "Compare…" button, which handles an empty run
+    job: comparison lives solely behind the card toolbar's always-visible
+    "Compare…" button, which handles an empty run
     with a plain notice instead of a second, confusing entry point here.
     """
 
@@ -137,7 +139,7 @@ class _CsvDropzone(QFrame):
 
         buttons = QHBoxLayout()
         buttons.addStretch(1)
-        upload = QPushButton("Upload data…")
+        upload = QPushButton("Import CSV…")
         upload.setObjectName("ExperimentDropzoneUpload")
         upload.clicked.connect(self._browse)
         buttons.addWidget(upload)
@@ -212,8 +214,7 @@ class ExperimentCard(QWidget):
         #: added via "+ Add experiment", ``{}``, has none of its four keys
         #: yet) -- :meth:`_placeholder_column` stands in so the grid always
         #: has something to type or import into. Temperature alone stays
-        #: behind its own "+" button while absent (see below), unchanged
-        #: from Phase 1.
+        #: behind its own "+" button while absent (see below).
         self._columns: list[ParameterItem] = [
             by_alias[alias]
             if alias in by_alias
@@ -271,16 +272,28 @@ class ExperimentCard(QWidget):
         # its own stretch below, the grid -- the whole pane.
         layout.addWidget(body, 1)
 
-        # Import-first entry for a run with nothing typed yet (Phase 3): an
+        # Import-first entry for a run with nothing typed yet: an
         # upload/drop target above the still-usable empty grid. Disappears
         # the moment any column holds a value -- see
         # :meth:`_refresh_derived_state`, kept live via the grid's own
         # ``changed`` so a typed cell (not only a commit) dismisses it.
         self._dropzone = None
+        self._import_message = None
         if not read_only:
             self._dropzone = _CsvDropzone()
             self._dropzone.csv_path_chosen.connect(self._import_csv_from_path)
             body_layout.addWidget(self._dropzone)
+            # Import feedback the click handlers can't otherwise give: an
+            # unreadable file or a zero-row parse previously did nothing at
+            # all, which read as the app being broken. Cleared on the next
+            # import attempt; a commit rebuilds the card (and so clears it)
+            # anyway.
+            self._import_message = QLabel("")
+            self._import_message.setObjectName("CsvImportMessage")
+            self._import_message.setStyleSheet(f"color: {ERROR}; font-size: 11px;")
+            self._import_message.setWordWrap(True)
+            self._import_message.hide()
+            body_layout.addWidget(self._import_message)
 
         headers = tuple(parameter.label for parameter in self._columns)
         self._grid = MultiColumnGrid(headers, read_only=read_only)
@@ -332,7 +345,7 @@ class ExperimentCard(QWidget):
 
         # Focus the resolved column, if any -- a bare run-node reveal
         # (``focused_alias is None``) leaves the grid's default focus alone
-        # (decision D1a). All columns stay editable regardless.
+        # All columns stay editable regardless.
         if focused_alias in headers:
             self._grid.focus_column(headers.index(focused_alias))
 
@@ -392,12 +405,13 @@ class ExperimentCard(QWidget):
                 for index in range(self._grid.column_count)
             )
             self._dropzone.setVisible(empty)
-            # The dropzone's "Upload data…" already covers an empty run, so
-            # the toolbar's "Import CSV…" only earns its place once there is
-            # data to replace. "Compare…" stays put regardless: opened on an
-            # empty run, the dialog says so plainly and still shows the
-            # reference data (redesign 2026-07-20).
-            self._import_button.setVisible(not empty)
+            # The dropzone already covers an empty run, so the toolbar's
+            # "Import CSV…" is disabled -- not hidden -- until there is data
+            # to replace: hiding it made "Compare…" jump sideways the moment
+            # a first cell was typed (and jump back on delete). "Compare…"
+            # stays enabled regardless: opened on an empty run, the dialog
+            # says so plainly and still shows the reference data.
+            self._import_button.setEnabled(not empty)
         self._sample_count_chip.setText(self._sample_count_text())
 
     def _sample_count_text(self) -> str:
@@ -497,9 +511,9 @@ class ExperimentCard(QWidget):
 
     def _own_series_label(self) -> str:
         """This run's own series label in the compare dialog: "<file> ·
-        <run>", reading like the reference runs rather than "You" (Bella's
-        call 2026-07-20). Falls back to "Active file" for an unsaved
-        document with no real name yet."""
+        <run>", reading like the reference runs rather than "You". Falls
+        back to "Active file" for an unsaved document with no real name
+        yet."""
         stem = Path(self._document_name).stem
         name = stem if stem and stem.lower() != "untitled" else "Active file"
         return f"{name} · {self._run_label}"
@@ -519,7 +533,21 @@ class ExperimentCard(QWidget):
     # ------------------------------------------------------------------
 
     def _csv_targets(self) -> tuple[tuple[str, tuple[str, ...]], ...]:
-        return tuple((parameter.label, parameter.path) for parameter in self._columns)
+        """Every schema alias, not just the columns currently shown: while
+        ``Temperature [K]`` is absent it has no column, but a 4-column CSV
+        must still be able to map it (the empty state's flow always could --
+        two entry points, one outcome). A mapped absent alias is written
+        through the same ``SetValues`` upsert a placeholder column commits
+        through (see :meth:`_placeholder_column`)."""
+        targets = [(parameter.label, parameter.path) for parameter in self._columns]
+        if all(label != _OPTIONAL_ALIAS for label, _ in targets):
+            targets.append((_OPTIONAL_ALIAS, self.run_path + (_OPTIONAL_ALIAS,)))
+        return tuple(targets)
+
+    def _show_import_message(self, message: str) -> None:
+        if self._import_message is not None:
+            self._import_message.setText(message)
+            self._import_message.setVisible(bool(message))
 
     def _import_csv(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
@@ -535,8 +563,14 @@ class ExperimentCard(QWidget):
         """Read, map and (on confirm) apply *path* -- shared by the header's
         "Import CSV…" button and the dropzone (Browse or drop), so a file
         obtained either way runs through exactly one mapping pipeline."""
-        data = read_csv_file(path)
+        self._show_import_message("")
+        try:
+            data = read_csv_file(path)
+        except OSError as exc:
+            self._show_import_message(f"Could not read {Path(path).name}: {exc}")
+            return
         if data.row_count == 0:
+            self._show_import_message(f"{Path(path).name} has no data rows to import.")
             return
         targets = self._csv_targets()
         dialog = CsvImportDialog(data, tuple(label for label, _ in targets), self)

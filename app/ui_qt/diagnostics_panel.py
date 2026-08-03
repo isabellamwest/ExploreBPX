@@ -1,40 +1,37 @@
-"""Diagnostics page: summary strip + section rail + single-section detail pane
-(Validation-page rail redesign; Stage B, built on Stage A's
-``core.page_buckets``).
+"""Diagnostics page: summary strip + section rail + single-section detail pane,
+built on ``core.page_buckets``.
 
-``bucket_page_content`` (Stage A) makes every grouping/absorption decision
-once, inward of the UI: this module renders its ``PageBuckets`` output and
+``bucket_page_content`` makes every grouping/absorption decision once,
+inward of the UI: this module renders its ``PageBuckets`` output and
 nothing else -- it never re-derives which section an issue or task belongs
-to. The old ``_display_path``/``_owning_section``/``_group_outstanding_tasks``
-helpers this file used to carry are gone; that duplication is exactly what
-put Issues and Outstanding grouping out of sync with each other before
-(see ``core.page_buckets``'s own module docstring).
+to. Re-deriving that here is exactly what put Issues and Outstanding
+grouping out of sync with each other before (see ``core.page_buckets``'s
+own module docstring).
 
-Layout (F2, signed-off wireframe):
+Layout:
 
 * A **summary strip** across the top -- three static chips (errors,
   warnings, outstanding), counts from ``PageBuckets`` totals.
 * A **rail** (``_RailList``, fixed width) below it: "All sections" first
   (one neutral total badge), a separator, then one entry per
   ``SectionBucket`` in ``PageBuckets`` order (the Document bucket, when
-  occupied, sits first -- Stage A already orders it that way). Quiet by
-  design (F4): a clean bucket shows no badge at all; red/amber/grey rounded
-  badges appear only for nonzero error/warning/outstanding counts; an
-  absent section renders its name italic. Selecting an entry (click or
-  arrow keys) switches the pane immediately and never touches the document.
+  occupied, sits first). Quiet by design: a clean bucket shows no badge at
+  all; red/amber/grey rounded badges appear only for nonzero
+  error/warning/outstanding counts; an absent section renders its name
+  italic. Selecting an entry (click or arrow keys) switches the pane
+  immediately and never touches the document.
 * A **detail pane** to the right, one of two views:
 
   - a single section's Issues + Outstanding, each a bordered, banded
     "group box" (``_GroupBox``), composed by ``_SectionDetailView``;
-  - "All sections", the whole-document backup view (F3): every bucket
-    exactly once, a foldable header (chevron + label + the same badges as
-    the rail) over its issue rows then its outstanding rows under
-    pinned-copy sub-heads (``_AllSectionsView``). This is what F3's
-    reconciliation test checks against the strip/rail totals -- nothing
-    renders here that isn't already counted there, and nothing counted
-    there is missing here.
+  - "All sections", the whole-document backup view: every bucket exactly
+    once, a foldable header (chevron + label + the same badges as the
+    rail) over its issue rows then its outstanding rows under pinned-copy
+    sub-heads (``_AllSectionsView``). Its own reconciliation test checks
+    this view against the strip/rail totals -- nothing renders here that
+    isn't already counted there, and nothing counted there is missing here.
 
-Row anatomy (F5): an issue row's severity is a small delegate-painted
+Row anatomy: an issue row's severity is a small delegate-painted
 filled-circle icon (:data:`ui_qt.parameter_row.SEVERITY_ROLE`) -- red X for
 an error, amber ! for a warning -- replacing the old bracketed
 ``[ERROR]``/``[WARN]`` text tag. This is a shared change to
@@ -42,22 +39,20 @@ an error, amber ! for a warning -- replacing the old bracketed
 (:mod:`ui_qt.issues_tab`) picks it up too. A task row keeps its own glyph
 (a hollow circle for "missing", a half-filled circle for "added, no value
 yet"), bold name + muted unit, a REQUIRED tag where applicable, the
-absorbed validator message (decision O) as muted secondary text, and its
-action ("Go to (right chevron)"/"+ Add section"/"Choose...") always visible
-in accent colour (decision L).
+absorbed validator message as muted secondary text, and its action
+("Go to (right chevron)"/"+ Add section"/"Choose...") always visible in
+accent colour.
 
-Activation contract (decision L, unchanged): Enter/double-click only,
-selection alone never acts. Both panes expose the same
-``issue_activated``/``task_activated`` signals this panel forwards
-unmodified -- ``MainWindow`` dispatches exactly as it did before this
-redesign (``_on_task_activated``). A Document-bucket issue row's nav_path
-is whatever the diagnostic-attachment pass resolved (its nearest existing
-ancestor, or empty when nothing resolves); ``NavigationService.navigate``
-already no-ops on an empty path, so "no attachment point -> no-op" needs no
-special-casing here.
+Activation contract: Enter/double-click only, selection alone never acts.
+Both panes expose the same ``issue_activated``/``task_activated`` signals
+this panel forwards unmodified to ``MainWindow`` (``_on_task_activated``).
+A Document-bucket issue row's nav_path is whatever the diagnostic-attachment
+pass resolved (its nearest existing ancestor, or empty when nothing
+resolves); ``NavigationService.navigate`` already no-ops on an empty path,
+so "no attachment point -> no-op" needs no special-casing here.
 
-View state (F6: one primary document, no module-level globals) lives on
-this panel instance: the selected rail entry and the All-sections fold set.
+View state (one primary document, no module-level globals) lives on this
+panel instance: the selected rail entry and the All-sections fold set.
 Both persist across an ordinary ``refresh`` (a commit, undo/redo) and reset
 via :meth:`reset_view_state`, called by ``MainWindow`` only when a
 *different* document replaces the session (open/new) -- mirrors the
@@ -102,7 +97,7 @@ from .titles import panel_title
 _MSG_NO_DOCUMENT = "No document open"
 _MSG_NO_ISSUES = style.all_clear("No issues")
 _MSG_NOTHING_OUTSTANDING = style.all_clear("Nothing outstanding")
-#: Decision C's pinned Partial-model notice. A bucket alone cannot tell
+#: Pinned Partial-model notice. A bucket alone cannot tell
 #: "Partial, so nothing is ever tracked" apart from "concrete model, fully
 #: filled, nothing remaining" -- both look identical from bucket data (zero
 #: ``required_tasks``, nonzero ``required_total``) -- so this is the one
@@ -110,18 +105,18 @@ _MSG_NOTHING_OUTSTANDING = style.all_clear("Nothing outstanding")
 #: a narrow, deliberate exception to "consume only PageBuckets" (grouping/
 #: counting logic itself stays entirely bucket-derived).
 _MSG_PARTIAL_NO_TARGET = (
-    "Model is Partial - no completion target. Expected fields are still "
-    "suggested in each section's parameter list."
+    "Model is Partial, so there is no completion target. Expected fields "
+    "are still suggested in each section's parameter list."
 )
 
 _ACTION_GO_TO = "Go to ›"
 _ACTION_ADD_SECTION = "+ Add section"
 _ACTION_CHOOSE = "Choose…"
 
-#: Task-row glyphs (F5): a hollow circle for "nothing committed yet"
+#: Task-row glyphs: a hollow circle for "nothing committed yet"
 #: (MISSING_FIELD/MISSING_SECTION/DECLARE_MODEL), a half-filled circle for
 #: "committed, but null" (NULL_FIELD) -- the same missing/added-no-value
-#: distinction decision D draws in prose, made visible at a glance. Plain
+#: distinction drawn in prose, made visible at a glance. Plain
 #: Unicode glyphs, used only for a task item's underlying (non-painted)
 #: ``QListWidgetItem`` text -- the delegate always paints the row's
 #: :data:`parameter_row.HTML_ROLE` fragment instead (see :func:`_task_glyph_svg`
@@ -153,7 +148,7 @@ _RAIL_BADGE_ROLE = Qt.UserRole + 313  # list[(text, bg, fg)]
 
 # ---------------------------------------------------------------------------
 # Badge painting -- shared by the rail and the All-sections fold headers
-# ("same badges as rail", per the signed-off wireframe). QTextDocument/QSS
+# (same badges as rail). QTextDocument/QSS
 # cannot paint a rounded pill, so every badge here is delegate-drawn, the
 # same idiom the app-rail's own ActivityButton badge already uses.
 # ---------------------------------------------------------------------------
@@ -162,7 +157,7 @@ _RAIL_BADGE_ROLE = Qt.UserRole + 313  # list[(text, bg, fg)]
 def _issue_badge_specs(bucket: SectionBucket) -> list[tuple[str, str, str]]:
     """Ordered ``(text, bg, fg)`` badge specs for one bucket's Issues count
     only -- red for errors, amber for warnings, either/both/neither
-    depending on what is actually nonzero (F4/F5). The red/amber half of
+    depending on what is actually nonzero. The red/amber half of
     :func:`_bucket_badge_specs`, factored out so the rail/fold-header badges
     and the section pane's Issues box header (which has no outstanding
     badge of its own -- that ratio lives in the Outstanding box's title)
@@ -176,7 +171,7 @@ def _issue_badge_specs(bucket: SectionBucket) -> list[tuple[str, str, str]]:
 
 
 def _bucket_badge_specs(bucket: SectionBucket) -> list[tuple[str, str, str]]:
-    """Ordered ``(text, bg, fg)`` badge specs for one bucket (F4): a clean
+    """Ordered ``(text, bg, fg)`` badge specs for one bucket: a clean
     bucket (all counts zero) yields no specs at all -- the quiet rail."""
     specs = list(_issue_badge_specs(bucket))
     if bucket.outstanding_count:
@@ -222,11 +217,11 @@ def _paint_badges(painter: QPainter, rect: QRect, specs: list[tuple[str, str, st
 
 
 # ---------------------------------------------------------------------------
-# View-only filtering (F8, phase B). Rows are hidden by the VIEW BUILDERS
+# View-only filtering. Rows are hidden by the VIEW BUILDERS
 # below (``_SectionDetailView``/``_AllSectionsView``) after they already
 # have their bucket's true, unfiltered content in hand -- ``core.page_
-# buckets`` is never touched, so rail badges/strip counts/the app badge/F3
-# reconciliation all keep reading the same unfiltered ``PageBuckets`` this
+# buckets`` is never touched, so rail badges/strip counts/the app badge/
+# All-sections reconciliation all keep reading the same unfiltered ``PageBuckets`` this
 # module always has. ``_FilterState`` and the two visibility predicates
 # below are the one shared, pure "does this row survive the filter" rule
 # both view builders consume -- neither one re-derives it.
@@ -235,10 +230,10 @@ def _paint_badges(painter: QPainter, rect: QRect, specs: list[tuple[str, str, st
 
 @dataclass(frozen=True)
 class _FilterState:
-    """Per-session view-only filter state (F8). All-on is the default --
-    i.e. "no filtering". (F8's text filter was removed by explicit user
-    decision: per-section buckets are small and the toolbar search already
-    finds anything by name -- the chips alone remain.)"""
+    """Per-session view-only filter state. All-on is the default --
+    i.e. "no filtering". (The text filter was removed: per-section buckets
+    are small and the toolbar search already finds anything by name --
+    the chips alone remain.)"""
 
     error_on: bool = True
     warning_on: bool = True
@@ -293,7 +288,7 @@ def _relative_location(bucket_label: str, nav_path: tuple[str, ...]) -> str:
 
 def _is_declare_model_only(bucket: SectionBucket) -> bool:
     """True when *bucket*'s only Outstanding row is "declare a model" --
-    ``document_completion`` always returns DECLARE_MODEL alone (decision C),
+    ``document_completion`` always returns DECLARE_MODEL alone,
     so a group holding it is never a section-shape fact ("Header -- 1 of 3
     remaining" would read indirectly when the one actionable thing is
     declaring a model). Such a group renders no ratio at all."""
@@ -303,7 +298,7 @@ def _is_declare_model_only(bucket: SectionBucket) -> bool:
 def _required_field_tasks(bucket: SectionBucket) -> tuple[CompletionTask, ...]:
     """*bucket.required_tasks* minus any MISSING_SECTION entries.
 
-    Stage A buckets a present section's absent CHILD sections together with
+    A present section's absent CHILD sections are bucketed together with
     its own leaf-field tasks (e.g. a present ``State`` with both
     ``Initial conditions`` and ``Thermal environment`` still missing lands
     both MISSING_SECTION tasks in the ``State`` bucket, per
@@ -350,8 +345,8 @@ def _outstanding_box_title(bucket: SectionBucket) -> str:
 
 
 def _absorbed_messages(task: CompletionTask, partition: PartitionedIssues | None) -> tuple[str, ...]:
-    """The real validator messages *task* stands in for (decision O), merging
-    a float/int union pair (decision Q) the same way the Issues surfaces do."""
+    """The real validator messages *task* stands in for, merging
+    a float/int union pair the same way the Issues surfaces do."""
     if partition is None:
         return ()
     pairs = partition.absorbed_by_task.get(task, ())
@@ -384,29 +379,29 @@ def _task_label(task: CompletionTask) -> tuple[str, str | None, str]:
 def _task_row_text(task: CompletionTask, absorbed_messages: tuple[str, ...]) -> str:
     glyph = _task_glyph(task)
     name, note, action = _task_label(task)
-    label = f"{name} - {note}" if note else name
+    label = f"{name} · {note}" if note else name
     text = f"{glyph} {label}"
     if task.required:
         text += "  (REQUIRED)"
     text += f"  {action}"
     if absorbed_messages:
-        text += "  - " + "; ".join(absorbed_messages)
+        text += "  · " + "; ".join(absorbed_messages)
     return text
 
 
 def _task_row_html(task: CompletionTask, absorbed_messages: tuple[str, ...]) -> str:
-    """§4b F5: REQUIRED sits inline right after the name; the action text
+    """REQUIRED sits inline right after the name; the action text
     itself is NOT part of this HTML fragment -- it is painted separately,
     right-aligned, by the delegate (see :data:`parameter_row.ACTION_ROLE`,
     set by :func:`_add_task_row`) so it never competes with a long name for
     the same line.
 
-    Polish round: the ring/half-filled mark is painted in ``style.MUTED``
+    The ring/half-filled mark is painted in ``style.MUTED``
     (the same grey #57606a family) to harmonise with the issue rows' flat
-    severity dots, not swept up in the bold name span the way it used to be."""
+    severity dots, rather than swept up in the bold name span."""
     glyph_img = icons.html_img(_task_glyph_svg(task), color=style.MUTED, size=parameter_row.MARK_BOX)
     name, note, action = _task_label(task)
-    label = f"{name} - {note}" if note else name
+    label = f"{name} · {note}" if note else name
     hints: list[tuple[str, str]] = []
     if task.required:
         hints.append(("REQUIRED", style.REQUIRED))
@@ -483,7 +478,7 @@ def _add_fold_header_row(list_widget: QListWidget, bucket: SectionBucket, collap
 
 
 def _hidden_by_filters_text(count: int) -> str:
-    """F8's pinned copy for the one quiet line a view renders when filters
+    """Pinned copy for the one quiet line a view renders when filters
     (toggled-off chips) hid something -- never rendered for a genuinely
     empty box/section (those keep the pinned ✓ wording instead, which
     claims truth; this line only ever claims view state)."""
@@ -555,8 +550,8 @@ class _ContentSizedList(QListWidget):
     the generic scroll-area default, and carries ``QSizePolicy.Minimum``
     vertically -- so it hugs exactly its own rows in a ``QVBoxLayout``
     rather than stretching to fill whatever space a sibling stretch factor
-    would otherwise hand it (the wireframe's content-hugging group boxes,
-    F2: a one-row Issues box must not become a ~300px empty card).
+    would otherwise hand it (content-hugging group boxes: a one-row
+    Issues box must not become a ~300px empty card).
     ``updateGeometry()`` must be called after any change that can alter row
     count/height (every caller here does, right after populating)."""
 
@@ -569,11 +564,11 @@ class _ContentSizedList(QListWidget):
 
 
 class _GroupBox(QFrame):
-    """One F2 group box: a banded header (title + zero or more count badges)
+    """One group box: a banded header (title + zero or more count badges)
     over a borderless list of rows that hugs its own content height
     (:class:`_ContentSizedList`) rather than stretching. Reused for both the
     Issues and the Outstanding box in ``_SectionDetailView`` -- Issues can
-    show BOTH a red error badge and an amber warning badge at once (F5), the
+    show BOTH a red error badge and an amber warning badge at once, the
     same ``_issue_badge_specs`` the rail/fold-header badges use, so the
     three surfaces can never disagree on what counts as "an issue badge";
     Outstanding never calls :meth:`set_badges` -- its ratio lives in the
@@ -640,7 +635,7 @@ class _GroupBox(QFrame):
     def set_badges(self, specs: list[tuple[str, str, str]]) -> None:
         """Replace the header's badges with one label per ``(text, bg, fg)``
         spec, left to right -- 0, 1 or 2 for Issues (:func:`_issue_badge_specs`);
-        an empty list clears every badge (a clean bucket, F4)."""
+        an empty list clears every badge (a clean bucket)."""
         while self._badge_layout.count():
             item = self._badge_layout.takeAt(0)
             widget = item.widget()
@@ -653,7 +648,7 @@ class _GroupBox(QFrame):
 class _SectionDetailView(QWidget):
     """One selected section's Issues + Outstanding, each its own
     content-hugging group box, stacked at the top with the leftover space
-    left below them (F2's wireframe) rather than the boxes splitting the
+    left below them rather than the boxes splitting the
     pane's full height. The whole column sits in a plain (frameless)
     ``QScrollArea`` so a section with more rows than the pane's viewport
     height scrolls as a unit instead of either box clipping its own rows."""
@@ -725,7 +720,7 @@ class _SectionDetailView(QWidget):
     def _render_issues(self, bucket: SectionBucket, filters: _FilterState) -> int:
         lst = self._issues_box.list
         lst.clear()
-        self._issues_box.set_badges(_issue_badge_specs(bucket))  # unfiltered truth (F8)
+        self._issues_box.set_badges(_issue_badge_specs(bucket))  # unfiltered truth
         if not bucket.issues:
             _add_message_row(lst, _MSG_NO_ISSUES)
             self._issues_box.refresh_content_size()
@@ -738,7 +733,7 @@ class _SectionDetailView(QWidget):
                 hidden += 1
         # A filter emptying the box entirely leaves it with zero rows and no
         # pinned message -- the box header/badge (already set above) stays
-        # true, and the pane-level hidden line accounts for the rows (F8);
+        # true, and the pane-level hidden line accounts for the rows;
         # "no issues" would be a lie about content that still exists.
         self._issues_box.refresh_content_size()
         return hidden
@@ -753,12 +748,12 @@ class _SectionDetailView(QWidget):
         lst = self._outstanding_box.list
         lst.clear()
         if model == "Partial":
-            # decision C (revised): nothing is ever Required under Partial,
+            # Nothing is ever Required under Partial,
             # so there is no ratio to title with, and a bucket's own
             # required_tasks==()/required_total>0 shape is indistinguishable
             # from "fully filled" -- only model says which. But Partial does
             # carry NULL_FIELD tasks now, and their absorbed diagnostics must
-            # stay reachable here (decision O: re-seated, never silenced), so
+            # stay reachable here (re-seated, never silenced), so
             # only the no-tasks case pins the notice; with tasks present the
             # shared rendering below runs unchanged.
             self._outstanding_box.set_title("Outstanding")
@@ -798,7 +793,7 @@ class _SectionDetailView(QWidget):
             # zero surviving rows would orphan a header for nothing, so it
             # only renders when at least one optional row survives.
             if optional_rows:
-                _add_subhead_row(lst, f"OPTIONAL - {len(bucket.optional_tasks)} UNFILLED")
+                _add_subhead_row(lst, f"OPTIONAL · {len(bucket.optional_tasks)} UNFILLED")
                 for task, absorbed in optional_rows:
                     _add_task_row(lst, task, absorbed)
 
@@ -815,7 +810,7 @@ class _SectionDetailView(QWidget):
 
 
 class _AllSectionsView(QWidget):
-    """The whole-document backup view (F3): every bucket exactly once, a
+    """The whole-document backup view: every bucket exactly once, a
     foldable header over its issue rows then its outstanding rows under
     pinned-copy sub-heads. One QListWidget -- the simplest structure that
     keeps the keyboard/activation contract."""
@@ -853,9 +848,9 @@ class _AllSectionsView(QWidget):
         hidden_total = 0
         for bucket in buckets.buckets:
             collapsed = bucket.path in self._collapsed
-            _add_fold_header_row(self._list, bucket, collapsed)  # unfiltered truth badges (F8)
+            _add_fold_header_row(self._list, bucket, collapsed)  # unfiltered truth badges
             if collapsed:
-                # A fold-hidden row is not a filter-hidden row (F8): it was
+                # A fold-hidden row is not a filter-hidden row: it was
                 # never even considered, so it contributes nothing to
                 # hidden_total -- filters and folds compose independently.
                 continue
@@ -876,7 +871,7 @@ class _AllSectionsView(QWidget):
                         hidden_total += 1
                 if required_rows:
                     if not _is_declare_model_only(bucket):
-                        _add_subhead_row(self._list, f"{bucket.label} - {_ratio_words(bucket)}")
+                        _add_subhead_row(self._list, f"{bucket.label} · {_ratio_words(bucket)}")
                     for task, absorbed in required_rows:
                         _add_task_row(self._list, task, absorbed)
 
@@ -890,7 +885,7 @@ class _AllSectionsView(QWidget):
                         hidden_total += 1
                 if optional_rows:
                     _add_subhead_row(
-                        self._list, f"{bucket.label} · optional - {len(bucket.optional_tasks)} unfilled"
+                        self._list, f"{bucket.label} · optional · {len(bucket.optional_tasks)} unfilled"
                     )
                     for task, absorbed in optional_rows:
                         _add_task_row(self._list, task, absorbed)
@@ -1030,7 +1025,7 @@ class _RailList(QListWidget):
 
 
 def _chip_html(svg: str, color: str, text: str, *, on: bool) -> str:
-    """*on* controls the chip's own colours (F8) -- when a chip is toggled
+    """*on* controls the chip's own colours -- when a chip is toggled
     off, both its dot and its count text go ``style.MUTED``, on top of the
     "off" QSS state (:data:`_FilterChip`) that greys its card background:
     visibly muted/pressed-out, never merely relabelled."""
@@ -1041,7 +1036,7 @@ def _chip_html(svg: str, color: str, text: str, *, on: bool) -> str:
 
 
 class _FilterChip(QLabel):
-    """One strip chip, also a click-toggle filter (F8). Stays a ``QLabel``
+    """One strip chip, also a click-toggle filter. Stays a ``QLabel``
     (not a ``QPushButton``) so it keeps rendering its rich-text icon+count
     content (a coloured dot plus text, :func:`_chip_html`) -- native Qt
     buttons render ``text()`` as plain text, not HTML. Interactivity is
@@ -1079,15 +1074,15 @@ class _FilterChip(QLabel):
 
 
 class _SummaryStrip(QWidget):
-    """Top band: three toggleable count-filter chips (F8; F2 phase A had
-    them static), each its own bordered, rounded card on the shaded strip
-    band (the wireframe's "boxes/shading to make regions distinguishable").
-    Filtering here is purely a VIEW concern -- this widget owns the filter
-    *state* (chip on/off) and reports it via :meth:`filter_state`; it never
-    touches counts, badges or buckets itself (:class:`DiagnosticsPanel`
-    reads the state and re-renders the pane -- see F8's "view-only" rule).
-    F8's companion text-filter field was removed by explicit user decision;
-    the chips are the whole filter surface."""
+    """Top band: three toggleable count-filter chips, each its own
+    bordered, rounded card on the shaded strip band ("boxes/shading to
+    make regions distinguishable"). Filtering here is purely a VIEW
+    concern -- this widget owns the filter *state* (chip on/off) and
+    reports it via :meth:`filter_state`; it never touches counts, badges
+    or buckets itself (:class:`DiagnosticsPanel` reads the state and
+    re-renders the pane -- filtering stays view-only).
+    The companion text-filter field was removed; the chips are the whole
+    filter surface."""
 
     #: Emitted whenever a chip is toggled -- DiagnosticsPanel re-renders
     #: only the *pane* on this signal (never a full ``refresh()``), so
@@ -1119,11 +1114,21 @@ class _SummaryStrip(QWidget):
     def set_counts(self, errors: int, warnings: int, outstanding: int) -> None:
         self._counts = (errors, warnings, outstanding)
         self._refresh_chip_text()
-        # Tooltips stay truthful regardless of on/off state (F8): they
-        # always describe the real, unfiltered counts.
-        self._errors.setToolTip(style.error_count_tooltip(errors))
-        self._warnings.setToolTip(style.warning_count_tooltip(warnings))
-        self._outstanding.setToolTip(style.outstanding_count_tooltip(outstanding))
+        self._refresh_tooltips()
+
+    def _refresh_tooltips(self) -> None:
+        """Counts stay truthful regardless of on/off state: they always
+        describe the real, unfiltered counts. The state suffix is what tells
+        a user these chips are click-to-filter at all -- nothing else on the
+        chip says so."""
+        errors, warnings, outstanding = self._counts
+        for chip, base in (
+            (self._errors, style.error_count_tooltip(errors)),
+            (self._warnings, style.warning_count_tooltip(warnings)),
+            (self._outstanding, style.outstanding_count_tooltip(outstanding)),
+        ):
+            state = "click to hide" if chip.is_on() else "hidden · click to show"
+            chip.setToolTip(f"{base} · {state}")
 
     def filter_state(self) -> _FilterState:
         return _FilterState(
@@ -1135,10 +1140,11 @@ class _SummaryStrip(QWidget):
     def reset_filters(self) -> None:
         """Back to all-on -- called only on a *different* document
         (:meth:`DiagnosticsPanel.reset_view_state`), never on an ordinary
-        refresh, where persisting is the point (F8)."""
+        refresh, where persisting is the point."""
         for chip in (self._errors, self._warnings, self._outstanding):
             chip.set_on(True)
         self._refresh_chip_text()
+        self._refresh_tooltips()
 
     def _refresh_chip_text(self) -> None:
         errors, warnings, outstanding = self._counts
@@ -1161,6 +1167,7 @@ class _SummaryStrip(QWidget):
 
     def _on_chip_toggled(self, _on: bool) -> None:
         self._refresh_chip_text()
+        self._refresh_tooltips()
         self.filters_changed.emit()
 
 
@@ -1244,9 +1251,9 @@ class DiagnosticsPanel(QWidget):
 
         *buckets* is ``core.page_buckets.bucket_page_content``'s result --
         computed once in ``main_window._refresh_all`` alongside the rail
-        badge, so this panel and the badge can never disagree (decision G).
+        badge, so this panel and the badge can never disagree.
         *partition* is passed through only for its ``absorbed_by_task``
-        lookup (decision O's secondary text); *model* only for the Partial
+        lookup (secondary text); *model* only for the Partial
         notice (see :data:`_MSG_PARTIAL_NO_TARGET`) -- every grouping/count
         this panel renders otherwise comes from *buckets* alone.
         """
@@ -1290,7 +1297,7 @@ class DiagnosticsPanel(QWidget):
         self._render_pane()
 
     def _on_filters_changed(self) -> None:
-        """A chip toggled (F8) -- re-render only
+        """A chip toggled -- re-render only
         the pane, never a full ``refresh()``: filters are view-only and
         must never re-enter the document-wide refresh path (rail badges,
         strip counts and the app badge are untouched by this call)."""
@@ -1301,7 +1308,7 @@ class DiagnosticsPanel(QWidget):
             return
         filters = self._strip.filter_state()
         # Always keep the All-sections view current, even while a single
-        # section is showing: it is the F3 backup view (nothing renders
+        # section is showing: it is the backup view (nothing renders
         # there that isn't already counted in the strip/rail), and a stale
         # copy sitting behind the visible section pane would quietly break
         # that promise the moment the user (or a test) switches back to it.

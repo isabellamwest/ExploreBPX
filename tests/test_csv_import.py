@@ -183,7 +183,7 @@ def test_dialog_blocks_a_duplicate_column_with_a_reason():
     dialog = _dialog()
     dialog._combos[1].setCurrentIndex(1)  # both targets -> file column 0
     assert dialog._import_button.isEnabled() is False
-    assert "one parameter" in dialog._reason.text()
+    assert "one field" in dialog._reason.text()
 
 
 def test_dialog_blocks_an_all_skip_mapping():

@@ -46,21 +46,22 @@ from state.reference_snapshot import ReferenceSnapshot
 
 from . import parameter_row, style
 from .add_parameter_popup import AddParameterPopup, suggestion_row_html, suggestion_row_text
+from .cards.experiment import is_validation_run_path
 from .comparison_strip import ComparisonStrip
 from .parameter_row import ParameterRowDelegate
 
-#: Row states (multi-file track M2) that render an amber/warning tint on an
-#: otherwise-normal, still-fully-editable real row -- matches the app's
+#: Row states that render an amber/warning tint on an otherwise-normal,
+#: still-fully-editable real row -- matches the app's
 #: existing warning-tint idiom (``style.WARNING_TINT``, the Diagnostics
 #: rail's own warning badge wash).
 _TINTED_ROW_STATES = (RowState.DIFFERS, RowState.FILLABLE)
 
-#: Models under which the "fields to add" group may appear at all (decision
-#: C): Partial suggests every expected field (none Required, V9); a concrete
-#: model suggests with Required flags as-is. An undeclared/garbage model is
-#: deliberately excluded here even though ``completion_for`` would happily
-#: resolve one (V8) -- the one visible completion task there is "declare a
-#: model", not a list of suggestions against a model the user hasn't picked.
+#: Models under which the "fields to add" group may appear at all: Partial
+#: suggests every expected field (none Required); a concrete model suggests
+#: with Required flags as-is. An undeclared/garbage model is deliberately
+#: excluded here even though ``completion_for`` would happily resolve one --
+#: the one visible completion task there is "declare a model", not a list
+#: of suggestions against a model the user hasn't picked.
 #: Header's own group is exempt from this gate (see
 #: ``_append_missing_fields_group``): its fields don't depend on the model.
 _COMPLETION_GROUP_MODELS = completion.CONCRETE_MODELS | {"Partial"}
@@ -124,9 +125,9 @@ class ParameterListPanel(QWidget):
     #: (parameter_path, direction): reorder the row via ``core.commands.MoveParameter``.
     #: ``direction`` is ``"up"`` or ``"down"``.
     move_parameter_requested = Signal(tuple, str)
-    #: (section_path, key): a REF_ONLY ghost row was selected (multi-file
-    #: track M2) -- distinct from ``parameter_selected`` because a ghost row
-    #: names no real document parameter for ``NavigationService`` to resolve.
+    #: (section_path, key): a REF_ONLY ghost row was selected -- distinct
+    #: from ``parameter_selected`` because a ghost row names no real
+    #: document parameter for ``NavigationService`` to resolve.
     ghost_selected = Signal(tuple, str)
 
     #: Item-data roles marking a synthetic "fields to add" row -- a group
@@ -148,13 +149,12 @@ class ParameterListPanel(QWidget):
         self._node: TreeNode | None = None
         self._model: str | None = None
         #: Whether the "fields to add" group is expanded, keyed by section
-        #: path (decision H): a rebuild of the *same* section (every "+"
-        #: commits a command, which rebuilds) preserves the flag, while
-        #: navigating to a different section reads a fresh (default-collapsed)
-        #: entry.
+        #: path: a rebuild of the *same* section (every "+" commits a
+        #: command, which rebuilds) preserves the flag, while navigating to
+        #: a different section reads a fresh (default-collapsed) entry.
         self._expanded: dict[tuple[str, ...], bool] = {}
         #: Parameter paths with a *page-visible* issue, mapped to the row's
-        #: worst severity ("error"/"warning") -- decision P, set by
+        #: worst severity ("error"/"warning"), set by
         #: ``MainWindow._refresh_all`` from ``core.completion.partition_issues``
         #: alongside ``show_node``/``reveal`` -- never computed here. The dot
         #: marker reads this instead of ``parameter.has_errors`` (validator-
@@ -162,9 +162,8 @@ class ParameterListPanel(QWidget):
         #: (grey, no dot) here even though the card badge/Issues tab still
         #: report it verbatim.
         self._visible_issue_severities: dict[tuple[str, ...], str] = {}
-        #: Comparison state (multi-file track M2), set only by
-        #: ``MainWindow.set_comparison`` -- ``None`` whenever no reference is
-        #: docked or no document is open.
+        #: Comparison state, set only by ``MainWindow.set_comparison`` --
+        #: ``None`` whenever no reference is docked or no document is open.
         self._comparison: ComparisonResult | None = None
         self._reference: ReferenceSnapshot | None = None
 
@@ -210,8 +209,7 @@ class ParameterListPanel(QWidget):
         self._popup.custom_parameter_requested.connect(self._on_custom_parameter_requested)
 
     def set_visible_issue_severities(self, severities: dict[tuple[str, ...], str]) -> None:
-        """Set the page-visible-issue parameter paths, mapped to severity
-        (decision P).
+        """Set the page-visible-issue parameter paths, mapped to severity.
 
         Call from ``_refresh_all`` before ``show_node``/``reveal`` render any
         rows -- stored, not applied immediately, since the panel is usually
@@ -227,8 +225,8 @@ class ParameterListPanel(QWidget):
         comparison: ComparisonResult | None,
         reference: ReferenceSnapshot | None,
     ) -> None:
-        """Set the reference comparison state (multi-file track M2) and
-        re-render whatever section is currently shown.
+        """Set the reference comparison state and re-render whatever
+        section is currently shown.
 
         Called by ``MainWindow`` -- the single place computing this state --
         on every document change and every reference dock/undock.
@@ -275,9 +273,9 @@ class ParameterListPanel(QWidget):
         self._append_missing_fields_group(node, model)
 
     def _append_ghost_rows(self, node: TreeNode) -> None:
-        """Append REF_ONLY ghost rows for this section (multi-file track M2,
-        the merge rule): synthetic, read-only rows for keys the reference
-        has and the main document does not. Rendered via the same
+        """Append REF_ONLY ghost rows for this section, per the merge rule:
+        synthetic, read-only rows for keys the reference has and the main
+        document does not. Rendered via the same
         synthetic-row precedent as the "fields to add" group -- role 256
         stays ``None`` so removal/context-menu/Enter-to-activate all treat
         them as non-existent parameters (see :meth:`_activate_item`)."""
@@ -302,8 +300,8 @@ class ParameterListPanel(QWidget):
         item.setData(parameter_row.HTML_ROLE, parameter_row.build_ghost_row_html(key))
         item.setData(parameter_row.VALUE_ROLE, preview)
         # Always italic, even for a plain scalar -- one of the ghost row's
-        # four signals (M2 brief), unlike a real row's VALUE_GHOST_ROLE,
-        # which only ghosts a null/derived-summary value.
+        # four signals, unlike a real row's VALUE_GHOST_ROLE, which only
+        # ghosts a null/derived-summary value.
         item.setData(parameter_row.VALUE_GHOST_ROLE, True)
         item.setData(parameter_row.REF_ONLY_ROLE, True)
         item.setData(parameter_row.TINT_ROLE, style.REFERENCE_TINT)
@@ -311,25 +309,32 @@ class ParameterListPanel(QWidget):
         return item
 
     def _append_missing_fields_group(self, node: TreeNode, model: str | None) -> None:
-        """Append the "fields to add" group after the real rows (decision H).
+        """Append the "fields to add" group after the real rows.
 
         Purely derived at render time from :func:`core.completion.completion_for`
         -- never written into ``TreeNode.parameters``, so the tree/parameter
         model keeps meaning "what is in the document". Suppressed for an
-        undeclared/garbage model (decision C -- the sole completion task there
-        is "declare a model", not a suggestion list against a model nobody
-        picked) and whenever the section has no missing fields at all (no
-        disabled placeholders, no "0 fields to add"). Header's own group is
-        exempt from the model gate: Title/Model/BPX resolve identically
-        regardless of model, so Header is collateral of a gate aimed at other
-        sections, not a section this gate is meant to silence.
+        undeclared/garbage model (the sole completion task there is "declare
+        a model", not a suggestion list against a model nobody picked) and
+        whenever the section has no missing fields at all (no disabled
+        placeholders, no "0 fields to add"). Header's own group is exempt
+        from the model gate: Title/Model/BPX resolve identically regardless
+        of model, so Header is collateral of a gate aimed at other sections,
+        not a section this gate is meant to silence.
 
-        The merge rule (multi-file track M2, Bella's explicit decision): a
-        spec field the reference has renders as a ghost row *only* -- it is
-        filtered out of this group even though it is still schema-missing
-        from the main, so one key never shows as two rows.
+        The merge rule: a spec field the reference has renders as a ghost
+        row *only* -- it is filtered out of this group even though it is
+        still schema-missing from the main, so one key never shows as two
+        rows.
         """
         if model not in _COMPLETION_GROUP_MODELS and node.path != ("Header",):
+            return
+        # A Validation run's ExperimentCard already renders every schema
+        # column (required ones as typable columns, Temperature behind its
+        # own "+"), so a "fields to add" group here would duplicate columns
+        # already on screen -- and clicking its "+ Time [s]" wrote [] while
+        # the card looked identical before and after.
+        if is_validation_run_path(node.path):
             return
         missing = completion.completion_for(node.path, node.value, model).missing_fields
         if self._comparison is not None:
@@ -369,11 +374,10 @@ class ParameterListPanel(QWidget):
         suggestion row; return False if the current section has no such
         missing field (already added, suppressed model, or never expected).
 
-        The new seam this phase must build (Phase 3 brief): today's
-        :meth:`reveal` only ever addresses a real row that already exists in
-        the document; nothing can address a field that isn't there yet. This
-        is what Phase 5's Outstanding "Go to ›" action for a missing field
-        will call.
+        Unlike :meth:`reveal`, which only ever addresses a real row that
+        already exists in the document, this addresses a field that isn't
+        there yet -- what an Outstanding "Go to ›" action for a missing
+        field calls.
         """
         if self._node is None:
             return False
@@ -396,8 +400,8 @@ class ParameterListPanel(QWidget):
 
         Call only from a document-REPLACE path (open/new/drop) -- never from
         :meth:`show_node`/:meth:`reveal`/a same-document refresh, which must
-        keep the survive-same-section-rebuild behaviour (decision H). Without
-        this, opening a different document would inherit a previous
+        keep the survive-same-section-rebuild behaviour. Without this,
+        opening a different document would inherit a previous
         document's expanded sections wherever their paths happen to collide
         (e.g. both have a "Cell"), and the dict would grow unboundedly across
         a session of many opens.
@@ -441,9 +445,9 @@ class ParameterListPanel(QWidget):
 
     def _on_activate_current(self) -> None:
         """Return/Enter on the current row: only a "fields to add" suggestion
-        row acts on this (mirrors the add-parameter popup's Enter-to-activate,
-        decision H). A real parameter row has no Enter behaviour, matching
-        today's app -- selection there is click-driven only."""
+        row acts on this (mirrors the add-parameter popup's Enter-to-activate).
+        A real parameter row has no Enter behaviour, matching today's app --
+        selection there is click-driven only."""
         item = self._list.currentItem()
         if item is None or item.data(self._GROUP_ROW_KIND_ROLE) != "suggestion":
             return
@@ -457,9 +461,9 @@ class ParameterListPanel(QWidget):
         requests the add through ``add_parameter_requested`` -- the exact
         signal/path the add-parameter popup's own Suggested rows use, so both
         surfaces share one undo step and one reveal/focus behaviour. A ghost
-        row (multi-file track M2) is selectable but names no real document
-        parameter, so it requests ``ghost_selected`` instead -- the Inspector
-        shows its read-only ghost card, never the normal editing card.
+        row is selectable but names no real document parameter, so it
+        requests ``ghost_selected`` instead -- the Inspector shows its
+        read-only ghost card, never the normal editing card.
         """
         kind = item.data(self._GROUP_ROW_KIND_ROLE)
         if kind == "header":

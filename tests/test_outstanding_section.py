@@ -1,17 +1,16 @@
 """Diagnostics page Outstanding section: absorption, the rail badge, and
 Outstanding row activation dispatch.
 
-Walks the plan's four mockup states end to end through the real MainWindow
-(state 1: fresh skeleton; state 2: a working document with one visible error
-plus outstanding work; state 3: Partial with a sparse electrode; state 4: a
+Walks four document states end to end through the real MainWindow (state 1:
+fresh skeleton; state 2: a working document with one visible error plus
+outstanding work; state 3: Partial with a sparse electrode; state 4: a
 complete, untouched document), then covers the polymorphic Outstanding
-activation contract (decision L) and the structural non-activatable rows.
+activation contract and the structural non-activatable rows.
 
-Two mutation-sensitive seams the plan calls out are verified by hand rather
-than as an automated test (a pytest run cannot revert production code mid
-test): (a) the badge must derive from POST-absorption counts, and (b) the V7
-cascade (AddSection -> Outstanding re-render) must actually run. Evidence for
-both is reported in the implementation summary, not here.
+Two mutation-sensitive seams are verified by hand rather than as an
+automated test (a pytest run cannot revert production code mid test): (a)
+the badge must derive from POST-absorption counts, and (b) the
+AddSection -> Outstanding re-render cascade must actually run.
 """
 
 from __future__ import annotations
@@ -77,9 +76,9 @@ def test_state1_fresh_skeleton(app_driver, tmp_path):
     assert d.validation_badge_severity() is None
 
     headers = d.validation_group_headers()
-    assert "Cell - 5 of 5 remaining" in headers
-    assert "Negative electrode - 9 of 9 remaining" in headers
-    assert "Positive electrode - 9 of 9 remaining" in headers
+    assert "Cell · 5 of 5 remaining" in headers
+    assert "Negative electrode · 9 of 9 remaining" in headers
+    assert "Positive electrode · 9 of 9 remaining" in headers
     # bpx 1.1.1 made `State` schema-optional (Field(None, alias="State")) and
     # deleted the root validator that used to demand it, so `document_factory`
     # no longer scaffolds it at all -- there is no State group here.
@@ -87,8 +86,8 @@ def test_state1_fresh_skeleton(app_driver, tmp_path):
     assert d.validation_outstanding_count() == 5 + 9 + 9
     tasks = d.outstanding_tasks()
     assert not any(t.path[:1] == ("State",) for t in tasks)
-    # Tree-dot consistency (user, 2026-07-22): a fresh skeleton's tree is as
-    # calm as its badge -- required-but-absent fields are outstanding, not red.
+    # Tree-dot consistency: a fresh skeleton's tree is as calm as its badge
+    # -- required-but-absent fields are outstanding, not red.
     assert d.tree_error_marked_sections() == []
 
 
@@ -113,10 +112,10 @@ def test_state2_working_document(app_driver, tmp_path, valid_spm_dict):
     )
     assert any(t.kind is TaskKind.NULL_FIELD and t.path == _LOWER_CUTOFF for t in tasks)
     headers = d.validation_group_headers()
-    assert "Cell - 2 of 5 remaining" in headers
+    assert "Cell · 2 of 5 remaining" in headers
 
-    # Tree-dot consistency (user, 2026-07-22): Cell's missing/null fields are
-    # outstanding, so Cell stays calm in the tree as in the badge. The one
+    # Tree-dot consistency: Cell's missing/null fields are outstanding, so
+    # Cell stays calm in the tree as in the badge. The one
     # genuine error here shows no dot either -- the malformed-BPX diagnostic
     # attaches to the document root (nav ``()``), which has no tree row; the
     # badge and the Document bucket carry it (unchanged from the verbatim-era
@@ -157,21 +156,21 @@ def test_state3_partial_sparse_electrode(app_driver, tmp_path):
     d.diagnostics_select_rail("Negative electrode")
     notice = d.diagnostics_section_outstanding_empty_text()
     assert notice == (
-        "Model is Partial - no completion target. Expected fields are "
-        "still suggested in each section's parameter list."
+        "Model is Partial, so there is no completion target. Expected "
+        "fields are still suggested in each section's parameter list."
     )
-    # Terminology discipline (decision B): "valid"/"invalid" never appear in
-    # the Outstanding notice.
+    # Terminology discipline: "valid"/"invalid" never appear in the
+    # Outstanding notice.
     assert "valid" not in notice.lower() and "invalid" not in notice.lower()
 
 
 def test_state3b_partial_null_is_outstanding_not_error(app_driver, tmp_path, valid_spm_dict):
-    """Decision C (revised 2026-07-22): a committed null under Partial is
-    outstanding work, not a red error -- the same calm treatment a concrete
-    model gives it. The motivating scenario: a complete document flipped to
-    Partial with one field emptied used to go red everywhere (row dot, tree
-    dot, badge) while the identical SPM document stayed calm. The Partial
-    notice remains only in a section with no task rows to show."""
+    """A committed null under Partial is outstanding work, not a red error --
+    the same calm treatment a concrete model gives it. The motivating
+    scenario: a complete document flipped to Partial with one field emptied
+    used to go red everywhere (row dot, tree dot, badge) while the identical
+    SPM document stayed calm. The Partial notice remains only in a section
+    with no task rows to show."""
     raw = json.loads(json.dumps(valid_spm_dict))
     raw["Header"]["Model"] = "Partial"
     raw["Parameterisation"]["Cell"]["Nominal cell capacity [A.h]"] = None
@@ -186,7 +185,7 @@ def test_state3b_partial_null_is_outstanding_not_error(app_driver, tmp_path, val
     assert [t.kind for t in tasks] == [TaskKind.NULL_FIELD]
     assert tasks[0].path == _CAPACITY
     assert tasks[0].required is False  # nothing is Required under Partial
-    assert "Cell · optional - 1 unfilled" in d.validation_group_headers()
+    assert "Cell · optional · 1 unfilled" in d.validation_group_headers()
     assert d.tree_error_marked_sections() == []  # calm tree too
 
     d.diagnostics_select_rail("Cell")
@@ -218,7 +217,7 @@ def test_state4_done(app_driver, valid_spm_path):
 
 
 # ---------------------------------------------------------------------------
-# Activation dispatch (decision L), each through the real driver.
+# Activation dispatch, each through the real driver.
 # ---------------------------------------------------------------------------
 
 
@@ -235,8 +234,8 @@ def test_missing_field_activation_reveals_the_fields_to_add_group(
 
     assert d.tree_selection_label() == "Cell"
     # The group is expanded (Nominal cell capacity plus whatever optional
-    # fields the fixture's Cell also omits -- decision H's group is
-    # all-Expected, not Required-only) and the missing field is highlighted.
+    # fields the fixture's Cell also omits -- the group is all-Expected, not
+    # Required-only) and the missing field is highlighted.
     assert d.fields_to_add_header_text().startswith("▾")
     assert "Nominal cell capacity [A.h]" in d.fields_to_add_suggestion_aliases()
     assert d.fields_to_add_current_alias() == "Nominal cell capacity [A.h]"
@@ -256,15 +255,15 @@ def test_null_field_activation_selects_the_parameter(app_driver, tmp_path, valid
 
 
 def test_missing_section_activation_adds_and_cascades_end_to_end(app_driver, tmp_path):
-    """V7's cascade, end to end: activating an absent section's Outstanding
-    row adds it (one undo step) and navigates into it, and the Outstanding
-    list immediately enumerates the new section's own required fields.
+    """The full cascade, end to end: activating an absent section's
+    Outstanding row adds it (one undo step) and navigates into it, and the
+    Outstanding list immediately enumerates the new section's own required
+    fields.
 
-    Re-baselined for bpx 1.1.1: this used to exercise a doubly-nested case
-    (``State`` -> ``Thermal environment``), but bpx 1.1.1 made every one of
-    ``State``'s own children schema-optional too (probed directly: none of
-    ``Initial conditions``/``Thermal environment``/``Degradation`` are in
-    ``State``'s own JSON-schema ``"required"`` list any more), so no
+    bpx 1.1.1 made every one of ``State``'s own children schema-optional too
+    (probed directly: none of ``Initial conditions``/``Thermal environment``/
+    ``Degradation`` are in ``State``'s own JSON-schema ``"required"`` list
+    any more), so no
     ``MISSING_SECTION`` task can ever be generated for them -- there is no
     remaining nested required section anywhere in the schema to demonstrate
     this with. ``Parameterisation`` -> ``Electrolyte`` (required for SPMe)
@@ -300,7 +299,7 @@ def test_missing_section_activation_adds_and_cascades_end_to_end(app_driver, tmp
         for t in tasks_after
     )
 
-    # Test 8: undo reverts both the section AND the Outstanding re-render.
+    # Undo reverts both the section AND the Outstanding re-render.
     d.undo()
 
     assert d.undo_enabled() is False
@@ -310,11 +309,11 @@ def test_missing_section_activation_adds_and_cascades_end_to_end(app_driver, tmp
 
 
 def test_declare_model_task_renders_standalone_with_no_group_header(app_driver, tmp_path):
-    """O1 (review fix): DECLARE_MODEL is not itself a section-shape fact --
-    "Header -- 1 of 2 remaining" read indirectly when the one actionable
-    thing is declaring a model. It renders standalone under the Outstanding
-    page header, with no group subheader at all (unlike every other task
-    kind, which keeps its own/owning-section group)."""
+    """DECLARE_MODEL is not itself a section-shape fact -- "Header -- 1 of 2
+    remaining" read indirectly when the one actionable thing is declaring a
+    model. It renders standalone under the Outstanding page header, with no
+    group subheader at all (unlike every other task kind, which keeps its
+    own/owning-section group)."""
     d = app_driver
     d.open(_undeclared_model_path(tmp_path))
 
@@ -326,8 +325,8 @@ def test_declare_model_task_renders_standalone_with_no_group_header(app_driver, 
 
 def test_declare_model_activation_navigates_to_header_when_model_absent(app_driver, tmp_path):
     """``Header.Model`` entirely absent: there is no committed parameter, but
-    Header's own "fields to add" suggestion row survives decision C's
-    model gate (Header's fields don't depend on the model -- see
+    Header's own "fields to add" suggestion row survives the model gate
+    (Header's fields don't depend on the model -- see
     ``_append_missing_fields_group``), so activation navigates to Header and
     reveals/selects the Model suggestion row via ``reveal_missing_alias``."""
     d = app_driver
@@ -399,19 +398,19 @@ def test_declare_model_activation_navigates_to_the_parameter_when_model_unrecogn
 
 
 def test_optional_null_field_gets_its_own_subgroup(app_driver, tmp_path):
-    """The live-review defect, fixed (decision R): a fresh SPM skeleton plus
-    Cell's optional ``Volume [m3]`` added empty used to render "Cell -- 5 of
-    5 remaining" with 6 rows underneath. The optional null now moves to a
-    separate, quiet sub-group beneath the required one."""
+    """The confirmed defect: a fresh SPM skeleton plus Cell's optional
+    ``Volume [m3]`` added empty used to render "Cell -- 5 of 5 remaining"
+    with 6 rows underneath. The optional null now moves to a separate,
+    quiet sub-group beneath the required one."""
     raw = document_factory.create("SPM", title="probe")
     raw["Parameterisation"]["Cell"]["Volume [m3]"] = None
     d = app_driver
     d.open(_write(tmp_path, "optional_null_cell.json", raw))
 
     headers = d.validation_group_headers()
-    assert "Cell - 5 of 5 remaining" in headers
-    assert "Cell · optional - 1 unfilled" in headers
-    assert d.validation_task_row_count_under_header("Cell - 5 of 5 remaining") == 5
+    assert "Cell · 5 of 5 remaining" in headers
+    assert "Cell · optional · 1 unfilled" in headers
+    assert d.validation_task_row_count_under_header("Cell · 5 of 5 remaining") == 5
 
     optional_task = next(
         t for t in d.outstanding_tasks() if t.path == _CELL + ("Volume [m3]",)
@@ -425,16 +424,16 @@ def test_optional_null_field_gets_its_own_subgroup(app_driver, tmp_path):
 def test_required_group_ratio_integrity_with_mixed_required_and_optional_tasks(
     app_driver, tmp_path
 ):
-    """Decision R's exact promise: the required group's stated N always
-    equals the row count directly beneath it, in a section holding BOTH
-    required-missing and optional-null tasks together (the scenario that
-    used to read "5 of 5" over 6 rows)."""
+    """The required group's stated N always equals the row count directly
+    beneath it, in a section holding BOTH required-missing and
+    optional-null tasks together (the scenario that used to read "5 of 5"
+    over 6 rows)."""
     raw = document_factory.create("SPM", title="probe")
     raw["Parameterisation"]["Cell"]["Volume [m3]"] = None
     d = app_driver
     d.open(_write(tmp_path, "ratio_integrity.json", raw))
 
-    assert d.validation_task_row_count_under_header("Cell - 5 of 5 remaining") == 5
+    assert d.validation_task_row_count_under_header("Cell · 5 of 5 remaining") == 5
 
 
 def test_section_with_only_optional_nulls_shows_no_required_header(
@@ -446,16 +445,15 @@ def test_section_with_only_optional_nulls_shows_no_required_header(
     d.open(_write(tmp_path, "only_optional_header.json", raw))
 
     headers = d.validation_group_headers()
-    assert "Header · optional - 1 unfilled" in headers
+    assert "Header · optional · 1 unfilled" in headers
     assert not any(h.startswith("Header -") for h in headers)
 
 
 def test_fold_headers_are_non_activatable(app_driver, tmp_path):
-    """The rail redesign (Stage B) replaced the page-level "Issues"/
-    "Outstanding" headers with one foldable header per bucket in the
-    All-sections view; the same non-activatable contract applies to it --
-    a single click folds/unfolds (covered elsewhere), Enter/double-click is
-    a structural no-op."""
+    """The rail replaced the page-level "Issues"/"Outstanding" headers with
+    one foldable header per bucket in the All-sections view; the same
+    non-activatable contract applies to it -- a single click folds/unfolds
+    (covered elsewhere), Enter/double-click is a structural no-op."""
     d = app_driver
     d.open(_skeleton_path(tmp_path))
     assert d.all_sections_fold_headers()  # premise: at least one bucket renders

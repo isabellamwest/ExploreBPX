@@ -231,7 +231,13 @@ def test_clicking_a_chip_selects_it_for_the_table():
     dialog._select_table_series(run.id)
 
     assert dialog._selected_table_id == run.id
+    # The selection ring means "shown in the table", so it paints only in
+    # Table mode -- in Chart mode the choice is remembered but unmarked.
+    assert dialog._chips[run.id].is_selected is False
+    dialog._on_mode_clicked(1)
     assert dialog._chips[run.id].is_selected is True
+    dialog._on_mode_clicked(0)
+    assert dialog._chips[run.id].is_selected is False
     assert dialog._chips["__you__"].is_selected is False
 
 
@@ -307,8 +313,8 @@ def test_temperature_panel_hidden_until_a_series_with_temperature_is_added(
 def test_own_run_is_the_anchor_and_cannot_be_removed():
     """The active document's own run has no picker row to add it back from,
     so it is the non-removable anchor: its legend chip carries no "x", and
-    ``_remove_series`` refuses it even if called directly (the dead-end Bella
-    hit 2026-07-20)."""
+    ``_remove_series`` refuses it even if called directly (removing it any
+    other way would be a dead end)."""
     dialog = DatabaseExamplesDialog(_OWN_RUN, "my_cell · test run")
 
     assert dialog._chips["__you__"].removable is False
@@ -352,13 +358,13 @@ def test_own_run_carries_line_width_three_and_reference_runs_carry_two():
 def test_window_title_names_the_run_when_a_run_label_is_given():
     dialog = DatabaseExamplesDialog(run_label="C/20 discharge")
 
-    assert dialog.windowTitle() == "Compare - Experiment · C/20 discharge"
+    assert dialog.windowTitle() == "Compare · Experiment · C/20 discharge"
 
 
 def test_window_title_is_generic_without_a_run_label():
     dialog = DatabaseExamplesDialog()
 
-    assert dialog.windowTitle() == "Compare experiment data"
+    assert dialog.windowTitle() == "Compare · Experiment"
 
 
 # ---------------------------------------------------------------------------
@@ -415,7 +421,7 @@ def test_numbers_table_reports_points_duration_and_ranges_for_own_run_and_a_refe
 
     table = dialog._chart_page.numbers
     headers = [table.horizontalHeaderItem(c).text() for c in range(table.columnCount())]
-    assert headers == ["Run", "Points", "Duration", "Current", "Voltage"]
+    assert headers == ["Run", "Points", "Duration", "Current range", "Voltage range"]
     assert table.rowCount() == 2
     assert not table.isHidden()
 
@@ -432,6 +438,33 @@ def test_numbers_table_reports_points_duration_and_ranges_for_own_run_and_a_refe
     assert table.item(1, 2).text() == "20.7 h"
     assert table.item(1, 3).text() == "-0.1004 to -0.002607 A"
     assert table.item(1, 4).text() == "2 to 3.477 V"
+
+
+def test_non_finite_cells_are_skipped_by_charts_and_numbers():
+    """A ``nan``/``inf`` float (which the lenient parser lets through) must
+    reach neither the plotted curve nor the key-numbers min/max -- the same
+    guard c1138d7 pinned for ``TablePreview``, now shared via
+    ``chart_axes.as_plot_number``. The row itself is dropped, never coerced."""
+    own = {
+        "Time [s]": [0.0, 1.0, float("nan"), 3.0],
+        "Current [A]": [-1.0, float("inf"), -1.0, -1.0],
+        "Voltage [V]": [4.0, 3.9, 3.85, 3.8],
+    }
+    dialog = DatabaseExamplesDialog(own, "my_cell · test run")
+
+    page = dialog._chart_page
+    voltage = [(p.x(), p.y()) for p in page.voltage._series["__you__"].points()]
+    assert voltage == [(0.0, 4.0), (1.0, 3.9), (3.0, 3.8)]
+    current = [(p.x(), p.y()) for p in page.current._series["__you__"].points()]
+    assert current == [(0.0, -1.0), (3.0, -1.0)]
+
+    table = page.numbers
+    # Points counts plottable Time samples (the nan row is dropped), the
+    # same basis as the duration beside it, so neither reads "nan".
+    assert table.item(0, 1).text() == "3"
+    assert table.item(0, 2).text() == "3 s"
+    assert table.item(0, 3).text() == "-1 A"
+    assert table.item(0, 4).text() == "3.8 to 4 V"
 
 
 # ---------------------------------------------------------------------------
@@ -480,6 +513,52 @@ def test_add_reference_file_appends_a_picker_group_and_its_run_is_addable(tmp_pa
     page = dialog._chart_page
     assert run.id in page.voltage._series
     assert dialog._chart_page.numbers.rowCount() == 1
+
+
+def test_opening_the_same_file_twice_is_refused_with_a_message(tmp_path):
+    """A repeat open used to append a second, visually identical picker
+    group with no way to tell the two apart or remove either."""
+    payload = {
+        "Header": {"BPX": "0.1.0", "Title": "My Test Cell", "Model": "DFN"},
+        "Validation": {
+            "My run": {
+                "Time [s]": [0, 1, 2],
+                "Current [A]": [-2.0, -2.0, -2.0],
+                "Voltage [V]": [4.2, 4.1, 4.0],
+            },
+        },
+    }
+    path = tmp_path / "my_cell.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    dialog = DatabaseExamplesDialog()
+    dialog._add_reference_file(str(path))
+    groups_before = dialog._file_groups.count()
+    rows_before = len(dialog._picker_rows)
+
+    dialog._add_reference_file(str(path))
+
+    assert dialog._file_groups.count() == groups_before
+    assert len(dialog._picker_rows) == rows_before
+    assert not dialog._file_message.isHidden()
+    assert "already" in dialog._file_message.text()
+
+
+def test_stale_file_error_clears_on_the_next_open_attempt(monkeypatch):
+    """A failed open's message must not outlive the attempt it describes --
+    even a cancelled file dialog clears it."""
+    dialog = DatabaseExamplesDialog()
+    dialog._show_file_message("old failure")
+    assert not dialog._file_message.isHidden()
+
+    monkeypatch.setattr(
+        dialog_module.QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *args, **kwargs: ("", "")),
+    )
+    dialog._open_reference_file()
+
+    assert dialog._file_message.isHidden()
 
 
 def test_add_reference_file_with_no_validation_section_shows_a_message(tmp_path):

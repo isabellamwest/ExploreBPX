@@ -1,14 +1,10 @@
-"""Diagnostics page -- rail redesign (Stage B, 2026-07-16 design pass).
+"""Diagnostics page: summary strip, section rail, and detail pane.
 
-Replaces the old Concept A layout (collapsible issue-section groups, two
-page-level "Issues"/"Outstanding" headers sharing one QListWidget) with the
-signed-off wireframe: a summary strip, a section rail, and a detail pane that
-is either one selected section's Issues/Outstanding group boxes or the
-whole-document "All sections" backup view. See ``ui_qt.diagnostics_panel``'s
-module docstring for the full design. Companion fix carried over unchanged from
-Concept A: a bad *string* in a FloatInt field (float_parsing + int_parsing)
-merges to one displayed row (decision Q), so its badge count and its rows
-agree.
+The detail pane is either one selected section's Issues/Outstanding group
+boxes or the whole-document "All sections" backup view. See
+``ui_qt.diagnostics_panel``'s module docstring for the full design. A bad
+*string* in a FloatInt field (float_parsing + int_parsing) merges to one
+displayed row, so its badge count and its rows agree.
 """
 
 from __future__ import annotations
@@ -72,7 +68,7 @@ def test_strip_counts_wording(qtbot):
 
 
 def test_strip_totals_match_the_app_rail_badge(app_driver, many_issues_path):
-    """F3/G: the strip's totals and the app-rail badge derive from the same
+    """The strip's totals and the app-rail badge derive from the same
     ``PartitionedIssues`` in ``main_window._refresh_all`` -- they can never
     disagree."""
     d = app_driver
@@ -89,13 +85,13 @@ def test_rail_lists_all_sections_first_then_one_entry_per_bucket(app_driver, man
     d.open(many_issues_path)
     labels = d.diagnostics_rail_labels()
     assert labels[0] == "All sections"
-    # SPM's schema sections, in document order, present or not (F3: every
-    # SectionBucket gets a rail entry, clean or not).
+    # SPM's schema sections, in document order, present or not -- every
+    # SectionBucket gets a rail entry, clean or not.
     assert labels[1:] == ["Header", "Cell", "Negative electrode", "Positive electrode", "State"]
 
 
 def test_clean_bucket_shows_no_badge(app_driver, many_issues_path):
-    """F4: a clean bucket carries no badge at all -- quiet rail, not a
+    """A clean bucket carries no badge at all -- quiet rail, not a
     green/zero one."""
     d = app_driver
     d.open(many_issues_path)
@@ -107,7 +103,7 @@ def test_rail_badge_counts_match_the_bucket(app_driver, many_issues_path):
     d = app_driver
     d.open(many_issues_path)
     cell = d.diagnostics_bucket("Cell")
-    assert cell.error_count == 2  # two merged union-pair rows (decision Q)
+    assert cell.error_count == 2  # two merged union-pair rows
     assert cell.warning_count == 0
     electrode = d.diagnostics_bucket("Negative electrode")
     assert electrode.error_count == 1
@@ -136,7 +132,7 @@ def test_document_bucket_appears_only_when_occupied(app_driver, valid_spm_path, 
     d.open(fixtures_dir / "nmc_pouch_cell_BPX.json")
     labels = d.diagnostics_rail_labels()
     assert "Document" in labels
-    # F2: Document sits first among the section entries, right after "All
+    # Document sits first among the section entries, right after "All
     # sections" (the separator between them is not itself a labelled entry).
     assert labels[1] == "Document"
 
@@ -269,8 +265,8 @@ def test_issue_row_splits_location_from_message(app_driver, many_issues_path):
     html = d.validation_issue_html()
     row = next(h for h in html if "Lower voltage cut-off" in h)
     # location and message are on two lines (a <br> between them); the unit
-    # is muted, the message present, and no bracketed [ERROR] tag survives
-    # (F5: a delegate-painted icon carries severity now).
+    # is muted, the message present, and no bracketed [ERROR] tag survives --
+    # a delegate-painted icon carries severity now.
     assert "<br>" in row
     assert "Lower voltage cut-off" in row
     assert "[V]" in row
@@ -293,7 +289,7 @@ def test_issues_box_badge_shows_a_warning_only_bucket(app_driver, fixtures_dir):
     """Regression: the Issues box header used to pass only ``bucket.
     error_count`` to its badge, so a warnings-only bucket (no errors) drew
     an invisible "0" badge even though its one warning row rendered fine.
-    The header must match the rail's own badge rule (F4/F5): an amber badge
+    The header must match the rail's own badge rule: an amber badge
     when warnings are nonzero, no red badge when errors are zero."""
     d = app_driver
     d.open(fixtures_dir / "warning_legacy_bpx_float.json")
@@ -329,7 +325,7 @@ def test_optional_subhead_only_when_optional_tasks_exist(app_driver, tmp_path):
     d.open(_write(tmp_path, "with_optional.json", raw))
     d.diagnostics_select_rail("Cell")
     subheads = d.diagnostics_section_optional_subhead_texts()
-    assert subheads == ["OPTIONAL - 1 UNFILLED"]
+    assert subheads == ["OPTIONAL · 1 UNFILLED"]
 
 
 def test_section_pane_empty_states_use_pinned_words(app_driver, valid_spm_path):
@@ -341,7 +337,7 @@ def test_section_pane_empty_states_use_pinned_words(app_driver, valid_spm_path):
     assert d.diagnostics_section_outstanding_empty_text() == _MSG_NOTHING_OUTSTANDING
 
 
-# --- All sections (F3 backup view) ------------------------------------------
+# --- All sections (backup view) --------------------------------------------
 
 
 def test_all_sections_renders_every_bucket_exactly_once(app_driver, many_issues_path):
@@ -352,7 +348,7 @@ def test_all_sections_renders_every_bucket_exactly_once(app_driver, many_issues_
 
 
 def test_all_sections_row_identity_matches_the_buckets(app_driver, many_issues_path):
-    """Spot-check the backup guarantee at UI level (F3): every issue row
+    """Spot-check the backup guarantee at UI level: every issue row
     shown in All-sections belongs to the bucket the rail agrees it does."""
     d = app_driver
     d.open(many_issues_path)
@@ -376,8 +372,7 @@ def test_only_issue_and_task_rows_are_interactive():
 
 def test_fold_header_paints_as_a_fixed_height_band(app_driver, valid_spm_path):
     """Fold headers get a fixed-height band treatment (the delegate
-    overrides sizeHint for them), the direct descendant of Concept A's
-    page-header divider."""
+    overrides sizeHint for them)."""
     from PySide6.QtWidgets import QStyleOptionViewItem
 
     from ui_qt.diagnostics_panel import _DiagnosticsRowDelegate
@@ -396,11 +391,11 @@ def test_fold_header_paints_as_a_fixed_height_band(app_driver, valid_spm_path):
 
 
 def test_folding_a_bucket_hides_both_its_issue_and_task_rows(app_driver, tmp_path, valid_spm_dict):
-    """Fold is per-bucket now (issues + outstanding together), not per-
-    Issues-section -- the direct architectural change from Concept A. Uses
-    a Cell bucket that genuinely carries BOTH an issue (a bad value) and a
-    task (a deleted required field), so folding is proved to hide each
-    half of its own claim, not just the one a fresh skeleton happens to have."""
+    """Fold is per-bucket (issues + outstanding together), not per-
+    Issues-section. Uses a Cell bucket that genuinely carries BOTH an issue
+    (a bad value) and a task (a deleted required field), so folding is
+    proved to hide each half of its own claim, not just the one a fresh
+    skeleton happens to have."""
     raw = json.loads(json.dumps(valid_spm_dict))
     del raw["Parameterisation"]["Cell"]["Nominal cell capacity [A.h]"]
     raw["Parameterisation"]["Cell"]["Lower voltage cut-off [V]"] = "low"
@@ -549,11 +544,10 @@ def test_ratio_words_plain_ratio():
 
 
 def test_ratio_words_absent_children_only():
-    """The State-like shape (Stage A groups a present section's absent
-    children into its own bucket): no leaf fields required, one or more
-    MISSING_SECTION children -- reports "N sections absent", never a
-    misleading "0 of 0 remaining" (the case the confirmed-live bug came
-    from)."""
+    """The State-like shape (groups a present section's absent children into
+    its own bucket): no leaf fields required, one or more MISSING_SECTION
+    children -- reports "N sections absent", never a misleading "0 of 0
+    remaining" (the case the confirmed-live bug came from)."""
     from core.completion import TaskKind
     from ui_qt.diagnostics_panel import _ratio_words
 
@@ -578,13 +572,11 @@ def test_ratio_words_absent_children_only():
 
 
 
-# --- windowed-review fix round (2026-07-16, second pass) -------------------
+# --- pinned regressions found by driving the real (non-offscreen) app ------
 #
-# Four divergences from the signed-off wireframe found by driving the real
-# (non-offscreen) app: content-hugging group boxes, right-aligned task-row
-# action text, bordered summary-strip chips, and rail/fold-header badge
-# paint order. A fifth item (fold chevron glyph) was investigated and found
-# already correct -- pinned here anyway as a regression guard.
+# Content-hugging group boxes, right-aligned task-row action text, bordered
+# summary-strip chips, rail/fold-header badge paint order, and the fold
+# chevron glyph.
 
 
 def test_group_boxes_hug_their_content_instead_of_stretching(app_driver):
@@ -612,10 +604,9 @@ def test_group_boxes_hug_their_content_instead_of_stretching(app_driver):
 
 
 def test_task_row_action_text_is_a_separate_right_aligned_role(app_driver):
-    """S4b F5: REQUIRED sits inline after the name; the action text is
-    painted separately, right-aligned, in accent colour -- not folded into
-    the same parenthetical the way it used to render
-    ("Name (REQUIRED . Go to >)")."""
+    """REQUIRED sits inline after the name; the action text is painted
+    separately, right-aligned, in accent colour -- not folded into the same
+    parenthetical the way it used to render ("Name (REQUIRED . Go to >)")."""
     from ui_qt import diagnostics_panel as dp
     from ui_qt import parameter_row
 
@@ -633,8 +624,8 @@ def test_task_row_action_text_is_a_separate_right_aligned_role(app_driver):
 
 
 def test_summary_strip_chips_are_bordered_boxes(app_driver, valid_spm_path):
-    """The wireframe's "boxes/shading to make regions distinguishable" --
-    plain coloured text was a Stage-B divergence; each chip must be its own
+    """The wireframe calls for "boxes/shading to make regions distinguishable"
+    -- plain coloured text is not enough; each chip must be its own
     QSS-styled card."""
     d = app_driver
     d.open(valid_spm_path)
@@ -670,8 +661,7 @@ def test_paint_badges_paints_in_reversed_order_so_first_spec_reads_leftmost(monk
 
 
 def test_fold_header_glyph_flips_with_collapsed_state(app_driver):
-    """Verified against a real windowed screenshot per the review: the
-    chevron glyph does flip correctly with fold state (this pins the
+    """The chevron glyph flips correctly with fold state (this pins the
     plain-text half of that against regression -- the delegate's own
     painted chevron is computed from the same collapsed flag, see
     _DiagnosticsRowDelegate._paint_fold_header)."""
@@ -687,7 +677,7 @@ def test_fold_header_glyph_flips_with_collapsed_state(app_driver):
     assert header.text().startswith("▸")
 
 
-# --- polish round (2026-07-17): flat dots, tooltips, crisper boxes ---------
+# --- flat dots, tooltips, crisper boxes -------------------------------------
 
 
 def test_task_row_tooltip_is_task_kind_derived(app_driver):
@@ -708,7 +698,9 @@ def test_task_row_tooltip_is_task_kind_derived(app_driver):
     assert task_item.toolTip() == style.task_kind_tooltip(task.kind)
 
 
-def test_strip_chip_tooltips_reflect_counts(app_driver, many_issues_path):
+def test_strip_chip_tooltips_reflect_counts_and_say_they_filter(app_driver, many_issues_path):
+    """Counts stay truthful (F8), and the suffix is the one place the chips
+    admit to being click-to-filter toggles -- including the off state."""
     from ui_qt import style
 
     d = app_driver
@@ -716,9 +708,19 @@ def test_strip_chip_tooltips_reflect_counts(app_driver, many_issues_path):
     strip = d._w._diagnostics._strip
     errors, warnings, outstanding = d.diagnostics_strip_counts()
 
-    assert strip._errors.toolTip() == style.error_count_tooltip(errors)
-    assert strip._warnings.toolTip() == style.warning_count_tooltip(warnings)
-    assert strip._outstanding.toolTip() == style.outstanding_count_tooltip(outstanding)
+    assert strip._errors.toolTip() == f"{style.error_count_tooltip(errors)} · click to hide"
+    assert strip._warnings.toolTip() == f"{style.warning_count_tooltip(warnings)} · click to hide"
+    assert (
+        strip._outstanding.toolTip()
+        == f"{style.outstanding_count_tooltip(outstanding)} · click to hide"
+    )
+
+    strip._errors.set_on(False)
+    strip._on_chip_toggled(False)
+    assert (
+        strip._errors.toolTip()
+        == f"{style.error_count_tooltip(errors)} · hidden · click to show"
+    )
 
 
 def test_rail_entry_tooltip_reflects_bucket_counts(app_driver, many_issues_path):
@@ -747,7 +749,7 @@ def test_rail_all_sections_tooltip_reflects_document_totals(app_driver, many_iss
 
 
 def test_clean_bucket_rail_tooltip_is_empty(app_driver, many_issues_path):
-    """F4's quiet philosophy extends to tooltips: a clean bucket (State,
+    """The quiet-badge philosophy extends to tooltips: a clean bucket (State,
     untouched in the many_issues fixture) has nothing to report, so its
     tooltip is empty -- no "0 errors" noise on hover."""
     d = app_driver
@@ -757,12 +759,12 @@ def test_clean_bucket_rail_tooltip_is_empty(app_driver, many_issues_path):
 
 
 def test_severity_dots_carry_no_inner_glyph_text_in_the_delegate(app_driver, many_issues_path):
-    """The confirmed real-window feedback: the delegate paints a flat dot,
-    not an icon-in-circle. Structural proof (paint is a no-op to assert
-    against directly): the delegate's severity-icon painter no longer draws
-    any glyph text -- inspect its source rather than pixels, since colour-
-    only circle painting is already covered by test_activity_bar.py-style
-    pixel probes elsewhere in this suite for the equivalent badge pattern."""
+    """The delegate paints a flat dot, not an icon-in-circle. Structural
+    proof (paint is a no-op to assert against directly): the delegate's
+    severity-icon painter no longer draws any glyph text -- inspect its
+    source rather than pixels, since colour-only circle painting is already
+    covered by test_activity_bar.py-style pixel probes elsewhere in this
+    suite for the equivalent badge pattern."""
     from ui_qt.parameter_row import ParameterRowDelegate
 
     import inspect
@@ -773,10 +775,10 @@ def test_severity_dots_carry_no_inner_glyph_text_in_the_delegate(app_driver, man
 
 
 def test_task_glyph_is_muted_grey_not_bold(app_driver):
-    """Harmonisation ask: a task row's ring/half-filled mark must render in
-    the same grey (#57606a) family as the issue dots -- the shared dot
-    family (unified symbol system, Concept A), rendered muted rather than
-    swept into the bold name span the way a text glyph used to be."""
+    """A task row's ring/half-filled mark must render in the same grey
+    (#57606a) family as the issue dots -- the shared dot family, rendered
+    muted rather than swept into the bold name span the way a text glyph
+    used to be."""
     from ui_qt import diagnostics_panel as dp
     from ui_qt import icons, parameter_row, style
 

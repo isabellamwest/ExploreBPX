@@ -35,6 +35,8 @@ card may hand over a Command" contract:
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -52,12 +54,12 @@ from .cards.csv_dialog import CsvImportDialog
 from .cards.experiment import KNOWN_ALIASES
 from .cards.page import GUTTER
 from .name_popup import NamePopup
-from .style import MUTED
+from .style import ERROR, MUTED
 
 _HEADING = "No experiments yet"
 _COPY = (
-    "Validation stores measured traces - time, current, voltage, "
-    "optionally temperature - to check this parameter set against."
+    "Validation stores measured traces (time, current, voltage, "
+    "optionally temperature) to check this parameter set against."
 )
 
 
@@ -109,12 +111,23 @@ class ValidationEmptyState(QWidget):
         self._add_button.clicked.connect(self._open_add_experiment_popup)
         actions.addWidget(self._add_button)
 
-        self._import_button = QPushButton("Import CSV as new experiment…")
+        self._import_button = QPushButton("Import CSV…")
         self._import_button.setObjectName("ValidationEmptyStateImport")
         self._import_button.clicked.connect(self._import_csv_as_new_experiment)
         actions.addWidget(self._import_button)
         actions.addStretch(1)
         layout.addLayout(actions)
+
+        # Import feedback (same role as ExperimentCard's CsvImportMessage):
+        # an unreadable file or a zero-row parse must say so, not silently
+        # do nothing. Cleared on the next import attempt.
+        self._import_message = QLabel("")
+        self._import_message.setObjectName("CsvImportMessage")
+        self._import_message.setWordWrap(True)
+        self._import_message.setAlignment(Qt.AlignCenter)
+        self._import_message.setStyleSheet(f"color: {ERROR}; font-size: 11px;")
+        self._import_message.hide()
+        layout.addWidget(self._import_message)
 
         # One popup, one pending intent -- mirrors tree_panel.TreePanel's own
         # _popup_intent convention: None means the plain "+ Add
@@ -161,11 +174,21 @@ class ValidationEmptyState(QWidget):
         )
         if not path:
             return
-        data = read_csv_file(path)
+        self._show_import_message("")
+        try:
+            data = read_csv_file(path)
+        except OSError as exc:
+            self._show_import_message(f"Could not read {Path(path).name}: {exc}")
+            return
         if data.row_count == 0:
+            self._show_import_message(f"{Path(path).name} has no data rows to import.")
             return
         self._pending_import = data
         self._open_name_popup(self._import_button)
+
+    def _show_import_message(self, message: str) -> None:
+        self._import_message.setText(message)
+        self._import_message.setVisible(bool(message))
 
     def _prompt_csv_mapping_then_create(self, data: CsvData, name: str) -> None:
         """Confirm the mapping, then write both commands back to back.
