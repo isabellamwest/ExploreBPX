@@ -233,7 +233,28 @@ def _activation_energy(fn_of_t, t_ref: float) -> float | None:
 # --- Section builders --------------------------------------------------------
 
 
-def _sampled_or_scalar(pv, key: str, t_ref: float) -> tuple[object, float | None]:
+class ConversionLog:
+    """What the converter actually did to one set, so the emitted Description
+    states only conversions that happened rather than a generic pipeline
+    summary."""
+
+    def __init__(self) -> None:
+        self.sampled_sto: list[str] = []  # sampled over stoichiometry only
+        self.sampled_at_t: list[str] = []  # sampled with temperature pinned
+        self.copied: list[str] = []  # measured data carried over unchanged
+        self.arrhenius: list[str] = []  # T-dependence reduced to an Ea
+        self.extra: list[str] = []  # one-off conversion clauses
+
+
+def _label(key: str) -> str:
+    """A pybamm entry name as description prose (unit suffix dropped)."""
+    name = key.split(" [")[0]
+    return name[0].lower() + name[1:]
+
+
+def _sampled_or_scalar(
+    pv, key: str, t_ref: float, log: ConversionLog
+) -> tuple[object, float | None]:
     """A sto-dependent property as (scalar | table, activation energy).
 
     Handles the three source shapes: plain number, callable of ``(sto, T)``,
@@ -244,9 +265,13 @@ def _sampled_or_scalar(pv, key: str, t_ref: float) -> tuple[object, float | None
     data = _as_data_table(value)
     if data is not None:
         x, y = data
+        log.copied.append(_label(key))
         return {"x": x, "y": y}, None
     if callable(value):
         ea = _activation_energy(lambda t: _evaluate(value, 0.5, t), t_ref)
+        log.sampled_at_t.append(_label(key))
+        if ea is not None:
+            log.arrhenius.append(_label(key))
         y = [_evaluate(value, s, t_ref) for s in STO_GRID]
         return _table(STO_GRID, y), ea
     return float(value), None
@@ -283,7 +308,7 @@ def _adaptive_grid(
     return xs, ys
 
 
-def _ocp_table(pv, key: str, sto_min: float, sto_max: float) -> dict:
+def _ocp_table(pv, key: str, sto_min: float, sto_max: float, log: ConversionLog) -> dict:
     """An OCP as an interpolated table over stoichiometry (OCPs take sto
     only; entropic T-dependence lives in a separate coefficient carried
     elsewhere).
@@ -298,13 +323,17 @@ def _ocp_table(pv, key: str, sto_min: float, sto_max: float) -> dict:
     data = _as_data_table(value)
     if data is not None:
         x, y = data
+        log.copied.append(_label(key))
         return {"x": x, "y": y}
     lo, hi = min(0.005, sto_min), max(0.995, sto_max)
     xs, ys = _adaptive_grid(lambda s: _evaluate(value, s), lo, hi, OCP_TOL_V)
+    log.sampled_sto.append(_label(key))
     return {"x": xs, "y": ys}
 
 
-def _electrode(pv, prefix: str, sto_min: float, sto_max: float, t_ref: float, c_e0: float) -> dict:
+def _electrode(
+    pv, prefix: str, sto_min: float, sto_max: float, t_ref: float, c_e0: float, log: ConversionLog
+) -> dict:
     """One electrode's BPX section from pybamm's ``<prefix> ...`` entries."""
     particle = "Negative particle" if prefix == "Negative electrode" else "Positive particle"
     c_max = _evaluate(pv[f"Maximum concentration in {prefix.lower()} [mol.m-3]"])
@@ -313,7 +342,7 @@ def _electrode(pv, prefix: str, sto_min: float, sto_max: float, t_ref: float, c_
     porosity = _evaluate(pv[f"{prefix} porosity"])
     bruggeman = _evaluate(pv[f"{prefix} Bruggeman coefficient (electrolyte)"])
 
-    diffusivity, ea_d = _sampled_or_scalar(pv, f"{particle} diffusivity [m2.s-1]", t_ref)
+    diffusivity, ea_d = _sampled_or_scalar(pv, f"{particle} diffusivity [m2.s-1]", t_ref, log)
 
     # Invert the exact normalisation pybamm's BPX reader applies:
     # reader: k_pybamm = k_bpx * F / (c_max * sqrt(c_e0)); here the source
@@ -330,12 +359,14 @@ def _electrode(pv, prefix: str, sto_min: float, sto_max: float, t_ref: float, c_
     k_pybamm = _j0(t_ref) / j0_shape
     k_bpx = k_pybamm * c_max * c_e0**0.5 / FARADAY
     ea_k = _activation_energy(_j0, t_ref)
+    if ea_k is not None:
+        log.arrhenius.append(f"{prefix.lower()} reaction rate constant")
 
     section = {
         "Particle radius [m]": radius,
         "Thickness [m]": _evaluate(pv[f"{prefix} thickness [m]"]),
         "Diffusivity [m2.s-1]": diffusivity,
-        "OCP [V]": _ocp_table(pv, f"{prefix} OCP [V]", sto_min, sto_max),
+        "OCP [V]": _ocp_table(pv, f"{prefix} OCP [V]", sto_min, sto_max, log),
         "Conductivity [S.m-1]": _evaluate(pv[f"{prefix} conductivity [S.m-1]"]),
         "Surface area per unit volume [m-1]": 3.0 * eps_am / radius,
         "Porosity": porosity,
@@ -356,6 +387,7 @@ def _electrode(pv, prefix: str, sto_min: float, sto_max: float, t_ref: float, c_
     # functions take sto only).
     entropic = pv[f"{prefix} OCP entropic change [V.K-1]"]
     if callable(entropic):
+        log.sampled_sto.append(_label(f"{prefix} OCP entropic change [V.K-1]"))
         section["Entropic change coefficient [V.K-1]"] = _table(
             STO_GRID, [_evaluate(entropic, s) for s in STO_GRID]
         )
@@ -364,41 +396,76 @@ def _electrode(pv, prefix: str, sto_min: float, sto_max: float, t_ref: float, c_
     return section
 
 
-def _electrolyte(pv, t_ref: float, c_e0: float) -> dict:
+def _electrolyte(pv, t_ref: float, c_e0: float, log: ConversionLog) -> dict:
     """The electrolyte's BPX section; properties sampled over ``CE_GRID``."""
     t_plus = pv["Cation transference number"]
     conductivity_fn = pv["Electrolyte conductivity [S.m-1]"]
     diffusivity_fn = pv["Electrolyte diffusivity [m2.s-1]"]
 
+    if callable(t_plus):
+        log.extra.append(
+            "the concentration-dependent cation transference number is collapsed "
+            "to its value at the initial electrolyte concentration"
+        )
     section: dict = {
         "Cation transference number": (
             _evaluate(t_plus, c_e0, t_ref) if callable(t_plus) else float(t_plus)
         ),
     }
-    for alias, fn in (
-        ("Conductivity [S.m-1]", conductivity_fn),
-        ("Diffusivity [m2.s-1]", diffusivity_fn),
+    for name, alias, fn in (
+        ("Electrolyte conductivity [S.m-1]", "Conductivity [S.m-1]", conductivity_fn),
+        ("Electrolyte diffusivity [m2.s-1]", "Diffusivity [m2.s-1]", diffusivity_fn),
     ):
         if callable(fn):
+            log.sampled_at_t.append(_label(name))
             section[alias] = _table(CE_GRID, [_evaluate(fn, c, t_ref) for c in CE_GRID])
             ea = _activation_energy(lambda t: _evaluate(fn, c_e0, t), t_ref)
             if ea is not None:
+                log.arrhenius.append(_label(name))
                 section[alias.split(" [")[0] + " activation energy [J.mol-1]"] = ea
         else:
             section[alias] = float(fn)
     return section
 
 
-def _description(meta: SetMeta, t_ref: float) -> str:
+def _description(meta: SetMeta, t_ref: float, log: ConversionLog) -> str:
+    """The Header Description, assembled from what the conversion actually
+    did to *this* set (via ``log``) plus the steps every conversion performs.
+    Every clause is evidence, not boilerplate."""
+    conversions = []
+    if log.sampled_sto:
+        conversions.append(
+            "analytic functions sampled onto interpolated tables over "
+            "stoichiometry: " + ", ".join(log.sampled_sto)
+        )
+    if log.sampled_at_t:
+        conversions.append(
+            f"analytic functions sampled onto interpolated tables at {t_ref} K: "
+            + ", ".join(log.sampled_at_t)
+        )
+    if log.arrhenius:
+        conversions.append(
+            "temperature dependence reduced to a best-fit Arrhenius activation "
+            "energy for " + ", ".join(log.arrhenius)
+        )
+    conversions.extend(log.extra)
+    applied = (
+        " Conversions applied to this set: " + "; ".join(conversions) + "."
+        if conversions
+        else ""
+    )
+    carried = (
+        " Measured data tables carried over unchanged: " + ", ".join(log.copied) + "."
+        if log.copied
+        else ""
+    )
     return (
         f"Reference artifact converted from PyBaMM's {meta.pybamm_name} parameter set "
         f"({meta.citation}). Not simulation-grade: only parameters with a BPX home are "
-        f"carried over; analytic functions (OCPs, electrolyte properties) are sampled as "
-        f"interpolated tables at {t_ref} K with temperature dependence reduced to "
-        f"Arrhenius activation energies; min/max stoichiometries are computed with "
-        f"PyBaMM's eSOH utilities; the reaction rate constant is reconstructed from the "
-        f"exchange-current density; degradation, current-collector and per-component "
-        f"thermal parameters are omitted. Generated offline by "
+        f"carried over; min/max stoichiometries are computed with PyBaMM's eSOH "
+        f"utilities; reaction rate constants are reconstructed from the "
+        f"exchange-current densities; degradation, current-collector and per-component "
+        f"thermal parameters are omitted.{applied}{carried} Generated offline by "
         f"scripts/generate_reference_library.py (PyBaMM {pybamm.__version__})."
     )
 
@@ -449,23 +516,26 @@ def convert(meta: SetMeta) -> dict:
         ** _evaluate(pv["Separator Bruggeman coefficient (electrolyte)"]),
     }
 
+    # Sections are built before the Header so the conversion log is complete
+    # by the time the Description is written from it.
+    log = ConversionLog()
+    electrolyte = _electrolyte(pv, t_ref, c_e0, log)
+    negative = _electrode(pv, "Negative electrode", x_0, x_100, t_ref, c_e0, log)
+    positive = _electrode(pv, "Positive electrode", y_100, y_0, t_ref, c_e0, log)
+
     return {
         "Header": {
             "BPX": BPX_STANDARD_VERSION,
             "Model": "DFN",
             "Title": f"{meta.pybamm_name} — {meta.cell} — PyBaMM reference",
-            "Description": _description(meta, t_ref),
+            "Description": _description(meta, t_ref, log),
             "References": meta.citation,
         },
         "Parameterisation": {
             "Cell": cell,
-            "Electrolyte": _electrolyte(pv, t_ref, c_e0),
-            "Negative electrode": _electrode(
-                pv, "Negative electrode", x_0, x_100, t_ref, c_e0
-            ),
-            "Positive electrode": _electrode(
-                pv, "Positive electrode", y_100, y_0, t_ref, c_e0
-            ),
+            "Electrolyte": electrolyte,
+            "Negative electrode": negative,
+            "Positive electrode": positive,
             "Separator": separator,
         },
         "State": {
