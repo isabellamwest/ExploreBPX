@@ -355,11 +355,13 @@ QPushButton[modelOption="true"] {
 }
 QPushButton[modelOption="true"]:hover { background: #e8eaed; }
 QLabel#NewChooserDescriptor { color: #57606a; font-size: 12px; padding: 0 6px 2px 6px; }
-/* The two file group boxes: the Diagnostics group-box language (bordered
-   rounded card, shaded banded header). The reference box swaps the band and
-   border to the reference purple's own pale tints. */
-QFrame#WorkspaceGroupBox { background: #ffffff; border: 1px solid #c4cdd5; border-radius: 6px; }
-QWidget#WorkspaceGroupBoxHeader {
+/* The shared banded group-box chrome (``ui_qt.group_box.GroupBox``):
+   bordered rounded card, shaded banded header -- the Workspace document
+   card and the Diagnostics Issues/Outstanding boxes alike. The reference
+   variant swaps the band and border to the reference purple's own pale
+   tints. */
+QFrame#GroupBox { background: #ffffff; border: 1px solid #c4cdd5; border-radius: 6px; }
+QWidget#GroupBoxHeader {
     background: #eef1f4; border-bottom: 1px solid #c4cdd5;
     border-top-left-radius: 6px; border-top-right-radius: 6px;
 }
@@ -510,15 +512,10 @@ QLabel#DiagnosticsPaneHeader { font-size: 14px; padding-bottom: 2px; }
    pinned empty-state (those use the shared muted-message row colour too,
    but this one only ever appears alongside real, still-counted rows). */
 QLabel#DiagnosticsHiddenLine { color: #57606a; font-size: 12px; padding: 2px 2px; }
-/* One group box: a bordered, rounded card with a shaded, banded header
-   row -- the same "IDE panel" language as QFrame#Card elsewhere. The header
-   band uses HEADER_BAND_STRONG (#eef1f4), one step darker than the app's
-   usual #f6f8fa banded-header tone. */
-QFrame#DiagnosticsGroupBox { background: #ffffff; border: 1px solid #c4cdd5; border-radius: 6px; }
-QWidget#DiagnosticsGroupBoxHeader {
-    background: #eef1f4; border-bottom: 1px solid #c4cdd5;
-    border-top-left-radius: 6px; border-top-right-radius: 6px;
-}
+/* The bordered, rounded card and banded header itself are the shared
+   #GroupBox/#GroupBoxHeader rules above (same "IDE panel" language as
+   QFrame#Card elsewhere); only this box's own title/suffix/list bits
+   follow. */
 QLabel#DiagnosticsGroupBoxTitle { color: #57606a; font-weight: 600; font-size: 11px; }
 /* The ratio/count tail ("· 3 of 6 added") stays sentence-case beside the
    caps title -- counts are information, not chrome. */

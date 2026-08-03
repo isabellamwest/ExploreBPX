@@ -46,6 +46,7 @@ from core.reference_library import (
     load_reference_raw,
 )
 
+from .group_box import GroupBox
 from .style import BORDER, MUTED, REFERENCE
 from .titles import panel_title
 
@@ -160,31 +161,20 @@ class ReferenceLibraryDialog(QDialog):
         """The detail card: the reference group-box chrome (purple band,
         light "Read-only" tag), filled from the chosen set in
         :meth:`_select`."""
-        card = QFrame()
-        card.setObjectName("ReferenceGroupBox")
-        box = QVBoxLayout(card)
-        box.setContentsMargins(0, 0, 0, 0)
-        box.setSpacing(0)
-
-        header = QWidget()
-        header.setObjectName("ReferenceGroupBoxHeader")
-        header.setAttribute(Qt.WA_StyledBackground, True)
-        band = QHBoxLayout(header)
-        band.setContentsMargins(12, 5, 12, 5)
-        band.setSpacing(8)
+        # Plain, not the caps panel-title tier: this heading is set later,
+        # in :meth:`_select`, to the chosen set's own sentence-case title.
         self._detail_heading = QLabel()
         self._detail_heading.setObjectName("ReferenceHeading")
-        band.addWidget(self._detail_heading)
-        band.addStretch(1)
         tag = QLabel("Read-only")
         tag.setObjectName("ReferenceReadOnlyTag")
-        band.addWidget(tag)
-        box.addWidget(header)
-
-        body = QWidget()
-        body_layout = QVBoxLayout(body)
-        body_layout.setContentsMargins(12, 10, 12, 12)
-        body_layout.setSpacing(8)
+        card = GroupBox(
+            "",
+            variant="reference",
+            title_widget=self._detail_heading,
+            trailing=tag,
+            body_stretch=1,
+        )
+        body_layout = card.body_layout
         self._detail_title = QLabel()
         self._detail_title.setObjectName("WorkspaceCardTitle")
         self._detail_title.setWordWrap(True)
@@ -211,7 +201,6 @@ class ReferenceLibraryDialog(QDialog):
         provenance.setObjectName("ReferenceLibraryProvenance")
         provenance.setWordWrap(True)
         body_layout.addWidget(provenance)
-        box.addWidget(body, 1)
         return card
 
     def _build_footer(self) -> QHBoxLayout:

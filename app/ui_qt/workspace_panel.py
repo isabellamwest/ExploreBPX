@@ -37,6 +37,7 @@ from core.document_factory import SUPPORTED_MODELS
 from state.reference_snapshot import ReferenceSnapshot
 
 from . import icons
+from .group_box import GroupBox
 from .style import ERROR, OK, WARNING
 from .titles import panel_title
 
@@ -230,38 +231,6 @@ class WorkspacePanel(QWidget):
             fields[key] = value
         return form, fields
 
-    @staticmethod
-    def _build_group_box(header: QWidget, frame_name: str, header_name: str) -> tuple[QFrame, QVBoxLayout]:
-        """One banded-header group box (the Diagnostics group-box language):
-        a bordered rounded frame whose first row is a shaded header band,
-        returning the frame and its body layout for the caller to fill."""
-        box = QFrame()
-        box.setObjectName(frame_name)
-        box_layout = QVBoxLayout(box)
-        box_layout.setContentsMargins(0, 0, 0, 0)
-        box_layout.setSpacing(0)
-        header.setObjectName(header_name)
-        header.setAttribute(Qt.WA_StyledBackground, True)
-        box_layout.addWidget(header)
-        body = QWidget()
-        body_layout = QVBoxLayout(body)
-        body_layout.setContentsMargins(12, 10, 12, 12)
-        body_layout.setSpacing(8)
-        box_layout.addWidget(body)
-        return box, body_layout
-
-    @staticmethod
-    def _build_header_band(title_label: QLabel, trailing_label: QLabel | None = None) -> QWidget:
-        header = QWidget()
-        band = QHBoxLayout(header)
-        band.setContentsMargins(12, 5, 12, 5)
-        band.setSpacing(8)
-        band.addWidget(title_label)
-        band.addStretch(1)
-        if trailing_label is not None:
-            band.addWidget(trailing_label)
-        return header
-
     def _build_validity_row(self) -> tuple[QHBoxLayout, QLabel, QLabel]:
         """The dot-plus-text validity line: a coloured mark from the shared
         dot family beside a plain-text label. Two widgets on purpose -- the
@@ -283,12 +252,8 @@ class WorkspacePanel(QWidget):
         plainly ("Main document" -- "main" is the app's one role word, per
         the UI copy rule; no tag, the caps MAIN tag read as noise), then
         identity, validity, contents."""
-        title = panel_title("Main document")
-        box, body = self._build_group_box(
-            self._build_header_band(title),
-            "WorkspaceGroupBox",
-            "WorkspaceGroupBoxHeader",
-        )
+        box = GroupBox("Main document")
+        body = box.body_layout
 
         self._info_title = QLabel()
         self._info_title.setObjectName("WorkspaceCardTitle")
@@ -313,16 +278,15 @@ class WorkspacePanel(QWidget):
         band, and the band's own subtle purple tint
         (``QWidget#ReferenceGroupBoxHeader``) -- the card must never read
         louder than the document's own."""
-        self._reference_heading = panel_title(
-            "Reference document", object_name="ReferenceHeading"
-        )
         self._reference_tag = QLabel("Read-only")
         self._reference_tag.setObjectName("ReferenceReadOnlyTag")
-        box, body = self._build_group_box(
-            self._build_header_band(self._reference_heading, self._reference_tag),
-            "ReferenceGroupBox",
-            "ReferenceGroupBoxHeader",
+        box = GroupBox(
+            "Reference document",
+            variant="reference",
+            title_object_name="ReferenceHeading",
+            trailing=self._reference_tag,
         )
+        body = box.body_layout
 
         self._reference_filename = QLabel()
         self._reference_filename.setObjectName("WorkspaceCardTitle")

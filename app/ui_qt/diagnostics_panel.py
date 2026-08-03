@@ -91,8 +91,8 @@ from core.page_buckets import (
 from core.validation import Severity, merge_union_pair
 
 from . import badges, icons, parameter_row, style
+from .group_box import GroupBox
 from .parameter_row import ParameterRowDelegate
-from .titles import panel_title
 
 _MSG_NO_DOCUMENT = "No document open"
 _MSG_NO_ISSUES = style.all_clear("No issues")
@@ -563,7 +563,7 @@ class _ContentSizedList(QListWidget):
         return QSize(width, height)
 
 
-class _GroupBox(QFrame):
+class _GroupBox(GroupBox):
     """One group box: a banded header (title + zero or more count badges)
     over a borderless list of rows that hugs its own content height
     (:class:`_ContentSizedList`) rather than stretching. Reused for both the
@@ -572,33 +572,33 @@ class _GroupBox(QFrame):
     same ``_issue_badge_specs`` the rail/fold-header badges use, so the
     three surfaces can never disagree on what counts as "an issue badge";
     Outstanding never calls :meth:`set_badges` -- its ratio lives in the
-    title text instead (:func:`_outstanding_box_title`)."""
+    title text instead (:func:`_outstanding_box_title`).
+
+    Builds on the shared :class:`ui_qt.group_box.GroupBox` chrome for the
+    frame/banded header; the content-hugging list and badge row are this
+    module's own concern, layered on via the base class's ``suffix``/
+    ``trailing`` header slots and ``body_layout``."""
 
     def __init__(self, title: str) -> None:
-        super().__init__()
-        self.setObjectName("DiagnosticsGroupBox")
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(0)
-
-        header = QWidget()
-        header.setObjectName("DiagnosticsGroupBoxHeader")
-        header_layout = QHBoxLayout(header)
-        header_layout.setContentsMargins(10, 6, 10, 6)
-        self.title_text = ""
-        self._title_label = panel_title("", object_name="DiagnosticsGroupBoxTitle")
-        header_layout.addWidget(self._title_label)
         self._suffix_label = QLabel()
         self._suffix_label.setObjectName("DiagnosticsGroupBoxTitleSuffix")
-        header_layout.addWidget(self._suffix_label)
-        self.set_title(title)
-        header_layout.addStretch(1)
         self._badge_row = QWidget()
         self._badge_layout = QHBoxLayout(self._badge_row)
         self._badge_layout.setContentsMargins(0, 0, 0, 0)
         self._badge_layout.setSpacing(4)
-        header_layout.addWidget(self._badge_row)
-        outer.addWidget(header)
+        super().__init__(
+            "",
+            title_object_name="DiagnosticsGroupBoxTitle",
+            suffix=self._suffix_label,
+            trailing=self._badge_row,
+            header_styled_background=False,
+            header_margins=(10, 6, 10, 6),
+            header_spacing=None,
+            body_margins=(0, 0, 0, 0),
+            body_spacing=0,
+        )
+        self.title_text = ""
+        self.set_title(title)
 
         self.list = _ContentSizedList()
         self.list.setObjectName("DiagnosticsGroupBoxList")
@@ -610,7 +610,7 @@ class _GroupBox(QFrame):
         # overflow (a section with very many rows) is still reachable via
         # the pane's own outer scroll behaviour, not a nested scrollbar.
         self.list.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        outer.addWidget(self.list)
+        self.body_layout.addWidget(self.list)
 
     def refresh_content_size(self) -> None:
         """Tell the layout this box's preferred height may have changed --
@@ -628,7 +628,7 @@ class _GroupBox(QFrame):
         caps rendering is presentation only."""
         self.title_text = text
         head, _, tail = text.partition(" · ")
-        self._title_label.setText(head.upper())
+        self.title_label.setText(head.upper())
         self._suffix_label.setText(f"· {tail}")
         self._suffix_label.setVisible(bool(tail))
 
