@@ -2,9 +2,9 @@
 
 A desktop app that makes [BPX](https://github.com/FaradayInstitution/BPX)
 (Battery Parameter eXchange) files easy to open, understand, validate, edit
-and author — for experimentalists and modellers alike.
+and author.
 
-BPX files are machine-readable JSON/YAML, but hard to inspect and navigate by
+BPX files are machine-readable JSON/YAML, but can be hard to inspect and navigate by
 hand as they grow. Explore_BPX presents a BPX document as a navigable tree of
 objects and parameters with continuous validation, a dedicated editor for
 every parameter kind, and authoring support for building new documents from
@@ -12,37 +12,36 @@ model skeletons.
 
 It builds on the official `bpx` package and deliberately implements none of
 the BPX specification itself: parsing, schema and validation all come from
-`bpx`, and the app's job is to surface them faithfully — including exactly
-what the validator thinks is wrong with a file.
+`bpx`, and the app's job is to surface them faithfully.
 
 ## Features
 
-- **Open anything** — JSON or YAML, including invalid or incomplete files;
+- **Open anything** - JSON or YAML, including invalid or incomplete files;
   problems become navigable validation issues, never a refusal to open.
-- **Explore** — a three-pane editor (object tree, parameter list, inspector)
+- **Explore** - a three-pane editor (object tree, parameter list, inspector)
   with search, schema metadata (units, descriptions) and per-parameter
   documentation.
-- **Validate continuously** — every change is re-checked by the official
+- **Validate continuously** - every change is re-checked by the official
   validator; a Diagnostics page groups issues and outstanding work by
-  section, keeping *invalid* distinct from merely *unfinished*.
-- **Edit every parameter kind** — scalar, integer, text, boolean, enum,
-  function, table, map and series — through dedicated editing cards with
+  section, keeping *invalid* distinct from *unfinished*.
+- **Edit every parameter kind** - scalar, integer, text, boolean, enum,
+  function, table, map and series, through dedicated editing cards with
   full undo/redo; tables plot a live chart preview as you edit.
-- **Author** — scaffold a new document for a chosen model (SPM, SPMe, DFN or
+- **Author** - scaffold a new document for a chosen model (SPM, SPMe, DFN or
   Partial), see which fields the schema still expects, and add custom
   parameters and sections where the schema allows them.
-- **Compare** — dock a read-only reference document from a file or from the
+- **Compare** - dock a read-only reference document from a file or from the
   bundled library of PyBaMM-derived parameter sets (Chen2020, Prada2013,
   Ai2020, Mohtat2020), and compare validation runs against bundled example
   data in overlaid charts.
-- **Save and export** — write back to the source file, or export a copy as
+- **Save and export** - write back to the source file, or export a copy as
   JSON or YAML.
 
 ## Quick start
 
 Requires **Python 3.12+**.
 
-With [uv](https://docs.astral.sh/uv/) (recommended — installs the exact
+With [uv](https://docs.astral.sh/uv/) (recommended, installs the exact
 locked dependencies):
 
 ```bash
@@ -64,7 +63,7 @@ Then open your own BPX file, dock a set from the reference library, or use
 
 ## Architecture
 
-Strict one-way layering — `ui_qt → state → core → bpx` — keeps all business
+Strict one-way layering - `ui_qt → state → core → bpx` - keeps all business
 logic independent of the frontend. `core/bpx_gateway.py` is the only module
 that imports `bpx` (pinned `bpx==1.1.1`), and the UI is driven by the schema
 metadata `bpx` publishes, so new parameters in future BPX versions appear
