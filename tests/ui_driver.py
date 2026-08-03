@@ -623,7 +623,8 @@ class AppDriver:
 
     def source_fold_button_text(self) -> str:
         """The toolbar's fold-all button label ("▾ Collapse Parameters" /
-        "▸ Expand Parameters"), tracking the view's aggregate fold state."""
+        "▸ Expand Parameters"), tracking the fold state of every
+        multi-line (dict/list) parameter value; sections don't count."""
         return self._w._source._fold_button.text()
 
     def source_toggle_fold_all(self) -> "AppDriver":

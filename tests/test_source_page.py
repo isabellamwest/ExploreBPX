@@ -848,39 +848,66 @@ def test_single_pane_label_omits_a_missing_model(qtbot):
     assert page._file_label.text() == "main.json"
 
 
-def test_fold_button_collapses_and_expands_every_section(qtbot):
+_DOC_WITH_TABLE = {
+    "Header": {"BPX": "0.1.0"},
+    "Section": {
+        "T": {"x": [1.0, 2.0], "y": [3.0, 4.0]},
+        "Scalar": 5.0,
+    },
+}
+
+
+def test_fold_button_collapses_and_expands_every_table(qtbot):
     page = SourcePage()
     qtbot.addWidget(page)
-    page.refresh(_DOC, main_name="main.json")
+    page.refresh(_DOC_WITH_TABLE, main_name="main.json")
     view = page._view
 
     assert page._fold_button.text() == "▾ Collapse Parameters"
     page._fold_button.click()
 
     assert page._fold_button.text() == "▸ Expand Parameters"
-    assert '"Nominal cell capacity [A.h]": 5.0' not in view.line_texts()
+    assert '"T": table' in view.line_texts()
+    # Sections stay open: only the table itself closed.
+    assert '"Scalar": 5.0' in view.line_texts()
 
     page._fold_button.click()
 
     assert page._fold_button.text() == "▾ Collapse Parameters"
-    assert '"Nominal cell capacity [A.h]": 5.0' in view.line_texts()
+    assert '"T": {' in view.line_texts()
 
 
-def test_fold_button_reads_expand_for_any_partial_fold(qtbot):
+def test_fold_button_reads_expand_for_any_partial_table_fold(qtbot):
     page = SourcePage()
     qtbot.addWidget(page)
-    page.refresh(_DOC, main_name="main.json")
+    page.refresh(_DOC_WITH_TABLE, main_name="main.json")
 
-    page._view.toggle_fold(("Parameterisation",))
+    page._view.toggle_fold(("Section", "T"))
 
     assert page._fold_button.text() == "▸ Expand Parameters"
 
-    # From a partial fold, the button expands everything rather than
-    # toggling just the one closed section.
+    # From a partial fold, the button expands every table rather than
+    # toggling just the one closed value.
     page._fold_button.click()
 
     assert page._fold_button.text() == "▾ Collapse Parameters"
-    assert '"Nominal cell capacity [A.h]": 5.0' in page._view.line_texts()
+    assert '"T": {' in page._view.line_texts()
+
+
+def test_fold_button_ignores_section_folds(qtbot):
+    page = SourcePage()
+    qtbot.addWidget(page)
+    page.refresh(_DOC_WITH_TABLE, main_name="main.json")
+
+    # A manually folded section neither flips the label nor reopens when
+    # the button acts on tables.
+    page._view.toggle_fold(("Header",))
+    assert page._fold_button.text() == "▾ Collapse Parameters"
+
+    page._fold_button.click()
+    texts = page._view.line_texts()
+    assert '"T": table' in texts
+    assert '"BPX": "0.1.0"' not in texts
 
 
 def test_pane_click_places_the_selection(qtbot):

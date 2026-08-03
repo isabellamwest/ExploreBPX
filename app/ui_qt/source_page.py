@@ -601,24 +601,22 @@ class SourceView(QAbstractScrollArea):
         """The selected row's path, or ``None`` (test/driver read)."""
         return self._selected
 
-    def all_expanded(self) -> bool:
-        """Whether every foldable section/table is currently open -- the
-        toolbar's fold-all button reads this to choose its label."""
-        return not self._closed
+    def all_tables_expanded(self) -> bool:
+        """Whether every closable table is currently open -- the toolbar's
+        fold-all button reads this to choose its label. Sections don't
+        count: the button acts on tables only."""
+        return not any(row.closable and row.path in self._closed for row in self._rows)
 
-    def set_all_folded(self, folded: bool) -> None:
-        """Fold every section and closable table (``True``) or unfold all
-        of them (``False``) -- the toolbar's fold-all button, always a
-        flat all-or-nothing action rather than restoring each row's prior
-        state."""
+    def set_tables_folded(self, folded: bool) -> None:
+        """Fold every closable table (``True``) or unfold all of them
+        (``False``) -- the toolbar's fold-all button, always a flat
+        all-or-nothing action rather than restoring each row's prior
+        state. Section folds are left exactly as the user set them."""
+        tables = {row.path for row in self._rows if row.closable}
         if folded:
-            self._closed = {
-                row.path
-                for row in self._rows
-                if row.kind is RowKind.SECTION or row.closable
-            }
+            self._closed |= tables
         else:
-            self._closed = set()
+            self._closed -= tables
         self._rebuild()
 
     def reveal(self, path: tuple[str, ...]) -> None:
@@ -1010,10 +1008,11 @@ class SourcePage(QWidget):
         self._hint.setObjectName("SourceHint")
 
         # Fold-all toggle: left-aligned in both single- and two-pane modes,
-        # so the rest of the toolbar never reshuffles around it. Label and
-        # caret track the view's aggregate fold state via
-        # ``fold_state_changed`` -- "Expand" whenever anything is folded,
-        # "Collapse" only once every section/table is open.
+        # so the rest of the toolbar never reshuffles around it. It acts on
+        # closable tables only (sections fold via their own carets); label
+        # and caret track the view's table fold state via
+        # ``fold_state_changed`` -- "Expand" whenever any table is folded,
+        # "Collapse" only once every table is open.
         self._fold_button = QPushButton()
         self._fold_button.setObjectName("SourceFoldButton")
         self._fold_button.clicked.connect(self._on_fold_toggle)
@@ -1122,10 +1121,10 @@ class SourcePage(QWidget):
         self._view.set_rows(rows, two_pane=two_pane)
 
     def _on_fold_toggle(self) -> None:
-        self._view.set_all_folded(self._view.all_expanded())
+        self._view.set_tables_folded(self._view.all_tables_expanded())
 
     def _update_fold_button(self) -> None:
-        if self._view.all_expanded():
+        if self._view.all_tables_expanded():
             self._fold_button.setText("▾ Collapse Parameters")
         else:
             self._fold_button.setText("▸ Expand Parameters")
