@@ -6,14 +6,14 @@ its own layout and rendering. MainWindow only constructs it, wires its
 guarded open/new flows, and calls ``refresh`` wherever it refreshes the
 other views.
 
-This is the activity-bar page shell (Step 7), the inline New model-chooser
-(Step 8) and drag-and-drop file opening (Step 9).
+This is the activity-bar page shell, the inline New model-chooser and
+drag-and-drop file opening.
 
-Restyle (Concept A, signed 2026-07-22): the Diagnostics page's own anatomy,
-reused -- a shaded fixed-width actions rail (Open buttons + the New chooser)
-beside a white pane holding the document and reference as banded-header group
-boxes. The earlier floating-cards-on-a-canvas treatment is gone: no page
-background tint, no vertically centred actions card, no solid validity pill.
+The Diagnostics page's own anatomy is reused here -- a shaded fixed-width
+actions rail (Open buttons + the New chooser) beside a white pane holding
+the document and reference as banded-header group boxes. The earlier
+floating-cards-on-a-canvas treatment is gone: no page background tint, no
+vertically centred actions card, no solid validity pill.
 """
 
 from __future__ import annotations
@@ -143,11 +143,10 @@ class WorkspacePanel(QWidget):
 
     def _build_rail(self) -> QWidget:
         """The shaded actions rail: the Open button over the New chooser.
-        No heading over the buttons -- they name themselves (explicit user
-        call: an "Actions" label over buttons is noise). Reference docking
-        lives on the reference card itself (Concept A, signed 2026-07-31),
-        not here: the card is the reference feature's home, so its
-        affordances sit where their result appears."""
+        No heading over the buttons -- they name themselves (an "Actions"
+        label over buttons is noise). Reference docking lives on the
+        reference card itself, not here: the card is the reference
+        feature's home, so its affordances sit where their result appears."""
         rail = QWidget()
         rail.setObjectName("WorkspaceRail")
         rail.setAttribute(Qt.WA_StyledBackground, True)
@@ -336,9 +335,9 @@ class WorkspacePanel(QWidget):
         self._reference_form, self._reference_fields = self._build_kv_form(("Model", "Contents"))
         body.addLayout(self._reference_form)
 
-        # Make main comes first (M4's signed entry point) at the same plain
-        # weight as Remove -- neither is styled as a loud action, so the
-        # card still never reads louder than the document card above it.
+        # Make main comes first, at the same plain weight as Remove --
+        # neither is styled as a loud action, so the card still never
+        # reads louder than the document card above it.
         action_row = QHBoxLayout()
         action_row.setSpacing(8)
         self._reference_make_main_button = QPushButton("Make main")
@@ -352,8 +351,8 @@ class WorkspacePanel(QWidget):
         action_row.addStretch(1)
         body.addLayout(action_row)
 
-        # The dock affordances (Concept A, signed 2026-07-31): with no
-        # reference docked the card is the reference library's front door --
+        # The dock affordances: with no reference docked the card is the
+        # reference library's front door --
         # the teaching line over these two buttons. Both buttons stay while
         # a reference is docked: docking over one replaces it silently (a
         # snapshot is disposable), the flow the reference-open tests pin.
@@ -474,7 +473,7 @@ class WorkspacePanel(QWidget):
         are caller-supplied facts derived from the active session, never from
         the raw dict. ``error_count``/``warning_count`` are likewise supplied
         by the caller -- the already-computed ``PartitionedIssues`` totals
-        (decision G in ``main_window._refresh_all``), not re-derived here from
+        from ``main_window._refresh_all``, not re-derived here from
         ``document.error_count``/``warning_count``, so the badge can never
         disagree with the Diagnostics rail badge over an absorbed diagnostic.
 
@@ -510,12 +509,10 @@ class WorkspacePanel(QWidget):
     def _set_reference(self, reference: ReferenceSnapshot | None) -> None:
         """Populate the reference card for the docked or empty state.
 
-        The card is always visible (Concept A, signed 2026-07-31 --
-        superseding the earlier hidden-when-empty call, which predates the
-        card having anything to offer while empty): with no reference docked
-        it is the reference library's front door, the teaching line over the
-        two dock buttons. The dock buttons stay in both states -- see
-        ``_build_reference_card``."""
+        The card is always visible, even with no reference docked, since
+        it is then the reference library's front door -- the teaching line
+        over the two dock buttons. The dock buttons stay in both states --
+        see ``_build_reference_card``."""
         docked = reference is not None
         self._reference_empty_text.setVisible(not docked)
         self._reference_filename.setVisible(docked)
@@ -523,9 +520,9 @@ class WorkspacePanel(QWidget):
         self._reference_badge.setVisible(docked)
         self._set_form_rows_visible(self._reference_form, docked)
         self._reference_remove_button.setVisible(docked)
-        # "Make main" promotes a file on disk (M4); a bundled library set
-        # has no path to promote, so the button disappears rather than sit
-        # as a disabled placeholder (the standing no-dead-controls rule).
+        # "Make main" promotes a file on disk; a bundled library set has no
+        # path to promote, so the button disappears rather than sit as a
+        # disabled placeholder (the standing no-dead-controls rule).
         self._reference_make_main_button.setVisible(
             docked and reference.path is not None
         )

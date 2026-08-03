@@ -18,8 +18,7 @@ ACCENT = "#1f6feb"
 #: decision -- everything reference-specific carries this one hue so it is
 #: visually unmistakable, and it can never be confused with ``ACCENT`` (the
 #: app's general blue) or any severity colour. Used by the Workspace
-#: reference card's tag (M1); ghost rows/sections (a later milestone) are
-#: expected to reuse it.
+#: reference card's tag; ghost rows/sections are expected to reuse it.
 REFERENCE = "#6f42c1"
 #: A required-but-absent/required-parameter tint -- distinct from both
 #: ``ERROR`` (invalid) and ``ACCENT`` (a merely-suggested field), so a
@@ -30,26 +29,26 @@ BORDER = "#d0d7de"
 #: Wash behind a grid cell the validator blamed -- a background tint, so it
 #: reads distinctly from ``ERROR``, which is used as text/badge colour.
 ERROR_TINT = "#ffebe9"
-#: Warning-badge background (Diagnostics page rail redesign, F5) -- the
+#: Warning-badge background on the Diagnostics page rail -- the
 #: ``WARNING`` counterpart to ``ERROR_TINT``.
 WARNING_TINT = "#fff1e0"
-#: Pale wash behind a REF_ONLY ghost row/the comparison strip (multi-file
-#: track M2) -- the ``REFERENCE`` counterpart to ``ERROR_TINT``/``WARNING_TINT``.
+#: Pale wash behind a REF_ONLY ghost row/the comparison strip -- the
+#: ``REFERENCE`` counterpart to ``ERROR_TINT``/``WARNING_TINT``.
 REFERENCE_TINT = "#f3ecfa"
 #: The reference purple's pale border tone -- already used by the inspector
 #: reference block's chrome in the stylesheet below (#d5cde6); named here so
 #: the Source page's ← pull chip draws its outline from the same tint.
 REFERENCE_BORDER = "#d5cde6"
-#: The Source page's value chip (multi-file track M5, signed frames): the
-#: wash behind a value that differs between the two panes. Warm but its own
-#: tint -- "differs" is information, not a severity, so it is deliberately
+#: The Source page's value chip: the wash behind a value that differs
+#: between the two panes. Warm but its own tint -- "differs" is
+#: information, not a severity, so it is deliberately
 #: darker than ``WARNING_TINT`` (it must read at value-chip size) while
 #: staying out of the error/warning families.
 DIFF_TINT = "#ffdfb8"
 #: Neutral grey badge background: the "All sections" rail entry's total
 #: badge and every "outstanding" count badge (rail/pane), which are never
-#: red/amber -- decision B's "outstanding is not an error" kept visible in
-#: the colour itself.
+#: red/amber -- "outstanding is not an error" kept visible in the colour
+#: itself.
 NEUTRAL_TINT = "#eef0f2"
 #: Muted/de-emphasised text. Used for secondary labels (e.g. QLabel#Heading)
 #: and reused as the foreground for the add-parameter popup's "other BPX
@@ -65,22 +64,19 @@ DEFAULT_TEXT = "#1f2328"
 #: the stylesheet below): quieter than ``MUTED`` so a placeholder reads as
 #: "nothing here", not as a value.
 GHOST_TEXT = "#8c959f"
-#: Diagnostics page rail (F2): background distinct from the white detail
+#: Diagnostics page rail: background distinct from the white detail
 #: pane, and the selected entry's accent-tinted background/hover wash.
 RAIL_BG = "#f3f4f6"
 RAIL_SELECTED_BG = "#e3edfd"
 RAIL_HOVER_BG = "#e8eaed"
-#: Crisper-boxes polish round: one step darker than the app's usual
-#: ``#d0d7de`` border tone, used only on the Diagnostics page's
-#: own chrome (group-box border, rail's right edge, strip's bottom edge,
-#: chip borders) so those regions read a touch more defined without raising
-#: contrast anywhere else in the app. Fills/palette are otherwise unchanged
-#: -- flat colour only, no shadows.
+#: One step darker than the app's usual ``#d0d7de`` border tone, used only
+#: on the Diagnostics page's own chrome (group-box border, rail's right
+#: edge, strip's bottom edge, chip borders) so those regions read a touch
+#: more defined without raising contrast anywhere else in the app.
+#: Fills/palette are otherwise unchanged -- flat colour only, no shadows.
 BORDER_STRONG = "#c4cdd5"
 #: The faintest border tone: dividers and disabled-control outlines. One of
-#: exactly three border greys (with ``BORDER`` and ``BORDER_STRONG``) after
-#: the 2026-07-31 consolidation absorbed the strays (#d9dee5 -> BORDER;
-#: #e4e8ec/#e1e4e8 -> this).
+#: exactly three border greys, with ``BORDER`` and ``BORDER_STRONG``.
 BORDER_FAINT = "#eaecef"
 #: Slightly stronger shaded band for the Diagnostics group-box header row --
 #: one step darker than the app's usual ``#f6f8fa`` banded-header tone.
@@ -92,7 +88,7 @@ HEADER_BAND_STRONG = "#eef1f4"
 CHART_GRID = "#eaeef2"
 
 # ---------------------------------------------------------------------------
-# Tooltip vocabulary (F5 polish round): the app's four completion/severity
+# Tooltip vocabulary: the app's four completion/severity
 # symbols (● red error, ● amber warning, ○ hollow missing, ◐ half added-no-
 # value) each carry one fixed, generic tooltip sentence, chosen by the
 # *enum* the layers already own -- never by a diagnostic's message text or
@@ -194,8 +190,8 @@ def all_clear(text: str) -> str:
 def validity_pill_qss(background: str) -> str:
     """Inline stylesheet for a document-validity pill (white text on
     *background*) -- the parameter card's per-card badge. (The workspace
-    panel used to share this; its Concept A restyle replaced the pill with
-    the dot-plus-plain-text language.)"""
+    panel used to share this; it has since replaced the pill with the
+    dot-plus-plain-text language.)"""
     return f"color: white; background: {background}; padding: 2px 9px; border-radius: 4px;"
 
 
@@ -265,16 +261,16 @@ QListWidget#ParameterListView::item { padding: 6px 8px; border-radius: 4px; }
 QSplitter#EditorSplitter::handle { background: #d0d7de; }
 QLabel#CardTitle { font-size: 15px; font-weight: 600; }
 QLabel#CardSymbol { margin-left: 8px; }
-/* Heading tiers (Concept B "VS Code chrome", signed 2026-07-31). Fixed
-   panel/section labels the app authors are one caps tier -- 11px MUTED
+/* Heading tiers. Fixed panel/section labels the app authors are one caps
+   tier -- 11px MUTED
    caps, letter-spaced in code via titles.panel_title (QSS has no
    text-transform). Data-derived headings (document names, parse summaries)
    stay sentence-case ink as QLabel#Heading, the content tier. */
 QLabel#PanelTitle { color: #57606a; font-weight: 600; font-size: 11px; }
 QLabel#Heading { color: #1f2328; font-weight: 600; }
 QLabel#CardDescription { color: #57606a; }
-/* Structured-page inspector (signed off 2026-07-22): the editing pane is a
-   white page -- frameless scroll area, white content surface -- with each
+/* Structured-page inspector: the editing pane is a white page -- frameless
+   scroll area, white content surface -- with each
    card's header block closed by a single full-bleed hairline. The gutter and
    rhythm live in cards/page.py; only the surfaces are painted here. */
 QScrollArea#InspectorScroll { border: none; background: #ffffff; }
@@ -285,8 +281,8 @@ QLabel#InspectorPlaceholder { color: #57606a; }
    stay quiet: they annotate the value, they are not part of it. */
 QLabel#UnitLabel, QLabel#ReferenceUnitLabel { color: #57606a; }
 QFrame#Card { border: 1px solid #d0d7de; border-radius: 6px; }
-/* Workspace page (Concept A restyle, signed 2026-07-22): the Diagnostics
-   page's own anatomy reused -- a shaded fixed-width actions rail beside a
+/* Workspace page: the Diagnostics page's own anatomy reused -- a shaded
+   fixed-width actions rail beside a
    white pane holding the document and reference as banded-header group
    boxes. White ground; the earlier canvas tint, floating cards and solid
    validity pill are gone. Validity is the dot language (ui_qt.icons.DOT
@@ -299,8 +295,8 @@ QWidget#WorkspaceRail { background: #f3f4f6; border-right: 1px solid #c4cdd5; }
 QFrame#WorkspaceRailDivider { background: #d0d7de; border: none; }
 /* Rail action buttons: white chips on the shaded rail, the Diagnostics
    strip-chip treatment (never native grey widgets). The old
-   Open-as-reference chip moved onto the reference card (Concept A, signed
-   2026-07-31) and takes the tile-button treatment below. */
+   Open-as-reference chip moved onto the reference card and takes the
+   tile-button treatment below. */
 QPushButton#WorkspaceOpen {
     background: #ffffff; border: 1px solid #c4cdd5; border-radius: 6px;
     padding: 5px 10px; font-size: 12px; text-align: left;
@@ -345,11 +341,11 @@ QPushButton#ReferenceFromLibrary, QPushButton#WorkspaceOpenReference {
 }
 QPushButton#ReferenceTileMakeMain:hover, QPushButton#ReferenceTileRemove:hover,
 QPushButton#ReferenceFromLibrary:hover, QPushButton#WorkspaceOpenReference:hover { background: #f6f8fa; }
-/* The reference card's empty state (Concept A, signed 2026-07-31): the
-   teaching line over the two dock buttons -- muted text, never a badge. */
+/* The reference card's empty state: the teaching line over the two dock
+   buttons -- muted text, never a badge. */
 QLabel#ReferenceEmptyStateText { color: #57606a; font-size: 12px; }
-/* Reference library dialog (Phase B, Concept A signed 2026-07-31): detail
-   card reuses the ReferenceGroupBox chrome above; these are its own bits.
+/* Reference library dialog: detail card reuses the ReferenceGroupBox
+   chrome above; these are its own bits.
    The dock button is the dialog's one loud action -- the CopyUpButton's
    solid style.REFERENCE treatment. */
 QLabel#ReferenceLibraryMeta { color: #57606a; font-size: 12px; }
@@ -363,13 +359,13 @@ QPushButton#ReferenceLibraryDockButton {
     border: none; border-radius: 4px; padding: 5px 14px;
 }
 QPushButton#ReferenceLibraryDockButton:hover { background: #5a3399; }
-/* Comparison strip (multi-file M2/M3): the slim reference-aware band atop
-   the parameter list. Purple identity (style.REFERENCE), muted counts. */
+/* Comparison strip: the slim reference-aware band atop the parameter
+   list. Purple identity (style.REFERENCE), muted counts. */
 QWidget#ComparisonStrip { background: #f8f5fc; border-bottom: 1px solid #d0d7de; }
 QLabel#ComparisonStripIdentity { color: #6f42c1; font-weight: 600; font-size: 12px; }
 QLabel#ComparisonStripCounts { color: #57606a; font-size: 12px; }
-/* Reference row (multi-file M2/M3, restyled): "Main file"/"Reference file"
-   are plain bold micro-labels above their own value; the purple frame+tint
+/* Reference row: "Main file"/"Reference file" are plain bold micro-labels
+   above their own value; the purple frame+tint
    marks only the read-only value box itself, not the whole row -- the unit
    label and "Copy up" button sit outside it, mirroring how the main
    editable row shows its own unit label outside the input. The "same as
@@ -393,11 +389,11 @@ QPushButton#CopyUpButton {
 QPushButton#CopyUpButton:hover:!disabled { background: #5a3399; }
 QPushButton#CopyUpButton:disabled { background: #d5cde6; color: #8c959f; font-weight: 400; }
 QLabel#GhostCardHeading { color: #6f42c1; font-weight: 600; }
-/* Source page toolbar (multi-file M5, signed frames): single-pane shows
-   the main file's identity + the purple docking hint; two-pane shows the
-   ‹ › difference stepper and ⇄ Make main. The bordered buttons reuse the
-   reference tile's flat treatment; disabled ‹ › (no differences, call C1)
-   fades border and glyph together rather than hiding. */
+/* Source page toolbar: single-pane shows the main file's identity + the
+   purple docking hint; two-pane shows the ‹ › difference stepper and
+   ⇄ Make main. The bordered buttons reuse the reference tile's flat
+   treatment; disabled ‹ › (no differences) fades border and glyph
+   together rather than hiding. */
 QLabel#SourceFileLabel { color: #57606a; font-size: 12px; }
 QLabel#SourceHint { color: #6f42c1; font-size: 12px; }
 QPushButton#SourceStepButton, QPushButton#SourceMakeMain {
@@ -409,8 +405,8 @@ QPushButton#SourceStepButton:hover:!disabled,
 QPushButton#SourceMakeMain:hover { background: #f6f8fa; }
 QPushButton#SourceStepButton:disabled { color: #c4cdd5; border-color: #eaecef; }
 QWidget#SourceToolbarSep { background: #d0d7de; }
-/* Stale-reference band (frames F4): slim, neutral, under the pane
-   headers; the Reload link is the page's only blue. */
+/* Stale-reference band: slim, neutral, under the pane headers; the
+   Reload link is the page's only blue. */
 QWidget#SourceStaleBand { background: #eef0f2; }
 QLabel#SourceStaleText { color: #57606a; font-size: 12px; }
 QPushButton#SourceReloadLink {
@@ -450,18 +446,16 @@ QListWidget#SearchPopupList {
 }
 QListWidget#SearchPopupList::item { padding: 6px 8px; border-radius: 4px; }
 QListWidget#SearchPopupList::item:selected { background: #ddeeff; color: #1f2328; }
-/* The Diagnostics page (rail redesign, F2): a summary strip over a
-   fixed-width rail beside a detail pane. The rail's own background is
-   distinct from the white pane so the two read as separate surfaces, like
-   the activity bar beside the editor. Crisper-boxes polish round: the
-   strip/rail/group-box/chip border lines use BORDER_STRONG (#c4cdd5), one
-   step darker than the app's usual #d0d7de, so this page's own
-   regions read a touch more defined -- flat colour only, no shadows, and
-   nothing outside this page's chrome changed. */
+/* The Diagnostics page: a summary strip over a fixed-width rail beside a
+   detail pane. The rail's own background is distinct from the white pane
+   so the two read as separate surfaces, like the activity bar beside the
+   editor. The strip/rail/group-box/chip border lines use BORDER_STRONG
+   (#c4cdd5), one step darker than the app's usual #d0d7de, so this page's
+   own regions read a touch more defined -- flat colour only, no shadows,
+   and nothing outside this page's chrome changed. */
 QWidget#DiagnosticsSummaryStrip { background: #f9fafb; border-bottom: 1px solid #c4cdd5; }
-/* One strip chip (F2 wireframe: "boxes/shading to make regions
-   distinguishable") -- a small bordered, rounded card on the shaded strip
-   band, distinct from the flat text it replaced. F8: each chip is now a
+/* One strip chip: a small bordered, rounded card on the shaded strip
+   band, distinct from the flat text it replaced. Each chip is a
    click-toggle filter; its "off" state is a dynamic QSS property
    (chipOff="true", set via setProperty + style().polish(), the same
    pattern QPushButton#AddParameterCreate's own "selected" property already
@@ -474,11 +468,11 @@ QLabel#DiagnosticsChip[chipOff="true"] { background: #eef0f2; border: 1px solid 
 QListWidget#DiagnosticsRail { background: #f3f4f6; border: none; border-right: 1px solid #c4cdd5; outline: none; }
 QListWidget#DiagnosticsRail::item { padding: 0; border: none; }
 QLabel#DiagnosticsPaneHeader { font-size: 14px; padding-bottom: 2px; }
-/* F8's "N hidden by filters" line -- quiet, muted, never mistakable for a
+/* The "N hidden by filters" line -- quiet, muted, never mistakable for a
    pinned empty-state (those use the shared muted-message row colour too,
    but this one only ever appears alongside real, still-counted rows). */
 QLabel#DiagnosticsHiddenLine { color: #57606a; font-size: 12px; padding: 2px 2px; }
-/* One F2 group box: a bordered, rounded card with a shaded, banded header
+/* One group box: a bordered, rounded card with a shaded, banded header
    row -- the same "IDE panel" language as QFrame#Card elsewhere. The header
    band uses HEADER_BAND_STRONG (#eef1f4), one step darker than the app's
    usual #f6f8fa banded-header tone. */
@@ -495,7 +489,7 @@ QListWidget#DiagnosticsGroupBoxList { border: none; background: transparent; }
 QListWidget#DiagnosticsGroupBoxList::item { padding: 6px 8px; border-radius: 4px; }
 QListWidget#DiagnosticsGroupBoxList::item:hover { background: #f0f2f4; }
 QListWidget#DiagnosticsGroupBoxList::item:selected { background: #ddeeff; color: #1f2328; }
-/* "All sections", the F3 backup view: one continuous list, same row rhythm
+/* "All sections", the backup view: one continuous list, same row rhythm
    as everywhere else in the app. */
 QListWidget#DiagnosticsAllSectionsList { border: none; }
 QListWidget#DiagnosticsAllSectionsList::item { padding: 6px 8px; border-radius: 4px; }

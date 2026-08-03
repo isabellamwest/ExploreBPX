@@ -1,6 +1,5 @@
-"""State-layer contract for library-set references (Phase B, Concept A
-signed 2026-07-31): ``ReferenceSnapshot.from_library`` and
-``AppState.open_reference_set``.
+"""State-layer contract for library-set references: ``ReferenceSnapshot.
+from_library`` and ``AppState.open_reference_set``.
 
 A library snapshot is judged identically to a file snapshot (same
 ``BPXDocument`` derivation -- expectations below are read back from the
@@ -79,7 +78,7 @@ def test_open_reference_set_replaces_a_file_reference_and_vice_versa():
     state = AppState()
     assert state.open_reference(_SPM) is OpenReferenceOutcome.ADDED
 
-    # Library set over file reference: silent replace (signed decision).
+    # Library set over file reference: silent replace.
     assert state.open_reference_set(_CHEN) is OpenReferenceOutcome.ADDED
     assert state.reference.path is None
 

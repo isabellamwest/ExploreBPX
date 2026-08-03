@@ -50,8 +50,8 @@ _SHORT_TITLES: dict[str, str] = {
 }
 
 #: Curated picker order for the bundled documents (the NMC pouch cell is the
-#: flagship sample, per the approved Concept A wireframe) -- an uncurated
-#: future file sorts after these, alphabetically.
+#: flagship sample) -- an uncurated future file sorts after these,
+#: alphabetically.
 _STEM_ORDER: tuple[str, ...] = ("nmc_pouch_cell", "lfp_18650_cell")
 
 

@@ -1,6 +1,5 @@
-"""Page scaffold for the Inspector's cards (structured-page layout, signed off
-2026-07-22): a full-bleed header block closed by a hairline rule, then a
-content column on the same fixed gutter.
+"""Page scaffold for the Inspector's cards: a full-bleed header block closed
+by a hairline rule, then a content column on the same fixed gutter.
 
 Every card that fills the Inspector's editing pane composes these two pieces
 so the pane reads as one designed page whichever card is showing: the header

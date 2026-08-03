@@ -50,15 +50,15 @@ VALUE_ROLE = Qt.UserRole + 101
 VALUE_GHOST_ROLE = Qt.UserRole + 102
 #: Item-data role carrying ``"error"``/``"warning"`` for an issue row; when
 #: present the delegate paints a small filled-circle severity icon in the
-#: row's left gutter (F5, Validation-page rail redesign: replaces the old
-#: bracketed ``[ERROR]``/``[WARN]`` text tag baked into the HTML). Shared by
+#: row's left gutter, replacing the old bracketed ``[ERROR]``/``[WARN]``
+#: text tag baked into the HTML. Shared by
 #: :mod:`ui_qt.diagnostics_panel` and :mod:`ui_qt.issues_tab` so both issue
 #: surfaces read identically -- this lives on the base delegate, not a
 #: page-specific subclass, precisely so the two never diverge.
 SEVERITY_ROLE = Qt.UserRole + 103
 #: Item-data role carrying a row's right-aligned call-to-action string
 #: (e.g. a Diagnostics Outstanding row's "Go to ›"), painted in
-#: ``style.ACCENT`` -- decision L: every actionable row displays its own
+#: ``style.ACCENT``: every actionable row displays its own
 #: action, always visible, never folded inline with the name (unlike
 #: :data:`VALUE_ROLE`, a muted monospace value preview, this is normal-
 #: weight coloured text and is never elided -- keep the string short).
@@ -66,8 +66,8 @@ SEVERITY_ROLE = Qt.UserRole + 103
 #: right-aligned-action row reuses the same reserved-width machinery
 #: :data:`VALUE_ROLE` already established for a row's right edge.
 ACTION_ROLE = Qt.UserRole + 104
-#: Item-data role marking a REF_ONLY ghost row (multi-file track M2): the
-#: delegate paints a dashed purple border (:data:`~ui_qt.style.REFERENCE`)
+#: Item-data role marking a REF_ONLY ghost row: the delegate paints a
+#: dashed purple border (:data:`~ui_qt.style.REFERENCE`)
 #: around the row on top of its normal content. The "REF ONLY" tag is not
 #: a delegate concern -- it is baked into the row's own :data:`HTML_ROLE`
 #: fragment (see :func:`build_ghost_row_html`).
@@ -90,10 +90,10 @@ _VALUE_MAX_SHARE = 0.45
 #: Gap between the (wrapped) name fragment and the value preview.
 _VALUE_GAP = 12
 
-#: The app's one painted severity mark (unified symbol system, Concept A):
-#: an 8px filled dot centred in a 13px box. ``MARK_BOX`` is the box a caller
-#: sizes its own paint rect to; ``MARK_DOT`` is the fixed dot diameter
-#: :func:`paint_severity_dot` centres inside whatever box it is given.
+#: The app's one painted severity mark: an 8px filled dot centred in a
+#: 13px box. ``MARK_BOX`` is the box a caller sizes its own paint rect to;
+#: ``MARK_DOT`` is the fixed dot diameter :func:`paint_severity_dot`
+#: centres inside whatever box it is given.
 MARK_BOX = 13
 MARK_DOT = 8
 
@@ -120,8 +120,8 @@ def value_preview(value: object, kind: ParameterKind) -> tuple[str, bool]:
     Simple committed values render **verbatim from the raw document** (JSON
     spelling for numbers and booleans, the bare string for text) -- never
     reformatted, rounded or re-spelled, per validator fidelity. Committed
-    ``null`` renders as a ghosted "-" (the muted-emptiness language of
-    decision P). Inspector-only kinds render a ghosted summary *derived*
+    ``null`` renders as a ghosted "-" (the app's muted-emptiness language).
+    Inspector-only kinds render a ghosted summary *derived*
     from the data (point/entry/value counts), never invented content.
     Elision to the available width is the delegate's job, not this one's:
     the full string is returned so tooltips can carry it.
@@ -185,12 +185,12 @@ def compose_issue_row_html(location: str, message: str) -> str:
     first line, the validator's verbatim message (muted, smaller) on the
     second -- or the message alone when there is no location to show.
 
-    Splitting where (location) from what (message) is Concept A's core move --
+    Splitting where (location) from what (message) is the core move here --
     a full-width run-on sentence per issue becomes a scannable header with its
     detail beneath. Severity used to be a bracketed ``[ERROR]``/``[WARN]``
-    text tag on the first line; F5 (Diagnostics-page rail redesign) replaced it
-    with a delegate-painted icon (see :data:`SEVERITY_ROLE`) that reads
-    clearly at a glance without competing with the location text for space --
+    text tag on the first line; a delegate-painted icon (see
+    :data:`SEVERITY_ROLE`) replaced it, reading clearly at a glance without
+    competing with the location text for space --
     callers set that role alongside this HTML, they no longer pass severity
     in here. Shared by the Diagnostics page's Issues section and the
     Inspector's Issues tab so the two issue surfaces read as one system; the
@@ -219,12 +219,12 @@ def build_parameter_row_html(label: str, *, severity: str | None = None, is_empt
     *severity*.
 
     ``severity`` is ``"error"``/``"warning"``/``None`` and means *page-
-    visible* (decision P), not validator-verbatim: the caller passes the
-    worst severity among this parameter's issues that survived absorption
+    visible*, not validator-verbatim: the caller passes the worst severity
+    among this parameter's issues that survived absorption
     (``core.completion.partition_issues``'s ``visible``), not
-    ``parameter.has_errors``. The card's own inline badge and the Issues tab
-    still mirror the validator verbatim (decision D) -- only this row
-    marker's meaning changed.
+    ``parameter.has_errors``. The card's own inline badge and the Issues
+    tab still mirror the validator verbatim -- only this row marker's
+    meaning changed.
 
     ``is_empty`` (a committed ``null`` value) renders the name/unit muted
     instead of the normal text colour -- emptiness visible at a glance,
@@ -248,9 +248,9 @@ def build_parameter_row_html(label: str, *, severity: str | None = None, is_empt
 
 
 def build_ghost_row_html(label: str) -> str:
-    """Compose a REF_ONLY ghost row's rich-text fragment (multi-file track
-    M2): bold name, muted unit -- the same plain-text styling as a real row
-    -- followed by the small "REF ONLY" tag in the reference accent
+    """Compose a REF_ONLY ghost row's rich-text fragment: bold name, muted
+    unit -- the same plain-text styling as a real row -- followed by the
+    small "REF ONLY" tag in the reference accent
     (:data:`~ui_qt.style.REFERENCE`). The row's other two ghost signals (the
     dashed border, the pale background wash) are not part of this fragment;
     see :data:`REF_ONLY_ROLE`."""
@@ -416,8 +416,8 @@ class ParameterRowDelegate(QStyledItemDelegate):
         painter.restore()
 
     def _paint_ref_only_border(self, painter, option) -> None:
-        """Dashed purple outline around a REF_ONLY ghost row (multi-file
-        track M2) -- one of its four signals; see :data:`REF_ONLY_ROLE`."""
+        """Dashed purple outline around a REF_ONLY ghost row -- one of its
+        four signals; see :data:`REF_ONLY_ROLE`."""
         painter.save()
         pen = QPen(QColor(style.REFERENCE))
         pen.setStyle(Qt.DashLine)
@@ -430,8 +430,8 @@ class ParameterRowDelegate(QStyledItemDelegate):
 
     def _paint_action(self, painter, option, index, reserved: int) -> None:
         """Right-aligned, top-anchored call-to-action text in accent
-        colour -- always fully visible, never folded inline with the name
-        (decision L)."""
+        colour -- always fully visible, never folded inline with the
+        name."""
         painter.save()
         painter.setFont(self._action_font(option))
         painter.setPen(QColor(style.ACCENT))
@@ -441,8 +441,8 @@ class ParameterRowDelegate(QStyledItemDelegate):
 
     def _paint_severity_icon(self, painter, option: QStyleOptionViewItem, index) -> None:
         """Paint the shared severity dot (:func:`paint_severity_dot`) in the
-        row's left gutter (F5, polish round): red = error, amber = warning,
-        no inner glyph -- a plain dot reads better at row size than the
+        row's left gutter: red = error, amber = warning, no inner glyph --
+        a plain dot reads better at row size than the
         earlier icon-in-circle (a bracketed ``[ERROR]``/``[WARN]`` text tag
         before that). Part of the app's unified dot vocabulary alongside a
         task row's own ring/half-filled marks (:mod:`ui_qt.diagnostics_panel`);

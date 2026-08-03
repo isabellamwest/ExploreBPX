@@ -4,8 +4,8 @@ pane").
 Rows carry a right-aligned, delegate-elided preview of the committed value:
 raw-verbatim for simple kinds, a ghosted "-" for committed null, a ghosted
 derived summary for Inspector-only kinds. Editing stays in the Inspector -
-the preview replaced the once-planned inline quick inputs (user decision,
-2026-07-15): scanning was the value; the Inspector already edits well.
+the preview replaced the once-planned inline quick inputs: scanning was the
+value; the Inspector already edits well.
 """
 
 from __future__ import annotations

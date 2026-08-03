@@ -1,10 +1,8 @@
-"""Shared badge geometry and colour mapping (``ui_qt.badges``, unified badge
-system Phase 2).
+"""Shared badge geometry and colour mapping (``ui_qt.badges``).
 
 Cheap, no pixel comparisons -- just proves the one shared shape and the
-severity->colour mapping both finishes are supposed to expose, per the
-approved spec: height 15, full-pill radius, bold 10px text, 15px min-width,
-5px horizontal padding.
+severity->colour mapping both finishes are supposed to expose: height 15,
+full-pill radius, bold 10px text, 15px min-width, 5px horizontal padding.
 """
 
 from __future__ import annotations
@@ -19,7 +17,7 @@ from ui_qt import badges, style
 # --- shared geometry --------------------------------------------------------
 
 
-def test_badge_geometry_matches_the_approved_spec():
+def test_badge_geometry_matches_spec():
     assert badges.HEIGHT == 15
     assert badges.RADIUS == badges.HEIGHT // 2
     assert badges.FONT_PIXEL_SIZE == 10

@@ -1,6 +1,5 @@
-"""ExperimentCard's Phase 3 additions: the import-first dropzone for an empty
-run, the multi-column grid expand affordance, and the per-column sample-count
-footer chip.
+"""ExperimentCard's import-first dropzone for an empty run, the multi-column
+grid expand affordance, and the per-column sample-count footer chip.
 
 The dropzone empty state is a derived display fact, no new document state,
 computed from the grid own column lengths, live (via changed) so a typed cell
@@ -268,8 +267,8 @@ def test_sample_count_chip_updates_live_with_a_typed_value(
 
 
 # ---------------------------------------------------------------------------
-# "Compare…" entry point (toolbar-only -- redesign 2026-07-20 removed the
-# dropzone's own affordance: getting data in is that widget's sole job now)
+# "Compare…" entry point (toolbar-only -- the dropzone has no affordance of
+# its own: getting data in is that widget's sole job)
 # ---------------------------------------------------------------------------
 
 
@@ -328,7 +327,7 @@ def test_toolbar_database_examples_labels_own_run_by_file_name_not_you(
     app_driver, spm_with_validation_path
 ):
     """The active document's own series reads "<file> · <run>" -- the file
-    name, never "You" (Bella's call 2026-07-20). The fixture is saved as
+    name, never "You". The fixture is saved as
     ``spm_with_validation.json``."""
     d = app_driver
     d.open(spm_with_validation_path).go_to(_RUN)

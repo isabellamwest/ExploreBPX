@@ -1,7 +1,8 @@
 """Serialise a BPX document back to bytes (roundtrip and format conversion).
 
-V1 is read-only, so export faithfully re-serialises the raw dictionary that was
-loaded. Choosing a different format performs a JSON <-> YAML conversion.
+Editing is not yet supported, so export faithfully re-serialises the raw
+dictionary that was loaded. Choosing a different format performs a JSON
+<-> YAML conversion.
 """
 
 from __future__ import annotations

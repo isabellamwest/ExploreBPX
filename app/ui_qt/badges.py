@@ -37,7 +37,7 @@ MIN_WIDTH = HEIGHT
 H_PADDING = 5
 
 #: Severity -> (background, foreground) for the tint finish. ``None`` is the
-#: neutral "outstanding" tier (decision B: outstanding is not an error).
+#: neutral "outstanding" tier: outstanding is not an error.
 _TINT_COLORS: dict[str | None, tuple[str, str]] = {
     "error": (style.ERROR_TINT, style.ERROR),
     "warning": (style.WARNING_TINT, style.WARNING),

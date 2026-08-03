@@ -1,8 +1,7 @@
-"""Workspace-page workflows for the bundled reference library (Phase B,
-Concept A signed 2026-07-31): the reference card's empty-state front door,
-docking a bundled set, silent replace in both directions, and the
-path-less guards (no Make main, no stale band) -- all in domain terms via
-``AppDriver``.
+"""Workspace-page workflows for the bundled reference library: the reference
+card's empty-state front door, docking a bundled set, silent replace in
+both directions, and the path-less guards (no Make main, no stale band) --
+all in domain terms via ``AppDriver``.
 
 The modal dialog itself is covered in ``test_reference_library_dialog.py``;
 here its ``exec``/``selected_set_id`` are stubbed at the class the window
@@ -103,7 +102,7 @@ def test_docking_the_same_set_again_is_a_quiet_noop(app_driver):
 
 def test_silent_replace_in_both_directions(app_driver, valid_spm_path, monkeypatch):
     """Library set over file reference and back -- no confirm step either
-    way (signed decision: a snapshot is disposable, immutable state)."""
+    way (a snapshot is disposable, immutable state)."""
     d = app_driver
     _stub_open_dialog(monkeypatch, valid_spm_path)
     d.click_workspace_open_reference()

@@ -70,8 +70,7 @@ class ReferenceSnapshot:
 
     @classmethod
     def from_library(cls, set_id: str) -> "ReferenceSnapshot":
-        """Snapshot a bundled reference-library set (Phase B, Concept A
-        signed 2026-07-31).
+        """Snapshot a bundled reference-library set.
 
         The raw dict comes through :mod:`core.reference_library` (the
         anti-corruption adapter -- never a direct asset read), and the

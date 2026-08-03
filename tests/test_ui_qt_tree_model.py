@@ -94,11 +94,11 @@ def test_expanded_object_in_visible_set_keeps_marker():
 
 
 def test_verbatim_issues_alone_never_light_the_marker():
-    """The regression behind the change (user, 2026-07-22): attached issues
-    whose diagnostics were absorbed (e.g. every field merely empty) must NOT
-    paint the tree dot. The marker reads only the page-visible set the
-    partition derives -- the same truth as the parameter list and rail badge
-    -- never ``node.issues``/``parameter.has_errors`` directly."""
+    """Attached issues whose diagnostics were absorbed (e.g. every field
+    merely empty) must NOT paint the tree dot. The marker reads only the
+    page-visible set the partition derives -- the same truth as the
+    parameter list and rail badge -- never
+    ``node.issues``/``parameter.has_errors`` directly."""
     parameter = ParameterItem(
         label="Voltage",
         path=("Parameterisation", "Cell", "Voltage"),

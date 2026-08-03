@@ -197,7 +197,7 @@ def test_document_card_badge_matches_partitioned_count_not_raw_diagnostics(
     per failed union branch: float, int, function-expression, table) plus
     the fixture's pre-existing Header warning, but ``partition_issues``
     merges the field's float/int union pair into a single displayed error
-    (decision Q), so the rest of the app shows 3 errors, 1 warning. The pill
+    so the rest of the app shows 3 errors, 1 warning. The pill
     must match, not the raw ``document.error_count``/``warning_count`` (4/1).
     """
     import json

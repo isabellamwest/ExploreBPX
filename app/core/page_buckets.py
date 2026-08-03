@@ -21,9 +21,9 @@ first when occupied, everything else in document order. Nothing is lost
 there is no drop path, and the module's own totals are summed FROM the
 buckets, never read from ``partition``/``tasks`` directly, so a caller cannot
 render a strip that disagrees with the rail (F3's own reconciliation
-invariant, and the direct descendant of decision G).
+invariant).
 
-Assignment rule (F3), reusing one existing normalization (decision E) for
+Assignment rule (F3), reusing one existing normalization for
 both diagnostics and tasks. ``diagnostics_panel._relative_location`` already
 established the shape of the rule for Issues display (see the
 diffusivity-warning-bug memory note): strip a leading ``"Parameterisation"``
@@ -41,8 +41,8 @@ parameter (its target field is exactly what is missing) arrives with that
 prefix already stripped by the validator itself -- the same fact
 ``completion._STRIPPED_LOC_PREFIXES``/``_nav_path_candidates`` exists to
 reverse for absorption matching. :func:`_resolve_bucket_path` is F3's three
-tiers made concrete, reusing that same fact rather than a second scheme
-(decision E): "display section when the path resolves" is
+tiers made concrete, reusing that same fact rather than a second scheme:
+"display section when the path resolves" is
 :func:`_bucket_path_for` applied directly whenever the path's own presumed
 parent already exists in ``raw`` (no stripping occurred, or none needs
 correcting); "else nearest existing ancestor's bucket" tries reinstating
@@ -79,7 +79,7 @@ class SectionBucket:
     """One rail entry's content: a section's Issues + Outstanding, already
     resolved to exactly the rows the pane needs (F2's banded group boxes).
 
-    ``issues`` are already display-merged (decision Q's float/int union-pair
+    ``issues`` are already display-merged (the float/int union-pair
     collapse) at the whole-page level before bucketing -- callers must not
     re-merge or un-merge them, or a bucket's count could drift from the
     page-level totals :class:`PageBuckets` reports.
@@ -92,24 +92,22 @@ class SectionBucket:
     #: Rail display name -- the section's own leaf name; ``"Document"`` for
     #: the sentinel bucket.
     label: str
-    #: Whether the section itself is absent from ``raw`` (decision M: an
-    #: absent section's fields are never enumerated, so ``required_total`` is
+    #: Whether the section itself is absent from ``raw`` (an absent
+    #: section's fields are never enumerated, so ``required_total`` is
     #: ``None`` whenever this is ``True``). Always ``False`` for the Document
     #: bucket -- "absent" has no meaning for the document root.
     absent: bool
-    #: Document order, already display-merged (decision Q) -- see the class
-    #: docstring.
+    #: Document order, already display-merged -- see the class docstring.
     issues: tuple[IssuePair, ...]
-    #: Decision R's required group, document order, ``task.required`` True.
+    #: Required group, document order, ``task.required`` True.
     required_tasks: tuple[CompletionTask, ...]
-    #: Decision R's optional sub-group, document order, ``task.required`` False.
+    #: Optional sub-group, document order, ``task.required`` False.
     optional_tasks: tuple[CompletionTask, ...]
     #: The "M" in "N of M remaining" (``len(required_tasks)`` is the "N").
-    #: ``None`` when the section is absent (decision M -- fields are never
+    #: ``None`` when the section is absent (fields are never
     #: enumerated) or for the Document bucket (no section shape to count).
     required_total: int | None
-    #: Post-absorption counts (decision E/G), from this bucket's own
-    #: ``issues`` only.
+    #: Post-absorption counts, from this bucket's own ``issues`` only.
     error_count: int
     warning_count: int
 
@@ -126,7 +124,7 @@ class PageBuckets:
     Totals are summed FROM ``buckets`` -- never read back from ``partition``/
     ``tasks`` -- so the summary strip and the rail can never disagree with
     the pane's own content (F3's reconciliation invariant; the badge itself
-    still derives from ``partition`` directly, per decision G, but must equal
+    still derives from ``partition`` directly, but must equal
     these same totals by construction).
     """
 
@@ -142,7 +140,7 @@ def _task_owning_path(task: CompletionTask) -> tuple[str, ...]:
     A ``MISSING_SECTION`` task names an absent section directly, so it is
     about that path itself. Every other kind names a field inside a section
     that necessarily exists (fields are only ever enumerated for present
-    sections, decision M), so it is about that field's parent.
+    sections), so it is about that field's parent.
     """
     if task.kind is TaskKind.MISSING_SECTION:
         return task.path
@@ -156,7 +154,7 @@ def strip_parameterisation_prefix(path: tuple[str, ...]) -> tuple[str, ...]:
     path passes through unchanged, including ``"Header"``/``"State"``/
     ``"Validation"``, which ARE real section names and must survive.
 
-    The one shared owner of this normalization (decision E: never invent a
+    The one shared owner of this normalization (never invent a
     second path-matching scheme) -- :func:`_bucket_path_for` builds its
     bucket-assignment truncation on it below, and
     ``ui_qt.diagnostics_panel._relative_location`` reuses it verbatim to
@@ -195,9 +193,9 @@ def _bucket_path_for(path: tuple[str, ...]) -> tuple[str, ...]:
 def _section_present(raw: dict, path: tuple[str, ...]) -> bool:
     """Whether the key named by ``path`` exists in ``raw`` -- regardless of
     its value's type/validity. A garbage ``"Cell": 5`` is present, just
-    wrong: decision M's "absent" means the key itself is missing, never that
-    its value is invalid (that stays a plain Issue, per decision E's safety
-    net -- nothing here silences it)."""
+    wrong: "absent" means the key itself is missing, never that
+    its value is invalid (that stays a plain Issue -- nothing here silences
+    it)."""
     node: object = raw
     for key in path:
         if not isinstance(node, dict) or key not in node:
@@ -372,7 +370,7 @@ def bucket_page_content(
     ``bpx_gateway`` or a live document itself, only these four already-derived
     values, so it stays a pure projection like the rest of ``core.completion``.
 
-    ``partition.visible`` is merged exactly once here (decision Q, matching
+    ``partition.visible`` is merged exactly once here (matching
     the page-level Issues section today) before distributing pairs into
     buckets, so a bucket's own ``error_count``/``warning_count`` and the
     returned totals agree with each other and with the (not-yet-built) rail

@@ -5,10 +5,10 @@ sections are removable, which are required for a model, and what model a raw
 dict declares. The Qt frontend asks these questions rather than encoding BPX
 structural rules itself.
 
-V2 scope is deliberately small and durable: queries derive from the declared
+Deliberately small and durable: queries derive from the declared
 ``Header.Model`` plus the known top-level structure, not from a deep schema
-walk. Container-aware parameter search lands later when add-parameter is wired,
-isolated to this module so callers do not change.
+walk. Container-aware parameter search lands later when add-parameter is
+wired, isolated to this module so callers do not change.
 """
 
 from __future__ import annotations

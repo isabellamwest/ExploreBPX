@@ -73,11 +73,11 @@ def _assert_reconciled(tasks: tuple[CompletionTask, ...], partition: Partitioned
 
 def test_normal_invalid_file_reconciles(valid_spm_dict):
     """Mirrors ``test_validation_page_layout.many_issues_path``: errors spread
-    across three sections, one of them a merged float/int union pair
-    (decision Q) so the bucket-level count must also reflect the merge, not
-    the raw diagnostic count. Deliberately avoids touching ``Header`` here --
-    bpx's root dispatcher validates ``Header`` first and an invalid Header
-    field suppresses everything else (V4), which is exercised on its own in
+    across three sections, one of them a merged float/int union pair, so the
+    bucket-level count must also reflect the merge, not the raw diagnostic
+    count. Deliberately avoids touching ``Header`` here -- bpx's root
+    dispatcher validates ``Header`` first and an invalid Header field
+    suppresses everything else, which is exercised on its own in
     ``test_custom_parameter_extra_forbidden_stays_visible``."""
     raw = json.loads(json.dumps(valid_spm_dict))
     raw["Parameterisation"]["Cell"]["Nominal cell capacity [A.h]"] = "banana"
@@ -117,8 +117,8 @@ def test_unknown_top_level_section_gets_its_own_bucket():
 
 def test_garbage_section_value_stays_visible_in_its_own_bucket():
     """``"Cell": 5`` -- a garbage, non-dict section value. It is present (not
-    absent, decision M), draws a real validator type error, and must not be
-    absorbed (no task exists for a garbage value, only for a missing one)."""
+    absent), draws a real validator type error, and must not be absorbed (no
+    task exists for a garbage value, only for a missing one)."""
     raw = document_factory.create("SPM", title="probe")
     raw["Parameterisation"]["Cell"] = 5
     _doc, tasks, partition, result = _bucket_page(raw, "SPM")
@@ -145,7 +145,7 @@ def test_committed_null_absorbs_into_its_own_bucket(valid_spm_dict):
     _doc, tasks, partition, result = _bucket_page(raw)
     _assert_reconciled(tasks, partition, result)
     cell_bucket = next(b for b in result.buckets if b.path == ("Parameterisation", "Cell"))
-    assert cell_bucket.error_count == 0  # absorbed, decision E/D
+    assert cell_bucket.error_count == 0  # absorbed into the null-field task
     null_task = next(t for t in cell_bucket.required_tasks if t.kind is TaskKind.NULL_FIELD)
     assert null_task.alias == "Lower voltage cut-off [V]"
 
@@ -157,7 +157,7 @@ def test_absent_required_section_is_one_absent_bucket():
     _assert_reconciled(tasks, partition, result)
     electrolyte = next(b for b in result.buckets if b.path == ("Parameterisation", "Electrolyte"))
     assert electrolyte.absent is True
-    assert electrolyte.required_total is None  # decision M: fields never enumerated
+    assert electrolyte.required_total is None  # fields never enumerated for an absent section
     assert len(electrolyte.required_tasks) == 1
     assert electrolyte.required_tasks[0].kind is TaskKind.MISSING_SECTION
 
@@ -196,17 +196,16 @@ def test_partial_model_has_no_tasks_and_stripped_locs_land_correctly():
     electrode_buckets = [b for b in result.buckets if b.label == "Negative electrode"]
     assert len(electrode_buckets) == 1, "must not split into two buckets for the same section"
     assert electrode_buckets[0].path == ("Parameterisation", "Negative electrode")
-    assert electrode_buckets[0].error_count == 8  # V3
+    assert electrode_buckets[0].error_count == 8
 
 
 def test_no_model_yields_declare_model_task_and_stays_visible_error():
-    """Decision C: an undeclared model -> exactly one task (declare a model),
-    landing under Header. ``partition_issues`` (pre-existing, unmodified by
-    this stage) never absorbs into a ``DECLARE_MODEL`` task -- only
-    MISSING_SECTION/MISSING_FIELD/NULL_FIELD/the pinned State message do
-    (decision E) -- so the validator's own ``missing ('Model',)`` diagnostic
-    stays visible alongside the task, both in the Header bucket, same as
-    V6's garbage-model case."""
+    """An undeclared model yields exactly one task (declare a model), landing
+    under Header. ``partition_issues`` never absorbs into a ``DECLARE_MODEL``
+    task -- only MISSING_SECTION/MISSING_FIELD/NULL_FIELD/the pinned State
+    message do -- so the validator's own ``missing ('Model',)`` diagnostic
+    stays visible alongside the task, both in the Header bucket, same as the
+    garbage-model case below."""
     raw = document_factory.create("SPM", title="probe")
     del raw["Header"]["Model"]
     _doc, tasks, partition, result = _bucket_page(raw, None)
@@ -224,15 +223,14 @@ def test_garbage_model_yields_declare_model_task_and_visible_error():
     _assert_reconciled(tasks, partition, result)
     header_bucket = next(b for b in result.buckets if b.path == ("Header",))
     assert header_bucket.required_tasks[0].kind is TaskKind.DECLARE_MODEL
-    assert header_bucket.error_count == 1  # literal_error, never absorbed (V6)
+    assert header_bucket.error_count == 1  # literal_error, never absorbed
 
 
 def test_garbage_model_plus_extra_header_field_both_land_in_header():
-    """A second V4-stripped-loc regression: with the model garbage,
-    ``document_completion`` short-circuits to the single DECLARE_MODEL task
-    (decision C), so a SEPARATE, un-absorbable Header diagnostic has no task
-    to absorb into and stays visible -- it must still land in the Header
-    bucket, not its own bogus per-field bucket.
+    """With the model garbage, ``document_completion`` short-circuits to the
+    single DECLARE_MODEL task, so a SEPARATE, un-absorbable Header diagnostic
+    has no task to absorb into and stays visible -- it must still land in the
+    Header bucket, not its own bogus per-field bucket.
 
     Re-baselined for bpx 1.1.1: this used to pair the garbage Model with a
     missing ``BPX`` field, but bpx 1.1.1 added an ``is_legacy_bpx`` pre-check

@@ -408,7 +408,7 @@ def test_fields_to_add_group_present_with_no_required_tags_under_partial_end_to_
     raw = document_factory.create("Partial", title="probe")
     # The Partial skeleton scaffolds no sections at all (Parameterisation is
     # `{}`) -- a Cell tree node must exist for select_object to resolve one,
-    # and an empty Cell immediately suggests every expected field (decision I).
+    # and an empty Cell immediately suggests every expected field.
     raw["Parameterisation"]["Cell"] = {}
     path = tmp_path / "partial.json"
     path.write_text(json.dumps(raw), encoding="utf-8")
@@ -425,10 +425,10 @@ def test_fields_to_add_group_present_with_no_required_tags_under_partial_end_to_
 def test_opening_a_different_document_resets_expansion_end_to_end(
     app_driver, spm_workfile, tmp_path
 ):
-    """Regression for M1: the panel's expansion dict is keyed by section path
-    only, so a previous document's expanded "Cell" group must not leak into a
-    freshly opened document's same-named "Cell" section (decision H's
-    "closed by default" applies per document, not just per section path)."""
+    """The panel's expansion dict is keyed by section path only, so a
+    previous document's expanded "Cell" group must not leak into a freshly
+    opened document's same-named "Cell" section -- "closed by default"
+    applies per document, not just per section path."""
     import json
     import shutil
 

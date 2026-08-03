@@ -1,16 +1,16 @@
-"""Diagnostics page filters -- Phase B (F8).
+"""Diagnostics page filters.
 
-Filters are VIEW-ONLY (F8's core rule): rail badges, strip counts, the app
-badge and F3 reconciliation always read the same unfiltered ``PageBuckets``
-this module always has -- filtering only decides which rows the view
-builders (``_SectionDetailView``/``_AllSectionsView``) actually add to their
-lists. Every test here either proves a row disappears/reappears from a VIEW
-while the TRUTH layer (buckets/badges/counts) stays untouched, or proves the
-pure filter predicates (``_issue_visible``/``_task_visible``) directly.
+Filters are VIEW-ONLY: rail badges, strip counts, the app badge and
+reconciliation checks always read the same unfiltered ``PageBuckets`` this
+module always has -- filtering only decides which rows the view builders
+(``_SectionDetailView``/``_AllSectionsView``) actually add to their lists.
+Every test here either proves a row disappears/reappears from a VIEW while
+the TRUTH layer (buckets/badges/counts) stays untouched, or proves the pure
+filter predicates (``_issue_visible``/``_task_visible``) directly.
 
-F8's text-filter field was removed by explicit user decision (per-section
-buckets are small and the toolbar search already finds anything by name);
-the three count chips are the whole filter surface.
+The text-filter field was removed (per-section buckets are small and the
+toolbar search already finds anything by name); the three count chips are
+the whole filter surface.
 """
 
 from __future__ import annotations
@@ -180,7 +180,7 @@ def test_all_sections_hidden_line_reflects_document_wide_count(app_driver, two_c
 
 
 # ---------------------------------------------------------------------------
-# Fold state composes independently of filters (F8): a fold-hidden row is
+# Fold state composes independently of filters: a fold-hidden row is
 # never counted in "N hidden by filters".
 # ---------------------------------------------------------------------------
 
@@ -201,7 +201,7 @@ def test_fold_hidden_rows_are_excluded_from_the_hidden_count(app_driver):
 
 # ---------------------------------------------------------------------------
 # Persistence: like rail selection, filter state survives an ordinary
-# refresh and resets only for a different document (F6/F8).
+# refresh and resets only for a different document.
 # ---------------------------------------------------------------------------
 
 
@@ -256,8 +256,8 @@ def test_activation_navigates_to_the_correct_visible_row_while_filtered(app_driv
 
 
 # ---------------------------------------------------------------------------
-# F3 note: with every chip off, the truth layer (buckets/badges) must still
-# fully reconcile -- it never saw the filter at all.
+# With every chip off, the truth layer (buckets/badges) must still fully
+# reconcile -- it never saw the filter at all.
 # ---------------------------------------------------------------------------
 
 

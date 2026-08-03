@@ -1,8 +1,7 @@
 """New from an existing file: clone a file into a fresh unsaved main and
-dock the origin as the read-only reference (multi-file track, decision 8;
-design signed 2026-07-31 -- Workspace rail entry, "From existing file…").
-Also pins the Save As default-folder rule for never-saved mains (decision
-10), whose first real customer is the clone.
+dock the origin as the read-only reference (Workspace rail entry, "From
+existing file…"). Also pins the Save As default-folder rule for
+never-saved mains, whose first real customer is the clone.
 """
 
 from __future__ import annotations
@@ -207,7 +206,7 @@ def test_load_failure_after_guard_keeps_previous_session(
 
 
 # ---------------------------------------------------------------------------
-# Save As default folder for never-saved mains (decision 10)
+# Save As default folder for never-saved mains
 # ---------------------------------------------------------------------------
 
 

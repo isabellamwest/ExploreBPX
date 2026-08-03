@@ -9,11 +9,10 @@ block marks a key one side lacks, reference-only rows read in the
 reference purple, and fillable keys grey out with no value. Section and
 table folding is shared -- one caret folds both panes together.
 
-The page never edits: it contains no input widget, ever (coexistence rule
-14). All content is painted by :class:`SourceView`, a custom scroll area
-over :func:`core.source_rows.build_rows` -- deliberately not entangled with
-``BpxTreeModel`` (the plan's risk note): the Source page owns its own
-row/fold state.
+The page never edits: it contains no input widget, ever. All content is
+painted by :class:`SourceView`, a custom scroll area over
+:func:`core.source_rows.build_rows` -- deliberately not entangled with
+``BpxTreeModel``: the Source page owns its own row/fold state.
 """
 
 from __future__ import annotations
@@ -56,7 +55,7 @@ _PULL_GLYPH = "←"
 _PULL_W = 26
 _PULL_H = 20
 
-#: The one-line stand-in for a closed dict/list value (decision 15).
+#: The one-line stand-in for a closed dict/list value.
 _CLOSED_SUMMARY = "table"
 
 #: How long the just-pulled row's gutter shows its "Pulled" tag. Long
@@ -74,8 +73,8 @@ class _Segment:
     bold: bool = False
     italic: bool = False
     #: Painted over the ``style.DIFF_TINT`` wash: the value-only highlight
-    #: chip of the signed frames. Only values (or the ⋯/"table" stand-ins)
-    #: ever chip -- keys, structure and whole rows never do.
+    #: chip. Only values (or the ⋯/"table" stand-ins) ever chip -- keys,
+    #: structure and whole rows never do.
     chip: bool = False
 
 
@@ -111,8 +110,8 @@ class _Line:
     toggle_path: tuple[str, ...] | None = None
     #: The ← gutter pull (two-pane only): set on the key line of a
     #: differs/fillable/ref-only parameter and on a ref-only section
-    #: header -- the frames' rule: absent entirely on equal and main-only
-    #: rows, and on shared section headers.
+    #: header -- absent entirely on equal and main-only rows, and on
+    #: shared section headers.
     pull_path: tuple[str, ...] | None = None
     pull_section: bool = False
     #: The owning row's path, set on the row's first painted line only (a
@@ -159,8 +158,8 @@ def _section_pane(
     ]
     if diff_dots:
         # A collapsed section signals with a chipped ⋯ when anything inside
-        # differs, is fillable or is ref-only (the signed frames' call: no
-        # text counts, the chip carries the whole signal).
+        # differs, is fillable or is ref-only. No text counts here -- the
+        # chip alone carries the signal.
         segments += [_Segment("  "), _Segment("⋯", color=style.MUTED, chip=True)]
     return _PaneLine(
         segments=tuple(segments),
@@ -173,7 +172,7 @@ def _token_diff_segments(value: str, other: str, color: str) -> tuple[_Segment, 
     """A differing string value rendered with only its changed parts
     chipped: whitespace-delimited tokens are diffed against the other
     side, so ``"8.3e-4 * exp(-4300 / T)"`` chips ``8.3e-4`` alone when the
-    tail is shared (the signed frames' function-segment chips)."""
+    tail is shared."""
     dumped = format_value(value)[1:-1]
     other_dumped = format_value(other)[1:-1]
     tokens = re.split(r"(\s+)", dumped)
@@ -236,8 +235,8 @@ def _param_side_panes(
     if not present:
         return []
     if fillable:
-        # The signed frames' fillable rendering: grey key, no value -- the
-        # slot is there, nothing meaningful fills it yet.
+        # Fillable rendering: grey key, no value -- the slot is there,
+        # nothing meaningful fills it yet.
         return [
             _PaneLine(
                 segments=(_Segment(f'"{row.key}":', color=style.GHOST_TEXT),),
@@ -303,9 +302,8 @@ def _align_panes(
 
     With *chip_replaced* (open dict/list values), the entry lines that
     genuinely changed -- paired but different beyond a trailing comma --
-    chip on both sides: the frames' per-table-entry chips. Extra entries
-    facing a gap do not chip (the gap already carries the signal), and key
-    lines (carets) never chip.
+    chip on both sides. Extra entries facing a gap do not chip (the gap
+    already carries the signal), and key lines (carets) never chip.
     """
     gap = _gap(depth)
     if not main_panes:
@@ -352,7 +350,7 @@ def _build_lines(
     # Sections holding any difference (differs/fillable/ref-only anywhere
     # beneath, ref-only ghost sections included): their collapsed headers
     # carry the chipped ⋯. Ancestors only -- a ref-only header itself stays
-    # purple-without-chip, per the signed frames.
+    # purple-without-chip.
     diff_sections: set[tuple[str, ...]] = set()
     if two_pane:
         for row in rows:
@@ -408,8 +406,8 @@ def _build_lines(
                     ref=ref,
                     toggle_path=row.path,
                     # ← on a section header only when the whole section is
-                    # ref-only: its pull copies the full subtree, one undo
-                    # entry (frames: "State"; shared headers carry no ←).
+                    # ref-only: its pull copies the full subtree as one undo
+                    # entry; shared headers carry no ←.
                     pull_path=row.path
                     if two_pane and row.is_difference
                     else None,
@@ -418,7 +416,7 @@ def _build_lines(
                 )
             )
         else:
-            # Value-chip modes per state (signed frames): differs chips
+            # Value-chip modes per state: differs chips
             # both sides -- token-level for string pairs, whole otherwise;
             # fillable chips the reference-side value alone; everything
             # else (equal, main-only, ref-only) carries no chip.
@@ -504,13 +502,13 @@ class SourceView(QAbstractScrollArea):
 
     Painting the ← chip is the view's job; *acting* on it is not: a gutter
     click only emits :attr:`pull_requested` (path, is_section) and the
-    window layer runs the shared M3 command -- the page itself never
-    mutates the document (coexistence rule 14).
+    window layer runs the shared pull command -- the page itself never
+    mutates the document.
     """
 
     #: A ← gutter chip was clicked: (path, is_section).
     pull_requested = Signal(object, bool)
-    #: A row was double-clicked (step 7): its path, for the Editor jump
+    #: A row was double-clicked: its path, for the Editor jump
     #: through ``NavigationService``. Emitted only for rows the main
     #: document actually has -- a ref-only row names nothing the Editor
     #: could resolve, and suffix-matching must never guess for it.
@@ -527,15 +525,16 @@ class SourceView(QAbstractScrollArea):
         #: stepper moves it between differences and a row click places it.
         self._selected: tuple[str, ...] | None = None
         #: The just-pulled row's path while its gutter "Pulled" tag shows
-        #: (concept 1's stay-put confirmation); cleared by the single-shot
-        #: timer, or by ``set_rows`` if the row itself vanishes (undo).
+        #: (the stay-put confirmation after a pull); cleared by the
+        #: single-shot timer, or by ``set_rows`` if the row itself vanishes
+        #: (undo).
         self._flash_path: tuple[str, ...] | None = None
         self._flash_timer = QTimer(self)
         self._flash_timer.setSingleShot(True)
         self._flash_timer.timeout.connect(self._clear_flash)
         self._font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
-        # Focusable for the Up/Down row navigation (step 7) -- still never
-        # an input widget: keys move the selection, nothing edits.
+        # Focusable for Up/Down row navigation -- still never an input
+        # widget: keys move the selection, nothing edits.
         self.setFocusPolicy(Qt.StrongFocus)
 
     # -- content ---------------------------------------------------------
@@ -600,7 +599,7 @@ class SourceView(QAbstractScrollArea):
 
     def has_differences(self) -> bool:
         """Whether any stepper target exists -- drives the toolbar's ‹ ›
-        enabled state (call C1: disabled, never hidden, at zero)."""
+        enabled state (disabled, never hidden, at zero)."""
         return any(row.is_difference for row in self._rows)
 
     def step(self, delta: int) -> None:
@@ -608,8 +607,8 @@ class SourceView(QAbstractScrollArea):
 
         Targets are exactly the rows the row model marks ``is_difference``
         (differs / fillable / ref-only parameters, ref-only section
-        headers), visited in file order and wrapping at both ends (call
-        C2). A selection resting on a non-target row steps to the nearest
+        headers), visited in file order and wrapping at both ends. A
+        selection resting on a non-target row steps to the nearest
         difference past it in the chosen direction.
         """
         targets = [row.path for row in self._rows if row.is_difference]
@@ -660,8 +659,7 @@ class SourceView(QAbstractScrollArea):
                 break
 
     def move_selection(self, delta: int) -> None:
-        """Move the selection one visible row up (-1) or down (+1) -- the
-        Up/Down keys of the signed design (step 7).
+        """Move the selection one visible row up (-1) or down (+1).
 
         Walks the rows as rendered (a folded section's children are not
         visited; open-value continuation lines are skipped) and stops at
@@ -900,7 +898,7 @@ class SourceView(QAbstractScrollArea):
         self, painter: QPainter, pane_width: int, top: int, line_height: int
     ) -> None:
         """The ← copy affordance, centred in the gutter column: light
-        purple tint, pointing into the main file (frames F1/F2)."""
+        purple tint, pointing into the main file."""
         x = pane_width + (_GUTTER_PX - _PULL_W) // 2
         y = top + (line_height - _PULL_H) // 2
         painter.setPen(QColor(style.REFERENCE_BORDER))
@@ -922,8 +920,7 @@ class SourceView(QAbstractScrollArea):
         self, painter: QPainter, pane_width: int, top: int, line_height: int
     ) -> None:
         """The transient "Pulled" confirmation, in the ← chip's own slot
-        and palette -- a role word, not a glyph, per the app's signed
-        no-decorative-glyphs rule."""
+        and palette -- a role word, not a glyph."""
         width = _GUTTER_PX - 4
         x = pane_width + (_GUTTER_PX - width) // 2
         y = top + (line_height - _PULL_H) // 2
@@ -969,7 +966,7 @@ class SourceView(QAbstractScrollArea):
         super().mousePressEvent(event)
 
     def mouseDoubleClickEvent(self, event) -> None:  # noqa: N802 - Qt override
-        """Double-click a row: jump to it in the Editor (decision 13).
+        """Double-click a row: jump to it in the Editor.
 
         Pane cells only -- the gutter stays the ←'s territory (its press
         already pulled once; a double-click must not pull twice or jump).
@@ -1006,12 +1003,12 @@ class SourcePage(QWidget):
     #: Re-emitted from the view's ← gutter clicks: (path, is_section).
     #: MainWindow runs the shared pull command; the page never mutates.
     pull_requested = Signal(object, bool)
-    #: The toolbar's ⇄ button: run the full Make-main flow (M4) -- the
+    #: The toolbar's ⇄ button: run the full Make-main flow -- the
     #: page only asks; MainWindow owns the dialogs and the swap.
     make_main_requested = Signal()
     #: The stale band's Reload link: re-snapshot the reference from disk.
     reload_requested = Signal()
-    #: A row was double-clicked: jump to it in the Editor (step 7). The
+    #: A row was double-clicked: jump to it in the Editor. The
     #: page re-emits; MainWindow routes through ``NavigationService``.
     navigate_requested = Signal(object)
 
@@ -1021,7 +1018,7 @@ class SourcePage(QWidget):
         self._view.pull_requested.connect(self.pull_requested)
         self._view.navigate_requested.connect(self.navigate_requested)
 
-        # Single-pane toolbar (frames F3): the main file's identity on the
+        # Single-pane toolbar: the main file's identity on the
         # left, the docking hint on the right -- the hint sits exactly where
         # the ‹ › stepper appears in two-pane mode, so the toolbar never
         # changes shape when a reference docks.
@@ -1030,8 +1027,8 @@ class SourcePage(QWidget):
         self._hint = QLabel("Open a reference to compare…")
         self._hint.setObjectName("SourceHint")
 
-        # Two-pane toolbar (frames F1): ‹ › difference stepper, thin
-        # separator, ⇄ Make main. No counts anywhere on the page (signed).
+        # Two-pane toolbar: ‹ › difference stepper, thin
+        # separator, ⇄ Make main. No counts anywhere on the page.
         self._prev_button = QPushButton("‹")
         self._prev_button.setObjectName("SourceStepButton")
         self._prev_button.setToolTip("Previous difference")
@@ -1088,10 +1085,10 @@ class SourcePage(QWidget):
         head_layout.addWidget(self._ref_head, 1)
         self._pane_head.setVisible(False)
 
-        # Stale-reference band (frames F4): a slim neutral notice directly
-        # under the pane headers. Shown/hidden by MainWindow's on-notice
-        # mtime check (page entry, window activation -- decision 11: no
-        # file watching, never a silent refresh).
+        # Stale-reference band: a slim neutral notice directly under the
+        # pane headers. Shown/hidden by MainWindow's on-notice mtime check
+        # (page entry, window activation) -- no file watching, never a
+        # silent refresh.
         self._stale_band = QWidget()
         self._stale_band.setObjectName("SourceStaleBand")
         stale_layout = QHBoxLayout(self._stale_band)
@@ -1144,7 +1141,7 @@ class SourcePage(QWidget):
         self._next_button.setVisible(two_pane)
         self._toolbar_sep.setVisible(two_pane)
         # "Make main" promotes a file on disk; a bundled library-set
-        # reference (path is None, Phase B) has nothing to promote, so the
+        # reference (path is None) has nothing to promote, so the
         # button hides rather than sit as a dead control.
         self._make_main_button.setVisible(
             two_pane and reference.path is not None

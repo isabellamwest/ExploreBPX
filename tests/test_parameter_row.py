@@ -62,8 +62,7 @@ def test_build_parameter_row_html_never_tints_a_row_by_requiredness():
 
 def test_build_parameter_row_html_error_marker_uses_error_colour():
     """An error row's trailing dot is the shared DOT mark rendered in
-    ``style.ERROR`` (unified symbol system, Concept A) -- no more literal
-    ``⚠`` text."""
+    ``style.ERROR`` -- no more literal ``⚠`` text."""
     html = build_parameter_row_html("Thickness [m]", severity="error")
     assert icons.html_img(icons.DOT, color=style.ERROR, size=MARK_BOX) in html
     assert "⚠" not in html
@@ -125,8 +124,8 @@ def test_row_without_html_role_falls_back_to_plain_rendering(rich_list):
 
 
 def test_tint_role_actually_paints_the_row_background(rich_list, qtbot):
-    """Regression pin (multi-file track M2): ``TINT_ROLE`` must produce a
-    real painted pixel, not just item data a headless test can read back.
+    """``TINT_ROLE`` must produce a real painted pixel, not just item data a
+    headless test can read back.
 
     A styled ``QListWidget::item`` (this app's global stylesheet declares
     one) silently ignores ``QListWidgetItem.setBackground``'s

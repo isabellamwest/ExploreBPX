@@ -34,7 +34,7 @@ _MSG_NO_ISSUES = style.all_clear("No validation issues for this parameter.")
 
 def issue_count(issues) -> int:
     """The number of rows :meth:`IssuesTab.show_parameter` would render for
-    *issues* -- i.e. the merged count (decision Q), after collapsing a
+    *issues* -- i.e. the merged count, after collapsing a
     committed-null ``FloatInt``'s ``float_type``+``int_type`` pair (V5) to
     one displayed row.
 
@@ -42,9 +42,9 @@ def issue_count(issues) -> int:
     caller that sets the secondary-workspace tab badge for an issues list
     that did *not* go through :meth:`show_parameter` itself (e.g. Inspector's
     live-preview and Escape-revert paths) MUST route the count through this
-    function rather than ``len(issues)`` -- a real defect (M1, reviewed): two
-    call-sites in ``inspector.py`` pushed the unmerged length into the same
-    badge, so the badge and the list disagreed for a committed-null FloatInt
+    function rather than ``len(issues)`` -- two call-sites in
+    ``inspector.py`` once pushed the unmerged length into the same badge,
+    so the badge and the list disagreed for a committed-null FloatInt
     parameter. Keeping one function used by both the list-builder and every
     badge-setter is what makes that drift impossible to reintroduce.
     """
@@ -98,7 +98,7 @@ class IssuesTab(QWidget):
         Switches to the placeholder when *parameter* is None or has no issues,
         so the panel always explains its state rather than showing a blank area.
         A committed-null ``FloatInt`` value's ``float_type``+``int_type`` pair
-        (V5) displays as one merged row (decision Q); the returned count
+        (V5) displays as one merged row; the returned count
         (used for the secondary-workspace tab badge) follows the same merge.
         """
         self._list.clear()
@@ -112,7 +112,7 @@ class IssuesTab(QWidget):
             is_error = issue.severity == Severity.ERROR
             label = "ERROR" if is_error else "WARN"
             item = QListWidgetItem(f"[{label}] {issue.message}")
-            # Same treatment as the Diagnostics page's issue rows (F5): a
+            # Same treatment as the Diagnostics page's issue rows: a
             # delegate-painted severity icon (SEVERITY_ROLE) plus the muted
             # verbatim message; the location slot stays empty -- this tab is
             # already scoped to one parameter.

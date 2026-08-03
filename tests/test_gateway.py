@@ -49,10 +49,10 @@ def test_validate_invalid_file_reports_issues(valid_spm_dict):
     assert result.issues
 
 
-# Multi-file 5c pins: a Copy up that leaves a dangling or half-built particle
-# name gets no invented diagnostic -- the app surfaces exactly what the
-# validator reports. These pin what that actually is, recorded live 2026-07-22;
-# a bpx upgrade that changes it should fail here.
+# A Copy up that leaves a dangling or half-built particle name gets no
+# invented diagnostic -- the app surfaces exactly what the validator
+# reports. These pin what that actually is; a bpx upgrade that changes
+# it should fail here.
 
 
 def test_dangling_particle_name_diagnostic_comes_from_bpx(valid_spm_dict):
@@ -501,9 +501,8 @@ def test_expected_fields_validation_run_resolves_to_experiment_definition():
 
 
 # ---------------------------------------------------------------------------
-# FieldMeta flag detection against the live BPX schema (Phase 1 input-system
-# extensions: allows_map, is_series, pattern, nullable, material_check,
-# is_container).
+# FieldMeta flag detection against the live BPX schema (allows_map,
+# is_series, pattern, nullable, material_check, is_container).
 # ---------------------------------------------------------------------------
 
 

@@ -25,8 +25,8 @@ def test_keystone_cell_field_deletion_invisible_to_validator(valid_spm_dict):
     trips a ``mode="before"`` validator leaves the validator's own issue list
     unchanged, while completion reports it.
 
-    This is the fact the whole layer exists to fix (V1/plan SS1): ``Cell``
-    has a ``mode="before"`` validator (a deprecated-fields check) that raises
+    This is the fact the whole layer exists to fix: ``Cell`` has a
+    ``mode="before"`` validator (a deprecated-fields check) that raises
     before pydantic ever checks Cell's own required fields.
 
     Re-baselined for bpx 1.1.1: this used to read the nmc fixture, which
@@ -111,8 +111,8 @@ def test_null_required_field_is_outstanding_not_missing():
 
 
 def test_empty_list_is_a_committed_value_not_outstanding():
-    """A ``[]`` is a real, if invalid, value -- decision D restricts the
-    outstanding/null rule to literal ``None`` only."""
+    """A ``[]`` is a real, if invalid, value -- the outstanding/null rule
+    is restricted to literal ``None`` only."""
     raw = document_factory.create("SPM", title="probe")
     cell = raw["Parameterisation"]["Cell"]
     cell["Electrode area [m2]"] = 1.0
@@ -153,7 +153,7 @@ def test_absent_header_yields_only_missing_header_task():
 def test_absent_required_section_then_cascade_on_readd():
     """Deleting Electrolyte (SPMe/DFN) collapses to one section-absent task
     with no field enumeration; re-adding it empty immediately enumerates its
-    fields (V7's cascade -- free from per-section recompute, no extra code)."""
+    fields via the cascade -- free from per-section recompute, no extra code."""
     raw = document_factory.create("SPMe", title="probe")
     del raw["Parameterisation"]["Electrolyte"]
 
@@ -236,17 +236,16 @@ def test_partial_has_no_state_task():
     assert completion.document_completion(raw) == ()
 
 
-# --- Reviewed defect: asymmetric loc-prefix matching (plan V4) ------------
+# --- Asymmetric loc-prefix matching ---------------------------------------
 
 
 def test_header_field_absorption_regression(valid_spm_dict):
-    """The reviewed defect this test used to pin: a missing ``Header.BPX``
-    diagnostic used to carry nav_path ``('BPX',)`` -- the validator dropping
-    a leading ``Header`` component, exactly like it drops ``Parameterisation``
-    (V4) -- and a matcher that only stripped ``Parameterisation`` left every
-    required Header field double-surfaced.
+    """A missing ``Header.BPX`` diagnostic used to carry nav_path
+    ``('BPX',)`` -- the validator dropping a leading ``Header`` component,
+    exactly like it drops ``Parameterisation`` -- and a matcher that only
+    stripped ``Parameterisation`` left every required Header field
+    double-surfaced.
 
-    Re-baselined for bpx 1.1.1 (probed directly against the real validator):
     bpx 1.1.1 added an ``is_legacy_bpx`` pre-check that reads ``Header.BPX``
     *before* pydantic validation runs at all, so a document missing it no
     longer raises the plain pydantic ``missing`` error the old fix absorbed
@@ -257,7 +256,7 @@ def test_header_field_absorption_regression(valid_spm_dict):
     ``partition_issues`` cannot match a diagnostic carrying no
     ``error_type``/``loc`` to it, so -- faithfully surfacing bpx's new
     behaviour, not a bug -- the task and the real validator's own message now
-    stay visible side by side (mirrors decision V6's ``DECLARE_MODEL`` case).
+    stay visible side by side (mirrors the ``DECLARE_MODEL`` case).
     """
     raw = copy.deepcopy(valid_spm_dict)
     del raw["Header"]["BPX"]
@@ -279,7 +278,7 @@ def test_validation_run_field_absorption_keeps_full_prefix(valid_spm_dict):
     ``Voltage`` -- NOT ``Temperature``, which is optional in ``Experiment``)
     absorb via nav_path ``('Validation', <run>, <field>)`` unchanged: unlike
     Header/Parameterisation, the validator KEEPS the ``Validation`` prefix in
-    full (V4). This exercises the "no prefix to strip" branch of
+    full. This exercises the "no prefix to strip" branch of
     ``_nav_path_candidates``, not just the two stripped ones.
     """
     raw = copy.deepcopy(valid_spm_dict)
@@ -323,15 +322,15 @@ def test_partition_handles_warning_diagnostics_without_crashing(fixtures_dir):
     assert result.warning_count >= 1
 
 
-# --- Fix 2: document_completion is Required-only (decision B) -------------
+# --- document_completion is Required-only ---------------------------------
 
 
 def test_document_completion_missing_field_excludes_optional_fields():
-    """Decision B: an *absent* Expected-but-optional field is never a
-    MISSING_FIELD task -- those are suggestions only, reachable through
-    ``completion_for``. (Decision D's revision only changed NULL_FIELD's own
-    rule -- see ``test_optional_null_field_is_outstanding_without_required_tag``
-    below; MISSING_FIELD stays Required-only, unaffected.)"""
+    """An *absent* Expected-but-optional field is never a MISSING_FIELD
+    task -- those are suggestions only, reachable through ``completion_for``.
+    NULL_FIELD has its own rule -- see
+    ``test_optional_null_field_is_outstanding_without_required_tag`` below;
+    MISSING_FIELD stays Required-only, unaffected."""
     raw = document_factory.create("SPM", title="probe")
     tasks = completion.document_completion(raw)
     assert all(task.required for task in tasks if task.kind is TaskKind.MISSING_FIELD)
@@ -340,12 +339,11 @@ def test_document_completion_missing_field_excludes_optional_fields():
 
 
 def test_optional_null_field_is_outstanding_without_required_tag():
-    """Decision D, REVISED 2026-07-14 (second user ruling, supersedes the
-    original required-only null rule): any schema-Expected field committed
-    null is Outstanding, Required or not. Header's ``Description`` is
-    schema-Expected but NOT schema-required -- committing it null must still
-    produce a NULL_FIELD task, with ``required=False`` so the Outstanding row
-    renders without the REQUIRED tag."""
+    """Any schema-Expected field committed null is Outstanding, Required or
+    not. Header's ``Description`` is schema-Expected but NOT schema-required
+    -- committing it null must still produce a NULL_FIELD task, with
+    ``required=False`` so the Outstanding row renders without the REQUIRED
+    tag."""
     raw = document_factory.create("SPM", title="probe")
     raw["Header"]["Description"] = None
     tasks = completion.document_completion(raw)
@@ -358,9 +356,9 @@ def test_optional_null_field_is_outstanding_without_required_tag():
 def test_optional_null_field_absorbs_its_diagnostic_calm_page():
     """The real validator does raise for a committed-null optional string
     field (``Description`` is not schema-nullable, so ``None`` there is a
-    real ``string_type`` error) -- decision D says creating an expected field
-    never makes the document look worse, so this absorbs into the NULL_FIELD
-    task exactly like a Required null field does."""
+    real ``string_type`` error) -- creating an expected field never makes the
+    document look worse, so this absorbs into the NULL_FIELD task exactly
+    like a Required null field does."""
     raw = document_factory.create("SPM", title="probe")
     raw["Header"]["Description"] = None
     doc = BPXDocument.from_raw(raw, filename="probe", fmt="json")
@@ -379,9 +377,9 @@ def test_optional_null_field_absorbs_its_diagnostic_calm_page():
 
 
 def test_custom_null_parameter_gets_no_task_and_stays_visible():
-    """Decision D: a custom parameter's ``extra_forbidden`` rejects the
-    *name*, not the emptiness -- filling a value fixes nothing, so it must
-    never absorb, unlike an expected field's null."""
+    """A custom parameter's ``extra_forbidden`` rejects the *name*, not the
+    emptiness -- filling a value fixes nothing, so it must never absorb,
+    unlike an expected field's null."""
     raw = document_factory.create("SPM", title="probe")
     raw["Header"]["NotARealField"] = None
     doc = BPXDocument.from_raw(raw, filename="probe", fmt="json")
@@ -411,8 +409,8 @@ def test_partition_calm_badge_spm_skeleton_absorbs_everything():
 
 
 def test_partition_partial_sparse_electrode_stays_fully_visible():
-    """V9's safety net: under Partial no tasks exist, so the validator's own
-    union-branch ``missing`` errors are never absorbed."""
+    """Under Partial no tasks exist, so the validator's own union-branch
+    ``missing`` errors are never absorbed."""
     raw = document_factory.create("Partial", title="probe")
     raw["Parameterisation"]["Negative electrode"] = {"Thickness [m]": 1e-4}
     doc = BPXDocument.from_raw(raw, filename="probe", fmt="json")
@@ -428,11 +426,10 @@ def test_partition_partial_sparse_electrode_stays_fully_visible():
 
 
 def test_partial_null_field_becomes_task_and_absorbs(valid_spm_dict):
-    """Decision C (revised 2026-07-22): Partial carries NULL_FIELD tasks --
-    an empty field is outstanding, not a red error, exactly as under a
-    concrete model. The scenario that motivated the revision: a complete
-    document flipped to Partial with one field emptied used to show that
-    field as a page-visible red error."""
+    """Partial carries NULL_FIELD tasks -- an empty field is outstanding, not
+    a red error, exactly as under a concrete model: a complete document
+    flipped to Partial with one field emptied must not show that field as a
+    page-visible red error."""
     raw = copy.deepcopy(valid_spm_dict)
     raw["Header"]["Model"] = "Partial"
     raw["Parameterisation"]["Cell"]["Nominal cell capacity [A.h]"] = None
@@ -443,7 +440,7 @@ def test_partial_null_field_becomes_task_and_absorbs(valid_spm_dict):
             TaskKind.NULL_FIELD,
             ("Parameterisation", "Cell", "Nominal cell capacity [A.h]"),
             "Nominal cell capacity [A.h]",
-            False,  # nothing is Required under Partial (decision C)
+            False,  # nothing is Required under Partial
         ),
     )
 
@@ -455,9 +452,9 @@ def test_partial_null_field_becomes_task_and_absorbs(valid_spm_dict):
 
 
 def test_partial_null_and_missing_split_cleanly(valid_spm_dict):
-    """The boundary of the revision: in one Partial document, a committed
-    null absorbs into its NULL_FIELD task while a sparse electrode's own
-    union-branch ``missing`` errors stay fully visible (V9, narrowed)."""
+    """In one Partial document, a committed null absorbs into its NULL_FIELD
+    task while a sparse electrode's own union-branch ``missing`` errors stay
+    fully visible."""
     raw = copy.deepcopy(valid_spm_dict)
     raw["Header"]["Model"] = "Partial"
     raw["Parameterisation"]["Cell"]["Nominal cell capacity [A.h]"] = None
@@ -482,11 +479,10 @@ def _section_paths(raw):
 
 
 def test_visible_error_section_paths_calm_for_merely_empty_document():
-    """The tree-dot regression (user, 2026-07-22): a document whose only
-    'errors' are unfilled fields -- required fields absent (a fresh
-    scaffold) plus one committed null -- must mark NO section. Emptiness is
-    outstanding work everywhere else (list rows, badge); the tree dot must
-    agree."""
+    """A document whose only 'errors' are unfilled fields -- required fields
+    absent (a fresh scaffold) plus one committed null -- must mark NO
+    section. Emptiness is outstanding work everywhere else (list rows,
+    badge); the tree dot must agree."""
     raw = document_factory.create("SPM", title="probe")
     raw["Parameterisation"]["Cell"]["Nominal cell capacity [A.h]"] = None
 
@@ -503,9 +499,9 @@ def test_visible_error_section_paths_marks_bad_value_section_only(valid_spm_dict
 
 
 def test_visible_error_section_paths_marks_extra_forbidden_custom(valid_spm_dict):
-    """Decision P's custom rule carries over to the tree: an
-    ``extra_forbidden`` custom parameter is name-rejection, never absorbed,
-    so its section keeps the dot."""
+    """The custom rule carries over to the tree: an ``extra_forbidden``
+    custom parameter is name-rejection, never absorbed, so its section keeps
+    the dot."""
     raw = copy.deepcopy(valid_spm_dict)
     raw["Parameterisation"]["Cell"]["My bespoke thing"] = 3.0
 
@@ -513,9 +509,9 @@ def test_visible_error_section_paths_marks_extra_forbidden_custom(valid_spm_dict
 
 
 def test_visible_error_section_paths_partial_sparse_electrode_still_marked(valid_spm_dict):
-    """The honest boundary: under Partial a *present but sparse* section's
-    union-branch ``missing`` errors stay visible (V9), so its dot stays --
-    while a committed-null field elsewhere marks nothing."""
+    """Under Partial a *present but sparse* section's union-branch
+    ``missing`` errors stay visible, so its dot stays -- while a
+    committed-null field elsewhere marks nothing."""
     raw = copy.deepcopy(valid_spm_dict)
     raw["Header"]["Model"] = "Partial"
     raw["Parameterisation"]["Cell"]["Nominal cell capacity [A.h]"] = None
@@ -527,8 +523,8 @@ def test_visible_error_section_paths_partial_sparse_electrode_still_marked(valid
 
 
 def test_partition_null_field_absorbs_both_union_branch_diagnostics():
-    """V5: a committed-null ``FloatInt`` field raises two diagnostics (one
-    per union branch); both must absorb, not just one."""
+    """A committed-null ``FloatInt`` field raises two diagnostics (one per
+    union branch); both must absorb, not just one."""
     raw = document_factory.create("SPM", title="probe")
     cell = raw["Parameterisation"]["Cell"]
     cell["Electrode area [m2]"] = 1.0
@@ -546,7 +542,7 @@ def test_partition_null_field_absorbs_both_union_branch_diagnostics():
         for d, nav in doc.iter_issues()
         if nav == ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
     ]
-    assert len(capacity_diagnostics) == 2  # float_type + int_type (V5)
+    assert len(capacity_diagnostics) == 2  # float_type + int_type
     # PydanticErrorDiagnostic wraps a raw error dict, so it is unhashable --
     # compare by list membership (uses __eq__), not a set.
     assert all(pair in result.absorbed for pair in capacity_diagnostics)
@@ -554,17 +550,16 @@ def test_partition_null_field_absorbs_both_union_branch_diagnostics():
 
 
 def test_partition_null_function_table_field_absorbs_all_four_branches():
-    """The diffusivity-class bug (fixed at 03849b6): a committed-null
-    function/table union field raises FOUR diagnostics -- ``float_type``/
-    ``int_type``/``string_type``/``model_type``, one per union branch -- and
-    pydantic tags the function/table branches with names
+    """A committed-null function/table union field raises FOUR diagnostics
+    -- ``float_type``/``int_type``/``string_type``/``model_type``, one per
+    union branch -- and pydantic tags the function/table branches with names
     (``function-after[validate(), str]``, ``InterpolatedTable``) that the
     old ``_NAV_STRIP_TAGS`` denylist never matched, so those nav_paths kept
     a bogus trailing component and absorption missed them: the field
     rendered grey AND red at once. The fix stores the resolved parameter's
     canonical ``.path`` as nav_path, so all four absorb into the one
-    NULL_FIELD task; decision Q's display merge then shows exactly three
-    messages (float+int collapse, string and table stay distinct)."""
+    NULL_FIELD task; the display merge then shows exactly three messages
+    (float+int collapse, string and table stay distinct)."""
     raw = document_factory.create("SPM", title="probe")
     path = ("Parameterisation", "Negative electrode", "Diffusivity [m2.s-1]")
     raw["Parameterisation"]["Negative electrode"]["Diffusivity [m2.s-1]"] = None
@@ -634,7 +629,7 @@ def test_every_expected_field_committed_null_absorbs_fully(model):
 
 
 def test_partition_garbage_model_shows_both_error_and_task():
-    """V6: a garbage Model value stays a visible Issue (literal_error, a
+    """A garbage Model value stays a visible Issue (literal_error, a
     user-typed bad value, never absorbed) *and* the declare-model task is
     still reported -- both are shown, deliberately."""
     raw = document_factory.create("SPM", title="probe")
@@ -661,7 +656,7 @@ def test_container_field_never_becomes_a_missing_field_suggestion():
     assert all(field.alias != "Particle" for field in section.null_fields)
 
 
-# --- Phase 5: required_total (the Outstanding page's "M") -----------------
+# --- required_total (the Outstanding page's "M") ---------------------------
 
 
 def test_required_total_counts_schema_required_non_container_fields():
@@ -692,7 +687,7 @@ def test_ordering_is_deterministic_and_document_ordered():
     second = completion.document_completion(copy.deepcopy(raw))
     assert first == second
 
-    # Header's own fields are all optional (decision B filters them out of
+    # Header's own fields are all optional (filtered out of
     # document_completion entirely -- see the required-only regression test
     # below), so Cell's required fields are the earliest document-ordered
     # tasks, followed by each Parameterisation child in the schema's own

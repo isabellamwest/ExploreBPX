@@ -144,9 +144,9 @@ class AppState:
 
     def open_reference_set(self, set_id: str) -> OpenReferenceOutcome:
         """Dock bundled reference-library set *set_id* as the reference,
-        replacing any reference already docked (silent replace -- signed
-        decision, Phase B 2026-07-31: a snapshot is disposable, immutable
-        state, and re-docking the old one is one click).
+        replacing any reference already docked (silent replace: a snapshot
+        is disposable, immutable state, and re-docking the old one is one
+        click).
 
         Dedupes by set id against the docked reference (returns
         ``ALREADY_REFERENCE``, quiet no-op). ``IS_MAIN`` can never apply: a

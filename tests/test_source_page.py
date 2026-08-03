@@ -1,7 +1,6 @@
-"""The Source page (multi-file track M5): rail entry, single-pane raw-JSON
-rendering, folding, live re-render, the aligned two-pane comparison
-(alignment, gaps, shared folding, per-state text styling), and the no-edit
-invariant.
+"""The Source page: rail entry, single-pane raw-JSON rendering, folding,
+live re-render, the aligned two-pane comparison (alignment, gaps, shared
+folding, per-state text styling), and the no-edit invariant.
 
 The aligned row model itself is covered in test_source_rows.py; this file
 covers the page widget and its MainWindow wiring.
@@ -39,7 +38,7 @@ class _RefStub:
         self.filename = filename
         self.model = model
         # A file-backed reference by default; pass ``path=None`` to stand in
-        # for a bundled library set (Phase B), which hides ⇄ Make main.
+        # for a bundled library set, which hides ⇄ Make main.
         self.path = path
 
 
@@ -184,7 +183,7 @@ def test_page_contains_no_input_widget(qtbot):
 
 
 # ---------------------------------------------------------------------------
-# Two-pane mode (step 3): keyed alignment, gaps, shared folding, styling.
+# Two-pane mode: keyed alignment, gaps, shared folding, styling.
 # ---------------------------------------------------------------------------
 
 _REF = {
@@ -361,7 +360,7 @@ def test_two_pane_page_still_has_no_input_widget(qtbot):
 
 
 # ---------------------------------------------------------------------------
-# Value chips (step 4): chip placement per state, values only.
+# Value chips: chip placement per state, values only.
 # ---------------------------------------------------------------------------
 
 
@@ -490,7 +489,7 @@ def test_single_pane_never_chips(qtbot):
 
 
 # ---------------------------------------------------------------------------
-# ← gutter pulls (step 5): presence per state, hit-testing, no page edits.
+# ← gutter pulls: presence per state, hit-testing, no page edits.
 # ---------------------------------------------------------------------------
 
 
@@ -717,10 +716,9 @@ def test_source_pull_stays_on_the_source_page(app_driver, tmp_path, monkeypatch)
 
     app_driver.source_pull(path)
 
-    # Concept 1 (signed): the page's rhythm is next ›, pull, next ›, pull
-    # -- confirmation happens in place (the row's transient "Pulled" tag),
-    # never a page switch. The Editor is opt-in: the toast's action, or a
-    # double-click.
+    # The page's rhythm is next ›, pull, next ›, pull -- confirmation
+    # happens in place (the row's transient "Pulled" tag), never a page
+    # switch. The Editor is opt-in: the toast's action, or a double-click.
     assert app_driver.current_view_name() == "Source"
     assert app_driver.source_flash_path() == path
 
@@ -765,7 +763,7 @@ def test_enter_pulls_the_selected_difference(app_driver, tmp_path, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Step 6: toolbar (‹ › stepper, ⇄ Make main, single-pane label) + stale band.
+# Toolbar (‹ › stepper, ⇄ Make main, single-pane label) + stale band.
 # ---------------------------------------------------------------------------
 
 _CAPACITY = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
@@ -800,9 +798,9 @@ def test_toolbar_two_pane_shows_stepper_and_make_main_only(qtbot):
 
 
 def test_toolbar_hides_make_main_for_a_library_reference(qtbot):
-    """A bundled library-set reference (Phase B) has no file on disk to
-    promote, so ⇄ Make main hides rather than sit as a dead control; the
-    stepper is unaffected."""
+    """A bundled library-set reference has no file on disk to promote, so
+    ⇄ Make main hides rather than sit as a dead control; the stepper is
+    unaffected."""
     page = SourcePage()
     qtbot.addWidget(page)
     page.refresh(_DOC_MAIN_ONLY, reference=_RefStub(_REF, path=None))
@@ -834,7 +832,7 @@ def test_single_pane_label_omits_a_missing_model(qtbot):
 
 
 def test_stepper_disabled_not_hidden_without_differences(qtbot):
-    # Call C1: identical files keep the ‹ › buttons in place, greyed.
+    # Identical files keep the ‹ › buttons in place, greyed.
     page = _two_pane(qtbot, _DOC, _DOC)
 
     assert not page._prev_button.isHidden()
@@ -858,7 +856,7 @@ def test_stepper_walks_differences_in_file_order_and_wraps(qtbot):
     assert view.selected_path() == _CAPACITY
     page._next_button.click()
     assert view.selected_path() == _LOWER_CUTOFF
-    page._next_button.click()  # call C2: wraps to the first difference
+    page._next_button.click()  # wraps to the first difference
     assert view.selected_path() == ("Header", "Title")
     page._prev_button.click()  # and backwards off the front, to the last
     assert view.selected_path() == _LOWER_CUTOFF
@@ -953,7 +951,7 @@ def test_stepper_disables_once_pulls_remove_every_difference(
     app_driver.source_pull(_LOWER_CUTOFF)
 
     # Three pulls, one visit: the page never navigated away between them
-    # (the whole point of the stay-put pull -- concept 1, signed).
+    # (the whole point of the stay-put pull).
     assert app_driver.current_view_name() == "Source"
     # Only the main-only row differs now -- not a target (frames rule).
     assert app_driver.source_stepper_enabled() is False
@@ -1026,8 +1024,8 @@ def test_window_activation_is_a_stale_notice_point(app_driver, tmp_path, monkeyp
 
 
 def test_reload_failure_keeps_snapshot_and_band(app_driver, tmp_path, monkeypatch):
-    # Call C3: an unreadable file at Reload surfaces the standard error;
-    # nothing mutates.
+    # An unreadable file at Reload surfaces the standard error; nothing
+    # mutates.
     app_driver.open(_write(tmp_path, "main.json", _DOC_MAIN_ONLY))
     _dock_reference(app_driver, tmp_path, monkeypatch, _REF)
 
@@ -1063,7 +1061,7 @@ def test_vanished_file_never_conjures_a_band(app_driver, tmp_path, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Step 7: Up/Down row navigation + double-click Editor jump.
+# Up/Down row navigation + double-click Editor jump.
 # ---------------------------------------------------------------------------
 
 

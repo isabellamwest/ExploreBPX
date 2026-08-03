@@ -6,11 +6,10 @@ Layer A guarantees a new/reshaped section fails loudly through
 ``field_meta``; it says nothing about *requiredness*, the model enum, or the
 handful of section/model maps the gateway must hand-maintain because the
 JSON schema carries no model->definition link. Those are what this file
-pins. The 2026-07-21 principles audit found exactly two silent failure
-modes -- a new upstream model quietly contradicting the validator, and a
-schema-required section quietly missing from scaffolds/completion -- and
-every test here exists to convert one of those silences into a loud,
-instructive failure.
+pins, guarding against two silent failure modes -- a new upstream model
+quietly contradicting the validator, and a schema-required section quietly
+missing from scaffolds/completion -- and every test here exists to convert
+one of those silences into a loud, instructive failure.
 
 Like Layer A, facts are read straight off ``bpx.BPX.model_json_schema()``
 (never through the gateway's own resolvers) so a derivation bug and a stale

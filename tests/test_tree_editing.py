@@ -356,7 +356,7 @@ def test_removing_an_empty_section_does_not_ask(window_with_validation, monkeypa
 
 # ----------------------------------------------------------------------
 # User-defined authoring: the one open bucket names both sections and
-# parameters freely, and its content is renamable (Concept C)
+# parameters freely, and its content is renamable
 # ----------------------------------------------------------------------
 
 _USER_DEFINED = ("Parameterisation", "User-defined")

@@ -1,5 +1,4 @@
-"""Reference tile lifecycle, toast feedback, and the Open-dialog choice flow
-(M1: reference in state + Workspace).
+"""Reference tile lifecycle, toast feedback, and the Open-dialog choice flow.
 
 Before extending this file: the choice dialog only ever appears while a main
 document is already open (main or reference, dirty or not) -- with no document
@@ -33,8 +32,8 @@ def _stub_open_dialog(monkeypatch, path) -> None:
 
 
 def test_reference_card_shows_the_empty_state_with_nothing_docked(app_driver):
-    """Concept A (signed 2026-07-31): with nothing docked the card stays on
-    screen as the reference library's front door, not a docked tile."""
+    """With nothing docked the card stays on screen as the reference
+    library's front door, not a docked tile."""
     assert not app_driver.reference_tile_visible()
     assert app_driver.reference_empty_state_visible()
 

@@ -17,7 +17,7 @@ deleted root validator in bpx 1.1.0 demanded it outside the JSON schema's own
 [``Field(None, alias="State")``] and removed that validator, so the special
 case is gone -- the schema-driven walk now covers everything on its own.)
 
-Terminology (decision B, use exactly): Expected = schema names the field for
+Terminology (use exactly): Expected = schema names the field for
 this section. Required = schema requires it AND the model is concrete
 (SPM/SPMe/DFN). Missing = expected field absent from raw. Outstanding =
 Required and (absent OR committed null).
@@ -29,15 +29,15 @@ questions:
   :func:`core.structure.addable_child_sections`'s shape. Pure over
   ``(path, value, model)``. Returns every *Expected* field, Required or not
   (``MissingField.required`` distinguishes them) -- this is the parameter
-  list's "fields to add" suggestions query (decision H), which shows
+  list's "fields to add" suggestions query, which shows
   optional fields too.
 * :func:`document_completion` -- aggregates :func:`completion_for` across the
   whole document into an ordered list of :class:`CompletionTask` for the
   Diagnostics page's Outstanding section. ``MISSING_FIELD`` tasks are
-  **Required-only** (decision B: an *absent* Expected-but-optional field is
+  **Required-only**: an *absent* Expected-but-optional field is
   never a document-level task; it only ever shows up as a suggestion via
-  :func:`completion_for`). ``NULL_FIELD`` tasks are the opposite (decision D,
-  REVISED 2026-07-14): every schema-Expected field committed as ``null``
+  :func:`completion_for`. ``NULL_FIELD`` tasks are the opposite: every
+  schema-Expected field committed as ``null``
   becomes a task, Required or not -- creating an expected field never makes
   the document look worse, so its calm Outstanding treatment doesn't depend
   on requiredness (the task's own ``required`` flag still drives whether the
@@ -48,7 +48,7 @@ questions:
 
 :func:`partition_issues` is a separate pure function that consumes a
 document's already-attached diagnostics plus a task list, and decides which
-diagnostics the Outstanding section already accounts for (decision E). It is
+diagnostics the Outstanding section already accounts for. It is
 the only function here that touches :class:`core.validation.ValidatorDiagnostic`
 objects; :func:`completion_for`/:func:`document_completion` never do.
 """
@@ -69,8 +69,8 @@ if TYPE_CHECKING:
 
 #: The models with a full, fixed schema shape: the ``Header.Model`` enum
 #: minus ``Partial``, the one member the schema gives no required list. A
-#: "Required" flag (decision B) only ever applies under one of these; an
-#: undeclared model or Partial never marks anything Required (decision C).
+#: "Required" flag only ever applies under one of these; an
+#: undeclared model or Partial never marks anything Required.
 #: Derived, not restated, so a new upstream model is concrete by default --
 #: :mod:`tests.test_spec_literals_contract` forces its deliberate onboarding.
 CONCRETE_MODELS = frozenset(bpx_gateway.supported_models()) - {"Partial"}
@@ -92,8 +92,7 @@ class SectionCompletion:
     #: Expected fields with no entry in ``value`` (feeds "fields to add").
     missing_fields: tuple[MissingField, ...]
     #: Every schema-Expected field present but committed as literal None
-    #: (decision D, REVISED 2026-07-14 -- second user ruling, live review:
-    #: "creating an expected field never makes the document look worse", so
+    #: ("creating an expected field never makes the document look worse", so
     #: this is no longer gated on ``required``; ``MissingField.required``
     #: still says whether the REQUIRED tag shows). A *custom* parameter --
     #: not in ``expected_fields`` at all -- can never land here: its
@@ -123,7 +122,7 @@ def completion_for(path: tuple[str, ...], value: object, model: str | None) -> S
     Pure over ``(path, value, model)`` -- never touches diagnostics. Delegates
     to :func:`core.bpx_gateway.expected_fields` for the schema shape; a path
     with no single schema definition (a Particle/Validation collection
-    itself, decision N) yields an empty result rather than raising.
+    itself) yields an empty result rather than raising.
     Container-link fields (``meta.is_container``) never appear in
     ``missing_fields``/``null_fields`` -- they are sections, reported through
     ``missing_child_sections`` instead (mirrors the add-parameter popup's own
@@ -181,24 +180,24 @@ class CompletionTask:
 def document_completion(raw: dict) -> tuple[CompletionTask, ...]:
     """Aggregate :func:`completion_for` across the whole document.
 
-    ``MISSING_FIELD`` is Required-only (decision B): an *absent*
+    ``MISSING_FIELD`` is Required-only: an *absent*
     Expected-but-optional field never appears here, even though
     :func:`completion_for` reports it as a suggestion for the same section.
-    ``NULL_FIELD`` is the opposite (decision D, revised): every schema-
+    ``NULL_FIELD`` is the opposite: every schema-
     Expected field committed ``null`` becomes a task regardless of
     requiredness. ``MISSING_SECTION``/``DECLARE_MODEL`` are inherently
     Required by construction.
 
-    Rules (decisions C/M, all locked -- see the plan):
+    Rules:
 
     * ``Header`` absent -> exactly one task, ``MISSING_SECTION ("Header",)``.
     * ``Header`` present but ``Model`` absent/unrecognised (not one of
       SPM/SPMe/DFN/Partial) -> exactly one task, ``DECLARE_MODEL`` at
       ``("Header", "Model")``. A garbage value also stays an Issue via the
-      validator's own ``literal_error`` -- both are shown, deliberately (V6).
-    * ``Model == "Partial"`` -> ``NULL_FIELD`` tasks only (decision C,
-      REVISED 2026-07-22): nothing is Required under Partial, so no
-      ``MISSING_*``/``DECLARE_MODEL`` task can arise -- but decision D is
+      validator's own ``literal_error`` -- both are shown, deliberately.
+    * ``Model == "Partial"`` -> ``NULL_FIELD`` tasks only: nothing is
+      Required under Partial, so no
+      ``MISSING_*``/``DECLARE_MODEL`` task can arise -- but ``NULL_FIELD`` is
       requiredness-independent, and without null tasks a Partial document
       painted its committed-null fields as red errors while a concrete
       model kept the very same fields calm. The walk below yields exactly
@@ -210,7 +209,7 @@ def document_completion(raw: dict) -> tuple[CompletionTask, ...]:
       level and nested -- including ``Particle/<material>`` and
       ``Validation/<run>`` instances) via :func:`completion_for`. A section's
       own required-but-absent child sections surface as ``MISSING_SECTION``
-      with their own fields *not* enumerated (decision M) -- this includes
+      with their own fields *not* enumerated -- this includes
       the well-known top structure (``Parameterisation``'s ``Cell``,
       electrodes, Electrolyte/Separator) and any deeper required container
       once its parent exists. ``State`` itself is schema-optional (bpx
@@ -232,7 +231,7 @@ def document_completion(raw: dict) -> tuple[CompletionTask, ...]:
 
     model = header.get("Model")
     if model == "Partial":
-        # Decision C (revised): no Parameterisation/DECLARE checks -- nothing
+        # No Parameterisation/DECLARE checks -- nothing
         # is Required under Partial -- but the walk still runs for NULL_FIELD
         # tasks (see the docstring rule; only nulls can produce tasks here).
         partial_tasks: list[CompletionTask] = []
@@ -256,7 +255,7 @@ def _walk_completion(node: TreeNode, model: str, tasks: list[CompletionTask]) ->
         for missing in section.missing_fields:
             if not missing.required:
                 # completion_for is all-Expected (feeds suggestions); document_completion
-                # is Required-only (decision B) -- an optional absence is never a task.
+                # is Required-only -- an optional absence is never a task.
                 continue
             tasks.append(
                 CompletionTask(
@@ -275,8 +274,8 @@ def _walk_completion(node: TreeNode, model: str, tasks: list[CompletionTask]) ->
         _walk_completion(child, model, tasks)
 
 
-#: Top-level components the validator's own ``loc`` convention drops
-#: (plan V4, fully mapped 2026-07-14): a diagnostic owned by ``Header`` or by
+#: Top-level components the validator's own ``loc`` convention drops: a
+#: diagnostic owned by ``Header`` or by
 #: ``Parameterisation`` carries a loc with that leading component stripped
 #: (``missing ('BPX',)`` for absent ``Header.BPX``; ``('Cell',)`` for absent
 #: ``Parameterisation.Cell``) -- the attachment pass passes these
@@ -284,14 +283,13 @@ def _walk_completion(node: TreeNode, model: str, tasks: list[CompletionTask]) ->
 #: ``State`` and ``Validation`` are the opposite: their prefix is KEPT in
 #: full (``('State','Thermal environment')``, ``('Validation','C/20','Time
 #: [s]')``). A single-prefix strip therefore double-surfaces every Header
-#: task (reviewed defect, fixed here): both prefixed and unprefixed forms
-#: must be tried.
+#: task: both prefixed and unprefixed forms must be tried.
 _STRIPPED_LOC_PREFIXES = (("Header",), ("Parameterisation",))
 
 
 def _nav_path_candidates(path: tuple[str, ...]) -> tuple[tuple[str, ...], ...]:
     """Every ``nav_path`` a diagnostic for the task/parameter at ``path``
-    might carry, per the validator's asymmetric loc convention (V4).
+    might carry, per the validator's asymmetric loc convention.
 
     A task path ``T`` matches a diagnostic nav_path ``N`` iff ``N == T``, or
     ``("Header",) + N == T``, or ``("Parameterisation",) + N == T`` --
@@ -309,11 +307,11 @@ def _nav_path_candidates(path: tuple[str, ...]) -> tuple[tuple[str, ...], ...]:
 @dataclass(frozen=True)
 class PartitionedIssues:
     """The document's diagnostics, split between the Issues and Outstanding
-    surfaces (decision E), plus badge counts derived from ``visible`` only
-    (decision G) so the panel and the rail badge can never disagree.
+    surfaces, plus badge counts derived from ``visible`` only
+    so the panel and the rail badge can never disagree.
 
-    Absorption re-seats a diagnostic; it never drops it (decision O, user:
-    "never remove any validation ever"). ``absorbed_by_task`` is how a caller
+    Absorption re-seats a diagnostic; it never drops it -- "never remove any
+    validation ever". ``absorbed_by_task`` is how a caller
     finds, for one Outstanding row, exactly which real validator messages it
     is standing in for -- keyed by the owning :class:`CompletionTask` itself
     (hashable: a frozen dataclass of hashable fields), so a renderer with a
@@ -331,8 +329,8 @@ class PartitionedIssues:
 
 def partition_issues(document: "BPXDocument", tasks: tuple[CompletionTask, ...]) -> PartitionedIssues:
     """Split ``document.iter_issues()`` into ``visible``/``absorbed`` against
-    ``tasks`` (decision E), attributing each absorbed diagnostic to the
-    specific task that covers it (decision O).
+    ``tasks``, attributing each absorbed diagnostic to the
+    specific task that covers it.
 
     A diagnostic absorbs into the first task it matches, tried in this order:
 
@@ -342,25 +340,24 @@ def partition_issues(document: "BPXDocument", tasks: tuple[CompletionTask, ...])
         :meth:`BPXDocument.iter_issues` already derives -- never re-derived
         here; matching against candidates rather than a single stripped path
         is required because the validator's own loc convention is
-        asymmetric, per V4); or
+        asymmetric); or
     (b) a ``NULL_FIELD`` task, when the diagnostic is attached to a parameter
         whose path matches one of that task's :func:`_nav_path_candidates`,
         regardless of ``error_type`` -- a committed-null union field raises
-        two diagnostics, one per branch (V5), and both absorb into the same
+        two diagnostics, one per branch, and both absorb into the same
         task.
 
     Everything else stays ``visible``, including Partial's union-branch
-    ``missing`` errors (Partial carries NULL_FIELD tasks only -- V9, narrowed
-    with decision C's 2026-07-22 revision -- and rule (a) needs a MISSING
-    task, so an *absent* field's errors never absorb there) and warning
-    diagnostics (``PythonWarningDiagnostic`` carries neither
+    ``missing`` errors (Partial carries NULL_FIELD tasks only, and rule (a)
+    needs a MISSING task, so an *absent* field's errors never absorb there)
+    and warning diagnostics (``PythonWarningDiagnostic`` carries neither
     ``error_type`` nor ``loc`` -- read both via ``getattr``). The validator is
     never silenced, only re-seated -- every absorbed diagnostic is still
-    retrievable via ``absorbed``/``absorbed_by_task`` (decision O).
+    retrievable via ``absorbed``/``absorbed_by_task``.
 
     ``error_count``/``warning_count`` are computed over ``visible`` after
-    applying :func:`core.validation.merge_union_pairs_by_location` (decision
-    Q): a page/badge count reflects displayed rows, not raw diagnostics, so a
+    applying :func:`core.validation.merge_union_pairs_by_location`: a
+    page/badge count reflects displayed rows, not raw diagnostics, so a
     single null number's float/int pair counts once.
     """
     missing_task_by_path: dict[tuple[str, ...], CompletionTask] = {
@@ -409,8 +406,8 @@ def partition_issues(document: "BPXDocument", tasks: tuple[CompletionTask, ...])
 def visible_issue_severities(
     document: "BPXDocument | None", partition: PartitionedIssues | None
 ) -> dict[tuple[str, ...], str]:
-    """Parameter paths carrying at least one *page-visible* diagnostic
-    (decision P), mapped to the row's worst severity ("error" if any
+    """Parameter paths carrying at least one *page-visible* diagnostic,
+    mapped to the row's worst severity ("error" if any
     page-visible issue there is an error, else "warning") -- i.e. one
     still in ``partition.visible`` after absorption, not one merely
     present in ``parameter.issues``. Feeds the parameter list's row dot.
@@ -445,7 +442,7 @@ def visible_error_section_paths(
     (errors only, matching that mark's existing scope).
 
     The same post-absorption truth as :func:`visible_issue_severities` and
-    the rail badge (decisions P/G: red = "something is wrong", never
+    the rail badge (red = "something is wrong", never
     "something is unstarted") -- a section whose fields are merely absent or
     committed null is outstanding work, not an error, and must read as calm
     in the tree exactly as its rows do in the parameter list. Same

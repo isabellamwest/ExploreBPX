@@ -9,9 +9,9 @@ Each body implements the small protocol in :mod:`~.modal`:
     ``value()``  ``set_value(v)``  ``reset()``  ``focus_widget()``  ``changed``
 
 Bodies keep their own draft. Switching mode swaps which body is visible; it
-never seeds, clears or copies between them (see decision C in the plan:
-switching mode *completely changes* the value, so ``3.7`` → ``InterpolatedTable``
-gives an empty grid, not a one-row table).
+never seeds, clears or copies between them: switching mode *completely
+changes* the value, so ``3.7`` → ``InterpolatedTable`` gives an empty grid,
+not a one-row table.
 
 ``RawJsonBody`` is the one editor that gates on **syntax**. Every other card in
 the app emits raw input and lets the validator judge legality; a Raw body
@@ -265,8 +265,8 @@ class MaterialMapBody(ModeBody):
 
         # The known particle names, offered but never enforced. Absent on a
         # single-particle electrode, where the dict mode is still reachable
-        # (decision F) but has no names to suggest -- the plain "+" row is then
-        # the only way to add one, which is exactly right.
+        # but has no names to suggest -- the plain "+" row is then the only
+        # way to add one, which is exactly right.
         if self._suggestions:
             self._menu = QMenu(self)
             self._menu.aboutToShow.connect(self._populate_menu)

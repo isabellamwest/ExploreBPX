@@ -1,9 +1,9 @@
 """ValidationEmptyState: guided empty state for a zero-run Validation section.
 
 Shown by the Inspector's ``reveal()`` when the user selects the bare
-``("Validation",)`` container node and it currently has zero runs -- a case
-that, before Phase 4, fell through to the generic "nothing to inspect"
-placeholder. With at least one run, selecting the container is unchanged
+``("Validation",)`` container node and it currently has zero runs, instead of
+falling through to the generic "nothing to inspect" placeholder. With at
+least one run, selecting the container is unchanged
 (``show_placeholder()`` still applies): this widget is only ever a substitute
 for the placeholder in the one genuinely-empty case, never a
 populated-container view (out of scope: the separate, unchanged absent-section
@@ -25,8 +25,8 @@ card may hand over a Command" contract:
 * **"Import CSV as new experiment…"** -- file pick, then the same name
   prompt, then the CSV mapping dialog, and only once that is confirmed does
   anything get written: first the ``AddSection`` (the named run), then a
-  ``SetValues`` filling its mapped columns -- deliberately two undo steps
-  (approved decision), so undoing the import keeps the named empty run. The
+  ``SetValues`` filling its mapped columns -- deliberately two undo steps,
+  so undoing the import keeps the named empty run. The
   mapping dialog always runs *before* either command is emitted: once the
   first command lands, the Inspector may rebuild this widget's content out
   from under it (exactly like any other card's commit), so nothing here may

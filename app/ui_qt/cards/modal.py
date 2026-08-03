@@ -105,7 +105,7 @@ class ModalCard(EditorCard):
         layout.setSpacing(4)
 
         # A single-representation kind shows no strip -- there is nothing to
-        # choose between (decision D).
+        # choose between.
         self._strip = None
         if len(modes) > 1:
             self._strip = ModeStrip(tuple(m.label for m in modes), self._on_mode_clicked)
@@ -221,7 +221,7 @@ class RawValueCard(ModalCard):
     is not a flat list, a ragged x/y table), the registry hands it this card
     rather than a read-only view -- so the value stays editable -- and rather
     than a free-text editor, which would commit a dict's Python ``repr`` and
-    corrupt it. The JSON body refuses to commit unparseable text (decision D).
+    corrupt it. The JSON body refuses to commit unparseable text.
 
     With one mode, :class:`ModalCard` draws no strip, so the user sees only the
     JSON editor and its notice.

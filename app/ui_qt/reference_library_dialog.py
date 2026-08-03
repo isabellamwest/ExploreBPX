@@ -1,9 +1,8 @@
 """``ReferenceLibraryDialog``: browse the bundled PyBaMM reference sets and
 choose one to dock as the workspace Reference.
 
-A pure chooser (Concept A, signed 2026-07-31): it holds no app state and
-never docks anything itself -- accepting simply reports
-:meth:`selected_set_id` and the caller routes it through
+A pure chooser: it holds no app state and never docks anything itself --
+accepting simply reports :meth:`selected_set_id` and the caller routes it through
 ``AppState.open_reference_set``. The sets carry no ``Validation`` runs
 (PyBaMM parameter sets hold no cycling data), which is why this exists
 apart from the run-comparison ``DatabaseExamplesDialog``; see the
@@ -15,13 +14,12 @@ rule: never circled tick/cross badges anywhere in the app), beside a detail
 card reusing the reference group-box chrome. The detail shows the chosen
 file's own Header fields verbatim -- Title, Model, Description (each set's
 conversion caveats live in its Description, and they must be readable
-*before* docking, the deciding value of the signed concept) -- plus
-section/parameter counts derived through :class:`core.document.BPXDocument`,
-the same derivation the docked tile itself uses. Chen2020 (the curated
-flagship, always first) is pre-selected so the detail pane is never empty
-and the dock button never needs a disabled placeholder state. A future
-second source (LiionDB, ...) becomes another picker group in this same
-dialog -- the scaling argument that won Concept A.
+*before* docking) -- plus section/parameter counts derived through
+:class:`core.document.BPXDocument`, the same derivation the docked tile
+itself uses. Chen2020 (the curated flagship, always first) is pre-selected
+so the detail pane is never empty and the dock button never needs a
+disabled placeholder state. A future second source (LiionDB, ...) becomes
+another picker group in this same dialog.
 """
 
 from __future__ import annotations

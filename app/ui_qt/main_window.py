@@ -134,7 +134,7 @@ class MainWindow(QMainWindow):
         # Cached by _refresh_all, read by _update_workspace_info -- see there.
         self._workspace_error_count = 0
         self._workspace_warning_count = 0
-        #: Reference comparison state (multi-file track M2): the whole-
+        #: Reference comparison state: the whole-
         #: document diff -- ``None`` with no reference docked or no document
         #: open. UI-session state, not persisted, recomputed whenever a
         #: reference docks or undocks (see ``_open_reference_path``/
@@ -154,10 +154,10 @@ class MainWindow(QMainWindow):
         self._source = SourcePage()
         self._source.pull_requested.connect(self._on_source_pull)
         # The page's ⇄ is the same full Make-main flow as the Workspace
-        # card's button (dirty prompt, Save As routing, toast -- M4).
+        # card's button (dirty prompt, Save As routing, toast).
         self._source.make_main_requested.connect(self._on_make_main_requested)
         self._source.reload_requested.connect(self._on_reload_reference)
-        # Double-click Editor jump (step 7): the page's one Editor link,
+        # Double-click Editor jump: the page's one Editor link,
         # through the shared NavigationService like every other navigation.
         self._source.navigate_requested.connect(
             lambda path: self._navigation.navigate(tuple(path))
@@ -393,7 +393,7 @@ class MainWindow(QMainWindow):
         self._stack.setCurrentIndex(page_index)
         self._activity_bar.select(page_index)
         self._page_header.set_title(self._activity_bar.label_for(page_index))
-        # Stale-on-disk is checked on notice, never watched (decision 11);
+        # Stale-on-disk is checked on notice, never watched;
         # entering the Source page is one of the two notice points (the
         # other is window activation, see ``changeEvent``).
         if page_index == _SOURCE_PAGE_INDEX:
@@ -427,14 +427,14 @@ class MainWindow(QMainWindow):
         self._inspector.reveal(target.parameter)
 
     def _on_task_activated(self, task) -> None:
-        """Dispatch one Outstanding row's activation by kind (decision L).
+        """Dispatch one Outstanding row's activation by kind.
 
         Polymorphic by design -- unlike an Issue, a task's target may not
         exist yet, so this cannot route through ``NavigationService`` alone:
 
         * ``MISSING_FIELD`` -- navigate to the *owning section* (the field
           itself has no address to resolve), then reveal the synthetic
-          suggestion row via the parameter list's Phase 3 seam
+          suggestion row via the parameter list's seam
           (``reveal_missing_alias``). No mutation; the group's own "+" does
           that.
         * ``NULL_FIELD`` -- the parameter already exists (a committed null),
@@ -905,7 +905,7 @@ class MainWindow(QMainWindow):
 
         Load failure surfaces through the same error-dialog pattern as the
         main Open flow. A genuine dock/replace (``ADDED``) recomputes the
-        comparison (multi-file track M2) -- a no-op outcome (already
+        comparison -- a no-op outcome (already
         docked/is-main) changes nothing to recompute.
         """
         try:
@@ -927,8 +927,7 @@ class MainWindow(QMainWindow):
         self._update_workspace_info()
 
     def _open_reference_library(self) -> None:
-        """From the reference library…: choose a bundled set and dock it
-        (Concept A, signed 2026-07-31).
+        """From the reference library…: choose a bundled set and dock it.
 
         The dialog is a pure chooser holding no app state, so cancelling
         changes nothing. Kept separate from :meth:`_dock_reference_set` so
@@ -972,7 +971,7 @@ class MainWindow(QMainWindow):
         self._recompute_comparison()
         self._update_workspace_info()
 
-    # --- Make main (multi-file track M4) ---------------------------------
+    # --- Make main ---------------------------------------------------------
 
     def _on_make_main_requested(self) -> None:
         """Handle the reference card's "Make main" button: promote the docked
@@ -1049,7 +1048,7 @@ class MainWindow(QMainWindow):
             return SwitchIntent.DISCARD_AND_SWITCH
         return SwitchIntent.CANCEL
 
-    # --- comparison (multi-file track M2) --------------------------------
+    # --- comparison ----------------------------------------------------------
 
     def _recompute_comparison(self) -> None:
         """Recompute the reference comparison from the current document +
@@ -1091,10 +1090,10 @@ class MainWindow(QMainWindow):
         show/hide the Source page's stale band accordingly.
 
         On notice only (Source page entry, window activation, reference
-        dock/swap/reload) -- decision 11: no file watching. A stat failure
+        dock/swap/reload) -- no file watching. A stat failure
         (file vanished, permissions) never conjures a band: the snapshot in
         the panes is still exactly what the user is reading, and Reload's
-        own error path (C3) is where an unreadable file gets surfaced.
+        own error path is where an unreadable file gets surfaced.
         """
         reference = self._state.reference
         if reference is None:
@@ -1114,7 +1113,7 @@ class MainWindow(QMainWindow):
         """The stale band's Reload: re-snapshot the reference from disk and
         recompute -- never silently (the band's click is the consent).
 
-        C3: an unreadable file gets the standard "Cannot open file" error;
+        An unreadable file gets the standard "Cannot open file" error;
         the docked snapshot and the band stay exactly as they were.
         """
         try:
@@ -1127,9 +1126,9 @@ class MainWindow(QMainWindow):
         self._update_workspace_info()
 
     def changeEvent(self, event) -> None:  # noqa: N802 - Qt override
-        """Window activation is the second stale-notice point (frames F4):
-        coming back from another app is exactly when the file may have
-        changed underneath the snapshot."""
+        """Window activation is the second stale-notice point: coming back
+        from another app is exactly when the file may have changed
+        underneath the snapshot."""
         super().changeEvent(event)
         if event.type() == QEvent.ActivationChange and self.isActiveWindow():
             self._check_reference_stale()
@@ -1137,9 +1136,9 @@ class MainWindow(QMainWindow):
     def _on_source_pull(self, path, is_section: bool) -> None:
         """A ← gutter pull on the Source page: copy the reference's raw
         value at *path* into the main document, verbatim, via the shared
-        M3 commands -- one undo entry, undoable from any page.
+        commands -- one undo entry, undoable from any page.
 
-        The pull stays on the Source page (signed concept 1): its rhythm
+        The pull stays on the Source page: its rhythm
         is next ›, pull, next ›, pull, so unlike ``_on_committed`` this
         never navigates -- confirmation is the row's transient "Pulled"
         tag plus a toast, and the Editor is opt-in via the toast's Show
@@ -1200,14 +1199,14 @@ class MainWindow(QMainWindow):
 
     def _new_from_file(self) -> None:
         """New from an existing file: clone it into a fresh unsaved session and
-        dock the origin as the read-only reference (signed design 2026-07-31).
+        dock the origin as the read-only reference.
 
         Picker first, then the same guard as New -- nobody should answer a
         replace prompt before a file is even chosen. The state change is
         atomic (``AppState.new_from_file`` loads both files before touching
         state), so a load failure after the guard leaves the previous
         session open and any docked reference in place. Unlike New, the
-        flow stays on the Workspace page (the signed end state): both role
+        flow stays on the Workspace page: both role
         cards confirm at a glance what was just set up.
         """
         name, _ = QFileDialog.getOpenFileName(
@@ -1345,7 +1344,7 @@ class MainWindow(QMainWindow):
 
         Error/warning counts come from ``self._workspace_error_count``/
         ``_workspace_warning_count``, cached by ``_refresh_all`` from the same
-        ``PartitionedIssues`` the Diagnostics rail badge uses (decision G) --
+        ``PartitionedIssues`` the Diagnostics rail badge uses --
         never recomputed here and never read from ``document.error_count``/
         ``warning_count``, so the pill can't disagree with the rest of the app.
         """
@@ -1394,7 +1393,7 @@ class MainWindow(QMainWindow):
     def _refresh_all(self) -> None:
         """Refresh every view from one document snapshot.
 
-        ``tasks``/``partition`` are computed exactly once here (decision G):
+        ``tasks``/``partition`` are computed exactly once here:
         the Diagnostics page's Outstanding section, the rail badge and the
         Workspace pill (via the cached ``_workspace_error_count``/
         ``_workspace_warning_count``) all derive from this single
@@ -1405,8 +1404,8 @@ class MainWindow(QMainWindow):
         """
         document = self._state.active.document if self._state.active else None
         # One derivation point, computed before anything renders: the tree's
-        # dot and the parameter list's dot both carry *page-visible* truth
-        # (decisions P/G), so the partition must exist before set_root paints.
+        # dot and the parameter list's dot both carry *page-visible* truth,
+        # so the partition must exist before set_root paints.
         raw = document.raw if document is not None else None
         model = structure.infer_model(raw) if raw is not None else None
         tasks = completion.document_completion(raw) if raw is not None else ()
@@ -1420,7 +1419,7 @@ class MainWindow(QMainWindow):
         self._params.show_node(None)
         self._inspector.reset()
 
-        # Decision P: stored before any subsequent show_node/reveal renders
+        # Stored before any subsequent show_node/reveal renders
         # real rows (those happen later, via a navigation reveal -- show_node
         # above is always called with None here) so the parameter list's dot
         # marker reflects *page-visible* issues, not the validator verbatim.
@@ -1440,8 +1439,8 @@ class MainWindow(QMainWindow):
         self._workspace_warning_count = warnings
         severity = "error" if errors else ("warning" if warnings else None)
         self._btn_diagnostics.set_badge(errors + warnings, severity)
-        # Source is the one rail entry gated on an open document (decision
-        # 13): with none there is no raw JSON to show. If the document ever
+        # Source is the one rail entry gated on an open document:
+        # with none there is no raw JSON to show. If the document ever
         # goes away while Source is current, land on Workspace like startup.
         self._btn_source.setEnabled(document is not None)
         if document is None and self._stack.currentIndex() == _SOURCE_PAGE_INDEX:
@@ -1451,7 +1450,7 @@ class MainWindow(QMainWindow):
         self._update_identity_label()
         self._update_workspace_info()
         self._update_actions_enabled()
-        # Multi-file track M2: recompute once per document change (the
+        # Recompute once per document change (the
         # reference's own dock/undock/replace recomputes separately -- see
         # _open_reference_path/_on_remove_reference_requested).
         self._recompute_comparison()

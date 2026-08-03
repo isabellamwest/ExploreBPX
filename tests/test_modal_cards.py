@@ -127,7 +127,7 @@ def test_table_not_representable(value):
 
 
 # ----------------------------------------------------------------------
-# Strip contents (decision D): decided once, at construction
+# Strip contents: decided once, at construction
 # ----------------------------------------------------------------------
 
 
@@ -144,7 +144,7 @@ def test_unrepresentable_value_appends_raw_as_the_last_mode():
 
 
 # ----------------------------------------------------------------------
-# Seeding (decision C): only the initial mode is seeded
+# Seeding: only the initial mode is seeded
 # ----------------------------------------------------------------------
 
 
@@ -272,7 +272,7 @@ def test_function_card_escape_discards_a_table_csv_import():
 
     card._reset_draft()
 
-    assert card.current_mode == FLOAT_INT  # mode reverts too (decision C)
+    assert card.current_mode == FLOAT_INT  # mode reverts too
     assert card.value() == 3.7
     assert card.is_dirty is False
 
@@ -359,7 +359,7 @@ def test_function_hint_quotes_bpx_function_docstring():
 
 
 # ----------------------------------------------------------------------
-# ModalCard: a single-representation kind shows no strip (decision D)
+# ModalCard: a single-representation kind shows no strip
 # ----------------------------------------------------------------------
 
 

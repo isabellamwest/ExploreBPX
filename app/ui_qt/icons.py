@@ -114,7 +114,7 @@ PENCIL = """
 """.strip()
 
 
-#: The app's one status-dot family (unified symbol system, Concept A):
+#: The app's one status-dot family:
 #: a filled circle (error/warning), a hollow ring (a task not yet started),
 #: and a half-filled circle (a task started but not yet given a value).
 #: Sized so every mark reads as the same "8px mark in a 13px box" as the

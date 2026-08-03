@@ -1,4 +1,4 @@
-"""Panel-title vocabulary (Concept B "VS Code chrome", signed 2026-07-31).
+"""Panel-title vocabulary.
 
 Every *fixed* panel/section label the app owns renders as one tier: 11px
 uppercase MUTED caps with the same letter-spacing ``PageHeader`` introduced,

@@ -21,8 +21,8 @@ The Inspector has two responsibilities, split top-to-bottom:
     card's ( i ) popover is the quick glance (symbol, meaning, units, types,
     ontology link) while the Documentation tab carries the multi-paragraph
     technical prose, which persists beside the editor instead of dismissing
-    on the first outside click.  This supersedes roadmap 2.4's
-    popover-not-a-tab decision, which predated page-long content.  A vertical
+    on the first outside click.  This supersedes the earlier popover-only
+    approach, which predated page-long content.  A vertical
     splitter above the tab strip resizes the whole secondary workspace.
 
 The secondary workspace is workspace state, not parameter state: it starts
@@ -77,7 +77,7 @@ class InspectorPanel(QWidget):
         self._state = state
         self._card = None
         self._panel_height = _DEFAULT_PANEL_HEIGHT
-        #: Reference comparison state (multi-file track M2), set only by
+        #: Reference comparison state, set only by
         #: ``set_comparison`` -- ``None`` whenever no reference is docked or
         #: its decoration is hidden.
         self._comparison: ComparisonResult | None = None
@@ -93,8 +93,7 @@ class InspectorPanel(QWidget):
 
         # Editing area (top splitter pane): the scrollable ParameterCard, or
         # the placeholder label when no parameter is selected. The pane is a
-        # white full-bleed page (structured-page layout, signed off
-        # 2026-07-22): zero margins here, because each card carries its own
+        # white full-bleed page: zero margins here, because each card carries its own
         # header block and gutter (cards/page.py) and its hairline rule must
         # span the pane edge to edge.
         scroll = QScrollArea()
@@ -191,7 +190,7 @@ class InspectorPanel(QWidget):
     def set_comparison(
         self, comparison: ComparisonResult | None, reference: ReferenceSnapshot | None
     ) -> None:
-        """Set the reference comparison state (multi-file track M2).
+        """Set the reference comparison state.
 
         Called by ``MainWindow`` -- the single place computing this state --
         on every document change and every reference dock/undock/hide
@@ -232,9 +231,9 @@ class InspectorPanel(QWidget):
         self._card.set_reference(row.ref_value, row.state, kind)
 
     def show_ghost_parameter(self, section_path: tuple[str, ...], key: str) -> None:
-        """Show the read-only ghost card for a REF_ONLY row (multi-file
-        track M2): a parameter the docked reference has and the main
-        document does not. Falls back to the placeholder if the comparison
+        """Show the read-only ghost card for a REF_ONLY row: a parameter
+        the docked reference has and the main document does not. Falls
+        back to the placeholder if the comparison
         has moved on since the row was selected (e.g. the reference was
         just undocked)."""
         if self._comparison is None or self._reference is None:
@@ -262,7 +261,7 @@ class InspectorPanel(QWidget):
         This is the Inspector's part of a navigation reveal; object-level
         targets carry no parameter and fall back to the placeholder -- except
         the bare ``("Validation",)`` container with zero runs, which gets its
-        own guided empty state instead (Phase 4; see
+        own guided empty state instead (see
         ``_show_validation_empty_state``). With at least one run, or for
         every other object-level target, the placeholder is unchanged.
 
@@ -397,7 +396,7 @@ class InspectorPanel(QWidget):
         count = self._issues_tab.show_parameter(parameter)
         self._secondary.set_count("issues", count)
         self._docs_tab.show_metadata(resolve_parameter_metadata(parameter.path, meta))
-        # Populate-after-build (multi-file track M2/M3): the reference block
+        # Populate-after-build: the reference block
         # is entirely outside the draft/commit signals just wired above, so
         # this can never trip the card's own _touched machinery.
         self._apply_reference_block(parameter)
@@ -448,7 +447,7 @@ class InspectorPanel(QWidget):
         errors = [i for i in issues if i.severity == Severity.ERROR]
         self._render_issues(issues, bool(errors), preview.validation_completed)
         self._card.set_cell_issues(issues)
-        # Decision Q (reviewed defect M1): the tab badge must count the same
+        # The tab badge must count the same
         # merged rows issues_tab.show_parameter renders, not raw diagnostics
         # -- a committed-null FloatInt's float_type+int_type pair (V5) is one
         # displayed row, so len(issues) here previously disagreed with it.
@@ -505,9 +504,9 @@ class InspectorPanel(QWidget):
         self.committed.emit()
 
     def _on_copy_up(self) -> None:
-        """Execute the current ``ParameterCard``'s "Copy up" (multi-file
-        track M3): copy the docked reference's raw value verbatim into the
-        main document at this parameter's path.
+        """Execute the current ``ParameterCard``'s "Copy up": copy the
+        docked reference's raw value verbatim into the main document at
+        this parameter's path.
 
         The reference value comes from the stored comparison, not any value
         cached on the card, so this always reflects the comparison last
@@ -531,7 +530,7 @@ class InspectorPanel(QWidget):
         self.committed.emit()
 
     def _on_ghost_copy_up(self) -> None:
-        """Execute a ghost row's "Copy up" (multi-file track M3): a REF_ONLY
+        """Execute a ghost row's "Copy up": a REF_ONLY
         row has no parameter in the main document yet, so this always adds
         one. The ``GhostParameterCard`` retains ``section_path``/``key`` --
         there is no committed parameter to read a path from -- and, as in

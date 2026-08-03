@@ -1,4 +1,4 @@
-"""ReferenceLibraryDialog: the Phase B chooser (Concept A, signed 2026-07-31).
+"""ReferenceLibraryDialog: the bundled reference library's chooser.
 
 Constructed directly and inspected, never through ``.exec()`` -- it is a
 pure chooser holding no app state; accepting only reports

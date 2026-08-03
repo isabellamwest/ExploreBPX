@@ -1,6 +1,6 @@
-"""Tests for the card-header inline rename editor (Concept A): the pencil
-button beside a renamable parameter's title, its Name/Unit/Apply row, and
-the schema-fixed unit tooltip on a non-renamable parameter's card.
+"""Tests for the card-header inline rename editor: the pencil button beside
+a renamable parameter's title, its Name/Unit/Apply row, and the
+schema-fixed unit tooltip on a non-renamable parameter's card.
 
 This is the single rename surface for a User-defined parameter -- also
 reachable (opened/focused, not reimplemented) via the parameter-list row's

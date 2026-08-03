@@ -8,11 +8,10 @@ Top to bottom, a ``ParameterCard`` holds:
      Documentation tab),
   2. the parameter's summary description, when present -- always directly
      under the title (and the rename row, when open), in both modes below,
-     for consistency: it describes the parameter, not either value (Bella,
-     2026-07-22),
+     for consistency: it describes the parameter, not either value,
   3. a "Main file" heading, then the per-kind value editor (:func:`create_card`),
-  4. a docked reference's value for this parameter (multi-file track M2/M3,
-     :meth:`set_reference`), when one exists -- a "Reference file" heading
+  4. a docked reference's value for this parameter (:meth:`set_reference`),
+     when one exists -- a "Reference file" heading
      over a purple-framed, read-only value row
      (:class:`~.reference_block.ReferenceValueBlock`, shared with
      ``GhostParameterCard``), with a "Copy up" action. The "Main file"
@@ -31,9 +30,8 @@ For a parameter whose own key is renamable (``core.structure.can_rename_paramete
 -- User-defined content, Particle materials, Validation runs, or any
 parameter leaf the schema defines nowhere, wherever it lives), the header
 also carries a small "✎" button that expands an inline Name/Unit row in
-place (Concept A of
-the completion-track rename/duplicate/move phase). This is the single rename
-surface for such a parameter: the parameter-list row's "Rename…" context-menu
+place. This is the single rename surface for such a parameter: the
+parameter-list row's "Rename…" context-menu
 action opens/focuses the very same row via :meth:`open_rename_editor`, rather
 than a second popup-based implementation. Applying composes the new key and
 emits ``rename_requested``; ``InspectorPanel`` executes the ``RenameKey``
@@ -98,8 +96,8 @@ class ParameterCard(QWidget):
     #: (path, new_key) -- the inline rename row's "Apply". Only ever emitted
     #: when the pencil button exists at all (``self._renamable``).
     rename_requested = Signal(tuple, str)
-    #: The reference row's "Copy up" button (multi-file track M3). Forwarded
-    #: verbatim from the (lazily built) reference block; ``InspectorPanel``
+    #: The reference row's "Copy up" button. Forwarded verbatim from the
+    #: (lazily built) reference block; ``InspectorPanel``
     #: wires this to a ``PullParameter`` command.
     copy_up_requested = Signal()
 
@@ -114,8 +112,8 @@ class ParameterCard(QWidget):
         # neither invents anything the dataset does not carry.
         self._metadata = resolve_parameter_metadata(parameter.path, meta)
 
-        # Structured-page layout (signed off 2026-07-22): a full-bleed header
-        # block (title row, rename row, description) closed by a hairline,
+        # Structured-page layout: a full-bleed header block (title row,
+        # rename row, description) closed by a hairline,
         # then the content column (editor, reference section) on the shared
         # gutter -- see cards/page.py.
         layout = QVBoxLayout(self)
@@ -136,8 +134,8 @@ class ParameterCard(QWidget):
             symbol.setObjectName("CardSymbol")
             header.addWidget(symbol)
         if self._renamable:
-            # Flat, box-less pencil (Concept A "without the box"): no border or
-            # fill of its own, the icon just darkens on hover. A real drawn glyph
+            # Flat, box-less pencil: no border or fill of its own, the icon
+            # just darkens on hover. A real drawn glyph
             # in the app's icon family, not the bare "✎" text it replaces.
             self._rename_button = QPushButton()
             self._rename_button.setObjectName("CardRenameButton")
@@ -174,8 +172,8 @@ class ParameterCard(QWidget):
 
         # Description: quiet muted prose directly under the title/rename row,
         # in both modes -- it describes the *parameter*, not either value, so
-        # it never moves depending on whether a reference is docked (Bella,
-        # 2026-07-22). Not a boxed text widget, which read as another input
+        # it never moves depending on whether a reference is docked. Not a
+        # boxed text widget, which read as another input
         # and claimed a fixed slab of height whatever its one sentence
         # needed. Selectable so it can still be copied. Hidden while the
         # editor's grid takes over the pane (a big table needs the room; the
@@ -193,8 +191,8 @@ class ParameterCard(QWidget):
         body, self._body_layout = page_content()
         layout.addWidget(body)
 
-        # "Main file" heading (multi-file track M3): built lazily alongside
-        # the reference block below, only while a reference is docked.
+        # "Main file" heading: built lazily alongside the reference block
+        # below, only while a reference is docked.
         self._main_file_heading: QLabel | None = None
 
         self._editor = create_card(parameter, meta)
@@ -211,8 +209,8 @@ class ParameterCard(QWidget):
         # and this is what hands the editor the whole pane.
         self._body_layout.addLayout(self._value_row, 1)
 
-        # Reference section (multi-file track M2/M3): the "Main file" heading
-        # above plus this "Reference file" heading + value row, built lazily,
+        # Reference section: the "Main file" heading above plus this
+        # "Reference file" heading + value row, built lazily,
         # only once ``set_reference`` is first called with real content --
         # with no reference docked this never runs, so the card stays
         # exactly today's, no extra widget instantiated at all.
@@ -225,7 +223,7 @@ class ParameterCard(QWidget):
     def set_reference(
         self, ref_value: object, ref_state: RowState | None, kind: ParameterKind | None
     ) -> None:
-        """Show/refresh/hide the reference section (multi-file track M2/M3).
+        """Show/refresh/hide the reference section.
 
         *ref_state* is ``None`` when there is nothing to show (no reference
         docked, comparison hidden, or the reference lacks this key --
@@ -314,7 +312,7 @@ class ParameterCard(QWidget):
         self._popover.open_below(self._info_button)
 
     # ------------------------------------------------------------------
-    # Inline rename row (Concept A) -- only built when ``self._renamable``
+    # Inline rename row -- only built when ``self._renamable``
     # ------------------------------------------------------------------
 
     def _build_rename_row(self) -> QWidget:

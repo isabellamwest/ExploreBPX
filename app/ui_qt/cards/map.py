@@ -11,9 +11,9 @@ value fits neither structured mode, decided once at construction so the strip
 never changes under the cursor.
 
 The dict mode is offered even on a single-particle electrode, where it is
-guaranteed invalid and has no particle names to suggest (decision F): guidance
-informs, it does not lock, and the validator remains the single source of truth
-for which materials are legal.
+guaranteed invalid and has no particle names to suggest: guidance informs,
+it does not lock, and the validator remains the single source of truth for
+which materials are legal.
 """
 
 from __future__ import annotations
