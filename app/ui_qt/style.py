@@ -389,22 +389,16 @@ QPushButton#CopyUpButton {
 QPushButton#CopyUpButton:hover:!disabled { background: #5a3399; }
 QPushButton#CopyUpButton:disabled { background: #d5cde6; color: #8c959f; font-weight: 400; }
 QLabel#GhostCardHeading { color: #6f42c1; font-weight: 600; }
-/* Source page toolbar: single-pane shows the main file's identity + the
-   purple docking hint; two-pane shows the ‹ › difference stepper and
-   ⇄ Make main. The bordered buttons reuse the reference tile's flat
-   treatment; disabled ‹ › (no differences) fades border and glyph
-   together rather than hiding. */
+/* Source page toolbar: the fold-all toggle sits left in both modes;
+   single-pane also shows the main file's identity + the purple docking
+   hint. The bordered button reuses the reference tile's flat treatment. */
 QLabel#SourceFileLabel { color: #57606a; font-size: 12px; }
 QLabel#SourceHint { color: #6f42c1; font-size: 12px; }
-QPushButton#SourceStepButton, QPushButton#SourceMakeMain {
+QPushButton#SourceFoldButton {
     background: #ffffff; border: 1px solid #d0d7de; border-radius: 4px;
-    padding: 2px 10px; font-size: 12px;
+    padding: 2px 10px; font-size: 12px; color: #57606a;
 }
-QPushButton#SourceStepButton { padding: 2px 8px; min-width: 14px; }
-QPushButton#SourceStepButton:hover:!disabled,
-QPushButton#SourceMakeMain:hover { background: #f6f8fa; }
-QPushButton#SourceStepButton:disabled { color: #c4cdd5; border-color: #eaecef; }
-QWidget#SourceToolbarSep { background: #d0d7de; }
+QPushButton#SourceFoldButton:hover { background: #f6f8fa; }
 /* Stale-reference band: slim, neutral, under the pane headers; the
    Reload link is the page's only blue. */
 QWidget#SourceStaleBand { background: #eef0f2; }

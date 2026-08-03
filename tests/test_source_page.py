@@ -38,7 +38,7 @@ class _RefStub:
         self.filename = filename
         self.model = model
         # A file-backed reference by default; pass ``path=None`` to stand in
-        # for a bundled library set, which hides ⇄ Make main.
+        # for a bundled library set.
         self.path = path
 
 
@@ -716,9 +716,9 @@ def test_source_pull_stays_on_the_source_page(app_driver, tmp_path, monkeypatch)
 
     app_driver.source_pull(path)
 
-    # The page's rhythm is next ›, pull, next ›, pull -- confirmation
-    # happens in place (the row's transient "Pulled" tag), never a page
-    # switch. The Editor is opt-in: the toast's action, or a double-click.
+    # The page's rhythm is click, pull, click, pull -- confirmation happens
+    # in place (the row's transient "Pulled" tag), never a page switch. The
+    # Editor is opt-in: the toast's action, or a double-click.
     assert app_driver.current_view_name() == "Source"
     assert app_driver.source_flash_path() == path
 
@@ -743,14 +743,15 @@ def test_enter_pulls_the_selected_difference(app_driver, tmp_path, monkeypatch):
     app_driver.open(_write(tmp_path, "main.json", _DOC_MAIN_ONLY))
     _dock_reference(app_driver, tmp_path, monkeypatch, _REF)
 
-    app_driver.source_step(+1)
+    path, _ = app_driver.source_pull_paths()[0]
+    app_driver._w._source._view.reveal(path)
     selected = app_driver.source_selected_path()
-    assert selected in [p for p, _ in app_driver.source_pull_paths()]
+    assert selected == path
 
     app_driver.source_press_key("enter")
 
     # The keyboard counterpart of the ← chip: the value landed, the chip
-    # is gone, and the page stayed put for the next › / Enter.
+    # is gone, and the page stayed put for the next selection / Enter.
     assert app_driver.current_view_name() == "Source"
     assert selected not in [p for p, _ in app_driver.source_pull_paths()]
     assert app_driver.source_flash_path() == selected
@@ -763,14 +764,14 @@ def test_enter_pulls_the_selected_difference(app_driver, tmp_path, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Toolbar (‹ › stepper, ⇄ Make main, single-pane label) + stale band.
+# Toolbar (fold-all toggle, single-pane label) + stale band.
 # ---------------------------------------------------------------------------
 
 _CAPACITY = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
 _LOWER_CUTOFF = ("Parameterisation", "Cell", "Lower voltage cut-off [V]")
 
 
-def test_toolbar_single_pane_shows_label_and_hint_only(qtbot):
+def test_toolbar_single_pane_shows_label_hint_and_fold_button(qtbot):
     page = SourcePage()
     qtbot.addWidget(page)
 
@@ -779,35 +780,16 @@ def test_toolbar_single_pane_shows_label_and_hint_only(qtbot):
     assert not page._file_label.isHidden()
     assert page._file_label.text() == "main.json  ·  SPM"
     assert not page._hint.isHidden()
-    assert page._prev_button.isHidden()
-    assert page._next_button.isHidden()
-    assert page._toolbar_sep.isHidden()
-    assert page._make_main_button.isHidden()
+    assert not page._fold_button.isHidden()
+    assert page._fold_button.text() == "▾ Collapse Parameters"
 
 
-def test_toolbar_two_pane_shows_stepper_and_make_main_only(qtbot):
+def test_toolbar_two_pane_shows_fold_button_only(qtbot):
     page = _two_pane(qtbot, _DOC_MAIN_ONLY, _REF)
 
     assert page._file_label.isHidden()
     assert page._hint.isHidden()
-    assert not page._prev_button.isHidden()
-    assert not page._next_button.isHidden()
-    assert not page._toolbar_sep.isHidden()
-    assert not page._make_main_button.isHidden()
-    assert page._make_main_button.text() == "⇄ Make main"
-
-
-def test_toolbar_hides_make_main_for_a_library_reference(qtbot):
-    """A bundled library-set reference has no file on disk to promote, so
-    ⇄ Make main hides rather than sit as a dead control; the stepper is
-    unaffected."""
-    page = SourcePage()
-    qtbot.addWidget(page)
-    page.refresh(_DOC_MAIN_ONLY, reference=_RefStub(_REF, path=None))
-
-    assert page._make_main_button.isHidden()
-    assert not page._prev_button.isHidden()
-    assert not page._next_button.isHidden()
+    assert not page._fold_button.isHidden()
 
 
 def test_toolbar_empty_without_a_document(qtbot):
@@ -818,8 +800,7 @@ def test_toolbar_empty_without_a_document(qtbot):
 
     assert page._file_label.isHidden()
     assert page._hint.isHidden()
-    assert page._prev_button.isHidden()
-    assert page._make_main_button.isHidden()
+    assert page._fold_button.isHidden()
 
 
 def test_single_pane_label_omits_a_missing_model(qtbot):
@@ -831,48 +812,39 @@ def test_single_pane_label_omits_a_missing_model(qtbot):
     assert page._file_label.text() == "main.json"
 
 
-def test_stepper_disabled_not_hidden_without_differences(qtbot):
-    # Identical files keep the ‹ › buttons in place, greyed.
-    page = _two_pane(qtbot, _DOC, _DOC)
-
-    assert not page._prev_button.isHidden()
-    assert not page._next_button.isHidden()
-    assert not page._prev_button.isEnabled()
-    assert not page._next_button.isEnabled()
-
-    # Still visible, and no page ever steps: a disabled click is inert.
-    page._next_button.click()
-    assert page._view.selected_path() is None
-
-
-def test_stepper_walks_differences_in_file_order_and_wraps(qtbot):
-    page = _two_pane(qtbot, _DOC_MAIN_ONLY, _REF)
+def test_fold_button_collapses_and_expands_every_section(qtbot):
+    page = SourcePage()
+    qtbot.addWidget(page)
+    page.refresh(_DOC, main_name="main.json")
     view = page._view
 
-    assert page._next_button.isEnabled()
-    page._next_button.click()
-    assert view.selected_path() == ("Header", "Title")
-    page._next_button.click()
-    assert view.selected_path() == _CAPACITY
-    page._next_button.click()
-    assert view.selected_path() == _LOWER_CUTOFF
-    page._next_button.click()  # wraps to the first difference
-    assert view.selected_path() == ("Header", "Title")
-    page._prev_button.click()  # and backwards off the front, to the last
-    assert view.selected_path() == _LOWER_CUTOFF
+    assert page._fold_button.text() == "▾ Collapse Parameters"
+    page._fold_button.click()
 
-
-def test_stepper_steps_into_a_collapsed_section(qtbot):
-    page = _two_pane(qtbot, _DOC_MAIN_ONLY, _REF)
-    view = page._view
-
-    view.toggle_fold(("Parameterisation", "Cell"))
+    assert page._fold_button.text() == "▸ Expand Parameters"
     assert '"Nominal cell capacity [A.h]": 5.0' not in view.line_texts()
 
-    page._next_button.click()  # Title
-    page._next_button.click()  # capacity -- inside the folded Cell
-    assert view.selected_path() == _CAPACITY
+    page._fold_button.click()
+
+    assert page._fold_button.text() == "▾ Collapse Parameters"
     assert '"Nominal cell capacity [A.h]": 5.0' in view.line_texts()
+
+
+def test_fold_button_reads_expand_for_any_partial_fold(qtbot):
+    page = SourcePage()
+    qtbot.addWidget(page)
+    page.refresh(_DOC, main_name="main.json")
+
+    page._view.toggle_fold(("Parameterisation",))
+
+    assert page._fold_button.text() == "▸ Expand Parameters"
+
+    # From a partial fold, the button expands everything rather than
+    # toggling just the one closed section.
+    page._fold_button.click()
+
+    assert page._fold_button.text() == "▾ Collapse Parameters"
+    assert '"Nominal cell capacity [A.h]": 5.0' in page._view.line_texts()
 
 
 def test_pane_click_places_the_selection(qtbot):
@@ -887,10 +859,6 @@ def test_pane_click_places_the_selection(qtbot):
     qtbot.mouseClick(view.viewport(), Qt.LeftButton, pos=QPoint(120, y))
 
     assert view.selected_path() == ("Header", "Title")
-
-    # Stepping continues from the clicked row, not from the top.
-    page._next_button.click()
-    assert view.selected_path() == _CAPACITY
 
 
 def test_selection_prunes_when_its_row_vanishes(qtbot):
@@ -934,40 +902,6 @@ def test_set_stale_needs_a_docked_reference(qtbot):
 
 
 # -- MainWindow wiring (driver level) ---------------------------------------
-
-
-def test_stepper_disables_once_pulls_remove_every_difference(
-    app_driver, tmp_path, monkeypatch
-):
-    app_driver.open(_write(tmp_path, "main.json", _DOC_MAIN_ONLY))
-    _dock_reference(app_driver, tmp_path, monkeypatch, _REF)
-
-    assert app_driver.source_stepper_visible() is True
-    assert app_driver.source_stepper_enabled() is True
-
-    app_driver.source_pull(("Header", "Title"))
-    app_driver.source_pull(_CAPACITY)
-    assert app_driver.source_stepper_enabled() is True
-    app_driver.source_pull(_LOWER_CUTOFF)
-
-    # Three pulls, one visit: the page never navigated away between them
-    # (the whole point of the stay-put pull).
-    assert app_driver.current_view_name() == "Source"
-    # Only the main-only row differs now -- not a target (frames rule).
-    assert app_driver.source_stepper_enabled() is False
-
-
-def test_source_make_main_runs_the_full_swap(app_driver, tmp_path, monkeypatch):
-    app_driver.open(_write(tmp_path, "main.json", _DOC_MAIN_ONLY))
-    _dock_reference(app_driver, tmp_path, monkeypatch, _REF)
-    assert app_driver.source_make_main_visible() is True
-
-    app_driver.source_make_main()
-
-    headers = app_driver.source_pane_headers()
-    assert headers is not None
-    assert "reference.json" in headers[0]  # promoted to Main
-    assert "main.json" in headers[1]  # demoted to the reference pane
 
 
 def _bump_on_disk(path: Path, raw: dict) -> None:

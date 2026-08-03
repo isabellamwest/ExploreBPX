@@ -60,7 +60,7 @@ _CLOSED_SUMMARY = "table"
 
 #: How long the just-pulled row's gutter shows its "Pulled" tag. Long
 #: enough to register where the eye already is, short enough that a
-#: stepper rhythm (next, pull, next, pull) never shows a stale tag.
+#: next-pull rhythm never shows a stale tag.
 _PULLED_FLASH_MS = 2500
 
 
@@ -116,8 +116,8 @@ class _Line:
     pull_section: bool = False
     #: The owning row's path, set on the row's first painted line only (a
     #: parameter's key line, a section's header line). This is the line the
-    #: selection outline anchors to: the ‹ › stepper and row clicks select
-    #: by path, so the selection survives re-renders and fold changes.
+    #: selection outline anchors to: arrow-key navigation and row clicks
+    #: select by path, so the selection survives re-renders and fold changes.
     row_path: tuple[str, ...] | None = None
 
 
@@ -513,6 +513,10 @@ class SourceView(QAbstractScrollArea):
     #: document actually has -- a ref-only row names nothing the Editor
     #: could resolve, and suffix-matching must never guess for it.
     navigate_requested = Signal(object)
+    #: Emitted whenever the fold state changes -- individual toggles, or
+    #: the toolbar's fold-all button -- so the toolbar label can track the
+    #: view's aggregate state without every caller telling it explicitly.
+    fold_state_changed = Signal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -521,8 +525,8 @@ class SourceView(QAbstractScrollArea):
         self._closed: set[tuple[str, ...]] = set()
         self._lines: list[_Line] = []
         #: The selected row's path, or ``None``. Selection is by path, not
-        #: line index, so it survives re-renders, folds and edits; the ‹ ›
-        #: stepper moves it between differences and a row click places it.
+        #: line index, so it survives re-renders, folds and edits; arrow
+        #: keys move it and a row click places it directly.
         self._selected: tuple[str, ...] | None = None
         #: The just-pulled row's path while its gutter "Pulled" tag shows
         #: (the stay-put confirmation after a pull); cleared by the
@@ -591,53 +595,36 @@ class SourceView(QAbstractScrollArea):
             self._closed.add(path)
         self._rebuild()
 
-    # -- selection & the ‹ › difference stepper --------------------------
+    # -- selection & fold-all ---------------------------------------------
 
     def selected_path(self) -> tuple[str, ...] | None:
         """The selected row's path, or ``None`` (test/driver read)."""
         return self._selected
 
-    def has_differences(self) -> bool:
-        """Whether any stepper target exists -- drives the toolbar's ‹ ›
-        enabled state (disabled, never hidden, at zero)."""
-        return any(row.is_difference for row in self._rows)
+    def all_expanded(self) -> bool:
+        """Whether every foldable section/table is currently open -- the
+        toolbar's fold-all button reads this to choose its label."""
+        return not self._closed
 
-    def step(self, delta: int) -> None:
-        """Move the selection to the next (+1) / previous (-1) difference.
-
-        Targets are exactly the rows the row model marks ``is_difference``
-        (differs / fillable / ref-only parameters, ref-only section
-        headers), visited in file order and wrapping at both ends. A
-        selection resting on a non-target row steps to the nearest
-        difference past it in the chosen direction.
-        """
-        targets = [row.path for row in self._rows if row.is_difference]
-        if not targets:
-            return
-        if self._selected in targets:
-            index = (targets.index(self._selected) + delta) % len(targets)
-        elif self._selected is not None:
-            order = {row.path: i for i, row in enumerate(self._rows)}
-            position = order.get(self._selected, -1)
-            if delta > 0:
-                following = [t for t in targets if order[t] > position]
-                index = targets.index(following[0]) if following else 0
-            else:
-                preceding = [t for t in targets if order[t] < position]
-                index = (
-                    targets.index(preceding[-1])
-                    if preceding
-                    else len(targets) - 1
-                )
+    def set_all_folded(self, folded: bool) -> None:
+        """Fold every section and closable table (``True``) or unfold all
+        of them (``False``) -- the toolbar's fold-all button, always a
+        flat all-or-nothing action rather than restoring each row's prior
+        state."""
+        if folded:
+            self._closed = {
+                row.path
+                for row in self._rows
+                if row.kind is RowKind.SECTION or row.closable
+            }
         else:
-            index = 0 if delta > 0 else len(targets) - 1
-        self.reveal(targets[index])
+            self._closed = set()
+        self._rebuild()
 
     def reveal(self, path: tuple[str, ...]) -> None:
         """Select the row at *path*, unfolding any closed ancestor section
-        and scrolling its key line into view (the stepper's contract; a
-        closed table's own key line is already visible, so only ancestors
-        ever unfold)."""
+        and scrolling its key line into view (a closed table's own key
+        line is already visible, so only ancestors ever unfold)."""
         for depth in range(1, len(path)):
             self._closed.discard(path[:depth])
         self._selected = path
@@ -663,8 +650,8 @@ class SourceView(QAbstractScrollArea):
 
         Walks the rows as rendered (a folded section's children are not
         visited; open-value continuation lines are skipped) and stops at
-        the ends -- arrows do not wrap; cycling is the stepper's job. With
-        nothing selected, Down starts at the first row and Up at the last.
+        the ends -- arrows do not wrap. With nothing selected, Down starts
+        at the first row and Up at the last.
         """
         row_paths = [
             line.row_path for line in self._lines if line.row_path is not None
@@ -692,8 +679,7 @@ class SourceView(QAbstractScrollArea):
             return
         if event.key() in (Qt.Key_Return, Qt.Key_Enter):
             # Enter pulls the selected row -- the keyboard counterpart of
-            # its ← chip, completing the stepper rhythm (next ›, Enter,
-            # next ›, Enter). A row with no chip ignores the key: equal
+            # its ← chip. A row with no chip ignores the key: equal
             # and main-only rows stay as impossible to pull as ever.
             line = next(
                 (
@@ -761,6 +747,7 @@ class SourceView(QAbstractScrollArea):
         self._lines = _build_lines(self._rows, self._closed, self._two_pane)
         self._update_scrollbars()
         self.viewport().update()
+        self.fold_state_changed.emit()
 
     def _update_scrollbars(self) -> None:
         line_height = self._line_height()
@@ -955,8 +942,7 @@ class SourceView(QAbstractScrollArea):
                 return
             # A pane click places the selection on the clicked row (its key
             # line carries the path; continuation lines of an open value
-            # leave the selection where it is). Shared state with the ‹ ›
-            # stepper, so stepping continues from a clicked row.
+            # leave the selection where it is).
             if line.row_path is not None and line.row_path != self._selected:
                 self._selected = line.row_path
                 self.viewport().update()
@@ -1003,9 +989,6 @@ class SourcePage(QWidget):
     #: Re-emitted from the view's ← gutter clicks: (path, is_section).
     #: MainWindow runs the shared pull command; the page never mutates.
     pull_requested = Signal(object, bool)
-    #: The toolbar's ⇄ button: run the full Make-main flow -- the
-    #: page only asks; MainWindow owns the dialogs and the swap.
-    make_main_requested = Signal()
     #: The stale band's Reload link: re-snapshot the reference from disk.
     reload_requested = Signal()
     #: A row was double-clicked: jump to it in the Editor. The
@@ -1019,52 +1002,35 @@ class SourcePage(QWidget):
         self._view.navigate_requested.connect(self.navigate_requested)
 
         # Single-pane toolbar: the main file's identity on the
-        # left, the docking hint on the right -- the hint sits exactly where
-        # the ‹ › stepper appears in two-pane mode, so the toolbar never
-        # changes shape when a reference docks.
+        # left, the docking hint on the right. Both hide in two-pane mode,
+        # leaving only the fold-all button and the pane headers.
         self._file_label = QLabel()
         self._file_label.setObjectName("SourceFileLabel")
         self._hint = QLabel("Open a reference to compare…")
         self._hint.setObjectName("SourceHint")
 
-        # Two-pane toolbar: ‹ › difference stepper, thin
-        # separator, ⇄ Make main. No counts anywhere on the page.
-        self._prev_button = QPushButton("‹")
-        self._prev_button.setObjectName("SourceStepButton")
-        self._prev_button.setToolTip("Previous difference")
-        self._prev_button.clicked.connect(lambda: self._view.step(-1))
-        self._next_button = QPushButton("›")
-        self._next_button.setObjectName("SourceStepButton")
-        self._next_button.setToolTip("Next difference")
-        self._next_button.clicked.connect(lambda: self._view.step(+1))
-        self._toolbar_sep = QWidget()
-        self._toolbar_sep.setObjectName("SourceToolbarSep")
-        self._toolbar_sep.setFixedSize(1, 18)
-        self._make_main_button = QPushButton("⇄ Make main")
-        self._make_main_button.setObjectName("SourceMakeMain")
-        self._make_main_button.clicked.connect(self.make_main_requested)
+        # Fold-all toggle: left-aligned in both single- and two-pane modes,
+        # so the rest of the toolbar never reshuffles around it. Label and
+        # caret track the view's aggregate fold state via
+        # ``fold_state_changed`` -- "Expand" whenever anything is folded,
+        # "Collapse" only once every section/table is open.
+        self._fold_button = QPushButton()
+        self._fold_button.setObjectName("SourceFoldButton")
+        self._fold_button.clicked.connect(self._on_fold_toggle)
+        self._view.fold_state_changed.connect(self._update_fold_button)
+        self._update_fold_button()
 
         toolbar = QWidget()
         toolbar_layout = QHBoxLayout(toolbar)
         toolbar_layout.setContentsMargins(10, 6, 10, 6)
         toolbar_layout.setSpacing(8)
+        toolbar_layout.addWidget(self._fold_button)
         toolbar_layout.addWidget(self._file_label)
         toolbar_layout.addStretch(1)
         toolbar_layout.addWidget(self._hint)
-        toolbar_layout.addWidget(self._prev_button)
-        toolbar_layout.addWidget(self._next_button)
-        toolbar_layout.addWidget(self._toolbar_sep)
-        toolbar_layout.addWidget(self._make_main_button)
         # Everything mode-dependent starts hidden; ``refresh`` shows the
         # right set for the current mode.
-        for control in (
-            self._file_label,
-            self._hint,
-            self._prev_button,
-            self._next_button,
-            self._toolbar_sep,
-            self._make_main_button,
-        ):
+        for control in (self._file_label, self._hint, self._fold_button):
             control.setVisible(False)
 
         self._main_head = QLabel()
@@ -1137,15 +1103,7 @@ class SourcePage(QWidget):
             if single_pane
             else ""
         )
-        self._prev_button.setVisible(two_pane)
-        self._next_button.setVisible(two_pane)
-        self._toolbar_sep.setVisible(two_pane)
-        # "Make main" promotes a file on disk; a bundled library-set
-        # reference (path is None) has nothing to promote, so the
-        # button hides rather than sit as a dead control.
-        self._make_main_button.setVisible(
-            two_pane and reference.path is not None
-        )
+        self._fold_button.setVisible(main_raw is not None)
         self._pane_head.setVisible(two_pane)
         if not two_pane:
             # The band is a two-pane notice; an undocked/replaced reference
@@ -1162,12 +1120,15 @@ class SourcePage(QWidget):
         else:
             rows = build_rows(main_raw) if main_raw is not None else []
         self._view.set_rows(rows, two_pane=two_pane)
-        # C1: at zero differences the stepper greys out, it never hides --
-        # the toolbar keeps its shape as edits create/remove the last
-        # difference.
-        enabled = two_pane and self._view.has_differences()
-        self._prev_button.setEnabled(enabled)
-        self._next_button.setEnabled(enabled)
+
+    def _on_fold_toggle(self) -> None:
+        self._view.set_all_folded(self._view.all_expanded())
+
+    def _update_fold_button(self) -> None:
+        if self._view.all_expanded():
+            self._fold_button.setText("▾ Collapse Parameters")
+        else:
+            self._fold_button.setText("▸ Expand Parameters")
 
     def focus_view(self) -> None:
         """Give the raw-JSON view keyboard focus, so Up/Down row navigation

@@ -153,9 +153,6 @@ class MainWindow(QMainWindow):
         self._workspace = WorkspacePanel()
         self._source = SourcePage()
         self._source.pull_requested.connect(self._on_source_pull)
-        # The page's ⇄ is the same full Make-main flow as the Workspace
-        # card's button (dirty prompt, Save As routing, toast).
-        self._source.make_main_requested.connect(self._on_make_main_requested)
         self._source.reload_requested.connect(self._on_reload_reference)
         # Double-click Editor jump: the page's one Editor link,
         # through the shared NavigationService like every other navigation.

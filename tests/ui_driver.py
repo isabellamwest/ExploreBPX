@@ -616,39 +616,19 @@ class AppDriver:
         label = self._w._source._file_label
         return None if label.isHidden() else label.text()
 
-    def source_stepper_visible(self) -> bool:
-        """Whether the ‹ › difference stepper is in the toolbar (two-pane
-        mode only)."""
-        page = self._w._source
-        return not page._prev_button.isHidden() and not page._next_button.isHidden()
-
-    def source_stepper_enabled(self) -> bool:
-        """Whether the ‹ › buttons are enabled (disabled, never hidden, when
-        no difference exists)."""
-        page = self._w._source
-        return page._prev_button.isEnabled() and page._next_button.isEnabled()
-
-    def source_step(self, delta: int) -> "AppDriver":
-        """Click the › (+1) or ‹ (-1) stepper button. A disabled button
-        swallows the click, exactly as on screen."""
-        page = self._w._source
-        (page._next_button if delta > 0 else page._prev_button).click()
-        return self
-
     def source_selected_path(self) -> tuple | None:
-        """The Source view's selected row path (stepper target / clicked
-        row), or ``None``."""
+        """The Source view's selected row path (last clicked/revealed row),
+        or ``None``."""
         return self._w._source._view.selected_path()
 
-    def source_make_main_visible(self) -> bool:
-        """Whether the toolbar's ⇄ Make main button is shown (two-pane
-        mode only)."""
-        return not self._w._source._make_main_button.isHidden()
+    def source_fold_button_text(self) -> str:
+        """The toolbar's fold-all button label ("▾ Collapse Parameters" /
+        "▸ Expand Parameters"), tracking the view's aggregate fold state."""
+        return self._w._source._fold_button.text()
 
-    def source_make_main(self) -> "AppDriver":
-        """Click the Source toolbar's ⇄ Make main button (the same flow as
-        the Workspace card's button)."""
-        self._w._source._make_main_button.click()
+    def source_toggle_fold_all(self) -> "AppDriver":
+        """Click the Source toolbar's fold-all toggle."""
+        self._w._source._fold_button.click()
         return self
 
     def source_stale_band_visible(self) -> bool:
