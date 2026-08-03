@@ -125,6 +125,13 @@ class ModalCard(EditorCard):
             mode.body.changed.connect(self.draft_changed)
             mode.body.expand_toggled.connect(self.expand_toggled)
             self._install_keyboard_handler(mode.body.focus_widget())
+            # Every grid-bearing body gets the card-level "Unsaved edits"
+            # bar: dirtiness is a property of the *card* (its active draft
+            # vs the committed value), so all bars mirror the same state --
+            # only the visible body's bar can be seen at any moment.
+            grid = mode.body.pending_grid()
+            if grid is not None:
+                self._bind_grid_pending(grid)
 
         self._stack.setCurrentIndex(initial)
         # Explicit call: setCurrentIndex emits currentChanged only on a real

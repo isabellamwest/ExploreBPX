@@ -349,6 +349,15 @@ class ExperimentCard(QWidget):
         if focused_alias in headers:
             self._grid.focus_column(headers.index(focused_alias))
 
+        # The grid's "Unsaved edits" bar re-enters this card's own commit/
+        # revert paths, exactly as ``EditorCard._bind_grid_pending`` wires
+        # them for draft-based cards; visibility is kept honest by
+        # ``_refresh_derived_state`` from the same per-column diff Enter
+        # would commit.
+        if not read_only:
+            self._grid.apply_clicked.connect(self._commit_dirty_columns)
+            self._grid.discard_clicked.connect(self._revert)
+
         self._refresh_derived_state()
         self._install_keyboard_handler(self._grid.focus_widget())
 
@@ -412,6 +421,9 @@ class ExperimentCard(QWidget):
             # stays enabled regardless: opened on an empty run, the dialog
             # says so plainly and still shows the reference data.
             self._import_button.setEnabled(not empty)
+        # The "Unsaved edits" bar mirrors the same per-column diff Enter
+        # would commit (a no-op on a read-only grid, which builds no bar).
+        self._grid.set_pending(self.is_dirty)
         self._sample_count_chip.setText(self._sample_count_text())
 
     def _sample_count_text(self) -> str:

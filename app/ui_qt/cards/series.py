@@ -79,11 +79,13 @@ class SeriesCard(EditorCard):
         layout.addWidget(GridHint(self._hint_lines(parameter)))
 
         self._install_keyboard_handler(self._grid.focus_widget())
+        self._bind_grid_pending(self._grid)
 
     @staticmethod
     def _hint_lines(parameter) -> tuple[str, ...]:
         lines = [
-            "Double-click a cell to edit; press Enter to commit, Esc to discard.",
+            "Click a cell and type, or double-click, to edit it; Enter confirms the cell and moves down.",
+            "Your edits stay a draft until applied: Enter on the grid (or Apply) writes them to the file, Esc (or Discard) reverts.",
             "Paste a column from a spreadsheet with Ctrl+V, or right-click → Paste.",
             "Use + and − to add or remove rows.",
             "Import CSV… loads this run's arrays from the columns of a file.",

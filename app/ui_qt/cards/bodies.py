@@ -74,6 +74,12 @@ class ModeBody(QWidget):
         """Why this body's draft has no representation, or ``None``."""
         return None
 
+    def pending_grid(self):
+        """This body's grid, for the card to drive its "Unsaved edits" bar
+        (``EditorCard._bind_grid_pending``) -- ``None`` for a body without
+        one (numbers, expressions, JSON)."""
+        return None
+
     def set_cell_issues(self, issues) -> None:
         """Render the validator's per-cell diagnostics, if this body has cells.
 
@@ -202,7 +208,8 @@ class TableBody(ModeBody):
             GridHint(
                 (
                     "Each row is one (x, y) point; the line above plots them in order.",
-                    "Double-click a cell to edit; press Enter to commit, Esc to discard.",
+                    "Click a cell and type, or double-click, to edit it; Enter confirms the cell and moves down.",
+                    "Your edits stay a draft until applied: Enter on the grid (or Apply) writes them to the file, Esc (or Discard) reverts.",
                     "Paste two columns from a spreadsheet with Ctrl+V, or right-click → Paste.",
                     "Use + and − to add or remove points; Expand fills the panel.",
                     "Import CSV… loads x and y from the columns of a file.",
@@ -226,6 +233,9 @@ class TableBody(ModeBody):
         ``FunctionCard``/``TableCard``), it simply has nothing visible to
         show until the strip switches back here."""
         self._preview.set_reference_rows(rows)
+
+    def pending_grid(self):
+        return self._grid
 
     def value(self) -> object:
         """``{"x": [...], "y": [...]}``, cells verbatim. An empty grid is empty lists."""
@@ -361,6 +371,9 @@ class MaterialMapBody(ModeBody):
 
     def focus_widget(self) -> QWidget:
         return self._grid.focus_widget()
+
+    def pending_grid(self):
+        return self._grid
 
 
 class RawJsonBody(ModeBody):

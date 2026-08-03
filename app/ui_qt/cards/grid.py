@@ -20,6 +20,19 @@ land, and the two layers do not collide:
   :class:`~.base.EditorCard`: Enter commits the draft to the document, Escape
   reverts it.
 
+Two things keep that split legible rather than a trap:
+
+- confirming a cell **steps the selection down a row** (:class:`_GridView`),
+  so the spreadsheet habit of "Enter, Enter, Enter" walks down the column
+  instead of falling through to the grid layer and committing the document
+  by accident. Only an Enter with no editor open commits;
+- a dirty grid shows an **"Unsaved edits" bar** (:class:`_PendingBar`) naming
+  both halves of the contract -- Apply (Enter) and Discard (Esc) -- as
+  clickable buttons. The grid never decides when: the owning card drives
+  :meth:`NumericGrid.set_pending` from its real ``is_dirty`` state (see
+  ``EditorCard._bind_grid_pending``), so the bar shows exactly when Enter
+  would actually write the file.
+
 The load-bearing mechanism for the grid-level case is the card's event filter
 on the view (installed by ``SeriesCard`` via ``_install_keyboard_handler``): it
 consumes Return and Escape before the view acts on them. ``EditKeyPressed`` is
@@ -34,11 +47,13 @@ from __future__ import annotations
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QKeySequence
 from PySide6.QtWidgets import (
+    QAbstractItemDelegate,
     QAbstractItemView,
     QApplication,
     QFileDialog,
     QHBoxLayout,
     QHeaderView,
+    QLabel,
     QSizePolicy,
     QTableView,
     QToolButton,
@@ -50,7 +65,7 @@ from core.csv_import import positional_map, read_csv_file
 from core.paste import parse_clipboard
 from core.values import format_value, parse_value, values_equal
 
-from ..style import ERROR_TINT, MUTED
+from ..style import ACCENT, BORDER, ERROR_TINT, MUTED, NEUTRAL_TINT
 from .csv_dialog import CsvImportDialog
 from .paste_dialog import PastePreviewDialog, PastePreviewResult
 
@@ -275,6 +290,87 @@ class _GridModel(QAbstractTableModel):
         self.set_issues({})  # stale tints would misattribute (see set_issues)
 
 
+class _GridView(QTableView):
+    """A table view whose cell-editor Enter confirms the cell *and steps down*.
+
+    Qt's default leaves the just-edited cell current, so the very next Enter
+    would fall through to the grid layer -- where the card's event filter
+    commits the whole draft to the document. Spreadsheet muscle memory
+    ("Enter to confirm, Enter to move on") made that an accident waiting to
+    happen. Stepping down keeps repeated Enter cell-scoped: it walks the
+    column, clamped at the last display row, and only an Enter pressed with
+    no editor open commits (see the module docstring).
+
+    Escape and Tab keep Qt's behaviour: only the delegate's *submit* close
+    (``SubmitModelCache``, what its editor emits for Enter) is redirected.
+    """
+
+    def closeEditor(self, editor, hint) -> None:  # noqa: N802
+        if hint == QAbstractItemDelegate.SubmitModelCache:
+            super().closeEditor(editor, QAbstractItemDelegate.NoHint)
+            index = self.currentIndex()
+            if index.isValid() and index.row() + 1 < self.model().rowCount():
+                self.setCurrentIndex(self.model().index(index.row() + 1, index.column()))
+            return
+        super().closeEditor(editor, hint)
+
+
+class _PendingBar(QWidget):
+    """The "Unsaved edits · Apply · Discard" strip under a dirty grid.
+
+    The grid's draft/commit cycle used to be invisible: Enter-to-apply and
+    Esc-to-discard existed only in a collapsed hint. This bar is the visible
+    face of that state -- a small dot, the words, and the two halves of the
+    keyboard contract as clickable buttons with their keys named.
+
+    Display and mouse access only: the bar owns no commit logic. The owning
+    card shows/hides it from its real dirty state and wires the buttons back
+    into the exact keyboard paths (``commit_requested`` / ``_reset_draft``),
+    so clicking Apply is Enter and clicking Discard is Esc, nothing more.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("GridPendingBar")
+        # A stylesheet background on a plain QWidget needs this attribute to
+        # actually paint.
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setStyleSheet(
+            f"#GridPendingBar {{ background: {NEUTRAL_TINT}; "
+            f"border: 1px solid {BORDER}; border-radius: 4px; }}"
+        )
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(8, 2, 6, 2)
+        layout.setSpacing(6)
+
+        # The unified dot language's small (8px) mark, in the accent colour:
+        # "edited, not yet written" is a document state, never a severity, so
+        # it must not read as a validator warning.
+        dot = QLabel("●")
+        dot.setStyleSheet(f"color: {ACCENT}; font-size: 8px;")
+        layout.addWidget(dot)
+        label = QLabel("Unsaved edits")
+        label.setStyleSheet(f"color: {MUTED};")
+        layout.addWidget(label)
+        layout.addStretch(1)
+
+        self.apply_button = QToolButton()
+        self.apply_button.setText("Apply (Enter)")
+        self.apply_button.setToolTip("Write these edits to the file")
+        self.apply_button.setAccessibleName("Apply edits")
+        self.apply_button.setAutoRaise(True)
+        self.apply_button.setStyleSheet(f"color: {ACCENT}; font-weight: 600;")
+        layout.addWidget(self.apply_button)
+
+        self.discard_button = QToolButton()
+        self.discard_button.setText("Discard (Esc)")
+        self.discard_button.setToolTip("Revert to the file's value")
+        self.discard_button.setAccessibleName("Discard edits")
+        self.discard_button.setAutoRaise(True)
+        layout.addWidget(self.discard_button)
+
+
 class NumericGrid(QWidget):
     """A compact, scrolling table of raw cell values with add/remove row."""
 
@@ -289,6 +385,14 @@ class NumericGrid(QWidget):
     #: Inspector) may additionally react -- hiding the secondary workspace -- but
     #: the grid works standalone when nobody listens.
     expand_toggled = Signal(bool)
+
+    #: Emitted when the pending bar's Apply button is clicked. The owning card
+    #: routes it into the same path as Enter on the grid (``commit_requested``);
+    #: the grid itself commits nothing.
+    apply_clicked = Signal()
+    #: Emitted when the pending bar's Discard button is clicked -- the mouse
+    #: twin of Escape, routed by the card into ``_reset_draft``.
+    discard_clicked = Signal()
 
     def __init__(
         self,
@@ -306,7 +410,7 @@ class NumericGrid(QWidget):
         self._bulk = bulk
         self._expanded = False
 
-        self._view = QTableView()
+        self._view = _GridView()
         self._view.setModel(self._model)
         self._view.setSelectionMode(QAbstractItemView.SingleSelection)
         self._view.setSelectionBehavior(QAbstractItemView.SelectItems)
@@ -353,10 +457,18 @@ class NumericGrid(QWidget):
             )
             self.add_toolbar_widget(self._import_button)
 
+        # Hidden until the owning card reports a real dirty draft (see
+        # ``set_pending``); the buttons only re-enter the keyboard paths.
+        self._pending_bar = _PendingBar()
+        self._pending_bar.hide()
+        self._pending_bar.apply_button.clicked.connect(self.apply_clicked)
+        self._pending_bar.discard_button.clicked.connect(self.discard_clicked)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self._view)
         layout.addLayout(self._buttons)
+        layout.addWidget(self._pending_bar)
 
         # Cell edits arrive via ``dataChanged``. Row additions/removals emit
         # ``changed`` from the grid methods below instead of from the model's
@@ -568,6 +680,16 @@ class NumericGrid(QWidget):
         an empty map clears every tint.
         """
         self._model.set_issues(issues)
+
+    def set_pending(self, pending: bool) -> None:
+        """Show or hide the "Unsaved edits" bar.
+
+        The grid never decides this itself -- its ``changed`` signal fires on
+        edits that may cancel out (retyping the original value) -- so the
+        owning card drives it from its real ``is_dirty`` state, and the bar
+        shows exactly when Enter would actually write the file.
+        """
+        self._pending_bar.setVisible(pending)
 
     def insert_row(self) -> None:
         """Add an empty row below the current one, or at the end.
@@ -827,6 +949,12 @@ class MultiColumnGrid(QWidget):
     #: the pane, the grid grows itself, a host may additionally react).
     expand_toggled = Signal(bool)
 
+    #: Apply/Discard from the pending bar -- the exact contract
+    #: ``NumericGrid.apply_clicked``/``discard_clicked`` document. Never
+    #: emitted by a read-only grid, whose bar is not built at all.
+    apply_clicked = Signal()
+    discard_clicked = Signal()
+
     def __init__(
         self,
         headers: tuple[str, ...],
@@ -838,7 +966,7 @@ class MultiColumnGrid(QWidget):
         self._read_only = read_only
         self._expanded = False
 
-        self._view = QTableView()
+        self._view = _GridView()
         self._view.setModel(self._model)
         self._view.setSelectionMode(QAbstractItemView.SingleSelection)
         self._view.setSelectionBehavior(QAbstractItemView.SelectItems)
@@ -866,6 +994,7 @@ class MultiColumnGrid(QWidget):
         self._remove_button = None
         self._expand_button = None
         self._buttons = None
+        self._pending_bar = None
         if not read_only:
             self._add_button = self._row_button("+", "Add cell", self.insert_cell)
             self._remove_button = self._row_button("−", "Remove cell", self.remove_cell)
@@ -883,6 +1012,13 @@ class MultiColumnGrid(QWidget):
             )
             self._buttons.addWidget(self._expand_button)
             layout.addLayout(self._buttons)
+            # Hidden until the owning card reports a real dirty draft (see
+            # ``set_pending``) -- same contract as ``NumericGrid``'s bar.
+            self._pending_bar = _PendingBar()
+            self._pending_bar.hide()
+            self._pending_bar.apply_button.clicked.connect(self.apply_clicked)
+            self._pending_bar.discard_button.clicked.connect(self.discard_clicked)
+            layout.addWidget(self._pending_bar)
             self._install_context_menu()
 
         # A cell edit -- including an in-place append past a column's own
@@ -1021,6 +1157,13 @@ class MultiColumnGrid(QWidget):
     def set_cell_issues(self, issues: dict[tuple[int, int], str]) -> None:
         """Tint the cells the validator blamed -- see ``NumericGrid.set_cell_issues``."""
         self._model.set_issues(issues)
+
+    def set_pending(self, pending: bool) -> None:
+        """Show or hide the "Unsaved edits" bar -- see
+        ``NumericGrid.set_pending``. A no-op on a read-only grid, whose bar
+        is never built."""
+        if self._pending_bar is not None:
+            self._pending_bar.setVisible(pending)
 
     def focus_column(self, column: int) -> None:
         """Give the view's current-cell ring to *column*'s first cell.

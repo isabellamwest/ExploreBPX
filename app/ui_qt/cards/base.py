@@ -152,6 +152,26 @@ class EditorCard(QWidget):
         """Watch *widget* for Enter (commit) and Escape (revert) key presses."""
         widget.installEventFilter(self)
 
+    def _bind_grid_pending(self, grid) -> None:
+        """Drive *grid*'s "Unsaved edits" bar from this card's dirty state.
+
+        The bar is the visible face of the otherwise invisible draft: it
+        shows exactly while ``is_dirty`` is true -- so an edit typed back to
+        the original value hides it again -- and its buttons re-enter the
+        keyboard paths verbatim (Apply is Enter, Discard is Esc). Nothing
+        here needs to react to a successful commit: committing rebuilds the
+        card (``MainWindow._on_committed`` → ``show_parameter``), so a fresh,
+        clean card starts with the bar hidden.
+        """
+        grid.apply_clicked.connect(self.commit_requested)
+        grid.discard_clicked.connect(self._reset_draft)
+
+        def refresh() -> None:
+            grid.set_pending(self.is_dirty)
+
+        self.draft_changed.connect(refresh)
+        self.draft_reset.connect(refresh)
+
     def eventFilter(self, obj: QObject, event: QEvent) -> bool:  # noqa: N802
         if event.type() == QEvent.KeyPress:
             # For combo boxes: pass Enter/Escape through when the popup is open
