@@ -1,8 +1,8 @@
-"""Read-only fallback card for kinds without an editor (section/table).
+"""Read-only fallback card for kinds without an editor.
 
-Structural kinds display their value read-only so the inspector still works
-for the whole tree. ``SECTION`` is a container, not a value to edit here, and
-``TABLE`` editing is separate roadmap work; both fall back to this card.
+Every value kind now has a real editor (unrepresentable SERIES/TABLE values
+get an editable Raw JSON fallback), so only ``SECTION`` -- a container, not a
+value to edit here -- still falls back to this card.
 """
 
 from __future__ import annotations

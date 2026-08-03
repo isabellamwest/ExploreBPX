@@ -7,8 +7,9 @@ file" heading + value row (:class:`~.reference_block.ReferenceValueBlock`,
 shared with ``ParameterCard``'s own reference section so the two can never
 drift), Copy up always enabled -- there is no main-file value to be "the
 same" as. Mirrors ``ValidationEmptyState``'s "never dirty" contract (a
-class-level ``is_dirty``/``is_editable``) so the Inspector's undo guard and
-driver reads treat it the same as any other non-``ParameterCard`` card.
+class-level ``is_dirty``/``is_editable``) so the Inspector's undo guard
+(which reads ``is_dirty``) and the test driver's editability reads treat it
+the same as any other non-``ParameterCard`` card.
 """
 
 from __future__ import annotations
