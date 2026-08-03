@@ -103,7 +103,16 @@ FARADAY = 96485.33212
 
 @dataclass(frozen=True)
 class SetMeta:
-    """Hand-curated identity for one PyBaMM parameter set."""
+    """Hand-curated identity for one PyBaMM parameter set.
+
+    ``cell`` may name detail PyBaMM's own docstring omits, as long as it does
+    not contradict it (``_verify_chemistry``). The detail below is not
+    guesswork and should not be trimmed back to match PyBaMM's terser
+    wording: Prada2013's cell is the A123 Systems ANR26650-M1 (2.3 Ah, 26650)
+    and Ai2020's is the Enertech LCO/graphite SPB655060 pouch, both stated in
+    the cited papers where PyBaMM says only "an LFP cell" and "the Enertech
+    cell".
+    """
 
     pybamm_name: str  # pybamm.ParameterValues(<name>)
     slug: str  # output file stem
