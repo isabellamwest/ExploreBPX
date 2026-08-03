@@ -6,7 +6,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from core import bpx_gateway
-from core.compare import ComparisonResult, RowState, compare, raw_equal
+from core.compare import ComparisonResult, RowState, compare, matching_table_rows, raw_equal
 
 APP_DIR = Path(__file__).resolve().parents[1] / "app"
 _ABOUT_ENERGY = APP_DIR / "data" / "example_documents" / "about_energy"
@@ -241,3 +241,34 @@ def test_end_to_end_against_bundled_about_energy_examples():
     assert result.ref_only_count >= state_ref_only_total
     assert result.differ_count >= cell.differ_count
     assert result.main_only_count >= cell.main_only_count
+
+
+# ----------------------------------------------------------------------
+# matching_table_rows: per-row match used by the reference card's table grid
+# ----------------------------------------------------------------------
+
+
+def test_matching_table_rows_marks_rows_with_no_equal_pair_in_main():
+    main_rows = [[0, 2.0], [1, 3.0]]
+    ref_rows = [[0, 2.0], [1, 3.0], [5, 9.0]]
+    assert matching_table_rows(main_rows, ref_rows) == [True, True, False]
+
+
+def test_matching_table_rows_is_order_independent():
+    """A ref row matches wherever the equal main row sits, not only at the
+    same index."""
+    main_rows = [[1, 3.0], [0, 2.0]]
+    ref_rows = [[0, 2.0], [1, 3.0]]
+    assert matching_table_rows(main_rows, ref_rows) == [True, True]
+
+
+def test_matching_table_rows_is_type_aware_at_the_leaves():
+    """1 (int) and 1.0 (float) are not the same cell -- the same leaf rule
+    raw_equal uses (values_equal), never loosened for a table row."""
+    main_rows = [[1, 2]]
+    ref_rows = [[1.0, 2.0]]
+    assert matching_table_rows(main_rows, ref_rows) == [False]
+
+
+def test_matching_table_rows_empty_main_marks_every_ref_row_false():
+    assert matching_table_rows([], [[0, 1.0]]) == [False]

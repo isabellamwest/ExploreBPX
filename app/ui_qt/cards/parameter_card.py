@@ -53,7 +53,7 @@ from PySide6.QtWidgets import (
 
 from core import structure
 from core.bpx_gateway import FieldMeta
-from core.compare import RowState
+from core.compare import RowState, matching_table_rows
 from core.parameter_metadata import resolve_parameter_metadata
 from core.parameter_types import ParameterKind, split_name_and_unit
 from core.tree_model import ParameterItem
@@ -64,6 +64,8 @@ from ..latex import symbol_label
 from ..parameter_info_popover import ParameterInfoPopover
 from ..parameter_row import value_preview
 from ..style import ERROR, MUTED
+from .bodies import table_rows
+from .function import table_is_representable
 from .page import page_content, page_header
 from .reference_block import ReferenceValueBlock
 from .registry import create_card
@@ -228,10 +230,13 @@ class ParameterCard(QWidget):
         *ref_state* is ``None`` when there is nothing to show (no reference
         docked, comparison hidden, or the reference lacks this key --
         MAIN_ONLY) -- the "Main file" heading and reference block hide in
-        every such case. Populate-only: this never touches ``self._editor``
-        or any of its draft/commit signals (known Qt pitfall), so calling it
-        can never trip ``_touched``, whatever order it is called relative to
-        construction.
+        every such case. Populate-only: this never touches ``self._editor``'s
+        draft/commit signals (known Qt pitfall), so calling it can never
+        trip ``_touched``, whatever order it is called relative to
+        construction -- it does, however, always tell the editor whether to
+        overlay a table reference on its own live preview
+        (:meth:`~.base.EditorCard.set_reference_table`), a no-op for any
+        editor that is not table-shaped.
         """
         self._reference_active = ref_state is not None and ref_state is not RowState.MAIN_ONLY
         if not self._reference_active:
@@ -239,6 +244,7 @@ class ParameterCard(QWidget):
                 self._main_file_heading.hide()
             if self._reference_block is not None:
                 self._reference_block.hide()
+            self._editor.set_reference_table(None)
             return
         if self._reference_block is None:
             self._main_file_heading = QLabel("Main file")
@@ -248,12 +254,29 @@ class ParameterCard(QWidget):
             self._reference_block = ReferenceValueBlock()
             self._reference_block.copy_up_requested.connect(self.copy_up_requested)
             self._body_layout.addWidget(self._reference_block)
-        text, _ghost = value_preview(ref_value, kind)
-        unit = self.parameter.unit if kind in _UNIT_LABEL_KINDS else ""
         same = ref_state is RowState.EQUAL
-        self._reference_block.set_content(
-            text, unit, same, narrow=kind in _UNIT_LABEL_KINDS
-        )
+        # A differing, table-representable reference gets the richer
+        # treatment (grid + chart overlay); an EQUAL table keeps today's
+        # compact one-liner, same as every other equal value.
+        if not same and table_is_representable(ref_value):
+            ref_rows = table_rows(ref_value)
+            main_rows = table_rows(self.parameter.value)
+            matches = matching_table_rows(main_rows, ref_rows)
+            self._reference_block.set_table_rows(ref_rows, matches)
+            self._editor.set_reference_table(ref_rows)
+        else:
+            if isinstance(ref_value, str):
+                # The full expression, not value_preview's truncated first
+                # line -- that one-line form still serves the parameter
+                # list row it was built for.
+                text, monospace = ref_value, True
+            else:
+                text, monospace = value_preview(ref_value, kind)[0], False
+            unit = self.parameter.unit if kind in _UNIT_LABEL_KINDS else ""
+            self._reference_block.set_content(
+                text, unit, same, narrow=kind in _UNIT_LABEL_KINDS, monospace=monospace
+            )
+            self._editor.set_reference_table(None)
         self._main_file_heading.show()
         self._reference_block.show()
 

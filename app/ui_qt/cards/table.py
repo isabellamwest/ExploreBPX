@@ -25,4 +25,8 @@ class TableCard(ModalCard):
     """Edits an ``x``/``y`` table as a grid over a live preview, with no strip."""
 
     def __init__(self, parameter, meta) -> None:
-        super().__init__(parameter, meta, [Mode(INTERPOLATED_TABLE, TableBody())], 0)
+        self._table_body = TableBody()
+        super().__init__(parameter, meta, [Mode(INTERPOLATED_TABLE, self._table_body)], 0)
+
+    def set_reference_table(self, rows: list[list[object]] | None) -> None:
+        self._table_body.set_reference_rows(rows)

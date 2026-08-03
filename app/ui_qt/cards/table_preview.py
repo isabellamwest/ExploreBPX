@@ -20,15 +20,23 @@ enhancement, never a dependency of editing.
 are skipped rather than coerced (``chart_axes.as_plot_number``) -- the grid
 and the validator remain the source of truth for those; the plot just shows
 what can be shown.
+
+**Reference overlay.** ``set_reference_rows`` (``mode="xy"`` only) draws a
+docked reference's own table as a second series -- a dashed reference-purple
+line, no scatter markers of its own, so it never competes with the draft's
+solid accent line + dots. A small legend appears above the chart only while
+an overlay is present. Independent of ``update_rows``: the main draft can
+keep changing while the overlay stays put until ``set_reference_rows`` is
+called again (or with ``None``, to clear it).
 """
 
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPen
-from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
-from ..style import ACCENT
+from ..style import ACCENT, MUTED, REFERENCE
 from .chart_axes import (
     as_plot_number,
     fit_axis,
@@ -77,6 +85,16 @@ class TablePreview(QWidget):
             self.setVisible(False)
             return
 
+        #: The main draft's own points, and a docked reference's overlay
+        #: points -- kept separate so either can be replotted without
+        #: disturbing the other (see ``update_rows``/``set_reference_rows``).
+        self._main_points: list[tuple[float, float]] = []
+        self._ref_points: list[tuple[float, float]] = []
+
+        self._legend = _legend_row()
+        self._legend.hide()
+        layout.addWidget(self._legend)
+
         self._chart = QChart()
         setup_chart(self._chart)
 
@@ -91,13 +109,23 @@ class TablePreview(QWidget):
         self._chart.addSeries(self._line)
         self._chart.addSeries(self._dots)
 
+        # The reference overlay: a dashed purple line only, no markers of its
+        # own -- it reads as "the other file's curve", not a second set of
+        # editable points.
+        self._ref_line = QLineSeries()
+        ref_pen = QPen(QColor(REFERENCE))
+        ref_pen.setWidthF(1.9)
+        ref_pen.setStyle(Qt.DashLine)
+        self._ref_line.setPen(ref_pen)
+        self._chart.addSeries(self._ref_line)
+
         self._axis_x = QValueAxis()
         self._axis_y = QValueAxis()
         for axis in (self._axis_x, self._axis_y):
             style_axis(axis)
         self._chart.addAxis(self._axis_x, Qt.AlignBottom)
         self._chart.addAxis(self._axis_y, Qt.AlignLeft)
-        for series in (self._line, self._dots):
+        for series in (self._line, self._dots, self._ref_line):
             series.attachAxis(self._axis_x)
             series.attachAxis(self._axis_y)
 
@@ -119,20 +147,46 @@ class TablePreview(QWidget):
         self._axis_y.setTitleText(y_title)
 
     def update_rows(self, rows: list[list[object]]) -> None:
-        """Replot from the grid's current rows. Non-numeric cells are skipped."""
+        """Replot the main draft from the grid's current rows.
+
+        Non-numeric cells are skipped. Never touches the reference overlay --
+        set independently by :meth:`set_reference_rows` -- so the draft can
+        keep changing while a docked reference's curve stays put.
+        """
         if not self.available:
             return
-        points = self._points(rows)
+        self._main_points = self._points(rows)
+        self._redraw()
+
+    def set_reference_rows(self, rows: list[list[object]] | None) -> None:
+        """Overlay *rows* -- a differing reference table's own ``(x, y)``
+        pairs -- as the dashed purple series, or clear it with ``None``.
+
+        Shows/hides the small legend alongside: present only while an
+        overlay is actually drawn, since the plain solid line already speaks
+        for itself with nothing to distinguish it from.
+        """
+        if not self.available:
+            return
+        self._ref_points = self._points(rows) if rows else []
+        self._legend.setVisible(bool(self._ref_points))
+        self._redraw()
+
+    def _redraw(self) -> None:
         self._line.clear()
         self._dots.clear()
-        if not points:
+        for x, y in self._main_points:
+            self._line.append(x, y)
+            self._dots.append(x, y)
+        self._ref_line.clear()
+        for x, y in self._ref_points:
+            self._ref_line.append(x, y)
+        all_points = self._main_points + self._ref_points
+        if not all_points:
             self._show_empty(True)
             return
         self._show_empty(False)
-        for x, y in points:
-            self._line.append(x, y)
-            self._dots.append(x, y)
-        self._fit_axes(points)
+        self._fit_axes(all_points)
 
     # ------------------------------------------------------------------
     def _points(self, rows: list[list[object]]) -> list[tuple[float, float]]:
@@ -161,3 +215,41 @@ class TablePreview(QWidget):
     def _show_empty(self, empty: bool) -> None:
         self._view.setVisible(not empty)
         self._empty.setVisible(empty)
+
+
+# ----------------------------------------------------------------------
+# reference-overlay legend
+# ----------------------------------------------------------------------
+
+
+def _legend_row() -> QWidget:
+    """"Main"/"Reference" swatches shown above the chart while an overlay is
+    present -- plain labels, no circled marks (the app's dot-language rules
+    ban those), just the same solid-vs-dashed distinction the two lines
+    themselves draw."""
+    row = QWidget()
+    row.setObjectName("ChartLegend")
+    layout = QHBoxLayout(row)
+    layout.setContentsMargins(0, 0, 0, 4)
+    layout.setSpacing(4)
+    layout.addWidget(_legend_swatch(_LINE, dashed=False))
+    layout.addWidget(_legend_label("Main"))
+    layout.addSpacing(10)
+    layout.addWidget(_legend_swatch(REFERENCE, dashed=True))
+    layout.addWidget(_legend_label("Reference"))
+    layout.addStretch(1)
+    return row
+
+
+def _legend_swatch(color: str, *, dashed: bool) -> QLabel:
+    swatch = QLabel()
+    swatch.setFixedSize(14, 10)
+    border_style = "dashed" if dashed else "solid"
+    swatch.setStyleSheet(f"border-top: 2px {border_style} {color}; margin-top: 4px;")
+    return swatch
+
+
+def _legend_label(text: str) -> QLabel:
+    label = QLabel(text)
+    label.setStyleSheet(f"color: {MUTED}; font-size: 11px;")
+    return label

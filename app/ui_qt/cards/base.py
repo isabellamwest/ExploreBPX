@@ -114,6 +114,18 @@ class EditorCard(QWidget):
         told, so the validator stays the sole source of truth.
         """
 
+    def set_reference_table(self, rows: list[list[object]] | None) -> None:
+        """Overlay a differing, table-representable reference's rows on this
+        card's own live preview, or clear the overlay with ``None``.
+
+        A no-op for every card whose editor is not table-shaped (most
+        cards). ``rows`` is already the ``(x, y)`` pairs the reference's own
+        grid would show (``bodies.table_rows``) -- this never re-parses the
+        reference value itself. ``ParameterCard`` calls this whenever the
+        docked reference changes, independent of which mode a strip-based
+        card currently shows.
+        """
+
     @property
     def is_editable(self) -> bool:
         return True

@@ -79,12 +79,20 @@ class FunctionCard(ModalCard):
         opens_in = initial_mode(parameter.value)
         renamable = structure.can_rename_parameter(parameter.path, parameter.value)
         unit_tooltip = "" if renamable else FIXED_UNIT_TOOLTIP
+        self._table_body = TableBody()
         modes = [
             Mode(FLOAT_INT, NumberBody(parameter.unit, unit_tooltip)),
             Mode(FUNCTION, ExpressionBody()),
-            Mode(INTERPOLATED_TABLE, TableBody()),
+            Mode(INTERPOLATED_TABLE, self._table_body),
         ]
         if opens_in == RAW_MODE:
             modes.append(Mode(RAW_MODE, RawJsonBody(_RAW_NOTICE)))
         labels = [mode.label for mode in modes]
         super().__init__(parameter, meta, modes, labels.index(opens_in))
+
+    def set_reference_table(self, rows: list[list[object]] | None) -> None:
+        """Delegate to the ``InterpolatedTable`` mode's own body, whichever
+        mode the strip currently shows -- a hidden body simply has nothing
+        visible to draw until the strip switches back to it (see
+        ``TableBody.set_reference_rows``)."""
+        self._table_body.set_reference_rows(rows)

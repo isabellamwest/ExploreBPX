@@ -217,6 +217,16 @@ class TableBody(ModeBody):
     def set_cell_issues(self, issues) -> None:
         self._grid.set_cell_issues(table_cells(issues))
 
+    def set_reference_rows(self, rows: list[list[object]] | None) -> None:
+        """Overlay a differing reference table's *rows* on the live preview,
+        or clear the overlay with ``None``. *rows* is already the ``(x, y)``
+        pairs the reference's own grid would show (see :func:`table_rows`) --
+        this never re-parses the reference value itself. A no-op while this
+        body is not the active mode: the card still calls it (see
+        ``FunctionCard``/``TableCard``), it simply has nothing visible to
+        show until the strip switches back here."""
+        self._preview.set_reference_rows(rows)
+
     def value(self) -> object:
         """``{"x": [...], "y": [...]}``, cells verbatim. An empty grid is empty lists."""
         rows = self._grid.values()
@@ -224,11 +234,11 @@ class TableBody(ModeBody):
 
     def set_value(self, value: object) -> None:
         self._seed = value
-        self._grid.set_values(_table_rows(value))
+        self._grid.set_values(table_rows(value))
         self._preview.update_rows(self._grid.values())
 
     def reset(self) -> None:
-        self._grid.set_values(_table_rows(self._seed))
+        self._grid.set_values(table_rows(self._seed))
         self._preview.update_rows(self._grid.values())
 
     def focus_widget(self) -> QWidget:
@@ -474,11 +484,13 @@ def _map_rows(value: object) -> list[list[object]]:
     return [[key, item] for key, item in value.items()]
 
 
-def _table_rows(value: object) -> list[list[object]]:
+def table_rows(value: object) -> list[list[object]]:
     """Zip a ``{"x": [...], "y": [...]}`` dict into grid rows.
 
     Only ever called with a value the registry judged representable, or with
-    ``None``/anything else for an unseeded body, which yields an empty grid.
+    ``None``/anything else for an unseeded body, which yields an empty grid --
+    the same fallback ``ParameterCard`` relies on to extract a reference's
+    rows without hand-rolling a second table parser.
     """
     if not isinstance(value, dict):
         return []

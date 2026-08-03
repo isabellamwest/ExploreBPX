@@ -14,13 +14,18 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 pytest.importorskip("PySide6")
 
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QApplication
 
 from core import bpx_gateway
 from core.compare import RowState
 from core.parameter_types import ParameterKind
 from core.tree_model import ParameterItem
+from ui_qt import style
 from ui_qt.cards.parameter_card import ParameterCard
+from ui_qt.cards.reference_block import _monospace_font
+from ui_qt.cards.table_preview import charts_available
 
 
 @pytest.fixture(autouse=True)
@@ -164,3 +169,138 @@ def test_clicking_copy_up_emits_signal_without_dirtying_the_card():
 
     assert received == [True]
     assert not card.is_dirty
+
+
+# ----------------------------------------------------------------------
+# Richer table/function reference comparison
+# ----------------------------------------------------------------------
+
+requires_charts = pytest.mark.skipif(
+    not charts_available(), reason="QtCharts not available in this PySide6 build"
+)
+
+
+def _table_card(value) -> ParameterCard:
+    param = ParameterItem(
+        label="Custom table",
+        path=("Parameterisation", "User-defined", "Custom table"),
+        kind=ParameterKind.TABLE,
+        value=value,
+    )
+    return ParameterCard(param, None)
+
+
+def _function_card(value) -> ParameterCard:
+    param = ParameterItem(
+        label="OCP [V]",
+        path=("Parameterisation", "Negative electrode", "OCP [V]"),
+        kind=ParameterKind.FUNCTION,
+        value=value,
+    )
+    return ParameterCard(param, None)
+
+
+def test_differing_table_reference_shows_grid_with_diff_marks_and_overlay():
+    card = _table_card({"x": [0, 1], "y": [2, 3]})
+    ref_value = {"x": [0, 1, 5], "y": [2, 3, 9]}
+    card.set_reference(ref_value, RowState.DIFFERS, ParameterKind.TABLE)
+
+    block = card._reference_block
+    assert block._value.isHidden()
+    assert not block._table_grid.isHidden()
+    table = block._table_grid._table
+    assert table.rowCount() == 3
+    # Rows (0, 2) and (1, 3) already exist in the main draft: ordinary text.
+    assert table.item(0, 0).foreground().style() == Qt.NoBrush
+    assert table.item(1, 1).foreground().style() == Qt.NoBrush
+    # Row (5, 9) has no equal pair in main: reference purple, both cells.
+    purple = QColor(style.REFERENCE).name()
+    assert table.item(2, 0).foreground().color().name() == purple
+    assert table.item(2, 1).foreground().color().name() == purple
+    assert block._copy_up.isEnabled()
+
+    if charts_available():
+        preview = card._editor._table_body._preview
+        assert preview._ref_points == [(0.0, 2.0), (1.0, 3.0), (5.0, 9.0)]
+        assert not preview._legend.isHidden()
+
+
+def test_equal_table_reference_keeps_the_compact_one_liner():
+    value = {"x": [0, 1], "y": [2, 3]}
+    card = _table_card(value)
+    card.set_reference(dict(value), RowState.EQUAL, ParameterKind.TABLE)
+
+    block = card._reference_block
+    assert not block._value.isHidden()
+    assert block._table_grid.isHidden()
+    assert block._value.text() == "table · 2 points · same"
+    assert not block._copy_up.isEnabled()
+
+    if charts_available():
+        preview = card._editor._table_body._preview
+        assert preview._ref_points == []
+        assert preview._legend.isHidden()
+
+
+@requires_charts
+def test_undocking_the_reference_clears_the_table_overlay():
+    card = _table_card({"x": [0, 1], "y": [2, 3]})
+    card.set_reference({"x": [0, 5], "y": [2, 9]}, RowState.DIFFERS, ParameterKind.TABLE)
+    preview = card._editor._table_body._preview
+    assert preview._ref_points
+
+    card.set_reference(None, None, None)
+
+    assert preview._ref_points == []
+    assert preview._legend.isHidden()
+
+
+@requires_charts
+def test_expanding_the_grid_keeps_the_chart_overlay():
+    """The reference *section* (grid + heading) hides while a grid takes
+    over the pane (known Qt pitfall), but the chart overlay lives inside
+    the editor itself and is untouched -- it carries the comparison while
+    expanded."""
+    card = _table_card({"x": [0, 1], "y": [2, 3]})
+    card.set_reference({"x": [0, 5], "y": [2, 9]}, RowState.DIFFERS, ParameterKind.TABLE)
+    preview = card._editor._table_body._preview
+    assert preview._ref_points
+
+    card._editor.expand_toggled.emit(True)
+
+    assert not card._reference_block.isVisibleTo(card)
+    assert preview._ref_points  # the overlay itself is never touched
+    assert preview.isVisibleTo(card._editor)
+
+
+def test_full_multiline_expression_reference_renders_in_full():
+    card = _function_card("x + 1")
+    long_expression = "1*x +\n2*x**2 +\n3*x**3"
+    card.set_reference(long_expression, RowState.DIFFERS, ParameterKind.FUNCTION)
+
+    block = card._reference_block
+    assert block._value.text() == long_expression  # no "…" truncation
+    assert block._value.font().family() == _monospace_font().family()
+
+
+def test_non_expression_reference_never_gets_the_monospace_font():
+    card = _card(("Parameterisation", "Cell", "Electrode area [m2]"))
+    card.set_reference(2.0, RowState.DIFFERS, ParameterKind.SCALAR)
+    assert card._reference_block._value.font().family() != _monospace_font().family()
+
+
+@requires_charts
+def test_function_cards_table_overlay_survives_switching_mode_away_and_back():
+    """FunctionCard's ``InterpolatedTable`` mode is one of several strip
+    entries -- the overlay lives on that mode's own (always-alive) body, so
+    switching the strip away and back must neither lose nor duplicate it."""
+    card = _function_card({"x": [0, 1], "y": [2, 3]})  # opens on InterpolatedTable
+    card.set_reference({"x": [0, 1, 9], "y": [2, 3, 50]}, RowState.DIFFERS, ParameterKind.FUNCTION)
+    table_body = card._editor._table_body
+    assert table_body._preview._ref_points == [(0.0, 2.0), (1.0, 3.0), (9.0, 50.0)]
+
+    card._editor.select_mode("FloatInt")
+    assert table_body._preview._ref_points == [(0.0, 2.0), (1.0, 3.0), (9.0, 50.0)]
+
+    card._editor.select_mode("InterpolatedTable")
+    assert table_body._preview._ref_points == [(0.0, 2.0), (1.0, 3.0), (9.0, 50.0)]

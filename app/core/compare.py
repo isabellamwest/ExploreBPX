@@ -265,3 +265,24 @@ def compare(main_raw: dict, ref_raw: dict) -> ComparisonResult:
         )
 
     return ComparisonResult(sections=sections)
+
+
+def matching_table_rows(
+    main_rows: list[list[object]], ref_rows: list[list[object]]
+) -> list[bool]:
+    """For each row in *ref_rows*, whether an identical ``(x, y)`` pair
+    exists somewhere in *main_rows* -- exact equality per cell
+    (:func:`values.values_equal`), the same leaf rule :func:`raw_equal` uses
+    for a whole value. Order-independent: a matching main row need not sit
+    at the same index as the reference row it matches.
+
+    Presentational, not part of the ``compare()`` traversal above: the
+    reference card's read-only table grid (``ui_qt.cards``) uses this to
+    mark a reference row that genuinely differs from every row the main
+    draft holds, distinct from one that happens to coincide with one.
+    Never mutates either input.
+    """
+    return [
+        any(values_equal(mx, rx) and values_equal(my, ry) for mx, my in main_rows)
+        for rx, ry in ref_rows
+    ]
