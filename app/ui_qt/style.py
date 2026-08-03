@@ -256,7 +256,7 @@ QListWidget::item:selected, QTreeView::item:selected { background: #ddeeff; colo
    so their own borders are stripped to avoid a doubled seam. Explicit ids
    only -- a descendant selector here would out-specify (and silently strip
    the border from) QListWidget#AddParameterList below. */
-QTreeView#StructureTree, QListWidget#ParameterListView { border: none; }
+QTreeView#StructureTree, QListWidget#ParameterListView { border: none; outline: none; }
 /* Wider than the generic 3px/4px item padding above -- a wrapped, two-line
    parameter row (name plus unit, or a validator marker) needs the extra
    breathing room the same way the add-parameter popup's rows do. */
