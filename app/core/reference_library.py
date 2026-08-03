@@ -37,13 +37,26 @@ _SHORT_TITLES: dict[str, str] = {
     "chen2020": "Chen2020 (LG M50 21700)",
     "prada2013": "Prada2013 (A123 26650 LFP)",
     "ai2020": "Ai2020 (Enertech pouch)",
-    "mohtat2020": "Mohtat2020 (NMC111 pouch)",
+    "mohtat2020": "Mohtat2020 (NMC532 pouch)",
 }
 
 #: Curated picker order -- Chen2020 is the flagship reference (the most
 #: widely used set); an uncurated future file sorts after these,
 #: alphabetically.
 _STEM_ORDER: tuple[str, ...] = ("chen2020", "prada2013", "ai2020", "mohtat2020")
+
+#: Origin and licence of the bundled library, stated wherever a set is
+#: offered. ``NOTICE.md`` is the full record, but it ships as a repo file a
+#: packaged user cannot open, so the two facts it alone carried -- that these
+#: are derived artifacts, and whose licence they arrive under -- are said in
+#: the app instead. Lives here rather than in the dialog because it is
+#: provenance, not presentation; the conversion caveats and the PyBaMM
+#: version stay in each file's own ``Header.Description``.
+PROVENANCE = (
+    "Derived offline from PyBaMM's published parameter sets. PyBaMM is "
+    "BSD 3-Clause licensed; the parameter values originate in the cited "
+    "publication."
+)
 
 
 def _stem_sort_key(path: Path) -> tuple[int, str]:
@@ -63,6 +76,7 @@ class ReferenceSet:
     short_title: str  # curated, list-heading-length -- see ``_SHORT_TITLES``
     model: str  # the file's own Header.Model, e.g. "DFN"
     description: str  # the file's own Header.Description (conversion caveats)
+    references: str  # the file's own Header.References (the citation; "" if absent)
 
 
 @lru_cache(maxsize=None)
@@ -86,6 +100,7 @@ def list_reference_sets() -> tuple[ReferenceSet, ...]:
                 short_title=_SHORT_TITLES.get(path.stem, title),
                 model=str(header.get("Model") or ""),
                 description=str(header.get("Description") or ""),
+                references=str(header.get("References") or ""),
             )
         )
     return tuple(sets)

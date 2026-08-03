@@ -12,11 +12,14 @@ apart from the run-comparison ``DatabaseExamplesDialog``; see the
 model; selection is a purple border plus a small plain tick -- the standing
 rule: never circled tick/cross badges anywhere in the app), beside a detail
 card reusing the reference group-box chrome. The detail shows the chosen
-file's own Header fields verbatim -- Title, Model, Description (each set's
-conversion caveats live in its Description, and they must be readable
-*before* docking) -- plus section/parameter counts derived through
+file's own Header fields verbatim -- Title, Model, References, Description
+(each set's conversion caveats live in its Description, and they must be
+readable *before* docking) -- plus section/parameter counts derived through
 :class:`core.document.BPXDocument`, the same derivation the docked tile
-itself uses. Chen2020 (the curated flagship, always first) is pre-selected
+itself uses, and ``core.reference_library.PROVENANCE`` in the footer: these
+are derived artifacts under someone else's licence, so origin and citation
+belong on screen rather than in a ``NOTICE.md`` no packaged user can open.
+Chen2020 (the curated flagship, always first) is pre-selected
 so the detail pane is never empty and the dock button never needs a
 disabled placeholder state. A future second source (LiionDB, ...) becomes
 another picker group in this same dialog.
@@ -36,7 +39,12 @@ from PySide6.QtWidgets import (
 )
 
 from core.document import BPXDocument
-from core.reference_library import ReferenceSet, list_reference_sets, load_reference_raw
+from core.reference_library import (
+    PROVENANCE,
+    ReferenceSet,
+    list_reference_sets,
+    load_reference_raw,
+)
 
 from .style import BORDER, MUTED, REFERENCE
 from .titles import panel_title
@@ -185,15 +193,21 @@ class ReferenceLibraryDialog(QDialog):
         self._detail_meta.setObjectName("ReferenceLibraryMeta")
         self._detail_meta.setWordWrap(True)
         body_layout.addWidget(self._detail_meta)
+        #: The citation, lifted out of the Description paragraph it is buried
+        #: in -- attribution has to be scannable, not something a reader has
+        #: to mine a thousand characters of conversion caveats to find.
+        self._detail_citation = QLabel()
+        self._detail_citation.setObjectName("ReferenceLibraryCitation")
+        self._detail_citation.setWordWrap(True)
+        self._detail_citation.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        body_layout.addWidget(self._detail_citation)
         self._detail_description = QLabel()
         self._detail_description.setObjectName("ReferenceLibraryDescription")
         self._detail_description.setWordWrap(True)
         self._detail_description.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         body_layout.addWidget(self._detail_description)
         body_layout.addStretch(1)
-        provenance = QLabel(
-            "Generated offline from PyBaMM · provenance and conversion caveats in NOTICE.md"
-        )
+        provenance = QLabel(PROVENANCE)
         provenance.setObjectName("ReferenceLibraryProvenance")
         provenance.setWordWrap(True)
         body_layout.addWidget(provenance)
@@ -236,6 +250,10 @@ class ReferenceLibraryDialog(QDialog):
         self._detail_meta.setText(
             f"Model {ref_set.model or '-'} · {sections} sections · {parameters} parameters"
         )
+        # An uncurated future file may carry no References at all; show
+        # nothing rather than a bare "Source:".
+        self._detail_citation.setText(f"Source: {ref_set.references}" if ref_set.references else "")
+        self._detail_citation.setVisible(bool(ref_set.references))
         self._detail_description.setText(ref_set.description)
 
     def _set_counts(self, set_id: str) -> tuple[int, int]:

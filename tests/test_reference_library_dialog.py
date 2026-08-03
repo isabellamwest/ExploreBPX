@@ -16,10 +16,10 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 pytest.importorskip("PySide6")
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QLabel
 
 from core.document import BPXDocument
-from core.reference_library import list_reference_sets, load_reference_raw
+from core.reference_library import PROVENANCE, list_reference_sets, load_reference_raw
 from ui_qt.reference_library_dialog import ReferenceLibraryDialog
 
 
@@ -66,6 +66,30 @@ def test_clicking_a_row_moves_the_selection_and_the_detail():
     assert dialog._rows[first.id]._tick.isHidden()
     assert dialog._detail_heading.text() == second.short_title
     assert dialog._detail_description.text() == second.description
+    assert second.references in dialog._detail_citation.text()
+
+
+# Transparency: a derived artifact under someone else's licence has to say
+# so on screen, because NOTICE.md does not ship anywhere a user can reach.
+
+
+def test_the_citation_is_shown_as_its_own_line_not_only_inside_the_description():
+    dialog = ReferenceLibraryDialog()
+    flagship = list_reference_sets()[0]
+
+    assert flagship.references  # the catalog must carry it in the first place
+    assert dialog._detail_citation.text() == f"Source: {flagship.references}"
+    assert not dialog._detail_citation.isHidden()
+
+
+def test_the_footer_states_the_origin_and_licence():
+    dialog = ReferenceLibraryDialog()
+    footer = dialog.findChild(QLabel, "ReferenceLibraryProvenance")
+
+    assert footer is not None
+    assert footer.text() == PROVENANCE
+    # The old text pointed at a repo file instead of saying anything.
+    assert "NOTICE.md" not in footer.text()
 
 
 def test_accept_reports_the_chosen_set():

@@ -355,6 +355,7 @@ QLabel#ReferenceEmptyStateText { color: #57606a; font-size: 12px; }
    The dock button is the dialog's one loud action -- the CopyUpButton's
    solid style.REFERENCE treatment. */
 QLabel#ReferenceLibraryMeta { color: #57606a; font-size: 12px; }
+QLabel#ReferenceLibraryCitation { color: #454c54; font-size: 12px; }
 QLabel#ReferenceLibraryDescription {
     color: #454c54; font-size: 12px;
     border-left: 2px solid #d5cde6; padding-left: 8px;

@@ -56,6 +56,7 @@ from __future__ import annotations
 import copy
 import json
 import math
+import re
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -150,7 +151,7 @@ SETS: tuple[SetMeta, ...] = (
     SetMeta(
         pybamm_name="Mohtat2020",
         slug="mohtat2020",
-        cell="NMC111 | graphite pouch cell",
+        cell="NMC532 | graphite pouch cell",
         citation=(
             "Mohtat et al. (2020), J. Electrochem. Soc. 167 110561, "
             "doi:10.1149/1945-7111/aba5d1"
@@ -605,6 +606,37 @@ TOLERANCES = {
     "j0 rel err": 1e-3,
 }
 
+#: Chemistry designations to cross-check a curated ``SetMeta.cell`` against
+#: PyBaMM's own docstring for the set. A curated label may legitimately add
+#: detail PyBaMM omits -- the cell format, its manufacturer, the negative
+#: electrode -- but it must never *contradict* PyBaMM: this library shipped
+#: Mohtat2020 as "NMC111" for months where PyBaMM says NMC532, and nothing
+#: downstream could have caught it, because every copy of the claim was
+#: made by hand from the same wrong reading. This is the only place PyBaMM
+#: itself is in scope, so it is the only place the claim can be checked.
+CHEMISTRY_FAMILIES = ("NMC", "NCA", "LFP", "LCO", "LMO", "LTO")
+
+
+def _verify_chemistry(meta: SetMeta) -> None:
+    """Raise ``SkipSet`` if the curated ``cell`` label names a chemistry
+    PyBaMM's own docstring disagrees with.
+
+    Compared per family so that extra detail stays allowed: PyBaMM says only
+    "an LG M50 cell" for Chen2020, which names no family at all, and a family
+    PyBaMM never mentions cannot be contradicted.
+    """
+    docstring = pybamm.parameter_sets.get_docstring(meta.pybamm_name)
+    for family in CHEMISTRY_FAMILIES:
+        pattern = rf"{family}\d*"
+        ours = set(re.findall(pattern, meta.cell))
+        theirs = set(re.findall(pattern, docstring))
+        if ours and theirs and ours != theirs:
+            raise SkipSet(
+                f"curated cell label says {sorted(ours)} but PyBaMM's own "
+                f"docstring for {meta.pybamm_name} says {sorted(theirs)} -- "
+                "fix SetMeta.cell (and NOTICE.md) rather than this check"
+            )
+
 
 def _check_report(report: dict[str, float]) -> list[str]:
     failures = []
@@ -623,6 +655,7 @@ def main() -> int:
     written, skipped = [], []
     for meta in SETS:
         try:
+            _verify_chemistry(meta)
             doc = _round_floats(convert(meta))
             bpx_warnings = _verify_bpx_valid(doc)
             report = _verify_round_trip(meta, doc)

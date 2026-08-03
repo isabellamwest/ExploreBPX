@@ -126,7 +126,7 @@ Any BPX file, or a bundled published set, can be docked as the **reference**: a 
 - **Make main** swaps the two documents when you decide the reference is the file you actually want to edit.
 - Comparison is exact and literal by design: values are compared as written, with no unit conversion, tolerance or fuzzy matching. What you see is exactly what is in the two files.
 
-> **Bundled reference library.** Four published parameter sets ship with the app, converted offline from PyBaMM's parameter library: **Chen2020** (LG M50 21700), **Prada2013** (A123 26650 LFP), **Ai2020** (Enertech pouch) and **Mohtat2020** (NMC111 pouch). Provenance and conversion caveats are recorded in a NOTICE file alongside the data, and each set's description states how it was derived. The experiment-comparison examples (NMC pouch and LFP 18650 runs) come from About:Energy's published example files, likewise with licence and notice files bundled.
+> **Bundled reference library.** Four published parameter sets ship with the app, converted offline from PyBaMM's parameter library: **Chen2020** (LG M50 21700), **Prada2013** (A123 26650 LFP), **Ai2020** (Enertech pouch) and **Mohtat2020** (NMC532 pouch). The chooser states each set's citation and the BSD 3-Clause origin of the data on screen; the full provenance and conversion caveats are recorded in a NOTICE file alongside the data, and each set's description states how it was derived. The experiment-comparison examples (NMC pouch and LFP 18650 runs) come from About:Energy's published example files, likewise with licence and notice files bundled.
 
 ---
 

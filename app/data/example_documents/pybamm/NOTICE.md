@@ -25,7 +25,7 @@ The underlying parameterisations are published in:
 * `ai2020.json` — Ai et al. (2020), *J. Electrochem. Soc.* **167** 013512,
   doi:10.1149/2.0122001JES (Enertech pouch cell, graphite | LCO).
 * `mohtat2020.json` — Mohtat et al. (2020), *J. Electrochem. Soc.* **167**
-  110561, doi:10.1149/1945-7111/aba5d1 (NMC111 | graphite pouch cell).
+  110561, doi:10.1149/1945-7111/aba5d1 (NMC532 | graphite pouch cell).
 
 PyBaMM's Marquis2019 set is deliberately absent: its idealised separator
 porosity of 1.0 cannot round-trip through PyBaMM's own BPX reader (the
