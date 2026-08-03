@@ -32,7 +32,7 @@ names, and the window turns them into commands.
 from __future__ import annotations
 
 from PySide6.QtCore import QModelIndex, QPoint, QRect, Qt, Signal
-from PySide6.QtGui import QFontMetrics
+from PySide6.QtGui import QColor, QFont, QFontMetrics
 from PySide6.QtWidgets import (
     QApplication,
     QMenu,
@@ -50,28 +50,84 @@ from core.tree_model import TreeNode
 
 from . import style
 from .name_popup import NamePopup
-from .parameter_row import MARK_BOX, SEVERITY_ROLE, paint_severity_dot
-from .tree_model import BpxTreeModel
+from .parameter_row import MARK_BOX, REF_BAR_ROLE, SEVERITY_ROLE, paint_ref_bar, paint_severity_dot
+from .tree_model import BpxTreeModel, REF_COUNT_ROLE
 
 
 class _TreeItemDelegate(QStyledItemDelegate):
-    """Paints a tree row's default content untouched, then -- for a node
-    flagged via :data:`ui_qt.parameter_row.SEVERITY_ROLE` (errors only,
-    *page-visible* per ``core.completion.visible_error_section_paths`` --
-    absorbed/outstanding diagnostics never light it) -- a small red dot
-    after its label text.
+    """Paints a tree row's default content, plus three optional marks layered
+    on top:
 
-    Replaces the bare "⚠" the model used to append to the display string;
-    the mark itself is the app's one shared severity spec
-    (:func:`ui_qt.parameter_row.paint_severity_dot`), the same painted mark
-    the parameter list's issue rows use.
+    - A reference gutter bar (:data:`~ui_qt.parameter_row.REF_BAR_ROLE`,
+      multi-file track M2 comparison), flush against the viewport's left
+      edge at every depth -- one continuous rail rather than a per-depth
+      indent, using the same painter (:func:`ui_qt.parameter_row.
+      paint_ref_bar`) and colours as the parameter list's own bar.
+    - A quiet, right-aligned differ count (:data:`~ui_qt.tree_model.
+      REF_COUNT_ROLE`) -- the numeric successor to the old text-appended
+      "≠ N" label suffix.
+    - For a node flagged via :data:`ui_qt.parameter_row.SEVERITY_ROLE`
+      (errors only, *page-visible* per
+      ``core.completion.visible_error_section_paths`` -- absorbed/
+      outstanding diagnostics never light it), a small red dot after its
+      label text (:func:`ui_qt.parameter_row.paint_severity_dot`), the same
+      painted mark the parameter list's issue rows use.
     """
 
     #: Gap between the end of the label text and the dot's box.
     _GAP = 6
+    #: The differ count's own font size (px) -- one step down from the row's
+    #: default text, reference purple, plain numerals: a quiet number, not
+    #: a badge.
+    _COUNT_FONT_SIZE = 12
+    #: Gap between the count's right edge and the viewport's right edge.
+    _COUNT_RIGHT_PAD = 8
+
+    def _count_text(self, index) -> str:
+        count = index.data(REF_COUNT_ROLE)
+        return str(count) if count else ""
+
+    def _count_font(self, option: QStyleOptionViewItem) -> QFont:
+        font = QFont(option.font)
+        font.setPixelSize(self._COUNT_FONT_SIZE)
+        return font
+
+    def _count_reserved(self, option: QStyleOptionViewItem, index) -> int:
+        """Row width the differ count claims (including its right padding),
+        0 for a row with none. Reserved from the label's available width so
+        a long section name elides short of the count instead of running
+        under it."""
+        text = self._count_text(index)
+        if not text:
+            return 0
+        metrics = QFontMetrics(self._count_font(option))
+        return metrics.horizontalAdvance(text) + self._COUNT_RIGHT_PAD
 
     def paint(self, painter, option, index) -> None:
-        super().paint(painter, option, index)
+        reserved = self._count_reserved(option, index)
+        if reserved:
+            # The selection/hover fill must span the row's full width even
+            # though the label itself is about to be painted into a
+            # narrower rect -- paint the plain background across the FULL
+            # row first (text/icon suppressed), then repaint the label into
+            # the narrowed rect, where Qt's own eliding shortens it before
+            # it can collide with the count.
+            full_opt = QStyleOptionViewItem(option)
+            self.initStyleOption(full_opt, index)
+            full_opt.text = ""
+            widget = full_opt.widget
+            widget_style = widget.style() if widget is not None else QApplication.style()
+            widget_style.drawControl(QStyle.CE_ItemViewItem, full_opt, painter, widget)
+
+            narrow_option = QStyleOptionViewItem(option)
+            narrow_option.rect = option.rect.adjusted(0, 0, -reserved, 0)
+            super().paint(painter, narrow_option, index)
+        else:
+            super().paint(painter, option, index)
+
+        self._paint_ref_bar(painter, option, index)
+        self._paint_count(painter, option, index, reserved)
+
         if index.data(SEVERITY_ROLE) != "error":
             return
         # Position off the style's own text sub-rect, not option.rect: the
@@ -94,6 +150,35 @@ class _TreeItemDelegate(QStyledItemDelegate):
             MARK_BOX,
         )
         paint_severity_dot(painter, box, style.ERROR)
+
+    def _paint_ref_bar(self, painter, option: QStyleOptionViewItem, index) -> None:
+        """Paint the reference gutter bar flush against the viewport's left
+        edge (x=0), not the indented ``option.rect.left()`` -- every depth's
+        bar lines up in one rail, the way a source-control gutter does.
+        Painted after the row content so it survives the QSS selection fill,
+        the same reasoning as the parameter list's own bar."""
+        variant = index.data(REF_BAR_ROLE)
+        if not variant:
+            return
+        rect = QRect(0, option.rect.top(), option.rect.width(), option.rect.height())
+        paint_ref_bar(painter, rect, variant)
+
+    def _paint_count(self, painter, option: QStyleOptionViewItem, index, reserved: int) -> None:
+        """Right-aligned, vertically centred differ count in reference
+        purple, ending ``_COUNT_RIGHT_PAD`` short of the row's right edge."""
+        if not reserved:
+            return
+        painter.save()
+        painter.setFont(self._count_font(option))
+        painter.setPen(QColor(style.REFERENCE))
+        rect = QRect(
+            option.rect.left(),
+            option.rect.top(),
+            option.rect.right() - self._COUNT_RIGHT_PAD - option.rect.left(),
+            option.rect.height(),
+        )
+        painter.drawText(rect, Qt.AlignRight | Qt.AlignVCenter, self._count_text(index))
+        painter.restore()
 
 
 class TreePanel(QWidget):
@@ -127,7 +212,7 @@ class TreePanel(QWidget):
         self._root: TreeNode | None = None
         #: Reference comparison (multi-file track M2), remembered across a
         #: ``set_root`` rebuild so a freshly-opened document immediately
-        #: shows the still-docked reference's "≠ N" marks. See
+        #: shows the still-docked reference's gutter bars/differ counts. See
         #: ``set_comparison``.
         self._comparison: ComparisonResult | None = None
         self._popup = NamePopup(self)
@@ -157,8 +242,9 @@ class TreePanel(QWidget):
 
     def set_comparison(self, comparison: ComparisonResult | None) -> None:
         """Set the reference comparison (multi-file track M2) and repaint
-        every section's "≠ N" mark -- called by ``MainWindow`` on every
-        document change and every reference dock/undock/hide toggle."""
+        every section's gutter bar/differ count -- called by ``MainWindow``
+        on every document change and every reference dock/undock/hide
+        toggle."""
         self._comparison = comparison
         model = self._view.model()
         if isinstance(model, BpxTreeModel):

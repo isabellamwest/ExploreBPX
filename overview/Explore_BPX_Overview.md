@@ -119,7 +119,7 @@ Any BPX file, or a bundled published set, can be docked as the **reference**: a 
 
 ![Editor with reference comparison bars and reference value block](images/editor_compare.png)
 
-*The Editor with Chen2020 docked as reference. The strip above the list names the reference and counts the differences. Purple bars on the left edge of rows mark values that differ; pale bars mark values that match; the tree shows a per-section difference count (≠ N). The card shows the reference value in a purple frame under the editable main value, with a one-click "Copy up".*
+*The Editor with Chen2020 docked as reference. The strip above the list names the reference and counts the differences. Purple bars on the left edge of rows mark values that differ; pale bars mark values that match; the tree carries the same gutter bars, with a quiet right-aligned differ count per section. The card shows the reference value in a purple frame under the editable main value, with a one-click "Copy up".*
 
 - **The reference is never editable and never red.** It is a comparison instrument, not a second document, so comparison marks are deliberately purple, a colour the app reserves for reference material, and never reuse the error/warning colours.
 - Parameters that exist only in the reference appear as ghost rows; **Copy up** brings a reference value into the main document as a single undoable step.

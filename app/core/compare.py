@@ -127,6 +127,13 @@ class SectionDiff:
         """Keys present only in the reference, in this section."""
         return tuple(key for key, row in self.rows.items() if row.state is RowState.REF_ONLY)
 
+    @property
+    def has_equal_row(self) -> bool:
+        """At least one row matches the reference exactly. Used by the tree's
+        pale "equal" gutter bar to tell a genuinely-compared, all-matching
+        section from a pure container (no rows of its own at all)."""
+        return any(row.state is RowState.EQUAL for row in self.rows.values())
+
 
 @dataclass(frozen=True)
 class ComparisonResult:

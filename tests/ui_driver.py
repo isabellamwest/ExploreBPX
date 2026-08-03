@@ -862,13 +862,90 @@ class AppDriver:
         raise AssertionError(f"No ghost row for {key!r}.")
 
     def tree_node_display_text(self, path: tuple[str, ...]) -> str:
-        """The tree's own painted DisplayRole text for the node at *path*
-        (e.g. carries the "≠ N" mark)."""
+        """The tree's own painted DisplayRole text for the node at *path*."""
         view = self._w._tree._view
         model = view.model()
         index = model.index_for_path(tuple(path))
         assert index.isValid(), f"No tree node at {path!r}"
         return model.data(index, Qt.DisplayRole)
+
+    def tree_node_ref_bar(self, path: tuple[str, ...]) -> str | None:
+        """The tree node at *path*'s :data:`~ui_qt.parameter_row.
+        REF_BAR_ROLE` variant ("differs"/"equal") or ``None`` -- the data
+        the tree delegate's gutter rail actually paints from."""
+        from ui_qt.parameter_row import REF_BAR_ROLE
+
+        view = self._w._tree._view
+        model = view.model()
+        index = model.index_for_path(tuple(path))
+        assert index.isValid(), f"No tree node at {path!r}"
+        return model.data(index, REF_BAR_ROLE)
+
+    def tree_node_ref_count(self, path: tuple[str, ...]) -> int | None:
+        """The tree node at *path*'s :data:`~ui_qt.tree_model.REF_COUNT_ROLE`
+        value -- the data the tree delegate's right-aligned differ count
+        actually paints from."""
+        from ui_qt.tree_model import REF_COUNT_ROLE
+
+        view = self._w._tree._view
+        model = view.model()
+        index = model.index_for_path(tuple(path))
+        assert index.isValid(), f"No tree node at {path!r}"
+        return model.data(index, REF_COUNT_ROLE)
+
+    def tree_row_painted_colour(self, path: tuple[str, ...], dx: int = 1, dy: int = 12) -> str:
+        """The actual rendered pixel colour at *dx* from the tree
+        **viewport's** left edge (x=0) on the row at *path*, real
+        widths/window shown first -- the tree's own version of
+        ``parameter_list_row_painted_colour``, proving the gutter bar
+        genuinely painted rather than merely carrying ``REF_BAR_ROLE`` data
+        a headless read could misreport.
+
+        *dx* is measured from the viewport edge, not ``rect.left()``: the
+        bar paints flush against x=0 regardless of the row's own
+        (indentation-shifted) rect (see ``_TreeItemDelegate._paint_ref_bar``)."""
+        view = self._w._tree._view
+        model = view.model()
+        index = model.index_for_path(tuple(path))
+        assert index.isValid(), f"No tree node at {path!r}"
+        self._w.show()
+        self._qtbot.waitExposed(view)
+        rect = view.visualRect(index)
+        image = view.viewport().grab().toImage()
+        return image.pixelColor(dx, rect.top() + dy).name()
+
+    def tree_row_right_band_shows_reference_colour(self, path: tuple[str, ...]) -> bool:
+        """True if some pixel in the row's right-hand band (where the
+        differ count paints) is tinted toward reference purple.
+
+        A small font's anti-aliased strokes rarely include a pixel of the
+        exact pinned colour the way a filled dot does (see
+        ``parameter_list_row_painted_colour``'s exact-colour pin) -- a
+        channel-distance tolerance against the plain white row background
+        is the robust offscreen proxy for "the count actually painted"."""
+        from PySide6.QtGui import QColor
+
+        from ui_qt import style
+
+        view = self._w._tree._view
+        model = view.model()
+        index = model.index_for_path(tuple(path))
+        assert index.isValid(), f"No tree node at {path!r}"
+        self._w.show()
+        self._qtbot.waitExposed(view)
+        rect = view.visualRect(index)
+        image = view.viewport().grab().toImage()
+        target = QColor(style.REFERENCE)
+        band_left = max(rect.right() - 40, rect.left())
+        for x in range(band_left, rect.right() + 1):
+            pixel = image.pixelColor(x, rect.center().y())
+            if (
+                abs(pixel.red() - target.red()) < 40
+                and abs(pixel.green() - target.green()) < 40
+                and abs(pixel.blue() - target.blue()) < 40
+            ):
+                return True
+        return False
 
     def tree_error_marked_sections(self) -> list[tuple[str, ...]]:
         """Paths of tree rows currently answering the error-dot query

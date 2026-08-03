@@ -21,7 +21,7 @@ import ui_qt.main_window as main_window_module
 from core.compare import ComparisonResult, RowDiff, RowState, SectionDiff, compare
 from core.tree_model import build_path_map, build_tree
 from state.reference_snapshot import ReferenceSnapshot
-from ui_qt import parameter_row, style
+from ui_qt import parameter_row, style, tree_model
 from ui_qt.parameter_list import ParameterListPanel
 from ui_qt.tree_model import BpxTreeModel
 
@@ -260,7 +260,7 @@ def test_strip_invisible_with_no_reference_docked(panel):
 
 
 # ---------------------------------------------------------------------------
-# Tree section marks ("differ N", BpxTreeModel unit level)
+# Tree section marks (gutter bar + differ count, BpxTreeModel unit level)
 # ---------------------------------------------------------------------------
 
 
@@ -269,44 +269,136 @@ def _comparison_with_differ_count(path: tuple[str, ...], count: int) -> Comparis
     return ComparisonResult(sections={path: SectionDiff(path, True, True, rows)})
 
 
-def test_tree_appends_differ_count_mark():
+def _tree_with_cell():
+    """A minimal tree: BPX File > Parameterisation > Cell, plus a sibling
+    Header section -- enough to exercise both leaf and container nodes."""
     from core.tree_model import TreeNode
 
     cell = TreeNode(label="Cell", path=_CELL_PATH)
     parameterisation = TreeNode(label="Parameterisation", path=("Parameterisation",), children=[cell])
-    root = TreeNode(label="BPX File", path=(), children=[parameterisation])
+    header = TreeNode(label="Header", path=("Header",))
+    root = TreeNode(label="BPX File", path=(), children=[header, parameterisation])
+    return root, header, parameterisation, cell
 
+
+def test_tree_display_text_carries_no_differ_suffix():
+    """The old text-appended "≠ N" label suffix is gone -- the mark is now
+    the gutter bar + REF_COUNT_ROLE, painted, not text."""
+    root, _header, _parameterisation, cell = _tree_with_cell()
     model = BpxTreeModel(root, comparison=_comparison_with_differ_count(_CELL_PATH, 3))
-    cell_index = model.index(0, 0, model.index(0, 0))
+    cell_index = model.index(0, 0, model.index(1, 0))
 
-    assert model.data(cell_index, Qt.DisplayRole) == "Cell ≠ 3"
+    assert model.data(cell_index, Qt.DisplayRole) == "Cell"
 
 
-def test_tree_mark_absent_with_no_comparison_or_zero_differ_count():
-    from core.tree_model import TreeNode
+def test_tree_ref_bar_and_count_for_differing_section():
+    root, _header, _parameterisation, _cell = _tree_with_cell()
+    model = BpxTreeModel(
+        root,
+        is_expanded=lambda _index: True,
+        comparison=_comparison_with_differ_count(_CELL_PATH, 3),
+    )
+    cell_index = model.index(0, 0, model.index(1, 0))
 
-    cell = TreeNode(label="Cell", path=_CELL_PATH)
-    root = TreeNode(label="BPX File", path=(), children=[cell])
+    assert model.data(cell_index, parameter_row.REF_BAR_ROLE) == "differs"
+    assert model.data(cell_index, tree_model.REF_COUNT_ROLE) == 3
+
+
+def test_tree_ref_bar_for_all_equal_section():
+    root, _header, _parameterisation, _cell = _tree_with_cell()
+    equal_rows = {"k": RowDiff(RowState.EQUAL, 1)}
+    comparison = ComparisonResult(sections={_CELL_PATH: SectionDiff(_CELL_PATH, True, True, equal_rows)})
+    model = BpxTreeModel(root, is_expanded=lambda _index: True, comparison=comparison)
+    cell_index = model.index(0, 0, model.index(1, 0))
+
+    assert model.data(cell_index, parameter_row.REF_BAR_ROLE) == "equal"
+    assert model.data(cell_index, tree_model.REF_COUNT_ROLE) is None
+
+
+def test_tree_ref_bar_absent_for_main_only_section():
+    """A section entirely absent from the reference gets no bar -- it isn't
+    "compared" in any meaningful sense, so it stays undecorated."""
+    root, _header, _parameterisation, _cell = _tree_with_cell()
+    main_only_rows = {"k": RowDiff(RowState.MAIN_ONLY)}
+    comparison = ComparisonResult(
+        sections={_CELL_PATH: SectionDiff(_CELL_PATH, in_main=True, in_reference=False, rows=main_only_rows)}
+    )
+    model = BpxTreeModel(root, is_expanded=lambda _index: True, comparison=comparison)
+    cell_index = model.index(0, 0, model.index(1, 0))
+
+    assert model.data(cell_index, parameter_row.REF_BAR_ROLE) is None
+    assert model.data(cell_index, tree_model.REF_COUNT_ROLE) is None
+
+
+def test_tree_ref_bar_absent_for_pure_container_with_no_rows_of_its_own():
+    """Parameterisation owns no leaf rows of its own (Cell does) -- a bar
+    there would be meaningless noise, not a real comparison result."""
+    root, _header, _parameterisation, _cell = _tree_with_cell()
+    comparison = ComparisonResult(
+        sections={
+            ("Parameterisation",): SectionDiff(("Parameterisation",), True, True, {}),
+            _CELL_PATH: SectionDiff(_CELL_PATH, True, True, {"k": RowDiff(RowState.DIFFERS, 1)}),
+        }
+    )
+    model = BpxTreeModel(root, is_expanded=lambda _index: True, comparison=comparison)
+    parameterisation_index = model.index(1, 0)
+
+    assert model.data(parameterisation_index, parameter_row.REF_BAR_ROLE) is None
+    assert model.data(parameterisation_index, tree_model.REF_COUNT_ROLE) is None
+
+
+def test_tree_collapsed_parent_rolls_up_differing_descendant():
+    root, _header, _parameterisation, _cell = _tree_with_cell()
+    comparison = ComparisonResult(
+        sections={
+            ("Parameterisation",): SectionDiff(("Parameterisation",), True, True, {}),
+            _CELL_PATH: SectionDiff(_CELL_PATH, True, True, {"k": RowDiff(RowState.DIFFERS, 1)}),
+        }
+    )
+    model = BpxTreeModel(root, is_expanded=lambda _index: False, comparison=comparison)
+    parameterisation_index = model.index(1, 0)
+
+    assert model.data(parameterisation_index, parameter_row.REF_BAR_ROLE) == "differs"
+    assert model.data(parameterisation_index, tree_model.REF_COUNT_ROLE) == 1
+
+
+def test_tree_expanded_parent_shows_no_bar_for_its_own_empty_section():
+    """Expanded rows read own-state only -- Cell's differing rows do not
+    leak up onto the expanded Parameterisation row (the collapsed-only
+    rollup test above covers the opposite state)."""
+    root, _header, _parameterisation, _cell = _tree_with_cell()
+    comparison = ComparisonResult(
+        sections={
+            ("Parameterisation",): SectionDiff(("Parameterisation",), True, True, {}),
+            _CELL_PATH: SectionDiff(_CELL_PATH, True, True, {"k": RowDiff(RowState.DIFFERS, 1)}),
+        }
+    )
+    model = BpxTreeModel(root, is_expanded=lambda _index: True, comparison=comparison)
+    parameterisation_index = model.index(1, 0)
+
+    assert model.data(parameterisation_index, parameter_row.REF_BAR_ROLE) is None
+    assert model.data(parameterisation_index, tree_model.REF_COUNT_ROLE) is None
+
+
+def test_tree_ref_bar_and_count_absent_with_no_comparison_docked():
+    root, _header, _parameterisation, _cell = _tree_with_cell()
     model = BpxTreeModel(root)
-    cell_index = model.index(0, 0)
-    assert model.data(cell_index, Qt.DisplayRole) == "Cell"
+    cell_index = model.index(0, 0, model.index(1, 0))
 
-    zero_differ = ComparisonResult(sections={_CELL_PATH: SectionDiff(_CELL_PATH, True, True, {})})
-    model.set_comparison(zero_differ)
-    assert model.data(cell_index, Qt.DisplayRole) == "Cell"
+    assert model.data(cell_index, parameter_row.REF_BAR_ROLE) is None
+    assert model.data(cell_index, tree_model.REF_COUNT_ROLE) is None
 
 
-def test_tree_mark_updates_live_and_clears():
-    from core.tree_model import TreeNode
+def test_tree_ref_bar_updates_live_and_clears():
+    root, _header, _parameterisation, _cell = _tree_with_cell()
+    model = BpxTreeModel(
+        root, is_expanded=lambda _index: True, comparison=_comparison_with_differ_count(_CELL_PATH, 2)
+    )
+    cell_index = model.index(0, 0, model.index(1, 0))
 
-    cell = TreeNode(label="Cell", path=_CELL_PATH)
-    root = TreeNode(label="BPX File", path=(), children=[cell])
-    model = BpxTreeModel(root, comparison=_comparison_with_differ_count(_CELL_PATH, 2))
-    cell_index = model.index(0, 0)
-
-    assert model.data(cell_index, Qt.DisplayRole) == "Cell ≠ 2"
+    assert model.data(cell_index, parameter_row.REF_BAR_ROLE) == "differs"
     model.set_comparison(None)
-    assert model.data(cell_index, Qt.DisplayRole) == "Cell"
+    assert model.data(cell_index, parameter_row.REF_BAR_ROLE) is None
 
 
 # ---------------------------------------------------------------------------
@@ -362,6 +454,36 @@ def test_row_bar_actually_renders_real_pixels(app_driver, main_and_ref, monkeypa
     assert app_driver.parameter_list_row_painted_colour(equal_index, dx=6, dy=12) == "#ffffff"
 
 
+def test_tree_bar_actually_renders_real_pixels(app_driver, main_and_ref, monkeypatch, tmp_path):
+    """Pixel-level pin for the tree's own gutter bar (not just the
+    REF_BAR_ROLE data), mirroring the parameter list's own pin above: the
+    differing Cell section's left-edge rail paints reference purple; once a
+    fully-matching reference is docked the same rail turns pale lilac."""
+    main_path, ref_path = main_and_ref
+    app_driver.open(main_path)
+    _dock_reference(app_driver, ref_path, monkeypatch)
+
+    assert app_driver.tree_row_painted_colour(_CELL_PATH, dx=1, dy=12) == style.REFERENCE
+
+    matching_ref_path = tmp_path / "matches_main.json"
+    matching_ref_path.write_text(json.dumps(MATCHING_REF_RAW), encoding="utf-8")
+    _dock_reference(app_driver, matching_ref_path, monkeypatch)
+
+    assert app_driver.tree_row_painted_colour(_CELL_PATH, dx=1, dy=12) == style.REFERENCE_BORDER
+
+
+def test_tree_differ_count_actually_paints(app_driver, main_and_ref, monkeypatch):
+    """The right-aligned differ count must genuinely paint pixels, not just
+    carry REF_COUNT_ROLE data -- the numeric successor to the old
+    text-appended "≠ N" label suffix."""
+    main_path, ref_path = main_and_ref
+    app_driver.open(main_path)
+    _dock_reference(app_driver, ref_path, monkeypatch)
+
+    assert app_driver.tree_node_ref_count(_CELL_PATH) == 2
+    assert app_driver.tree_row_right_band_shows_reference_colour(_CELL_PATH)
+
+
 def test_merge_rule_end_to_end_both_ways(app_driver, main_and_ref, monkeypatch):
     main_path, ref_path = main_and_ref
     app_driver.open(main_path)
@@ -385,18 +507,22 @@ def test_no_reference_docked_fields_to_add_exactly_as_today(app_driver, main_and
     assert app_driver.ghost_row_keys() == []
 
 
-def test_tree_mark_present_then_gone_when_equal(app_driver, main_and_ref, monkeypatch, tmp_path):
+def test_tree_ref_bar_switches_from_differs_to_equal_when_reference_matches(
+    app_driver, main_and_ref, monkeypatch, tmp_path
+):
     main_path, ref_path = main_and_ref
     app_driver.open(main_path)
     _dock_reference(app_driver, ref_path, monkeypatch)
 
-    assert "≠" in app_driver.tree_node_display_text(_CELL_PATH)
+    assert app_driver.tree_node_ref_bar(_CELL_PATH) == "differs"
+    assert app_driver.tree_node_ref_count(_CELL_PATH) == 2
 
     matching_ref_path = tmp_path / "matches_main.json"
     matching_ref_path.write_text(json.dumps(MATCHING_REF_RAW), encoding="utf-8")
     _dock_reference(app_driver, matching_ref_path, monkeypatch)
 
-    assert "≠" not in app_driver.tree_node_display_text(_CELL_PATH)
+    assert app_driver.tree_node_ref_bar(_CELL_PATH) == "equal"
+    assert app_driver.tree_node_ref_count(_CELL_PATH) is None
 
 
 def test_reference_block_shows_differing_value(app_driver, main_and_ref, monkeypatch):
@@ -552,7 +678,8 @@ def test_removing_reference_clears_everything_immediately(app_driver, main_and_r
     assert app_driver.ghost_row_keys() == []
     assert app_driver.parameter_row_ref_bar("Nominal cell capacity") is None
     assert not app_driver.reference_block_visible()
-    assert "≠" not in app_driver.tree_node_display_text(_CELL_PATH)
+    assert app_driver.tree_node_ref_bar(_CELL_PATH) is None
+    assert app_driver.tree_node_ref_count(_CELL_PATH) is None
 
 
 def test_replacing_the_main_document_with_reference_docked_refreshes(
@@ -585,7 +712,8 @@ def test_no_reference_docked_is_structurally_todays_editor(app_driver, main_and_
     assert app_driver.ghost_row_keys() == []
     for label in ("Reference temperature", "Nominal cell capacity", "Lower voltage cut-off", "Density"):
         assert app_driver.parameter_row_ref_bar(label) is None
-    assert "≠" not in app_driver.tree_node_display_text(_CELL_PATH)
+    assert app_driver.tree_node_ref_bar(_CELL_PATH) is None
+    assert app_driver.tree_node_ref_count(_CELL_PATH) is None
 
     app_driver.go_to(("Parameterisation", "Cell", "Nominal cell capacity [A.h]"))
     assert not app_driver.reference_block_visible()

@@ -16,7 +16,16 @@ from core import structure
 from core.compare import ComparisonResult
 from core.tree_model import TreeNode
 
-from .parameter_row import SEVERITY_ROLE
+from .parameter_row import REF_BAR_ROLE, SEVERITY_ROLE
+
+#: Item-data role carrying a section's differ count (DIFFERS+FILLABLE rows,
+#: multi-file track M2), painted right-aligned by ``_TreeItemDelegate``
+#: alongside the reference gutter bar (:data:`~ui_qt.parameter_row.
+#: REF_BAR_ROLE`, re-exported here for the tree's own use). ``None``/absent
+#: with no comparison docked or a zero count -- the old text-appended
+#: "≠ N" label suffix moved here so the mark paints like the parameter
+#: list's, not as row text.
+REF_COUNT_ROLE = Qt.UserRole + 106
 
 
 def _is_user_defined_content(node: TreeNode) -> bool:
@@ -119,12 +128,14 @@ class BpxTreeModel(QAbstractItemModel):
             label = node.label
             if _is_user_defined_content(node):
                 label = f"{label} · custom"
-            differ_count = self._differ_count(node)
-            if differ_count:
-                label = f"{label} ≠ {differ_count}"
             return label
         if role == SEVERITY_ROLE:
             return "error" if self._shows_error_marker(index, node) else None
+        if role == REF_BAR_ROLE:
+            return self._ref_bar(index, node)
+        if role == REF_COUNT_ROLE:
+            count = self._ref_count(index, node)
+            return count or None
         if role == Qt.ToolTipRole:
             return node.description or node.label
         return None
@@ -151,15 +162,64 @@ class BpxTreeModel(QAbstractItemModel):
             return any(path[:depth] == node.path for path in self._visible_error_paths)
         return False
 
-    def _differ_count(self, node: TreeNode) -> int:
-        """This section's own DIFFERS+FILLABLE row count (multi-file track
-        M2), or 0 with no comparison docked/visible. Text-appended to the
-        label the same way the "· custom" tag is (decision 12) -- no ghost
-        counts here, and no new widget/delegate."""
+    def _ref_bar(self, index: QModelIndex, node: TreeNode) -> str | None:
+        """This node's reference gutter-bar variant (multi-file track M2
+        reference comparison): an expanded row reads its own section only;
+        a collapsed row rolls up self plus every descendant section (same
+        prefix-match idiom as :meth:`_shows_error_marker`), so a purple rail
+        on a collapsed parent means "something differs underneath", not just
+        here. ``None`` with no comparison docked."""
+        if self._comparison is None:
+            return None
+        if not self._is_expanded(index):
+            depth = len(node.path)
+            variants = [
+                self._section_bar(path)
+                for path in self._comparison.sections
+                if path[:depth] == node.path
+            ]
+            if "differs" in variants:
+                return "differs"
+            if "equal" in variants:
+                return "equal"
+            return None
+        return self._section_bar(node.path)
+
+    def _ref_count(self, index: QModelIndex, node: TreeNode) -> int:
+        """This node's differ count: this section's own DIFFERS+FILLABLE
+        rows when expanded, summed over self plus every descendant section
+        when collapsed -- the numeric companion to :meth:`_ref_bar`, 0 with
+        no comparison docked."""
         if self._comparison is None:
             return 0
-        section = self._comparison.section(node.path)
-        return section.differ_count if section is not None else 0
+        if not self._is_expanded(index):
+            depth = len(node.path)
+            return sum(
+                self._section_differ_count(path)
+                for path in self._comparison.sections
+                if path[:depth] == node.path
+            )
+        return self._section_differ_count(node.path)
+
+    def _section_bar(self, path: tuple[str, ...]) -> str | None:
+        """One section's own bar variant: "differs" if it has any
+        differing/fillable row, "equal" if it has no differences but at
+        least one row that matches the reference exactly, else ``None`` --
+        a main-only section (absent from the reference entirely) or a pure
+        container with no rows of its own (e.g. Parameterisation) never
+        shows a bar."""
+        section = self._comparison.section(path) if self._comparison else None
+        if section is None or section.is_main_only:
+            return None
+        if section.differ_count > 0:
+            return "differs"
+        return "equal" if section.has_equal_row else None
+
+    def _section_differ_count(self, path: tuple[str, ...]) -> int:
+        section = self._comparison.section(path) if self._comparison else None
+        if section is None or section.is_main_only:
+            return 0
+        return section.differ_count
 
     def _emit_data_changed(self, parent: QModelIndex) -> None:
         for row in range(self.rowCount(parent)):

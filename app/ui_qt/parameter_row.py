@@ -95,6 +95,46 @@ _VALUE_GAP = 12
 MARK_BOX = 13
 MARK_DOT = 8
 
+#: Reference gutter bar: width, vertical inset from the row's edges, and
+#: corner radius. Shared by :func:`paint_ref_bar`'s two callers (the
+#: parameter list's :class:`ParameterRowDelegate` and the navigation tree's
+#: ``_TreeItemDelegate``) so both rails read as one system.
+REF_BAR_WIDTH = 3
+REF_BAR_INSET = 4
+REF_BAR_RADIUS = 1.5
+
+
+def paint_ref_bar(painter: QPainter, rect: QRect, variant: str) -> None:
+    """Paint a reference-comparison gutter bar flush against *rect*'s left
+    edge: solid purple = differs/fillable, pale lilac = present in the
+    reference and equal, hollow outline = reference-only ghost row.
+
+    *rect* is whatever row rect the caller paints against (a list row's
+    ``option.rect``, or the tree's full-width viewport rect) -- this
+    function only reads its left/top/height, so callers control exactly
+    where the bar's rail sits. Painted after the row background so it stays
+    visible on a selected row."""
+    bar = QRectF(
+        rect.left(),
+        rect.top() + REF_BAR_INSET,
+        REF_BAR_WIDTH,
+        rect.height() - 2 * REF_BAR_INSET,
+    )
+    painter.save()
+    painter.setRenderHint(QPainter.Antialiasing)
+    if variant == "ref_only":
+        painter.setPen(QPen(QColor(style.REFERENCE_SOFT)))
+        painter.setBrush(Qt.NoBrush)
+        painter.drawRoundedRect(
+            bar.adjusted(0.5, 0.5, -0.5, -0.5), REF_BAR_RADIUS, REF_BAR_RADIUS
+        )
+    else:
+        painter.setPen(Qt.NoPen)
+        fill = style.REFERENCE if variant == "differs" else style.REFERENCE_BORDER
+        painter.setBrush(QColor(fill))
+        painter.drawRoundedRect(bar, REF_BAR_RADIUS, REF_BAR_RADIUS)
+    painter.restore()
+
 
 def paint_severity_dot(painter: QPainter, box: QRect, color: str) -> None:
     """Paint one filled *color* dot, :data:`MARK_DOT` wide, centred in
@@ -400,39 +440,13 @@ class ParameterRowDelegate(QStyledItemDelegate):
         if value_reserved:
             self._paint_value(painter, option, index, value_reserved)
 
-    #: Reference gutter bar: width, vertical inset from the row's edges, and
-    #: corner radius. Painted flush against the row's left edge, left of the
-    #: ``_h_pad`` region, so it never collides with the severity dot gutter.
-    _BAR_WIDTH = 3
-    _BAR_INSET = 4
-    _BAR_RADIUS = 1.5
-
     def _paint_ref_bar(self, painter, option, variant: str) -> None:
         """Paint the row's reference-comparison bar (:data:`REF_BAR_ROLE`)
-        on its left edge: solid purple = differs/fillable, pale lilac =
-        present in the reference and equal, hollow outline = reference-only
-        ghost row. Painted after the row background so it stays visible on
-        a selected row."""
-        rect = QRectF(
-            option.rect.left(),
-            option.rect.top() + self._BAR_INSET,
-            self._BAR_WIDTH,
-            option.rect.height() - 2 * self._BAR_INSET,
-        )
-        painter.save()
-        painter.setRenderHint(QPainter.Antialiasing)
-        if variant == "ref_only":
-            painter.setPen(QPen(QColor(style.REFERENCE_SOFT)))
-            painter.setBrush(Qt.NoBrush)
-            painter.drawRoundedRect(
-                rect.adjusted(0.5, 0.5, -0.5, -0.5), self._BAR_RADIUS, self._BAR_RADIUS
-            )
-        else:
-            painter.setPen(Qt.NoPen)
-            fill = style.REFERENCE if variant == "differs" else style.REFERENCE_BORDER
-            painter.setBrush(QColor(fill))
-            painter.drawRoundedRect(rect, self._BAR_RADIUS, self._BAR_RADIUS)
-        painter.restore()
+        on its left edge, left of the ``_h_pad`` region so it never collides
+        with the severity dot gutter -- geometry and colours live in the
+        shared :func:`paint_ref_bar` (also used by the navigation tree's own
+        rail, :mod:`ui_qt.tree_panel`)."""
+        paint_ref_bar(painter, option.rect, variant)
 
     def _paint_action(self, painter, option, index, reserved: int) -> None:
         """Right-aligned, top-anchored call-to-action text in accent
