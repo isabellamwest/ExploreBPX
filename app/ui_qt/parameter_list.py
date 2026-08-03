@@ -50,11 +50,16 @@ from .cards.experiment import is_validation_run_path
 from .comparison_strip import ComparisonStrip
 from .parameter_row import ParameterRowDelegate
 
-#: Row states that render an amber/warning tint on an otherwise-normal,
-#: still-fully-editable real row -- matches the app's
-#: existing warning-tint idiom (``style.WARNING_TINT``, the Diagnostics
-#: rail's own warning badge wash).
-_TINTED_ROW_STATES = (RowState.DIFFERS, RowState.FILLABLE)
+#: RowState -> gutter-bar variant (:data:`parameter_row.REF_BAR_ROLE`).
+#: DIFFERS and FILLABLE both read "the reference disagrees or has something
+#: this file doesn't" (solid bar); EQUAL is the quiet pale bar, so "same"
+#: and "not in the reference" (MAIN_ONLY, no bar at all) stay tellable
+#: apart. Comparison is information, not a severity: no warning tint.
+_ROW_BAR_VARIANTS = {
+    RowState.DIFFERS: "differs",
+    RowState.FILLABLE: "differs",
+    RowState.EQUAL: "equal",
+}
 
 #: Models under which the "fields to add" group may appear at all: Partial
 #: suggests every expected field (none Required); a concrete model suggests
@@ -266,8 +271,16 @@ class ParameterListPanel(QWidget):
             if not is_empty:
                 item.setToolTip(parameter_row.value_tooltip(parameter.value))
             row_diff = self._comparison.row(node.path, parameter.path[-1]) if self._comparison else None
-            if row_diff is not None and row_diff.state in _TINTED_ROW_STATES:
-                item.setData(parameter_row.TINT_ROLE, style.WARNING_TINT)
+            if row_diff is not None:
+                variant = _ROW_BAR_VARIANTS.get(row_diff.state)
+                if variant is not None:
+                    item.setData(parameter_row.REF_BAR_ROLE, variant)
+                if variant == "differs":
+                    # The list says "differs"; the hover says from what. The
+                    # main value's own tooltip line (set above) stays first.
+                    ref_line = "Reference: " + parameter_row.value_tooltip(row_diff.ref_value)
+                    existing = item.toolTip()
+                    item.setToolTip(existing + "\n" + ref_line if existing else ref_line)
             self._list.addItem(item)
         self._append_ghost_rows(node)
         self._append_missing_fields_group(node, model)
@@ -299,13 +312,12 @@ class ParameterListPanel(QWidget):
         item.setData(self._GHOST_KEY_ROLE, key)
         item.setData(parameter_row.HTML_ROLE, parameter_row.build_ghost_row_html(key))
         item.setData(parameter_row.VALUE_ROLE, preview)
-        # Always italic, even for a plain scalar -- one of the ghost row's
-        # four signals, unlike a real row's VALUE_GHOST_ROLE, which only
+        # Always italic, even for a plain scalar -- ghost rows read ghosted
+        # end to end, unlike a real row's VALUE_GHOST_ROLE, which only
         # ghosts a null/derived-summary value.
         item.setData(parameter_row.VALUE_GHOST_ROLE, True)
-        item.setData(parameter_row.REF_ONLY_ROLE, True)
-        item.setData(parameter_row.TINT_ROLE, style.REFERENCE_TINT)
-        item.setToolTip(parameter_row.value_tooltip(ref_value))
+        item.setData(parameter_row.REF_BAR_ROLE, "ref_only")
+        item.setToolTip("Reference: " + parameter_row.value_tooltip(ref_value))
         return item
 
     def _append_missing_fields_group(self, node: TreeNode, model: str | None) -> None:

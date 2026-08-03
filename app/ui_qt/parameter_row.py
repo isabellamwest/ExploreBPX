@@ -66,22 +66,20 @@ SEVERITY_ROLE = Qt.UserRole + 103
 #: right-aligned-action row reuses the same reserved-width machinery
 #: :data:`VALUE_ROLE` already established for a row's right edge.
 ACTION_ROLE = Qt.UserRole + 104
-#: Item-data role marking a REF_ONLY ghost row: the delegate paints a
-#: dashed purple border (:data:`~ui_qt.style.REFERENCE`)
-#: around the row on top of its normal content. The "REF ONLY" tag is not
-#: a delegate concern -- it is baked into the row's own :data:`HTML_ROLE`
-#: fragment (see :func:`build_ghost_row_html`).
-REF_ONLY_ROLE = Qt.UserRole + 105
-#: Item-data role carrying a row's background wash colour (a hex string,
-#: e.g. ``style.WARNING_TINT``/``style.REFERENCE_TINT``), painted directly
-#: by the delegate before the row's normal content -- **not**
-#: ``QListWidgetItem.setBackground``, whose ``Qt.BackgroundRole`` a
-#: stylesheet-styled ``::item`` silently ignores once any such rule exists
+#: Item-data role carrying a row's reference-comparison bar variant --
+#: ``"differs"`` (solid :data:`~ui_qt.style.REFERENCE`), ``"equal"`` (pale
+#: :data:`~ui_qt.style.REFERENCE_BORDER`) or ``"ref_only"`` (hollow
+#: :data:`~ui_qt.style.REFERENCE_SOFT` outline) -- painted by the delegate
+#: as a 3px bar on the row's left edge, the source-control gutter idiom.
+#: Absent (``None``) when no reference is docked or the reference has no
+#: entry for this row (MAIN_ONLY). Painted directly by the delegate --
+#: **not** via ``QListWidgetItem.setBackground``, whose ``Qt.BackgroundRole``
+#: a stylesheet-styled ``::item`` silently ignores once any such rule exists
 #: for the view (a real Qt/QSS gotcha; a plain data read back from the item
 #: would look correct in an offscreen test while never actually painting).
-#: A selected row still shows its native selection colour: the delegate
-#: skips the tint fill for a row ``option.state`` reports as selected.
-TINT_ROLE = Qt.UserRole + 106
+#: Unlike the background washes this replaced, the bar paints *after* the
+#: row background, so comparison state stays readable on a selected row.
+REF_BAR_ROLE = Qt.UserRole + 105
 
 _MIN_WIDTH = 40
 #: The value preview never claims more than this share of the row, however
@@ -248,18 +246,15 @@ def build_parameter_row_html(label: str, *, severity: str | None = None, is_empt
 
 
 def build_ghost_row_html(label: str) -> str:
-    """Compose a REF_ONLY ghost row's rich-text fragment: bold name, muted
-    unit -- the same plain-text styling as a real row -- followed by the
-    small "REF ONLY" tag in the reference accent
-    (:data:`~ui_qt.style.REFERENCE`). The row's other two ghost signals (the
-    dashed border, the pale background wash) are not part of this fragment;
-    see :data:`REF_ONLY_ROLE`."""
+    """Compose a REF_ONLY ghost row's rich-text fragment: name and unit in
+    ghosted italic text -- quiet, clearly not a real row. The reference-only
+    state itself is carried by the hollow gutter bar
+    (:data:`REF_BAR_ROLE`), not a text tag."""
     name, unit = split_name_and_unit(label)
-    fragment = _span(name, color=style.DEFAULT_TEXT, bold=True)
+    fragment = _span(name, color=style.GHOST_TEXT, bold=True)
     if unit:
-        fragment += _span(f" [{unit}]", color=style.MUTED)
-    fragment += "  " + _span("REF ONLY", color=style.REFERENCE)
-    return fragment
+        fragment += _span(f" [{unit}]", color=style.GHOST_TEXT)
+    return f"<i>{fragment}</i>"
 
 
 class ParameterRowDelegate(QStyledItemDelegate):
@@ -385,11 +380,11 @@ class ParameterRowDelegate(QStyledItemDelegate):
         opt.text = ""
         widget = opt.widget
         style_obj = widget.style() if widget is not None else QApplication.style()
-        tint = index.data(TINT_ROLE)
-        if tint and not (option.state & QStyle.State_Selected):
-            self._paint_tint(painter, option, tint)
         style_obj.drawControl(QStyle.CE_ItemViewItem, opt, painter, widget)
 
+        bar = index.data(REF_BAR_ROLE)
+        if bar:
+            self._paint_ref_bar(painter, option, bar)
         if icon_reserved:
             self._paint_severity_icon(painter, option, index)
 
@@ -404,28 +399,39 @@ class ParameterRowDelegate(QStyledItemDelegate):
             self._paint_action(painter, option, index, action_reserved)
         if value_reserved:
             self._paint_value(painter, option, index, value_reserved)
-        if index.data(REF_ONLY_ROLE):
-            self._paint_ref_only_border(painter, option)
 
-    def _paint_tint(self, painter, option, colour: str) -> None:
-        """Fill the row's background wash (:data:`TINT_ROLE`) before its
-        normal content paints -- see that role's docstring for why this
-        cannot be a plain ``QListWidgetItem.setBackground`` call."""
-        painter.save()
-        painter.fillRect(option.rect, QColor(colour))
-        painter.restore()
+    #: Reference gutter bar: width, vertical inset from the row's edges, and
+    #: corner radius. Painted flush against the row's left edge, left of the
+    #: ``_h_pad`` region, so it never collides with the severity dot gutter.
+    _BAR_WIDTH = 3
+    _BAR_INSET = 4
+    _BAR_RADIUS = 1.5
 
-    def _paint_ref_only_border(self, painter, option) -> None:
-        """Dashed purple outline around a REF_ONLY ghost row -- one of its
-        four signals; see :data:`REF_ONLY_ROLE`."""
+    def _paint_ref_bar(self, painter, option, variant: str) -> None:
+        """Paint the row's reference-comparison bar (:data:`REF_BAR_ROLE`)
+        on its left edge: solid purple = differs/fillable, pale lilac =
+        present in the reference and equal, hollow outline = reference-only
+        ghost row. Painted after the row background so it stays visible on
+        a selected row."""
+        rect = QRectF(
+            option.rect.left(),
+            option.rect.top() + self._BAR_INSET,
+            self._BAR_WIDTH,
+            option.rect.height() - 2 * self._BAR_INSET,
+        )
         painter.save()
-        pen = QPen(QColor(style.REFERENCE))
-        pen.setStyle(Qt.DashLine)
-        pen.setWidth(1)
-        painter.setPen(pen)
-        painter.setBrush(Qt.NoBrush)
-        rect = QRectF(option.rect).adjusted(1, 1, -1.5, -1.5)
-        painter.drawRoundedRect(rect, 4, 4)
+        painter.setRenderHint(QPainter.Antialiasing)
+        if variant == "ref_only":
+            painter.setPen(QPen(QColor(style.REFERENCE_SOFT)))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawRoundedRect(
+                rect.adjusted(0.5, 0.5, -0.5, -0.5), self._BAR_RADIUS, self._BAR_RADIUS
+            )
+        else:
+            painter.setPen(Qt.NoPen)
+            fill = style.REFERENCE if variant == "differs" else style.REFERENCE_BORDER
+            painter.setBrush(QColor(fill))
+            painter.drawRoundedRect(rect, self._BAR_RADIUS, self._BAR_RADIUS)
         painter.restore()
 
     def _paint_action(self, painter, option, index, reserved: int) -> None:

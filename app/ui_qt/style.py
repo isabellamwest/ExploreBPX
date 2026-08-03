@@ -39,6 +39,12 @@ REFERENCE_TINT = "#f3ecfa"
 #: reference block's chrome in the stylesheet below (#d5cde6); named here so
 #: the Source page's ← pull chip draws its outline from the same tint.
 REFERENCE_BORDER = "#d5cde6"
+#: Mid reference tone between ``REFERENCE`` and ``REFERENCE_BORDER``: the
+#: outline of the hollow "reference only" gutter bar in the parameter list
+#: (:data:`~ui_qt.parameter_row.REF_BAR_ROLE`) -- lighter than the solid
+#: "differs" bar so a ghost row reads as an outline, not a fill, while
+#: staying visibly purple at 3px.
+REFERENCE_SOFT = "#a08cc4"
 #: The Source page's value chip: the wash behind a value that differs
 #: between the two panes. Warm but its own tint -- "differs" is
 #: information, not a severity, so it is deliberately

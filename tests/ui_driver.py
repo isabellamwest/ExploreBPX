@@ -779,11 +779,12 @@ class AppDriver:
     def comparison_strip_counts_text(self) -> str:
         return self._w._params._strip._counts.text()
 
-    def parameter_row_tint(self, label: str) -> str | None:
+    def parameter_row_ref_bar(self, label: str) -> str | None:
         """The real parameter row starting with *label*'s own
-        :data:`~ui_qt.parameter_row.TINT_ROLE` hex colour, or ``None`` if it
-        carries none. This is the data the delegate actually paints from
-        (see ``ParameterRowDelegate._paint_tint``) -- ``QListWidgetItem``'s
+        :data:`~ui_qt.parameter_row.REF_BAR_ROLE` variant ("differs" /
+        "equal" / "ref_only"), or ``None`` if it carries none. This is the
+        data the delegate actually paints from (see
+        ``ParameterRowDelegate._paint_ref_bar``) -- ``QListWidgetItem``'s
         own ``background()``/``setBackground`` is a dead read once a
         stylesheet styles ``::item`` (a real Qt/QSS gotcha; see
         ``test_parameter_row.py``'s pixel-level regression pin)."""
@@ -793,7 +794,7 @@ class AppDriver:
         for i in range(lst.count()):
             item = lst.item(i)
             if item.data(256) is not None and item.text().startswith(label):
-                return item.data(parameter_row.TINT_ROLE)
+                return item.data(parameter_row.REF_BAR_ROLE)
         raise AssertionError(f"No real parameter row starting with {label!r}.")
 
     def ghost_row_keys(self) -> list[str]:
@@ -806,7 +807,7 @@ class AppDriver:
             if lst.item(i).data(panel._GROUP_ROW_KIND_ROLE) == "ghost"
         ]
 
-    def ghost_row_tint(self, key: str) -> str | None:
+    def ghost_row_ref_bar(self, key: str) -> str | None:
         from ui_qt import parameter_row
 
         panel = self._w._params
@@ -814,7 +815,7 @@ class AppDriver:
         for i in range(lst.count()):
             item = lst.item(i)
             if item.data(panel._GROUP_ROW_KIND_ROLE) == "ghost" and item.data(panel._GHOST_KEY_ROLE) == key:
-                return item.data(parameter_row.TINT_ROLE)
+                return item.data(parameter_row.REF_BAR_ROLE)
         raise AssertionError(f"No ghost row for {key!r}.")
 
     def parameter_list_row_painted_colour(self, item_index: int, dx: int = 6, dy: int = 6) -> str:
@@ -823,7 +824,7 @@ class AppDriver:
 
         Proves the delegate genuinely painted a colour, not merely that an
         item carries data a headless read could misreport (see
-        ``parameter_row_tint``/``ghost_row_tint`` and
+        ``parameter_row_ref_bar``/``ghost_row_ref_bar`` and
         ``test_parameter_row.py``'s pixel-level regression pin)."""
         lst = self._w._params._list
         self._w.show()

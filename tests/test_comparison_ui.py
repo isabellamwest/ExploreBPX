@@ -134,19 +134,36 @@ def test_no_comparison_renders_no_decoration_at_all(panel):
 
     assert _ghost_items(panel) == []
     for label in ("Reference temperature", "Nominal cell capacity", "Density"):
-        assert _real_item(panel, label).data(parameter_row.TINT_ROLE) is None
+        assert _real_item(panel, label).data(parameter_row.REF_BAR_ROLE) is None
     assert panel._strip.isHidden()
 
 
-def test_row_tint_for_differs_and_fillable_not_equal_or_main_only(panel):
+def test_row_bar_variant_per_row_state(panel):
+    """DIFFERS and FILLABLE carry the solid "differs" bar, EQUAL the pale
+    "equal" bar, MAIN_ONLY no bar at all: "same" and "not in the reference"
+    are distinguishable at a glance."""
     node = _cell_node(MAIN_RAW)
     panel.show_node(node, "SPM")
     panel.set_comparison(compare(MAIN_RAW, REF_RAW), _reference_snapshot(REF_RAW))
 
-    assert _real_item(panel, "Nominal cell capacity").data(parameter_row.TINT_ROLE) == style.WARNING_TINT
-    assert _real_item(panel, "Lower voltage cut-off").data(parameter_row.TINT_ROLE) == style.WARNING_TINT
-    assert _real_item(panel, "Reference temperature").data(parameter_row.TINT_ROLE) is None
-    assert _real_item(panel, "Density").data(parameter_row.TINT_ROLE) is None
+    assert _real_item(panel, "Nominal cell capacity").data(parameter_row.REF_BAR_ROLE) == "differs"
+    assert _real_item(panel, "Lower voltage cut-off").data(parameter_row.REF_BAR_ROLE) == "differs"
+    assert _real_item(panel, "Reference temperature").data(parameter_row.REF_BAR_ROLE) == "equal"
+    assert _real_item(panel, "Density").data(parameter_row.REF_BAR_ROLE) is None
+
+
+def test_differs_row_tooltip_carries_the_reference_value(panel):
+    node = _cell_node(MAIN_RAW)
+    panel.show_node(node, "SPM")
+    panel.set_comparison(compare(MAIN_RAW, REF_RAW), _reference_snapshot(REF_RAW))
+
+    differs_tip = _real_item(panel, "Nominal cell capacity").toolTip()
+    assert differs_tip.endswith("Reference: 6.0")
+    assert differs_tip.startswith("5.0")  # main value line stays first
+    # FILLABLE: no main value line, the reference line alone.
+    assert _real_item(panel, "Lower voltage cut-off").toolTip() == "Reference: 3.0"
+    # EQUAL: no reference line, the main value tooltip exactly as today.
+    assert _real_item(panel, "Reference temperature").toolTip() == "298.15"
 
 
 def test_ghost_row_rendered_read_only_and_selectable(panel):
@@ -159,10 +176,11 @@ def test_ghost_row_rendered_read_only_and_selectable(panel):
     ghost = ghosts[0]
     assert ghost.data(panel._GHOST_KEY_ROLE) == "Electrode area [m2]"
     assert ghost.data(256) is None  # not a real parameter row
-    assert ghost.data(parameter_row.REF_ONLY_ROLE) is True
+    assert ghost.data(parameter_row.REF_BAR_ROLE) == "ref_only"
     assert ghost.data(parameter_row.VALUE_GHOST_ROLE) is True  # italic, even for a plain scalar
-    assert ghost.data(parameter_row.TINT_ROLE) == style.REFERENCE_TINT
-    assert "REF ONLY" in ghost.data(parameter_row.HTML_ROLE)
+    html = ghost.data(parameter_row.HTML_ROLE)
+    assert html.startswith("<i>") and html.endswith("</i>")  # ghosted end to end
+    assert style.GHOST_TEXT in html
 
     # Selectable: clicking emits ghost_selected, never parameter_selected.
     received: list = []
@@ -308,22 +326,22 @@ def test_strip_appears_with_correct_counts_after_docking(app_driver, main_and_re
     assert app_driver.comparison_strip_counts_text() == "2 differ · 1 ref only"
 
 
-def test_row_tint_end_to_end(app_driver, main_and_ref, monkeypatch):
+def test_row_bar_end_to_end(app_driver, main_and_ref, monkeypatch):
     main_path, ref_path = main_and_ref
     app_driver.open(main_path)
     _dock_reference(app_driver, ref_path, monkeypatch)
     app_driver.go_to(("Parameterisation", "Cell"))
 
-    assert app_driver.parameter_row_tint("Nominal cell capacity") == style.WARNING_TINT
-    assert app_driver.parameter_row_tint("Lower voltage cut-off") == style.WARNING_TINT
-    assert app_driver.parameter_row_tint("Reference temperature") is None
-    assert app_driver.parameter_row_tint("Density") is None
+    assert app_driver.parameter_row_ref_bar("Nominal cell capacity") == "differs"
+    assert app_driver.parameter_row_ref_bar("Lower voltage cut-off") == "differs"
+    assert app_driver.parameter_row_ref_bar("Reference temperature") == "equal"
+    assert app_driver.parameter_row_ref_bar("Density") is None
 
 
-def test_row_tint_actually_renders_real_pixels(app_driver, main_and_ref, monkeypatch):
-    """Pixel-level pin (not just the TINT_ROLE data): the DIFFERS row's
-    painted colour must genuinely be the warning tint, and the untouched
-    EQUAL row's must genuinely be plain white -- see
+def test_row_bar_actually_renders_real_pixels(app_driver, main_and_ref, monkeypatch):
+    """Pixel-level pin (not just the REF_BAR_ROLE data): the DIFFERS row's
+    left-edge bar must genuinely paint reference purple, the EQUAL row's the
+    pale lilac, and both rows' backgrounds must stay plain white -- see
     ``test_parameter_row.py``'s dedicated regression test for why a
     data-only check is not enough here."""
     main_path, ref_path = main_and_ref
@@ -336,8 +354,12 @@ def test_row_tint_actually_renders_real_pixels(app_driver, main_and_ref, monkeyp
     differs_index = next(i for i, t in enumerate(labels) if t.startswith("Nominal cell capacity"))
     equal_index = next(i for i, t in enumerate(labels) if t.startswith("Reference temperature"))
 
-    assert app_driver.parameter_list_row_painted_colour(differs_index) == style.WARNING_TINT
-    assert app_driver.parameter_list_row_painted_colour(equal_index) == "#ffffff"
+    # dx=1 hits the 3px bar's interior at mid-row height; dx=6 sits between
+    # the bar (3px) and the text padding (8px), i.e. the row background.
+    assert app_driver.parameter_list_row_painted_colour(differs_index, dx=1, dy=12) == style.REFERENCE
+    assert app_driver.parameter_list_row_painted_colour(equal_index, dx=1, dy=12) == style.REFERENCE_BORDER
+    assert app_driver.parameter_list_row_painted_colour(differs_index, dx=6, dy=12) == "#ffffff"
+    assert app_driver.parameter_list_row_painted_colour(equal_index, dx=6, dy=12) == "#ffffff"
 
 
 def test_merge_rule_end_to_end_both_ways(app_driver, main_and_ref, monkeypatch):
@@ -528,7 +550,7 @@ def test_removing_reference_clears_everything_immediately(app_driver, main_and_r
 
     assert not app_driver.comparison_strip_visible()
     assert app_driver.ghost_row_keys() == []
-    assert app_driver.parameter_row_tint("Nominal cell capacity") is None
+    assert app_driver.parameter_row_ref_bar("Nominal cell capacity") is None
     assert not app_driver.reference_block_visible()
     assert "≠" not in app_driver.tree_node_display_text(_CELL_PATH)
 
@@ -562,7 +584,7 @@ def test_no_reference_docked_is_structurally_todays_editor(app_driver, main_and_
     assert not app_driver.comparison_strip_visible()
     assert app_driver.ghost_row_keys() == []
     for label in ("Reference temperature", "Nominal cell capacity", "Lower voltage cut-off", "Density"):
-        assert app_driver.parameter_row_tint(label) is None
+        assert app_driver.parameter_row_ref_bar(label) is None
     assert "≠" not in app_driver.tree_node_display_text(_CELL_PATH)
 
     app_driver.go_to(("Parameterisation", "Cell", "Nominal cell capacity [A.h]"))
@@ -583,21 +605,21 @@ def test_copy_up_on_differs_row_pulls_value_retints_and_disables(app_driver, mai
     app_driver.open(main_path)
     _dock_reference(app_driver, ref_path, monkeypatch)
     app_driver.go_to(("Parameterisation", "Cell", "Nominal cell capacity [A.h]"))
-    assert app_driver.parameter_row_tint("Nominal cell capacity") == style.WARNING_TINT
+    assert app_driver.parameter_row_ref_bar("Nominal cell capacity") == "differs"
 
     app_driver.click_copy_up()
 
     assert app_driver.field_value() == 6.0
     assert app_driver.reference_block_is_same()
     assert not app_driver.copy_up_enabled()
-    assert app_driver.parameter_row_tint("Nominal cell capacity") is None
+    assert app_driver.parameter_row_ref_bar("Nominal cell capacity") == "equal"
 
     app_driver.undo()
 
     assert app_driver.field_value() == 5.0
     assert not app_driver.reference_block_is_same()
     assert app_driver.copy_up_enabled()
-    assert app_driver.parameter_row_tint("Nominal cell capacity") == style.WARNING_TINT
+    assert app_driver.parameter_row_ref_bar("Nominal cell capacity") == "differs"
 
 
 def test_copy_up_on_fillable_row_pulls_the_reference_value(app_driver, main_and_ref, monkeypatch):
