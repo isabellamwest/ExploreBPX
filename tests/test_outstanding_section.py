@@ -1,6 +1,5 @@
 """Diagnostics page Outstanding section: absorption, the rail badge, and
-Outstanding row activation dispatch (completion track Phase 5 -- decisions
-E/F/G/L; PLAN-completion-track.md SS4 Phase 5).
+Outstanding row activation dispatch.
 
 Walks the plan's four mockup states end to end through the real MainWindow
 (state 1: fresh skeleton; state 2: a working document with one visible error

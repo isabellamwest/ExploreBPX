@@ -1,6 +1,6 @@
-"""Diagnostics page: summary strip + section rail + single-section detail
-pane (Validation-page rail redesign, ``PLAN-completion-track.md`` S4b,
-decisions F2-F7 -- Stage B, built on Stage A's ``core.page_buckets``).
+"""Diagnostics page: summary strip + section rail + single-section detail pane
+(Validation-page rail redesign; Stage B, built on Stage A's
+``core.page_buckets``).
 
 ``bucket_page_content`` (Stage A) makes every grouping/absorption decision
 once, inward of the UI: this module renders its ``PageBuckets`` output and

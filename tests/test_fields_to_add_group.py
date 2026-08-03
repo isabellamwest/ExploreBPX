@@ -1,5 +1,4 @@
-"""Tests for the parameter list's "fields to add" group (completion track
-Phase 3, decisions C/H/I/K -- see PLAN-completion-track.md).
+"""Tests for the parameter list's "fields to add" group.
 
 The group is synthetic: appended to the parameter list's underlying
 QListWidget after the real parameter rows, derived at render time from

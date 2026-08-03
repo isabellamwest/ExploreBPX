@@ -1,5 +1,5 @@
 """Driver-level tests for decisions D (revised)/O/P/Q -- the live-review
-follow-ups to the completion track (PLAN-completion-track.md).
+follow-ups to the completion track.
 
 Covers, through the real ``MainWindow``: the null-field result matrix
 (required-expected / optional-expected / custom, decisions D+P), absorbed

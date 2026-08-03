@@ -1,6 +1,6 @@
 """Tests for InspectorPanel's commit-only-when-dirty guard and the live
-Issues-tab count during preview (docs/01-architecture.md "Editing
-Architecture" / docs/02-ui.md "Inspector pane").
+Issues-tab count during preview (docs/architecture.md "Editing
+Architecture" / "Inspector pane").
 """
 
 from __future__ import annotations
@@ -223,8 +223,8 @@ def test_switching_content_leaves_no_ghost_placeholder(qtbot, spm_workfile):
 
 
 def test_issues_tab_count_updates_live_during_preview(qtbot, spm_workfile):
-    """Issues tab (docs/02-ui.md): the Issues tab's count badge updates live while
-    typing an invalid draft, not only on commit."""
+    """Issues tab (docs/architecture.md): the Issues tab's count badge updates
+    live while typing an invalid draft, not only on commit."""
     state, panel = _panel_on(qtbot, spm_workfile, _CAPACITY)
     assert panel._secondary._buttons["issues"].text() == "Issues"
 

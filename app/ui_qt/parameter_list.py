@@ -15,7 +15,7 @@ Validation runs, and any parameter leaf the schema defines nowhere, wherever
 it lives. "Move up"/"Move down" are offered for every real row, individually
 disabled at the first/last sibling. Context menus never create; creation
 controls are never hidden behind a right-click (see the parameter-list pane
-section of docs/02-ui.md).
+section of docs/architecture.md).
 
 "Rename…" does not open its own popup: it opens (or focuses) the same
 inline card-header editor the row's own parameter card offers via a pencil

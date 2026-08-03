@@ -260,7 +260,7 @@ class DocumentSession:
         to ``path``. Document- and object-level issues -- a Header deprecation
         warning, say -- are deliberately excluded: they belong to the Validation
         workspace, not to a parameter's validity badge or Issues tab (see the
-        Diagnostics page in docs/02-ui.md).
+        Diagnostics page section of docs/architecture.md).
 
         A full candidate :class:`BPXDocument` is derived rather than
         suffix-matching the raw diagnostics here, so live preview attaches

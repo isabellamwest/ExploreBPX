@@ -76,8 +76,7 @@ class AppState:
 
     def new_from_file(self, path: Path) -> None:
         """Clone *path* into a fresh unsaved session and dock *path* itself
-        as the read-only reference ("New from source", PLAN-multi-file.md
-        decision 8).
+        as the read-only reference ("New from source").
 
         The clone is built from the file's on-disk bytes under a derived
         "{stem} (copy)" filename (the Export naming convention), keeping the
@@ -110,8 +109,7 @@ class AppState:
         """Close the active session.
 
         Leaves ``reference`` untouched: closing the main file is just closing
-        the main file, never a prompt about the docked reference (decision 9,
-        PLAN-multi-file.md).
+        the main file, never a prompt about the docked reference.
         """
         self.active = None
 
@@ -170,7 +168,7 @@ class AppState:
 
     def reload_reference(self) -> None:
         """Re-snapshot the docked reference from its own path on disk (the
-        Source page's stale-band Reload, PLAN-multi-file.md decision 11).
+        Source page's stale-band Reload).
 
         Raises ``core.bpx_gateway.LoadError``/``OSError`` exactly as
         ``ReferenceSnapshot.load`` does; on failure the docked snapshot is
@@ -186,8 +184,7 @@ class AppState:
     def swap_roles(self, promoted_path: Path, demoted_path: Path) -> None:
         """The "Make main" swap: promote *promoted_path* (today's reference)
         to the active session, demoting *demoted_path* (today's main) to a
-        fresh reference snapshot -- both loaded from disk (PLAN-multi-file.md
-        M4).
+        fresh reference snapshot -- both loaded from disk.
 
         Loads both files before touching either field: if either raises
         (``core.bpx_gateway.LoadError``/``OSError``, exactly as ``open`` and

@@ -1,12 +1,12 @@
 """Completion query: what a document expects but does not yet have.
 
 Completion is a pure, stateless projection over ``(raw, model)`` -- the same
-shape as :func:`core.structure.addable_child_sections`. It is provably
-distinct from validation (see ``PLAN-completion-track.md`` S1/S2): a
-section-level ``mode="before"`` validator can raise before pydantic ever
-checks that section's own required fields, so an absent field can leave the
-validator's diagnostics byte-identical; an absent section always collapses to
-one ``missing`` diagnostic, its inner required fields never enumerated.
+shape as :func:`core.structure.addable_child_sections`. It is provably distinct
+from validation: a section-level ``mode="before"`` validator can raise before
+pydantic ever checks that section's own required fields, so an absent field can
+leave the validator's diagnostics byte-identical; an absent section always
+collapses to one ``missing`` diagnostic, its inner required fields never
+enumerated.
 
 Completion never reads diagnostics to decide what is expected; it reads the
 schema (via :func:`core.bpx_gateway.expected_fields`) and the raw dict

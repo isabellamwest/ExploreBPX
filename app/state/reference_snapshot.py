@@ -3,8 +3,7 @@ document.
 
 A ``ReferenceSnapshot`` is loaded once (raw dict, model identity, section/
 parameter counts, a one-shot validation summary) and never mutates
-afterwards -- no session, no undo, no dirty state, no file watching. See
-``PLAN-multi-file.md`` milestone M1.
+afterwards -- no session, no undo, no dirty state, no file watching.
 """
 
 from __future__ import annotations

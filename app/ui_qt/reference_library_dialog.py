@@ -7,7 +7,7 @@ never docks anything itself -- accepting simply reports
 ``AppState.open_reference_set``. The sets carry no ``Validation`` runs
 (PyBaMM parameter sets hold no cycling data), which is why this exists
 apart from the run-comparison ``DatabaseExamplesDialog``; see the
-"Bundled PyBaMM parameter sets" entry in ``docs/05-future.md``.
+"Bundled PyBaMM parameter sets" entry in ``docs/future.md``.
 
 **Layout.** Picker rows on the left (curated order, short title + muted
 model; selection is a purple border plus a small plain tick -- the standing

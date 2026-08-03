@@ -1,10 +1,9 @@
 """Reference tile lifecycle, toast feedback, and the Open-dialog choice flow
 (M1: reference in state + Workspace).
 
-Study ``PLAN-multi-file.md`` decision 8 before extending this file: the
-choice dialog only ever appears while a main document is already open (main
-or reference, dirty or not) -- with no document open, Open/drop behave
-exactly as before.
+Before extending this file: the choice dialog only ever appears while a main
+document is already open (main or reference, dirty or not) -- with no document
+open, Open/drop behave exactly as before.
 """
 
 from __future__ import annotations

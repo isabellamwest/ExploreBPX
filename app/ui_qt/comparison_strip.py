@@ -1,5 +1,4 @@
-"""ComparisonStrip: slim reference-aware band atop the parameter list
-(multi-file track M2/M3). See PLAN-multi-file.md decision 12 / the M2 brief.
+"""ComparisonStrip: slim reference-aware band atop the parameter list.
 
 Visible only while a reference is docked -- with none docked it stays
 hidden and renders nothing, so the Editor is pixel-for-pixel today's, per

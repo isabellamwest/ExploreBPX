@@ -434,11 +434,10 @@ class WorkspacePanel(QWidget):
         return row
 
     def _build_new_from_file_option(self) -> QWidget:
-        """The chooser's non-model row, below its own divider: clone an
-        existing file into a fresh unsaved document with the origin docked
-        as the reference ("New from source", PLAN-multi-file.md decision 8).
-        Same row anatomy as the model options -- the ``modelOption``
-        property carries the shared flat-row styling."""
+        """The chooser's non-model row, below its own divider: clone an existing
+        file into a fresh unsaved document with the origin docked as the
+        reference ("New from source"). Same row anatomy as the model options --
+        the ``modelOption`` property carries the shared flat-row styling."""
         row = QWidget()
         row_layout = QVBoxLayout(row)
         row_layout.setContentsMargins(0, 0, 0, 0)

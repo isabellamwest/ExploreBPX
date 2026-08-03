@@ -1,5 +1,4 @@
-"""Frontend-agnostic bucketing for the Validation page's rail (Stage A of the
-rail redesign, ``PLAN-completion-track.md`` S4b, decisions F2/F3).
+"""Frontend-agnostic bucketing for the Validation page's rail.
 
 The rail replaces the old stacked Issues/Outstanding page with a summary
 strip plus a per-section rail; each rail entry needs its own Issues +

@@ -1,5 +1,4 @@
-"""Shared count-badge geometry, colour and painting (unified badge system,
-Phase 2 -- see ``PLAN-app-audit.md``).
+"""Shared count-badge geometry, colour and painting (unified badge system).
 
 Before this module the app had three independent count-badge implementations
 (the activity-bar icon overlay, the diagnostics rail/fold-header pill, the

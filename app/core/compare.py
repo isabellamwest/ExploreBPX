@@ -1,5 +1,5 @@
 """Pure comparison engine between a main document's raw dict and a reference
-snapshot's raw dict (multi-file track, ``PLAN-multi-file.md`` M2).
+snapshot's raw dict.
 
 Frontend-agnostic and side-effect-free: :func:`compare` never mutates its
 inputs, imports nothing from ``state``/``ui_qt``, and knows no BPX spec logic

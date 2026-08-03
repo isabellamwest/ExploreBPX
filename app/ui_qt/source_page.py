@@ -1,5 +1,4 @@
-"""Source page (multi-file track, ``PLAN-multi-file.md`` M5, decision 13):
-the document's formatted raw JSON, live against the session.
+"""Source page: the document's formatted raw JSON, live against the session.
 
 With no reference docked the page shows one full-width pane of the main
 file -- monospace, collapsible section headers, "n parameters" sizes, and a

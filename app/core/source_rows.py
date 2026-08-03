@@ -1,5 +1,4 @@
-"""Pure row model for the Source page (multi-file track, ``PLAN-multi-file.md``
-M5, decision 13).
+"""Pure row model for the Source page.
 
 Turns the main document's raw dict -- plus, when one is docked, the reference
 snapshot's raw dict -- into one flat, ordered list of display rows the Source

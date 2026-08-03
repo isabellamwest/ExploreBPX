@@ -1,7 +1,7 @@
 """Tests for the pure completion query (``core.completion``).
 
-Pure Python throughout -- no Qt. See ``PLAN-completion-track.md`` SS2/SS3 for
-the verified facts and locked decisions these tests hold implementation to.
+Pure Python throughout -- no Qt. These tests hold implementation to the
+verified facts and locked decisions.
 """
 
 from __future__ import annotations

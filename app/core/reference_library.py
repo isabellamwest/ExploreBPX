@@ -8,7 +8,7 @@ a user can pull up as a read-only reference for Parameterisation comparison
 and plotting. The two stay separate because a PyBaMM-derived set carries no
 ``Validation`` section at all (PyBaMM parameter sets hold no cycling data),
 so it has nothing to offer the run-comparison dialog; see
-``docs/05-future.md``'s "Bundled PyBaMM parameter sets" entry for the
+``docs/future.md``'s "Bundled PyBaMM parameter sets" entry for the
 accepted constraints.
 
 The bundled files are generated offline by

@@ -1,5 +1,4 @@
-"""Tests for the display-merge helpers in ``core.validation`` (decision Q,
-PLAN-completion-track.md).
+"""Tests for the display-merge helpers in ``core.validation``.
 
 Pure Python, no Qt.
 """

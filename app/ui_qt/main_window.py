@@ -73,7 +73,7 @@ _SOURCE_PAGE_INDEX = 3
 
 class OpenIntent(Enum):
     """What to do with a chosen file when a document is already open (the
-    Open-dialog choice, PLAN-multi-file.md decision 8)."""
+    Open-dialog choice)."""
 
     REPLACE_MAIN = "replace_main"
     ADD_REFERENCE = "add_reference"
@@ -81,8 +81,7 @@ class OpenIntent(Enum):
 
 
 class SwitchIntent(Enum):
-    """How to handle a dirty main before "Make main" swaps roles
-    (PLAN-multi-file.md M4)."""
+    """How to handle a dirty main before "Make main" swaps roles."""
 
     SAVE_AND_SWITCH = "save_and_switch"
     DISCARD_AND_SWITCH = "discard_and_switch"
@@ -141,10 +140,10 @@ class MainWindow(QMainWindow):
         #: reference docks or undocks (see ``_open_reference_path``/
         #: ``_on_remove_reference_requested``).
         self._comparison: ComparisonResult | None = None
-        #: Where a never-saved document's Save As dialog starts: the folder
-        #: of the last Save As this run, else the user's Documents folder --
-        #: never a bundled template/example directory (PLAN-multi-file.md
-        #: decision 10). Session-scoped on purpose; not persisted.
+        #: Where a never-saved document's Save As dialog starts: the folder of
+        #: the last Save As this run, else the user's Documents folder -- never
+        #: a bundled template/example directory. Session-scoped on purpose; not
+        #: persisted.
         self._save_dialog_dir: Path | None = None
 
         self._tree = TreePanel()
@@ -976,11 +975,10 @@ class MainWindow(QMainWindow):
     # --- Make main (multi-file track M4) ---------------------------------
 
     def _on_make_main_requested(self) -> None:
-        """Handle the reference card's "Make main" button: promote the
-        docked reference to main, demoting today's main to reference -- both
-        loaded fresh from disk (decision 1, PLAN-multi-file.md M4). Role
-        assignment is a Workspace action, never a command: it never touches
-        the undo stack.
+        """Handle the reference card's "Make main" button: promote the docked
+        reference to main, demoting today's main to reference -- both loaded
+        fresh from disk. Role assignment is a Workspace action, never a
+        command: it never touches the undo stack.
 
         With no main document open, or a never-saved main that gets
         discarded, there is nothing on disk to demote -- the reference
@@ -1201,9 +1199,8 @@ class MainWindow(QMainWindow):
         self._show_page(_EDITOR_PAGE_INDEX)
 
     def _new_from_file(self) -> None:
-        """New from an existing file: clone it into a fresh unsaved session
-        and dock the origin as the read-only reference (PLAN-multi-file.md
-        decision 8, signed design 2026-07-31).
+        """New from an existing file: clone it into a fresh unsaved session and
+        dock the origin as the read-only reference (signed design 2026-07-31).
 
         Picker first, then the same guard as New -- nobody should answer a
         replace prompt before a file is even chosen. The state change is
@@ -1245,10 +1242,10 @@ class MainWindow(QMainWindow):
             return False
         session = self._state.active
         if session.backing_file is None:
-            # Decision 10 (PLAN-multi-file.md): a never-saved main's Save As
-            # starts in the last Save As folder this run, else Documents --
-            # never wherever the app happens to run from (which could be a
-            # bundled directory). The document's own filename seeds the name.
+            # A never-saved main's Save As starts in the last Save As folder
+            # this run, else Documents -- never wherever the app happens to run
+            # from (which could be a bundled directory). The document's own
+            # filename seeds the name.
             start_dir = self._save_dialog_dir or Path(
                 QStandardPaths.writableLocation(QStandardPaths.DocumentsLocation)
             )

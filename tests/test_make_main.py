@@ -1,7 +1,6 @@
-"""Make main: role-swap between the docked reference and the active main
-(multi-file track M4). See PLAN-multi-file.md section "M4 -- Make main" for
-the full spec (entry point, dialog copy, toast copy, post-swap contract)
-this file pins.
+"""Make main: role-swap between the docked reference and the active main. This
+file pins the full spec: entry point, dialog copy, toast copy, and post-swap
+contract.
 """
 
 from __future__ import annotations

@@ -5,9 +5,9 @@ Shown by the Inspector's ``reveal()`` when the user selects the bare
 that, before Phase 4, fell through to the generic "nothing to inspect"
 placeholder. With at least one run, selecting the container is unchanged
 (``show_placeholder()`` still applies): this widget is only ever a substitute
-for the placeholder in the one genuinely-empty case, never a populated-
-container view (out of scope; see PLAN-validation-section.md, decision D3a
-for the separate, unchanged absent-section case).
+for the placeholder in the one genuinely-empty case, never a
+populated-container view (out of scope: the separate, unchanged absent-section
+case).
 
 Both actions below are ready-made :class:`~core.commands.Command` objects
 handed to the Inspector's existing ``bulk_commit_requested`` /

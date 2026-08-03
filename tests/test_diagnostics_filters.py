@@ -1,4 +1,4 @@
-"""Diagnostics page filters -- Phase B (F8, ``PLAN-completion-track.md`` S4b).
+"""Diagnostics page filters -- Phase B (F8).
 
 Filters are VIEW-ONLY (F8's core rule): rail badges, strip counts, the app
 badge and F3 reconciliation always read the same unfiltered ``PageBuckets``

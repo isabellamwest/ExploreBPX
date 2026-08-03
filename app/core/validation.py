@@ -114,7 +114,7 @@ def warnings_as_diagnostics(
     return [PythonWarningDiagnostic(raw_warning=w) for w in caught]
 
 
-# --- Display helpers (decision Q, PLAN-completion-track.md) ----------------
+# --- Display helpers --------------------------------------------------------
 #
 # A nullable ``FloatInt`` field holding a bad/``null`` value is a union of two
 # branches (``float`` and ``int``), so pydantic raises once per branch --

@@ -71,7 +71,7 @@ def create_card(parameter: ParameterItem, meta: FieldMeta | None) -> EditorCard:
 
 
 def _build_card(parameter: ParameterItem, meta: FieldMeta | None) -> EditorCard:
-    # FUNCTION and MAP are union-typed kinds (docs/01-architecture.md). Each card
+    # FUNCTION and MAP are union-typed kinds (docs/architecture.md). Each card
     # is a mode strip covering every legal representation -- including a
     # conditional Raw mode -- so the registry hands it every value
     # unconditionally and the card decides which mode to open in.

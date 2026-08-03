@@ -2,13 +2,13 @@
 
 Replaces the old Concept A layout (collapsible issue-section groups, two
 page-level "Issues"/"Outstanding" headers sharing one QListWidget) with the
-signed-off wireframe: a summary strip, a section rail, and a detail pane
-that is either one selected section's Issues/Outstanding group boxes or the
+signed-off wireframe: a summary strip, a section rail, and a detail pane that
+is either one selected section's Issues/Outstanding group boxes or the
 whole-document "All sections" backup view. See ``ui_qt.diagnostics_panel``'s
-module docstring and ``PLAN-completion-track.md`` S4b (decisions F2-F7) for
-the full design. Companion fix carried over unchanged from Concept A: a bad
-*string* in a FloatInt field (float_parsing + int_parsing) merges to one
-displayed row (decision Q), so its badge count and its rows agree.
+module docstring for the full design. Companion fix carried over unchanged from
+Concept A: a bad *string* in a FloatInt field (float_parsing + int_parsing)
+merges to one displayed row (decision Q), so its badge count and its rows
+agree.
 """
 
 from __future__ import annotations

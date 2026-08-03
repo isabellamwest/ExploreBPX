@@ -1,6 +1,6 @@
 """Tests for the rail-redesign bucketing layer (``core.page_buckets``).
 
-Stage A of ``PLAN-completion-track.md`` S4b: pure Python throughout, no Qt.
+Stage A of the rail redesign: pure Python throughout, no Qt.
 The point of this module is F3's reconciliation invariant -- every visible
 diagnostic and every task lands in exactly ONE rail bucket, so the strip
 totals, the rail badges and the All-sections view can never disagree. Every
