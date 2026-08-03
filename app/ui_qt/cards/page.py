@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QFrame, QVBoxLayout, QWidget
 
+from .. import style
+
 #: The single horizontal gutter every page block shares.
 GUTTER = 16
 
@@ -28,8 +30,18 @@ def page_header() -> tuple[QFrame, QVBoxLayout]:
 
 
 def page_content() -> tuple[QWidget, QVBoxLayout]:
-    """The content column below the header, on the same gutter."""
+    """The content column below the header, on the same gutter.
+
+    Capped at ``style.CONTENT_MEASURE`` so a card's fields/prose stay a
+    readable width rather than stretching edge-to-edge with a wide pane;
+    the cap only bounds the maximum, so the column still shrinks on a
+    narrow pane. Left unset on the widget itself, the containing
+    ``QVBoxLayout`` hugs the capped column against its left edge (the same
+    side ``GUTTER`` already indents from), so no explicit alignment call is
+    needed here.
+    """
     body = QWidget()
+    body.setMaximumWidth(style.CONTENT_MEASURE)
     layout = QVBoxLayout(body)
     layout.setContentsMargins(GUTTER, 12, GUTTER, GUTTER)
     layout.setSpacing(10)

@@ -9,8 +9,9 @@ icon-only, so this is now the only place that names the page in text.
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget
+
+from .titles import apply_caps_spacing
 
 
 class PageHeader(QWidget):
@@ -30,9 +31,9 @@ class PageHeader(QWidget):
 
         self._title = QLabel()
         self._title.setObjectName("PageHeaderTitle")
-        font = self._title.font()
-        font.setLetterSpacing(QFont.PercentageSpacing, 108)
-        self._title.setFont(font)
+        # Same caps-tier recipe as titles.panel_title (letter-spacing only --
+        # this bar keeps its own QSS size/colour via PageHeaderTitle).
+        self._title.setFont(apply_caps_spacing(self._title.font()))
         layout.addWidget(self._title)
         layout.addStretch(1)
 

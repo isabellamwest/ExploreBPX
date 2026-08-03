@@ -536,7 +536,7 @@ class AddParameterPopup(QWidget):
             font.setPointSizeF(size * 0.82)
         font.setBold(True)
         font.setCapitalization(QFont.AllUppercase)
-        font.setLetterSpacing(QFont.PercentageSpacing, 106)
+        font.setLetterSpacing(QFont.PercentageSpacing, 108)
         item.setFont(font)
         if divider:
             item.setData(self._TIER_TOP_ROLE, True)

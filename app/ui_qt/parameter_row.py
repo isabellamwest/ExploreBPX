@@ -19,7 +19,7 @@ from __future__ import annotations
 import html as _html
 import json
 
-from PySide6.QtCore import QRect, QRectF, QSize, Qt
+from PySide6.QtCore import QPointF, QRect, QRectF, QSize, Qt
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QFontMetrics, QPainter, QPen, QTextDocument
 from PySide6.QtWidgets import (
     QApplication,
@@ -448,15 +448,24 @@ class ParameterRowDelegate(QStyledItemDelegate):
         rail, :mod:`ui_qt.tree_panel`)."""
         paint_ref_bar(painter, option.rect, variant)
 
+    def _name_baseline(self, option: QStyleOptionViewItem) -> float:
+        """Y of the parameter name's first-line baseline (row top + ``_v_pad``
+        + the row font's ascent) -- the anchor :meth:`_paint_value` and
+        :meth:`_paint_action` align their own, differently-sized text to, so
+        neither floats above the name like a superscript."""
+        return option.rect.top() + self._v_pad + QFontMetrics(option.font).ascent()
+
     def _paint_action(self, painter, option, index, reserved: int) -> None:
-        """Right-aligned, top-anchored call-to-action text in accent
-        colour -- always fully visible, never folded inline with the
-        name."""
+        """Right-aligned call-to-action text in accent colour, baseline-
+        aligned with the parameter name's first line -- always fully
+        visible, never folded inline with the name."""
         painter.save()
-        painter.setFont(self._action_font(option))
+        font = self._action_font(option)
+        painter.setFont(font)
         painter.setPen(QColor(style.ACCENT))
-        rect = option.rect.adjusted(0, self._v_pad, -self._h_pad, -self._v_pad)
-        painter.drawText(rect, Qt.AlignRight | Qt.AlignTop, index.data(ACTION_ROLE))
+        text = index.data(ACTION_ROLE)
+        x = option.rect.right() - self._h_pad - QFontMetrics(font).horizontalAdvance(text)
+        painter.drawText(QPointF(x, self._name_baseline(option)), text)
         painter.restore()
 
     def _paint_severity_icon(self, painter, option: QStyleOptionViewItem, index) -> None:
@@ -479,9 +488,10 @@ class ParameterRowDelegate(QStyledItemDelegate):
         paint_severity_dot(painter, box, style.ERROR if is_error else style.WARNING)
 
     def _paint_value(self, painter, option, index, reserved: int) -> None:
-        """Right-aligned, top-anchored value preview, elided with "…" to the
-        reserved width -- elision is visual only; the full string travels on
-        the item's tooltip."""
+        """Right-aligned value preview, elided with "…" to the reserved
+        width and baseline-aligned with the parameter name's first line --
+        elision is visual only; the full string travels on the item's
+        tooltip."""
         font = self._value_font(option)
         ghost = bool(index.data(VALUE_GHOST_ROLE))
         if ghost:
@@ -493,6 +503,6 @@ class ParameterRowDelegate(QStyledItemDelegate):
         painter.save()
         painter.setFont(font)
         painter.setPen(QColor(style.GHOST_TEXT if ghost else style.MUTED))
-        rect = option.rect.adjusted(0, self._v_pad, -self._h_pad, -self._v_pad)
-        painter.drawText(rect, Qt.AlignRight | Qt.AlignTop, elided)
+        x = option.rect.right() - self._h_pad - metrics.horizontalAdvance(elided)
+        painter.drawText(QPointF(x, self._name_baseline(option)), elided)
         painter.restore()

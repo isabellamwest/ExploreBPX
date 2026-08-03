@@ -10,10 +10,44 @@ from __future__ import annotations
 from core.completion import TaskKind
 from core.validation import Severity
 
+# ---------------------------------------------------------------------------
+# Spacing/type scale: shared step values so new layout code picks a rung on
+# the app's existing rhythm instead of inventing its own margin/font-size
+# literal. Not a migration -- existing hardcoded numbers stay put until a
+# later pass moves them onto these names; these constants only need to exist
+# so new code has somewhere to reach for.
+# ---------------------------------------------------------------------------
+SPACING_XS = 4
+SPACING_SM = 8
+SPACING_MD = 12
+SPACING_LG = 16
+
+FONT_SIZE_SM = 11
+FONT_SIZE_BASE = 12
+FONT_SIZE_MD = 13
+FONT_SIZE_LG = 15
+
+#: A readable-measure cap for a content column inside an otherwise full-bleed
+#: section (e.g. the Inspector's ``cards/page.py`` content body) -- long
+#: lines of prose/labels stay legible instead of stretching edge-to-edge with
+#: the pane.
+CONTENT_MEASURE = 560
+
 OK = "#2e7d32"
 ERROR = "#c62828"
 WARNING = "#ef6c00"
 ACCENT = "#1f6feb"
+#: Pale accent tint shared by every "selected row"/"hovered chip" wash that
+#: isn't a severity or reference colour: list-selection backgrounds, the
+#: Diagnostics rail's selected entry, and the add-parameter popup's pinned
+#: Create action -- one blue instead of three near-identical ones (#ddeeff,
+#: #e3edfd, #eaf2ff) that had drifted apart. ``RAIL_SELECTED_BG`` reads this
+#: constant directly; the raw stylesheet below still spells the same hex
+#: literal at each QSS selector (as every other named colour already does in
+#: that string, e.g. ``BORDER_STRONG``/``HEADER_BAND_STRONG``) rather than
+#: turning ``STYLESHEET`` into an f-string, which would need every literal
+#: ``{``/``}`` in the QSS escaped.
+ACCENT_TINT = "#ddeeff"
 #: The reference-file feature's own accent: purple, by explicit user
 #: decision -- everything reference-specific carries this one hue so it is
 #: visually unmistakable, and it can never be confused with ``ACCENT`` (the
@@ -73,7 +107,7 @@ GHOST_TEXT = "#8c959f"
 #: Diagnostics page rail: background distinct from the white detail
 #: pane, and the selected entry's accent-tinted background/hover wash.
 RAIL_BG = "#f3f4f6"
-RAIL_SELECTED_BG = "#e3edfd"
+RAIL_SELECTED_BG = ACCENT_TINT
 RAIL_HOVER_BG = "#e8eaed"
 #: One step darker than the app's usual ``#d0d7de`` border tone, used only
 #: on the Diagnostics page's own chrome (group-box border, rail's right
@@ -250,6 +284,9 @@ QToolButton#AddMaterialButton::menu-indicator {
 }
 QTreeView, QListWidget { border: 1px solid #d0d7de; background: #ffffff; }
 QTreeView::item, QListWidget::item { padding: 3px 4px; }
+/* #ddeeff below is style.ACCENT_TINT, spelled as a literal (see the
+   constant's comment for why) -- every list-selection/hover wash in this
+   stylesheet reuses this same tint. */
 QListWidget::item:selected, QTreeView::item:selected { background: #ddeeff; color: #1f2328; }
 /* Editor page: the tree and parameter-list panes sit flush against the
    splitter's own 1px hairline (see QSplitter#EditorSplitter::handle below),
@@ -561,6 +598,8 @@ QPushButton#AddParameterCreate {
     color: #1f6feb;
     font-weight: 500;
 }
-QPushButton#AddParameterCreate:hover { background: #eaf2ff; }
+/* Same wash as the row-selected states above (style.ACCENT_TINT) -- this
+   used to be its own near-identical #eaf2ff blue. */
+QPushButton#AddParameterCreate:hover { background: #ddeeff; }
 QPushButton#AddParameterCreate[selected="true"] { background: #ddeeff; }
 """
