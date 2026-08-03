@@ -649,6 +649,42 @@ def test_source_two_pane_follows_reference_dock(app_driver, tmp_path, monkeypatc
     assert app_driver.source_pane_headers() is None
 
 
+def test_source_file_label_follows_save_as(app_driver, tmp_path, monkeypatch):
+    """A never-saved document's first Save As renames the Source page's
+    single-pane file label to the backing file, matching the title bar."""
+    app_driver.click_workspace_new("SPM")
+    app_driver.show_view("Source")
+    assert app_driver.source_file_label().startswith("untitled.json")
+
+    save_path = tmp_path / "saved_as.json"
+    monkeypatch.setattr(
+        main_window_module.QFileDialog, "getSaveFileName", lambda *a, **k: (str(save_path), "")
+    )
+    app_driver.save()
+
+    assert save_path.exists()
+    assert app_driver.source_file_label().startswith("saved_as.json")
+
+
+def test_source_main_pane_header_follows_save_as(app_driver, tmp_path, monkeypatch):
+    """With a reference docked, Save As renames the two-pane Main header too."""
+    app_driver.click_workspace_new("SPM")
+    _stub_open_dialog(monkeypatch, _write(tmp_path, "reference.json", _REF))
+    app_driver.click_workspace_open_reference()
+    app_driver.show_view("Source")
+    assert "untitled.json" in app_driver.source_pane_headers()[0]
+
+    save_path = tmp_path / "saved_as.json"
+    monkeypatch.setattr(
+        main_window_module.QFileDialog, "getSaveFileName", lambda *a, **k: (str(save_path), "")
+    )
+    app_driver.save()
+
+    headers = app_driver.source_pane_headers()
+    assert "saved_as.json" in headers[0]
+    assert "reference.json" in headers[1]
+
+
 def _dock_reference(app_driver, tmp_path, monkeypatch, ref_raw):
     _stub_open_dialog(monkeypatch, _write(tmp_path, "reference.json", ref_raw))
     app_driver.show_view("Workspace").click_workspace_open_reference()

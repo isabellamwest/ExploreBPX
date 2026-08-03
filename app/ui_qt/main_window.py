@@ -1074,11 +1074,14 @@ class MainWindow(QMainWindow):
         # The Source page re-renders here too: every route that changes what
         # it must show (edit, undo/redo, open/new, reference dock/undock)
         # already funnels through this method.
-        document = self._state.active.document if self._state.active else None
+        session = self._state.active
+        document = session.document if session is not None else None
+        # The pane header names the file the way the title bar does: the
+        # backing file once one exists, the document's own filename before.
         self._source.refresh(
             document.raw if document is not None else None,
             reference,
-            main_name=document.filename if document is not None else "",
+            main_name=self._fallback_filename(session) if session is not None else "",
             main_model=document.identity.model if document is not None else None,
         )
 
@@ -1263,6 +1266,9 @@ class MainWindow(QMainWindow):
         self._update_title()
         self._update_identity_label()
         self._update_workspace_info()
+        # A first Save As gives the session its backing file, which renames
+        # the Source page's pane header/file label too.
+        self._apply_comparison()
         return True
 
     def _export_as(self, fmt: str) -> None:

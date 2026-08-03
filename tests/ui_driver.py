@@ -1392,6 +1392,13 @@ class AppDriver:
         """
         return self._w._identity_label.toolTip()
 
+    def save(self) -> "AppDriver":
+        """Click the toolbar's Save button: writes to the backing file, or
+        opens Save As first for a never-saved document (tests stub the
+        dialog)."""
+        self._w._save_action.trigger()
+        return self
+
     def save_enabled(self) -> bool:
         return self._w._save_action.isEnabled()
 
