@@ -1056,7 +1056,7 @@ class AppDriver:
         return self
 
     def open_add_parameter_popup(self) -> "AppDriver":
-        """Click the Parameter list's "+ Add parameter" header button."""
+        """Click the Parameter list's section-header "+ Add" action."""
         self._qtbot.mouseClick(self._w._params._add_button, Qt.LeftButton)
         return self
 

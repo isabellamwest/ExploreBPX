@@ -1,9 +1,9 @@
-"""Editor page flush-pane layout: single-hairline seams and the shaded inset
-"+ Add parameter" button.
+"""Editor page flush-pane layout: single-hairline seams and the parameter
+list's section-header wash.
 
 Covers the editor splitter's 1px handle width and ``#EditorSplitter``
 objectName (the QSS scoping hook), the tree/parameter-list child views'
-stripped borders, the add-button container's even inset padding, and two
+stripped borders, the section header's "+ Add" suffix action, and two
 guards against the specificity traps called out in the design: the
 Inspector's own internal splitter must stay unaffected by the editor-only
 handle rule, and the add-parameter popup's card border must survive the new
@@ -41,25 +41,16 @@ def test_tree_and_parameter_list_views_are_named_for_qss_binding(app_driver):
     assert d._w._params._list.objectName() == "ParameterListView"
 
 
-def test_add_parameter_button_container_has_even_inset_and_zero_pane_spacing(app_driver):
+def test_parameter_list_header_is_the_pane_s_first_widget_with_zero_spacing(app_driver):
     params = app_driver._w._params
     assert params.layout().spacing() == 0
-
-    button = params._add_button
-    container_layout = button.parentWidget().layout()
-    margins = container_layout.contentsMargins()
-    assert (margins.left(), margins.top(), margins.right(), margins.bottom()) == (
-        8,
-        8,
-        8,
-        8,
-    )
+    assert params.layout().itemAt(0).widget() is params._header
 
 
-def test_add_parameter_button_object_name_and_min_height(app_driver):
+def test_add_parameter_button_object_name_and_flat_style(app_driver):
     button = app_driver._w._params._add_button
     assert button.objectName() == "AddParameterButton"
-    assert button.minimumHeight() == 28
+    assert button.isFlat() is True
 
 
 # --- painted chrome ------------------------------------------------------

@@ -430,7 +430,7 @@ QPushButton#ReferenceLibraryDockButton:hover { background: #5a3399; }
    style.REFERENCE_WASH, spelled as a literal (also reused by
    QWidget#WorkspaceReferenceSection above and QFrame#ReferenceValueBox
    below). */
-QWidget#ComparisonStrip { background: #f8f5fc; border-bottom: 1px solid #d0d7de; }
+QWidget#ComparisonStrip { background: #f8f5fc; }
 QLabel#ComparisonStripIdentity { color: #6f42c1; font-weight: 600; font-size: 12px; }
 QLabel#ComparisonStripCounts { color: #57606a; font-size: 12px; }
 /* Reference row: "Main file"/"Reference file" are plain bold micro-labels
@@ -448,8 +448,7 @@ QLabel#ReferenceBlockValue[same="true"] { color: #8c959f; }
 /* "Copy up": the reference feature's first solid button -- solid
    style.REFERENCE fill, white text, so it reads as a deliberate, loud
    action beside the row's otherwise flat/bordered treatment. Disabled (an
-   EQUAL row -- nothing to copy) fades to the same light-purple/muted-text
-   pairing QPushButton#AddParameterButton:disabled already uses for "not
+   EQUAL row -- nothing to copy) fades to the app's muted-text tone for "not
    available right now", not a full grey-out. */
 QPushButton#CopyUpButton {
     background: #6f42c1; color: #ffffff; font-weight: 600;
@@ -568,17 +567,22 @@ QToolButton#ModeButton:last-child { border-top-right-radius: 4px; border-bottom-
 QToolButton#ModeButton:hover { background: #eef1f4; }
 QToolButton#ModeButton:checked { background: #ffffff; color: #1f2328; font-weight: 600; border-bottom: 2px solid #1f6feb; }
 
-/* Parameter-list pane's "+ Add parameter" header: a shaded, inset button
-   rather than a native full-bleed one, and honestly greyed (not error-red)
-   while disabled (no section selected). */
+/* Parameter-list pane's section header: style.NEUTRAL_WASH, spelled as a
+   literal (see the constant's own comment), the same full-width tinted-wash
+   idiom as ui_qt.group_box.TintedSection -- no lines, no corners. The count
+   sits in the caps-title row's right-aligned suffix, in the app's usual
+   muted tone; "+ Add" beside it is a quiet flat link rather than a bordered
+   button, since it now lives inside chrome rather than on plain background,
+   and honestly greys out (not error-red) while disabled (no section
+   selected). */
+QWidget#ParameterListHeader { background: #f6f8fa; }
+QLabel#ParameterListHeaderCount { color: #57606a; font-size: 12px; }
 QPushButton#AddParameterButton {
-    background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px;
-    color: #1f2328; font-size: 12px; padding: 4px 8px;
+    background: transparent; border: none; color: #1f6feb;
+    font-size: 12px; font-weight: 600; padding: 0;
 }
-QPushButton#AddParameterButton:hover:!disabled { background: #e8eaed; }
-QPushButton#AddParameterButton:disabled {
-    color: #8c959f; background: #f6f8fa; border: 1px solid #eaecef;
-}
+QPushButton#AddParameterButton:hover:!disabled { color: #0757d0; }
+QPushButton#AddParameterButton:disabled { color: #8c959f; }
 
 /* Add-parameter popup: a floating "command palette" surface. The frameless
    top-level is translucent; this rounded card carries the visible chrome so

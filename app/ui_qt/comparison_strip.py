@@ -14,6 +14,8 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget
 from core.compare import ComparisonResult
 from state.reference_snapshot import ReferenceSnapshot
 
+from . import style
+
 
 def _counts_text(comparison: ComparisonResult) -> str:
     """"14 differ · 8 ref only" -- singular forms at 1, a zero side omitted
@@ -36,7 +38,10 @@ class ComparisonStrip(QWidget):
         super().__init__()
         self.setObjectName("ComparisonStrip")
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(8, 4, 8, 4)
+        # Left/right inset matches the section header wash directly above it
+        # (``ui_qt.group_box.TintedSection``'s gutter) so the two stacked
+        # washes' text lines up; top/bottom stay slim.
+        layout.setContentsMargins(style.SPACING_LG, style.SPACING_XS, style.SPACING_LG, style.SPACING_XS)
         layout.setSpacing(8)
 
         self._identity = QLabel()

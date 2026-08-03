@@ -160,3 +160,39 @@ class TintedSection(QWidget):
         self.body_layout.setContentsMargins(0, 0, 0, 0)
         self.body_layout.setSpacing(8)
         outer.addWidget(self.body)
+
+
+class TintedSectionHeader(QWidget):
+    """:class:`TintedSection`'s header row on its own -- a full-width tinted
+    wash carrying only the caps-title/suffix row, no body beneath it. For a
+    column too narrow to also cap a body at ``style.CONTENT_MEASURE`` (the
+    parameter-list pane's section header): same wash, same caps-title/
+    right-aligned-suffix anatomy as :class:`TintedSection`, just without a
+    body -- the caller owns everything below it.
+    """
+
+    def __init__(
+        self,
+        title: str,
+        *,
+        object_name: str,
+        title_object_name: str = "PanelTitle",
+        suffix: QWidget | None = None,
+    ) -> None:
+        super().__init__()
+        self.setObjectName(object_name)
+        self.setAttribute(Qt.WA_StyledBackground, True)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(_SECTION_GUTTER, 8, _SECTION_GUTTER, 8)
+        layout.setSpacing(8)
+        self.title_label = panel_title(title, object_name=title_object_name)
+        layout.addWidget(self.title_label)
+        layout.addStretch(1)
+        if suffix is not None:
+            layout.addWidget(suffix)
+
+    def set_title(self, title: str) -> None:
+        """Update the caps title text in place (``panel_title`` uppercases
+        it), for a header whose section changes after construction."""
+        self.title_label.setText(title.upper())

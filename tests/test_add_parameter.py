@@ -761,6 +761,28 @@ def test_add_button_disabled_again_once_selection_clears(panel):
     assert panel._add_button.isEnabled() is False
 
 
+def test_header_hidden_with_no_node(panel):
+    assert panel._header.isHidden() is True
+
+
+def test_header_shows_section_title_and_parameter_count(panel):
+    existing = ParameterItem(
+        label="Existing [unit]",
+        path=_CELL + ("Existing [unit]",),
+        kind=ParameterKind.SCALAR,
+    )
+    panel.show_node(_section_node(label="Cell", parameters=[existing]))
+    assert panel._header.isHidden() is False
+    assert panel._header.title_label.text() == "CELL"
+    assert panel._count_label.text() == "1"
+
+
+def test_header_hides_again_once_selection_clears(panel):
+    panel.show_node(_section_node())
+    panel.show_node(None)
+    assert panel._header.isHidden() is True
+
+
 def test_custom_parameter_form_add_carries_section_path_key_and_seed(panel, qtbot):
     """The inline form's "Add" -- not the footer activation itself -- is what
     fires ``add_parameter_requested``, now carrying a seed (Scalar's ``0.0``,

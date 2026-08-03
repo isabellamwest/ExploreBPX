@@ -1,10 +1,12 @@
 """Parameter list (middle panel): direct parameters of the selected object.
 
-The pane also hosts the section-scoped "+ Add parameter" entry point: a
-header button, enabled only when a document is loaded and an object is
-selected, that opens :class:`~.add_parameter_popup.AddParameterPopup`
-anchored underneath it. This is deliberately the only add-parameter surface;
-creation is never offered by a row's right-click.
+The pane's own section header -- a tinted wash naming the selected object
+and counting its parameters -- also hosts the section-scoped "+ Add" entry
+point: a quiet button in the header's right-aligned suffix, enabled only
+when a document is loaded and an object is selected, that opens
+:class:`~.add_parameter_popup.AddParameterPopup` anchored underneath it.
+This is deliberately the only add-parameter surface; creation is never
+offered by a row's right-click.
 
 A row's right-click context menu instead offers actions on that *existing*
 row: "Remove parameter" (also reachable via the Delete key once a row is
@@ -28,6 +30,8 @@ from __future__ import annotations
 from PySide6.QtCore import QPoint, Qt, Signal
 from PySide6.QtGui import QAction, QColor, QFont
 from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
     QListWidget,
     QListWidgetItem,
     QMenu,
@@ -48,6 +52,7 @@ from . import parameter_row, style
 from .add_parameter_popup import AddParameterPopup, suggestion_row_html, suggestion_row_text
 from .cards.experiment import is_validation_run_path
 from .comparison_strip import ComparisonStrip
+from .group_box import TintedSectionHeader
 from .parameter_row import ParameterRowDelegate
 
 #: RowState -> gutter-bar variant (:data:`parameter_row.REF_BAR_ROLE`).
@@ -172,20 +177,34 @@ class ParameterListPanel(QWidget):
         self._comparison: ComparisonResult | None = None
         self._reference: ReferenceSnapshot | None = None
 
-        self._strip = ComparisonStrip()
-        layout.addWidget(self._strip)
+        self._count_label = QLabel()
+        self._count_label.setObjectName("ParameterListHeaderCount")
 
-        self._add_button = QPushButton("+ Add parameter")
+        self._add_button = QPushButton("+ Add")
         self._add_button.setObjectName("AddParameterButton")
+        self._add_button.setFlat(True)
+        self._add_button.setCursor(Qt.PointingHandCursor)
         self._add_button.setEnabled(False)
-        self._add_button.setMinimumHeight(28)
         self._add_button.clicked.connect(self._open_add_popup)
 
-        button_container = QWidget()
-        button_layout = QVBoxLayout(button_container)
-        button_layout.setContentsMargins(8, 8, 8, 8)
-        button_layout.addWidget(self._add_button)
-        layout.addWidget(button_container)
+        suffix = QWidget()
+        suffix_layout = QHBoxLayout(suffix)
+        suffix_layout.setContentsMargins(0, 0, 0, 0)
+        suffix_layout.setSpacing(8)
+        suffix_layout.addWidget(self._count_label)
+        suffix_layout.addWidget(self._add_button)
+
+        self._header = TintedSectionHeader(
+            "", object_name="ParameterListHeader", suffix=suffix
+        )
+        self._header.hide()  # no section selected yet
+        layout.addWidget(self._header)
+
+        # Comparison strip: a second, slimmer wash sitting directly beneath
+        # the section header wash -- two adjacent full-width tints, no gap
+        # or line between them (``layout.setSpacing(0)`` above).
+        self._strip = ComparisonStrip()
+        layout.addWidget(self._strip)
 
         self._list = _ParameterListView()
         self._list.setObjectName("ParameterListView")
@@ -250,7 +269,17 @@ class ParameterListPanel(QWidget):
         self._add_button.setEnabled(node is not None)
         self._list.clear()
         if node is None:
+            # No section selected: hide the header entirely rather than show
+            # an empty wash (there is nothing to title or count).
+            self._header.hide()
             return
+        self._header.show()
+        self._header.set_title(node.label)
+        # Same count the tree's own whole-document total aggregates per
+        # section (``Document.parameter_count``: the sum, across every
+        # section, of ``len(node.parameters)``) -- real rows only, not the
+        # ghost rows or "fields to add" suggestions appended below.
+        self._count_label.setText(str(len(node.parameters)))
         for parameter in node.parameters:
             severity = self._visible_issue_severities.get(parameter.path)
             is_empty = parameter.value is None
