@@ -25,6 +25,20 @@ def test_load_raw_yaml_detected_by_extension():
     assert raw == {"Header": {"Model": "SPM"}}
 
 
+def test_load_raw_json_with_utf8_bom():
+    raw, fmt = bpx_gateway.load_raw(
+        b'\xef\xbb\xbf{"Header": {"Model": "SPM"}}', "thing.json"
+    )
+    assert fmt == "json"
+    assert raw == {"Header": {"Model": "SPM"}}
+
+
+def test_load_raw_yaml_with_utf8_bom():
+    raw, fmt = bpx_gateway.load_raw(b"\xef\xbb\xbfHeader:\n  Model: SPM\n", "thing.yaml")
+    assert fmt == "yaml"
+    assert raw == {"Header": {"Model": "SPM"}}
+
+
 def test_load_raw_rejects_non_object():
     with pytest.raises(LoadError):
         bpx_gateway.load_raw(b"[1, 2, 3]", "thing.json")

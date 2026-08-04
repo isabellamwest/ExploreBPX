@@ -112,7 +112,11 @@ def load_raw(data: bytes | str, filename: str = "") -> tuple[dict, str]:
     The format is inferred from the file extension and defaults to JSON.
     Raises :class:`LoadError` if the content is not a JSON/YAML object.
     """
-    text = data.decode("utf-8") if isinstance(data, (bytes, bytearray)) else data
+    # utf-8-sig strips a leading UTF-8 BOM (common in files saved by Windows
+    # editors) and is a no-op otherwise. json.loads rejects a BOM outright,
+    # while yaml.safe_load tolerates one -- decoding here keeps the two
+    # supported formats consistent.
+    text = data.decode("utf-8-sig") if isinstance(data, (bytes, bytearray)) else data
     fmt = "yaml" if filename.lower().endswith((".yml", ".yaml")) else "json"
     try:
         parsed = yaml.safe_load(text) if fmt == "yaml" else json.loads(text)
