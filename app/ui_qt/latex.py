@@ -62,7 +62,22 @@ def symbol_label(latex: str, point_size: float = 11.0, color: str = DEFAULT_TEXT
 
 @lru_cache(maxsize=256)
 def _render_png(latex: str, point_size: float, color: str) -> bytes | None:
-    """Rasterise to PNG bytes (cached - symbols repeat across popover opens)."""
+    """Rasterise to PNG bytes (cached - symbols repeat across popover opens).
+
+    The ``finally`` clause is load-bearing: matplotlib's mathtext parses
+    ``$...$`` through pyparsing with packrat caching enabled, and that cache
+    stores ``ParseException`` instances whose ``__traceback__`` captures this
+    call stack -- including the Inspector widgets in the callers' frames.
+    Those exception/traceback/frame graphs are reference *cycles*, so they
+    (and every widget their frames pin) can only ever die in a cyclic-GC
+    pass -- which Python may run mid-``processEvents``, tearing down live
+    Qt objects in the middle of event dispatch (an offscreen
+    access-violation crash in practice). Clearing the cache unroots the
+    cycles and the immediate ``gc.collect()`` reclaims them *here*, a safe
+    point where every widget in the calling stack is still strongly
+    referenced. This function's own ``lru_cache`` keeps repeat symbol
+    renders cheap, so neither cost recurs per paint.
+    """
     try:
         # The OO API (Figure + explicit Agg canvas) rasterises through Agg
         # regardless of the global backend, so this never sets or fights the
@@ -83,3 +98,13 @@ def _render_png(latex: str, point_size: float, color: str) -> bytes | None:
         return buffer.getvalue()
     except Exception:
         return None
+    finally:
+        try:
+            import gc
+
+            import pyparsing
+
+            pyparsing.ParserElement.reset_cache()
+            gc.collect()
+        except Exception:
+            pass
