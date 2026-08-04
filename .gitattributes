@@ -1,0 +1,11 @@
+# Keep line endings identical on macOS and Windows.
+#
+# Everything git detects as text is stored as LF in the repository and checked
+# out as LF in both working trees, so a file edited on Windows and a file edited
+# on the Mac produce the same bytes. Without this the repo drifts into a mix of
+# CRLF and LF and every cross-machine pull shows whole-file diffs.
+* text=auto eol=lf
+
+# Binary assets — never inspected or converted.
+*.png binary
+*.docx binary
