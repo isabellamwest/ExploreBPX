@@ -470,6 +470,33 @@ class InspectorPanel(QWidget):
             return False
         return card.is_dirty and card.isAncestorOf(widget)
 
+    def has_pending_draft(self) -> bool:
+        """True when the showing card holds an uncommitted draft.
+
+        Unlike :meth:`has_focused_draft` this asks nothing about focus: the
+        file-level actions (Save, Open, New, close) need to know a draft
+        exists whether or not the card still has the keyboard, because all
+        four would otherwise walk straight past it.
+        """
+        return self._card is not None and self._card.is_dirty
+
+    def apply_pending_draft(self) -> bool:
+        """Commit the showing card's draft, as Enter would. True if safe.
+
+        Returns False only when a draft exists but *cannot* be written
+        (:meth:`EditorCard.commit_blocked_reason` -- unparseable Raw JSON,
+        duplicate map keys). The card is already showing that reason inline,
+        so the caller aborts rather than saving a document that does not
+        include what the user is looking at. No draft, or one that applies
+        cleanly, both answer True.
+        """
+        if not self.has_pending_draft():
+            return True
+        if self._card.commit_blocked_reason() is not None:
+            return False
+        self._on_commit()
+        return True
+
     def _validate_draft(self) -> None:
         if self._card is None or self._state.active is None:
             return

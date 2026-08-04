@@ -769,6 +769,21 @@ class MainWindow(QMainWindow):
         self._refresh_all()
         self._show_page(_EDITOR_PAGE_INDEX)
 
+    def _has_unsaved_work(self) -> bool:
+        """Whether anything would be lost by replacing the active document.
+
+        Wider than ``session.dirty``: a card draft the user typed but never
+        pressed Enter on is not in the document at all, so ``dirty`` stays
+        False while a real edit sits on screen. Every guard that protects
+        against discarding work asks this instead, so the draft goes through
+        the same Save/Discard/Cancel prompt a committed edit does -- and
+        "Save" applies it on the way out (see :meth:`_save`).
+        """
+        session = self._state.active
+        if session is None:
+            return False
+        return session.dirty or self._inspector.has_pending_draft()
+
     def _confirm_discard_if_dirty(self) -> bool:
         """Guard against silently discarding unsaved changes.
 
@@ -782,7 +797,7 @@ class MainWindow(QMainWindow):
         still lose data, so the guard refuses to proceed.
         """
         session = self._state.active
-        if session is None or not session.dirty:
+        if session is None or not self._has_unsaved_work():
             return True
         choice = QMessageBox.question(
             self,
@@ -810,7 +825,7 @@ class MainWindow(QMainWindow):
         session = self._state.active
         if session is None:
             return True
-        if session.dirty:
+        if self._has_unsaved_work():
             return self._confirm_discard_if_dirty()
         filename = (
             session.backing_file.name
@@ -992,7 +1007,7 @@ class MainWindow(QMainWindow):
             # card hides its "Make main" button, so this is belt-and-braces.
             return
         session = self._state.active
-        if session is not None and session.dirty:
+        if session is not None and self._has_unsaved_work():
             intent = self._ask_switch_intent(
                 self._fallback_filename(session), reference.filename
             )
@@ -1253,8 +1268,18 @@ class MainWindow(QMainWindow):
         save, the Save As dialog was cancelled, or the write failed -- used
         by :meth:`_confirm_discard_if_dirty` to decide whether it is safe to
         proceed with a destructive action.
+
+        A card draft the user typed but never pressed Enter on is applied
+        first, the way every spreadsheet and form commits its active editor
+        on save: what is on screen is what reaches the file. The apply is an
+        ordinary command, so Ctrl+Z takes it back.
         """
         if self._state.active is None:
+            return False
+        if not self._inspector.apply_pending_draft():
+            # The draft cannot be written at all and the card says why
+            # inline. Saving anyway would quietly write a file that does not
+            # contain what the user is looking at.
             return False
         session = self._state.active
         adopted_backing = False
