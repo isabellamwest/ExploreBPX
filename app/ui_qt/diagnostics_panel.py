@@ -36,7 +36,7 @@ filled-circle icon (:data:`ui_qt.parameter_row.SEVERITY_ROLE`) -- red X for
 an error, amber ! for a warning -- replacing the old bracketed
 ``[ERROR]``/``[WARN]`` text tag. This is a shared change to
 ``ParameterRowDelegate`` itself, so the Inspector's Issues tab
-(:mod:`ui_qt.issues_tab`) picks it up too. A task row keeps its own glyph
+(:mod:`ui_qt.issues_view`) picks it up too. A task row keeps its own glyph
 (a hollow circle for "missing", a half-filled circle for "added, no value
 yet"), bold name + muted unit, a REQUIRED tag where applicable, the
 absorbed validator message as muted secondary text, and its action
@@ -91,6 +91,7 @@ from core.page_buckets import (
 from core.validation import Severity, merge_union_pair
 
 from . import badges, icons, parameter_row, style
+from .content_sized_list import ContentSizedList
 from .group_box import GroupBox
 from .parameter_row import ParameterRowDelegate
 
@@ -544,29 +545,11 @@ class _DiagnosticsRowDelegate(ParameterRowDelegate):
             _paint_badges(painter, badge_rect, specs)
 
 
-class _ContentSizedList(QListWidget):
-    """A ``QListWidget`` that reports its natural content height (the sum
-    of its own rows' delegate ``sizeHint``s) as its ``sizeHint`` instead of
-    the generic scroll-area default, and carries ``QSizePolicy.Minimum``
-    vertically -- so it hugs exactly its own rows in a ``QVBoxLayout``
-    rather than stretching to fill whatever space a sibling stretch factor
-    would otherwise hand it (content-hugging group boxes: a one-row
-    Issues box must not become a ~300px empty card).
-    ``updateGeometry()`` must be called after any change that can alter row
-    count/height (every caller here does, right after populating)."""
-
-    def sizeHint(self) -> QSize:
-        width = super().sizeHint().width()
-        height = 2 * self.frameWidth() + sum(
-            self.sizeHintForRow(row) for row in range(self.count())
-        )
-        return QSize(width, height)
-
-
 class _GroupBox(GroupBox):
     """One group box: a banded header (title + zero or more count badges)
     over a borderless list of rows that hugs its own content height
-    (:class:`_ContentSizedList`) rather than stretching. Reused for both the
+    (:class:`~ui_qt.content_sized_list.ContentSizedList`) rather than
+    stretching. Reused for both the
     Issues and the Outstanding box in ``_SectionDetailView`` -- Issues can
     show BOTH a red error badge and an amber warning badge at once, the
     same ``_issue_badge_specs`` the rail/fold-header badges use, so the
@@ -600,7 +583,7 @@ class _GroupBox(GroupBox):
         self.title_text = ""
         self.set_title(title)
 
-        self.list = _ContentSizedList()
+        self.list = ContentSizedList()
         self.list.setObjectName("DiagnosticsGroupBoxList")
         self.list.setFrameShape(QFrame.NoFrame)
         self.list.setWordWrap(True)

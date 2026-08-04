@@ -105,10 +105,10 @@ class AppDriver:
         self._qtbot.wait(260)  # slightly longer than the 200ms debounce
         return self
 
-    def click_issues_tab(self) -> "AppDriver":
-        """Click the Issues tab button in the secondary workspace."""
-        button = self._w._inspector._secondary._buttons["issues"]
-        self._qtbot.mouseClick(button, Qt.LeftButton)
+    def toggle_documentation_section(self) -> "AppDriver":
+        """Click the Documentation section's title row (disclosure toggle)."""
+        header = self._w._inspector._docs_section.header
+        self._qtbot.mouseClick(header, Qt.LeftButton)
         return self
 
     # -- Diagnostics page: strip + rail + detail pane ----------------------
@@ -491,14 +491,14 @@ class AppDriver:
         return self.diagnostics_section_outstanding_empty_text()
 
     def activate_first_parameter_issue(self) -> "AppDriver":
-        """Activate the first issue in the Inspector's Issues tab.
+        """Activate the first issue in the Inspector's Issues section.
 
-        Emits ``itemActivated`` -- the signal the tab actually connects
+        Emits ``itemActivated`` -- the signal the view actually connects
         (fired by a real double-click or Enter/Return) -- rather than
-        ``itemDoubleClicked``, which is a distinct Qt signal the tab does
+        ``itemDoubleClicked``, which is a distinct Qt signal the view does
         not listen to.
         """
-        lst = self._w._inspector._issues_tab._list
+        lst = self._w._inspector._issues_view._list
         lst.itemActivated.emit(lst.item(0))
         return self
 
@@ -1601,46 +1601,48 @@ class AppDriver:
         assert card is not None, "No active card; navigate to a parameter first."
         return type(card._editor).__name__
 
-    def issues_tab_label(self) -> str:
-        return self._w._inspector._secondary._buttons["issues"].text()
+    def issues_section_visible(self) -> bool:
+        """Whether the Inspector's Issues section is meant to be showing.
 
-    def issues_tab_badge_count(self) -> int:
-        """The secondary Issues tab's badge NUMBER, parsed from its button
-        text (e.g. 'Issues (1)' -> 1; 'Issues' with no suffix -> 0).
-
-        Deliberately distinct from :meth:`issues_tab_count` (which reads the
-        tab's own row *list*) -- the two are set by different code paths
-        (``SecondaryWorkspace.set_count`` vs ``IssuesTab.show_parameter``'s
-        row-building) and must always agree. Two Inspector call-sites
-        (``_validate_draft``, ``_on_reset``) used to push the *unmerged*
-        diagnostic count into this badge while the list stayed merged, so
-        this reader exists specifically to catch that class of bug -- a test
-        using only ``issues_tab_count()`` cannot see it.
+        Reads ``isVisibleTo`` against the Inspector so the answer is
+        layout-truth even in a headless run where nothing is on screen.
         """
-        text = self._w._inspector._secondary._buttons["issues"].text()
-        if "(" not in text:
-            return 0
-        return int(text.rsplit("(", 1)[1].rstrip(")"))
+        panel = self._w._inspector
+        return panel._issues_section.isVisibleTo(panel)
 
-    def issues_tab_count(self) -> int:
-        return self._w._inspector._issues_tab._list.count()
+    def issues_header_count(self) -> int:
+        """The Issues section's title-row count NUMBER ('' -> 0).
 
-    def issues_tab_texts(self) -> list[str]:
-        """Text of every row currently listed in the Issues tab (a null/bad
-        FloatInt value's float_type+int_type pair displays merged to one row
-        here)."""
-        lst = self._w._inspector._issues_tab._list
+        Deliberately distinct from :meth:`issues_list_count` (which reads
+        the section's own row *list*) -- the two are set by different code
+        paths (``InspectorPanel._show_issue_rows``'s label vs
+        ``IssuesView.show_issues``'s row-building) and must always agree.
+        Two Inspector call-sites once pushed the *unmerged* diagnostic count
+        into the old tab badge while the list stayed merged, so this reader
+        exists specifically to catch that class of bug -- a test using only
+        ``issues_list_count()`` cannot see it.
+        """
+        text = self._w._inspector._issues_count.text()
+        return int(text) if text else 0
+
+    def issues_list_count(self) -> int:
+        return self._w._inspector._issues_view._list.count()
+
+    def issues_list_texts(self) -> list[str]:
+        """Text of every row currently listed in the Issues section (a
+        null/bad FloatInt value's float_type+int_type pair displays merged
+        to one row here)."""
+        lst = self._w._inspector._issues_view._list
         return [lst.item(i).text() for i in range(lst.count())]
 
-    def issues_tab_message(self) -> str | None:
-        """Visible placeholder text when the Issues tab shows one, else None."""
-        tab = self._w._inspector._issues_tab
-        if tab._stack.currentWidget() is tab._placeholder:
-            return tab._placeholder.text()
-        return None
+    def documentation_section_visible(self) -> bool:
+        """Whether the Inspector's Documentation section is meant to be
+        showing (see :meth:`issues_section_visible` for the idiom)."""
+        panel = self._w._inspector
+        return panel._docs_section.isVisibleTo(panel)
 
-    def secondary_expanded(self) -> bool:
-        return self._w._inspector._secondary.is_expanded
+    def documentation_collapsed(self) -> bool:
+        return self._w._inspector._docs_section.is_collapsed
 
     def validation_issue_count(self) -> int:
         """Count of Issues-section rows only (the page also always renders

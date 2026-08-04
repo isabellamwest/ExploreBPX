@@ -52,7 +52,7 @@ VALUE_GHOST_ROLE = Qt.UserRole + 102
 #: present the delegate paints a small filled-circle severity icon in the
 #: row's left gutter, replacing the old bracketed ``[ERROR]``/``[WARN]``
 #: text tag baked into the HTML. Shared by
-#: :mod:`ui_qt.diagnostics_panel` and :mod:`ui_qt.issues_tab` so both issue
+#: :mod:`ui_qt.diagnostics_panel` and :mod:`ui_qt.issues_view` so both issue
 #: surfaces read identically -- this lives on the base delegate, not a
 #: page-specific subclass, precisely so the two never diverge.
 SEVERITY_ROLE = Qt.UserRole + 103

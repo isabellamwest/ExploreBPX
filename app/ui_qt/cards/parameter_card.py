@@ -2,10 +2,11 @@
 
 Top to bottom, a ``ParameterCard`` holds:
 
-  1. a header (title label + validity badge + ( i ) information button that
-     toggles a :class:`~ui_qt.parameter_info_popover.ParameterInfoPopover` -
+  1. a header band (title label + validity dot-and-text + ( i ) information
+     button that toggles a
+     :class:`~ui_qt.parameter_info_popover.ParameterInfoPopover` -
      the quick glance; the long-form prose lives in the Inspector's
-     Documentation tab),
+     Documentation section),
   2. the parameter's summary description, when present -- always directly
      under the title (and the rename row, when open), in both modes below,
      for consistency: it describes the parameter, not either value,
@@ -23,8 +24,10 @@ Top to bottom, a ``ParameterCard`` holds:
 editor's ``draft_changed`` / ``draft_reset`` / ``commit_requested`` signals
 unchanged and re-exposes ``parameter``, ``value()``, ``reset()`` and
 ``is_dirty`` so callers can treat it like the editor it wraps. It does not
-decide validity: the badge is driven externally via :meth:`set_validity`, and
-all validation orchestration stays in ``InspectorPanel``.
+decide validity: the header's dot-plus-plain-text mark (the same validity
+language the Workspace page speaks; the old solid "Valid" pill retired with
+it) is driven externally via :meth:`set_validity`, and all validation
+orchestration stays in ``InspectorPanel``.
 
 For a parameter whose own key is renamable (``core.structure.can_rename_parameter``
 -- User-defined content, Particle materials, Validation runs, or any
@@ -58,8 +61,7 @@ from core.parameter_metadata import resolve_parameter_metadata
 from core.parameter_types import ParameterKind, split_name_and_unit
 from core.tree_model import ParameterItem
 
-from .. import style
-from ..icons import PENCIL, hover_icon
+from ..icons import DOT, PENCIL, hover_icon, html_img
 from ..latex import symbol_label
 from ..parameter_info_popover import ParameterInfoPopover
 from ..parameter_row import value_preview
@@ -153,7 +155,15 @@ class ParameterCard(QWidget):
         else:
             self._rename_button = None
         header.addStretch(1)
+        # Validity mark: the shared dot family plus a separate plain text
+        # label (the "dot-plus-plain-text language" the Workspace page
+        # introduced), not a solid pill -- tests and the driver read the
+        # text via ``self._badge.text()``.
+        self._dot = QLabel("")
+        self._dot.setObjectName("ValidityDot")
+        header.addWidget(self._dot)
         self._badge = QLabel("")
+        self._badge.setObjectName("CardValidityText")
         header.addWidget(self._badge)
         self._info_button = QPushButton("i")
         self._info_button.setObjectName("InfoButton")
@@ -320,9 +330,10 @@ class ParameterCard(QWidget):
         self._editor.set_cell_issues(issues)
 
     def set_validity(self, text: str, colour: str) -> None:
-        """Drive the header badge; validity decisions stay in the Inspector."""
+        """Drive the header's validity dot and text; validity decisions stay
+        in the Inspector."""
+        self._dot.setText(html_img(DOT, color=colour))
         self._badge.setText(text)
-        self._badge.setStyleSheet(style.validity_pill_qss(colour))
 
     def _toggle_info_popover(self) -> None:
         """Open the info popover on the first click, close it on the second."""

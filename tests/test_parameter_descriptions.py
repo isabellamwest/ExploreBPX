@@ -168,25 +168,25 @@ def test_latex_pixmap_returns_none_for_unparseable_input(qtbot):
 
 
 # ---------------------------------------------------------------------------
-# Documentation tab
+# Documentation view (the Documentation section's body)
 # ---------------------------------------------------------------------------
 
 
 @pytest.fixture
-def docs_tab(qtbot):
+def docs_view(qtbot):
     pytest.importorskip("PySide6")
     from PySide6.QtWidgets import QApplication
 
     QApplication.instance() or QApplication([])
-    from ui_qt.documentation_tab import DocumentationTab
+    from ui_qt.documentation_view import DocumentationView
 
-    tab = DocumentationTab()
-    qtbot.addWidget(tab)
-    return tab
+    view = DocumentationView()
+    qtbot.addWidget(view)
+    return view
 
 
-def _tab_texts(tab) -> list[str]:
-    layout = tab._content_layout
+def _view_texts(view) -> list[str]:
+    layout = view._layout
     return [
         layout.itemAt(i).widget().text()
         for i in range(layout.count())
@@ -194,14 +194,16 @@ def _tab_texts(tab) -> list[str]:
     ]
 
 
-def test_docs_tab_starts_on_placeholder(docs_tab):
-    assert docs_tab._stack.currentWidget() is docs_tab._placeholder
+def test_docs_view_starts_empty(docs_view):
+    # No "select a parameter" placeholder of its own: with nothing shown the
+    # Inspector hides the whole Documentation section instead.
+    assert docs_view._layout.count() == 0
 
 
-def test_docs_tab_renders_sections_in_dataset_order(docs_tab):
+def test_docs_view_renders_sections_in_dataset_order(docs_view):
     from core.parameter_metadata import ParameterMetadata
 
-    docs_tab.show_metadata(
+    docs_view.show_metadata(
         ParameterMetadata(
             symbol="A",
             documentation=(
@@ -211,25 +213,25 @@ def test_docs_tab_renders_sections_in_dataset_order(docs_tab):
             source="Test source, v1",
         )
     )
-    assert docs_tab._stack.currentWidget() is docs_tab._scroll
-    texts = _tab_texts(docs_tab)
+    texts = _view_texts(docs_view)
     assert texts.index("Physical correspondence") < texts.index("A brand-new heading")
     assert "First." in texts and "Second." in texts
     assert any("Test source, v1" in t for t in texts)
 
 
-def test_docs_tab_placeholder_when_parameter_has_no_documentation(docs_tab):
+def test_docs_view_placeholder_when_parameter_has_no_documentation(docs_view):
     from core.parameter_metadata import ParameterMetadata
 
-    docs_tab.show_metadata(ParameterMetadata(physical_meaning="short only"))
-    assert docs_tab._stack.currentWidget() is docs_tab._placeholder
+    docs_view.show_metadata(ParameterMetadata(physical_meaning="short only"))
+    texts = _view_texts(docs_view)
+    assert texts == ["No technical description is available for this parameter."]
 
 
-def test_docs_tab_clears_back_to_no_selection(docs_tab):
+def test_docs_view_clears_back_to_no_selection(docs_view):
     from core.parameter_metadata import ParameterMetadata
 
-    docs_tab.show_metadata(
+    docs_view.show_metadata(
         ParameterMetadata(documentation=(("Description", "x"),))
     )
-    docs_tab.show_metadata(None)
-    assert docs_tab._stack.currentWidget() is docs_tab._placeholder
+    docs_view.show_metadata(None)
+    assert docs_view._layout.count() == 0

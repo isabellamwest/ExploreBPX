@@ -156,14 +156,14 @@ def _partial_null_capacity_path(tmp_path):
     return _write(tmp_path, "partial_null.json", raw)
 
 
-def test_union_pair_merges_in_issues_tab(app_driver, tmp_path):
+def test_union_pair_merges_in_issues_section(app_driver, tmp_path):
     d = app_driver
     d.open(_partial_null_capacity_path(tmp_path))
     d.go_to(_CELL + ("Nominal cell capacity [A.h]",))
-    d.click_issues_tab()
 
-    assert d.issues_tab_count() == 1
-    assert d.issues_tab_texts() == ["[ERROR] Input should be a valid number"]
+    assert d.issues_section_visible()
+    assert d.issues_list_count() == 1
+    assert d.issues_list_texts() == ["[ERROR] Input should be a valid number"]
 
 
 def _partial_bad_capacity_path(tmp_path):
@@ -209,48 +209,50 @@ def test_union_pair_does_not_merge_across_different_locations(app_driver, tmp_pa
 
 
 # ---------------------------------------------------------------------------
-# The secondary Issues-tab BADGE must always equal its own LIST count -- two
-# Inspector call-sites (live-preview, Escape-revert) used to push the
-# unmerged diagnostic length into the badge while the list stayed merged.
+# The Issues section's header COUNT must always equal its own LIST count --
+# two Inspector call-sites (live-preview, Escape-revert) used to push the
+# unmerged diagnostic length into the old tab badge while the list stayed
+# merged.
 # ---------------------------------------------------------------------------
 
 
-def test_issues_tab_badge_matches_list_after_escape_revert(app_driver, tmp_path):
-    """Select a committed-null FloatInt parameter: the tab lists 1 merged row
-    and the badge reads 1. Edit then press Escape (``Inspector._on_reset``)
-    -- the list stays at its pre-edit render (1 row, ``_on_reset`` does not
-    re-run ``show_parameter``), so the badge must stay 1 too, not
+def test_issues_header_count_matches_list_after_escape_revert(app_driver, tmp_path):
+    """Select a committed-null FloatInt parameter: the section lists 1
+    merged row and its header count reads 1. Edit then press Escape
+    (``Inspector._on_reset``) -- both must stay 1, not
     ``len(parameter.issues)`` (2, the unmerged float_type+int_type pair)."""
     d = app_driver
     d.open(_partial_null_capacity_path(tmp_path))
     d.go_to(_CELL + ("Nominal cell capacity [A.h]",))
-    d.click_issues_tab()
 
-    assert d.issues_tab_count() == 1
-    assert d.issues_tab_badge_count() == 1
+    assert d.issues_list_count() == 1
+    assert d.issues_header_count() == 1
 
     d.edit_field(5.0)
     d.escape()
 
-    assert d.issues_tab_count() == 1
-    assert d.issues_tab_badge_count() == 1
+    assert d.issues_list_count() == 1
+    assert d.issues_header_count() == 1
 
 
-def test_issues_tab_badge_matches_list_during_live_preview(app_driver, valid_spm_path):
+def test_issues_header_count_matches_list_during_live_preview(app_driver, valid_spm_path):
     """``Inspector._validate_draft`` (live typing, before commit) is the
     other call-site: previewing a candidate ``None`` value on a valid
-    FloatInt field raises the same float_type+int_type pair, and the badge
+    FloatInt field raises the same float_type+int_type pair, and the section
     must show the merged count (1), not the raw diagnostic count (2)."""
     d = app_driver
     d.open(valid_spm_path)
     d.go_to(_LOWER_CUTOFF)
-    d.click_issues_tab()
-    assert d.issues_tab_badge_count() == 0  # baseline: a valid committed field
+    # Baseline: a valid committed field has no Issues section at all.
+    assert not d.issues_section_visible()
+    assert d.issues_header_count() == 0
 
     d.edit_field("")  # draft candidate becomes None -- previews the pair
     d.wait_for_live_validation()
 
-    assert d.issues_tab_badge_count() == 1
+    assert d.issues_section_visible()
+    assert d.issues_header_count() == 1
+    assert d.issues_list_count() == 1
 
 
 # ---------------------------------------------------------------------------

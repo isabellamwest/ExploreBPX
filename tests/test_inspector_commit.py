@@ -155,34 +155,34 @@ def test_model_popup_pick_switches_model_and_completes_structure(qtbot, spm_work
     assert "Electrolyte" not in raw["Parameterisation"]
 
 
-def test_expanding_a_grid_reclaims_the_secondary_workspace_space(
+def test_expanding_a_grid_hides_the_sections_and_takes_the_pane(
     qtbot, spm_with_validation_path
 ):
-    """When a grid takes over the pane, the secondary workspace must collapse
-    to its tab strip and *give its space back* -- not merely hide its content
-    and leave a dead band (the splitter has to be resized, since lowering the
-    max height alone does not make it redistribute)."""
+    """When a grid takes over the pane, the Issues/Documentation sections
+    must get out of the way and the surface slot must claim the page's
+    leftover space; collapsing restores both (including a section the
+    parameter's own issues would show)."""
     time_path = ("Validation", "C/20 discharge", "Time [s]")
     state, panel = _panel_on(qtbot, spm_with_validation_path, time_path)
     panel.resize(460, 720)
     panel.show()
     qtbot.waitExposed(panel)
-
-    # Open the drawer so it holds a real slice of the splitter, then expand.
-    panel._secondary.open("issues")
-    qtbot.wait(1)
-    assert panel._splitter.sizes()[1] > panel._secondary.tab_strip_height()
+    assert panel._docs_section.isVisibleTo(panel)
 
     panel._card._editor._grid._toggle_expanded()
     qtbot.wait(1)
 
-    strip = panel._secondary.tab_strip_height()
-    assert not panel._secondary.is_expanded
-    assert panel._splitter.sizes()[1] <= strip  # space reclaimed, no dead band
-    # Collapsing the grid restores the drawer to what the user last wanted.
+    assert not panel._docs_section.isVisibleTo(panel)
+    assert not panel._issues_section.isVisibleTo(panel)
+    # The surface slot owns the page's leftover space, the tail does not.
+    assert panel._content_layout.stretch(0) == 1
+    assert panel._content_layout.stretch(panel._tail_index) == 0
+
     panel._card._editor._grid._toggle_expanded()
     qtbot.wait(1)
-    assert panel._splitter.sizes()[1] > strip
+    assert panel._docs_section.isVisibleTo(panel)
+    assert panel._content_layout.stretch(0) == 0
+    assert panel._content_layout.stretch(panel._tail_index) == 1
 
 
 def test_real_edit_still_commits_and_emits(qtbot, spm_workfile):
@@ -222,28 +222,31 @@ def test_switching_content_leaves_no_ghost_placeholder(qtbot, spm_workfile):
     assert len(stale) == 1, f"expected one placeholder, found {len(stale)}"
 
 
-def test_issues_tab_count_updates_live_during_preview(qtbot, spm_workfile):
-    """Issues tab (docs/architecture.md): the Issues tab's count badge updates
-    live while typing an invalid draft, not only on commit."""
+def test_issues_section_appears_live_during_preview(qtbot, spm_workfile):
+    """The Issues section updates live while typing an invalid draft, not
+    only on commit: it appears with the previewed issue's row and count."""
     state, panel = _panel_on(qtbot, spm_workfile, _CAPACITY)
-    assert panel._secondary._buttons["issues"].text() == "Issues"
+    assert not panel._issues_section.isVisibleTo(panel)
 
     panel._card._editor._edit.setText("not-a-number")
     panel._validate_draft()  # bypass the debounce timer directly
 
-    assert panel._secondary._buttons["issues"].text() != "Issues"
+    assert panel._issues_section.isVisibleTo(panel)
+    assert panel._issues_count.text() != "0"
+    assert panel._issues_view._list.count() > 0
 
 
-def test_issues_tab_count_restores_on_escape(qtbot, spm_workfile):
+def test_issues_section_restores_on_escape(qtbot, spm_workfile):
     state, panel = _panel_on(qtbot, spm_workfile, _CAPACITY)
 
     panel._card._editor._edit.setText("not-a-number")
     panel._validate_draft()
-    assert panel._secondary._buttons["issues"].text() != "Issues"
+    assert panel._issues_section.isVisibleTo(panel)
 
     panel._on_reset()
 
-    assert panel._secondary._buttons["issues"].text() == "Issues"
+    assert not panel._issues_section.isVisibleTo(panel)
+    assert panel._issues_view._list.count() == 0
 
 
 # ---------------------------------------------------------------------------

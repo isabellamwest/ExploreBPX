@@ -1,12 +1,15 @@
-"""Page scaffold for the Inspector's cards: a full-bleed header block closed
-by a hairline rule, then a content column on the same fixed gutter.
+"""Page scaffold for the Inspector's cards: a full-bleed tinted header band,
+then a content column on the same fixed gutter.
 
 Every card that fills the Inspector's editing pane composes these two pieces
 so the pane reads as one designed page whichever card is showing: the header
-frame carries identity (title row, rename row, description), the content
-column carries the work surface (editor, reference section). Both builders
-return ``(container, layout)`` so callers add their own widgets; the margins
-and spacing live here, once, instead of per card.
+band carries identity (title row, rename row, description) on the app's
+neutral section wash -- the same tinted-band language as the Workspace
+page's sections and the parameter list's header, with no hairline (the wash
+edge is the boundary) -- and the content column carries the work surface
+(editor, reference section) on the white page below. Both builders return
+``(container, layout)`` so callers add their own widgets; the margins and
+spacing live here, once, instead of per card.
 """
 
 from __future__ import annotations
@@ -20,7 +23,7 @@ GUTTER = 16
 
 
 def page_header() -> tuple[QFrame, QVBoxLayout]:
-    """The header block: styled ``CardPageHeader`` (hairline rule below)."""
+    """The header band: styled ``CardPageHeader`` (neutral wash, no rule)."""
     frame = QFrame()
     frame.setObjectName("CardPageHeader")
     layout = QVBoxLayout(frame)

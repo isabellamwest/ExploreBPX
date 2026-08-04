@@ -59,15 +59,16 @@ surface.
 
 ## Analysis and visualisation
 
-An **Analysis** tab in the Inspector's secondary workspace — the next piece
-of design work, and it requires its own design pass before any UI is built.
-Beyond it: plausibility displays against reference data, comparison overlays
-for related files or known cells, and docking or maximising floating plots
-if they need more space.
+An **Analysis** section on the Inspector's page (beside the Issues and
+Documentation sections) — the next piece of design work, and it requires its
+own design pass before any UI is built. Beyond it: plausibility displays
+against reference data, comparison overlays for related files or known
+cells, and docking or maximising floating plots if they need more space.
 
 ## ParameterTool protocol
 
-When a second Inspector tool ships, evolve `SecondaryWorkspace` toward a
-small `ParameterTool` protocol (`id`, `title`, `supports()`, `update()`) so
-tools register generically instead of each needing bespoke wiring. The
-abstraction should be derived from two real examples, not invented for one.
+When a second parameter-scoped Inspector tool ships, evolve the Inspector's
+section wiring toward a small `ParameterTool` protocol (`id`, `title`,
+`supports()`, `update()`) so tools register generically instead of each
+needing bespoke wiring. The abstraction should be derived from two real
+examples, not invented for one.

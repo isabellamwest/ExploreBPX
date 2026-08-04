@@ -200,14 +200,15 @@ navigate to locations rather than filtering or replacing the hierarchy.
   (typed: scalar, text, boolean, table or series); actions on an existing row
   (rename, duplicate, move, remove) live in its context menu. A collapsed
   `▸ N fields to add` line lists schema-expected fields still absent.
-- **Inspector** — the selected parameter's work surface: the editing card for
-  its kind on top (tables plot a live chart preview beside the grid), and
-  below it a collapsible tabbed secondary workspace (**Issues**,
-  **Documentation**; future tools add tabs here, not new pages). Large grids
-  expand in place within the pane; floating windows are reserved for
-  read-only visualisation, such as the validation-run comparison charts. A
-  card's ( i ) opens a quick documentation popover; the Documentation tab
-  carries the full prose.
+- **Inspector** — the selected parameter's work surface, one scrolling page:
+  the editing card for its kind on top (tables plot a live chart preview
+  beside the grid), then an **Issues** section that appears only while the
+  parameter has issues, then a resident collapsible **Documentation**
+  section (future parameter tools add sections here, not new pages). Large
+  grids expand in place within the pane, hiding the sections while
+  expanded; floating windows are reserved for read-only visualisation, such
+  as the validation-run comparison charts. A card's ( i ) opens a quick
+  documentation popover; the Documentation section carries the full prose.
 - **Diagnostics page** — a summary strip over a section rail beside a detail
   pane of per-section **Issues** and **Outstanding** groups. The strip's
   chips double as view-only filters that never change any reported count.

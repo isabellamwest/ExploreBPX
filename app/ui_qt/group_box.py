@@ -20,7 +20,7 @@ subclassing).
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from . import style
@@ -110,6 +110,38 @@ class GroupBox(QFrame):
 #: this module's docstring exactly.
 _SECTION_GUTTER = 16
 
+#: The disclosure chevrons a collapsible section's title row carries --
+#: the same pair the Diagnostics fold headers draw, so "this heading
+#: toggles" reads identically everywhere.
+_CHEVRON_EXPANDED = "▾"
+_CHEVRON_COLLAPSED = "▸"
+
+
+class _ClickableRow(QWidget):
+    """A plain row widget that emits ``clicked`` on a left press -- the hit
+    area for a collapsible :class:`TintedSection`'s whole title row (title,
+    chevron and the empty stretch between them), not just the text.
+
+    A signal, deliberately not a stored callback: holding the section's
+    bound method here would tie the whole widget tree into a pure-Python
+    reference cycle, deferring its death from prompt refcounting to a later
+    GC pass -- which can land mid-event-dispatch and delete live Qt objects
+    under Qt's feet (PySide keeps QObject slot references weak, so the
+    signal creates no such cycle).
+    """
+
+    clicked = Signal()
+
+    def __init__(self, clickable: bool) -> None:
+        super().__init__()
+        self._clickable = clickable
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        if self._clickable and event.button() == Qt.LeftButton:
+            self.clicked.emit()
+            return
+        super().mousePressEvent(event)
+
 
 class TintedSection(QWidget):
     """One full-width tinted section wash: a caps title row (optional
@@ -117,8 +149,8 @@ class TintedSection(QWidget):
     :class:`GroupBox` there is no border, corner radius or shadow -- the
     wash colour itself is the section's only chrome, for pages built as
     full-bleed stacked bands rather than floating bordered cards (the
-    Workspace page's document/reference sections today; Phase 5 reuses it
-    for Inspector sections).
+    Workspace page's document/reference sections, the Inspector's Issues/
+    Documentation sections).
 
     ``object_name`` selects the wash colour: this module never spells a
     colour literal, so pair one with a ``QWidget#<object_name>``
@@ -126,6 +158,13 @@ class TintedSection(QWidget):
     ``WorkspaceReferenceSection`` for the pattern). The body is capped at
     ``style.CONTENT_MEASURE``, left-hugging the same gutter as the title,
     the same left-unset/no-alignment idiom ``cards/page.py`` uses.
+
+    ``collapsible=True`` puts a disclosure chevron before the title and
+    makes the whole title row a click target that toggles the body
+    (:meth:`set_collapsed`); collapsed, the section is just its tinted
+    title band. The open/collapsed state is the widget's own -- a caller
+    that keeps one section resident across content changes keeps the
+    user's choice for free.
     """
 
     def __init__(
@@ -135,24 +174,38 @@ class TintedSection(QWidget):
         object_name: str,
         title_object_name: str = "PanelTitle",
         suffix: QWidget | None = None,
+        collapsible: bool = False,
     ) -> None:
         super().__init__()
         self.setObjectName(object_name)
         self.setAttribute(Qt.WA_StyledBackground, True)
+        self._collapsed = False
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(_SECTION_GUTTER, 12, _SECTION_GUTTER, 12)
         outer.setSpacing(8)
 
-        header = QHBoxLayout()
+        self.header = _ClickableRow(collapsible)
+        if collapsible:
+            self.header.clicked.connect(self._toggle_collapsed)
+        header = QHBoxLayout(self.header)
         header.setContentsMargins(0, 0, 0, 0)
         header.setSpacing(8)
+        self._chevron: QLabel | None = None
+        if collapsible:
+            self.header.setCursor(Qt.PointingHandCursor)
+            # Same caps-tier object name as the title so the chevron takes
+            # the identical muted colour/size from QSS.
+            self._chevron = QLabel(_CHEVRON_EXPANDED)
+            self._chevron.setObjectName(title_object_name)
+        if self._chevron is not None:
+            header.addWidget(self._chevron)
         self.title_label = panel_title(title, object_name=title_object_name)
         header.addWidget(self.title_label)
         header.addStretch(1)
         if suffix is not None:
             header.addWidget(suffix)
-        outer.addLayout(header)
+        outer.addWidget(self.header)
 
         self.body = QWidget()
         self.body.setMaximumWidth(style.CONTENT_MEASURE)
@@ -160,6 +213,22 @@ class TintedSection(QWidget):
         self.body_layout.setContentsMargins(0, 0, 0, 0)
         self.body_layout.setSpacing(8)
         outer.addWidget(self.body)
+
+    @property
+    def is_collapsed(self) -> bool:
+        return self._collapsed
+
+    def set_collapsed(self, collapsed: bool) -> None:
+        """Show/hide the body and flip the chevron. Harmless (body toggle
+        only) on a non-collapsible section, though callers have no reason
+        to do that."""
+        self._collapsed = collapsed
+        self.body.setVisible(not collapsed)
+        if self._chevron is not None:
+            self._chevron.setText(_CHEVRON_COLLAPSED if collapsed else _CHEVRON_EXPANDED)
+
+    def _toggle_collapsed(self) -> None:
+        self.set_collapsed(not self._collapsed)
 
 
 class TintedSectionHeader(QWidget):

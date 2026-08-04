@@ -1,7 +1,7 @@
 """Keyboard navigation of validation issues (roadmap 2.3).
 
 Both issue lists (the document-wide ``DiagnosticsPanel`` and the
-parameter-scoped ``IssuesTab``) must let Enter/Return activate the selected
+parameter-scoped ``IssuesView``) must let Enter/Return activate the selected
 row and emit ``issue_activated``, matching the existing double-click
 behaviour. Arrow-key selection alone (i.e. simply moving the current row)
 must not navigate.
@@ -21,7 +21,7 @@ from core.parameter_types import ParameterKind
 from core.tree_model import ParameterItem
 from core.validation import PydanticErrorDiagnostic
 from ui_qt import diagnostics_panel as vp
-from ui_qt.issues_tab import IssuesTab
+from ui_qt.issues_view import IssuesView
 from ui_qt.diagnostics_panel import DiagnosticsPanel
 
 
@@ -52,8 +52,8 @@ def validation_panel(qtbot, invalid_document) -> DiagnosticsPanel:
 
 
 @pytest.fixture
-def issues_tab(qtbot) -> IssuesTab:
-    # The Issues tab is parameter-scoped, so drive it with a parameter that has
+def issues_view(qtbot) -> IssuesView:
+    # The Issues view is parameter-scoped, so drive it with a parameter that has
     # an issue directly (mirroring test_ui_qt_tree_model). This is independent
     # of whether any example file happens to produce a parameter-level issue.
     path = ("Parameterisation", "Cell", "Voltage")
@@ -63,11 +63,11 @@ def issues_tab(qtbot) -> IssuesTab:
         kind=ParameterKind.SCALAR,
         issues=[PydanticErrorDiagnostic(raw_error={"loc": path, "msg": "Invalid"})],
     )
-    tab = IssuesTab()
-    qtbot.addWidget(tab)
-    tab.show_parameter(parameter)
-    assert tab._list.count() >= 1
-    return tab
+    view = IssuesView()
+    qtbot.addWidget(view)
+    view.show_issues(parameter.issues, parameter.path)
+    assert view._list.count() >= 1
+    return view
 
 
 def _press_return(qtbot, list_widget):
@@ -95,22 +95,22 @@ def test_validation_panel_selection_change_alone_does_not_activate(qtbot, valida
     assert received == []
 
 
-def test_issues_tab_enter_activates_selected_row(qtbot, issues_tab):
+def test_issues_view_enter_activates_selected_row(qtbot, issues_view):
     received = []
-    issues_tab.issue_activated.connect(received.append)
+    issues_view.issue_activated.connect(received.append)
 
-    issues_tab._list.setCurrentRow(0)
-    expected_path = issues_tab._list.item(0).data(256)
-    _press_return(qtbot, issues_tab._list)
+    issues_view._list.setCurrentRow(0)
+    expected_path = issues_view._list.item(0).data(256)
+    _press_return(qtbot, issues_view._list)
 
     assert received == [expected_path]
 
 
-def test_issues_tab_selection_change_alone_does_not_activate(qtbot, issues_tab):
+def test_issues_view_selection_change_alone_does_not_activate(qtbot, issues_view):
     received = []
-    issues_tab.issue_activated.connect(received.append)
+    issues_view.issue_activated.connect(received.append)
 
-    issues_tab._list.setCurrentRow(0)
+    issues_view._list.setCurrentRow(0)
 
     assert received == []
 
@@ -134,7 +134,7 @@ def test_validation_panel_issue_row_tooltips_match_their_severity_role(validatio
         assert item.toolTip() == style.severity_tooltip(severity)
 
 
-def test_issues_tab_row_tooltip_is_severity_derived_not_message_derived(issues_tab):
+def test_issues_view_row_tooltip_is_severity_derived_not_message_derived(issues_view):
     """The fixture's fake diagnostic carries the message "Invalid" -- if the
     tooltip were message-derived it would show something unrelated to the
     pinned, generic sentence. It must show the fixed Severity.ERROR text
@@ -142,5 +142,5 @@ def test_issues_tab_row_tooltip_is_severity_derived_not_message_derived(issues_t
     from core.validation import Severity
     from ui_qt import style
 
-    item = issues_tab._list.item(0)
+    item = issues_view._list.item(0)
     assert item.toolTip() == style.severity_tooltip(Severity.ERROR)

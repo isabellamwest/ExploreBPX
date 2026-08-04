@@ -150,16 +150,19 @@ def test_flagship_edit_updates_validation_and_issues(app_driver, spm_workfile):
     assert d.inspector_title() == "Nominal cell capacity [A.h]"
     assert d.validity() == "Valid"
 
-    # Commit an invalid value: the badge flips and the Issues tab counts it.
+    # Commit an invalid value: the validity mark flips and the Issues
+    # section appears with the issue counted in its title row.
     d.edit_field("not-a-number").commit()
     assert d.validity() == "Invalid"
-    assert d.issues_tab_count() >= 1
-    assert "Issues (" in d.issues_tab_label()
+    assert d.issues_section_visible()
+    assert d.issues_list_count() >= 1
+    assert d.issues_header_count() == d.issues_list_count()
 
-    # Repair it: validity clears and the Issues tab empties.
+    # Repair it: validity clears and the Issues section disappears.
     d.edit_field("5.0").commit()
     assert d.validity() == "Valid"
-    assert d.issues_tab_count() == 0
+    assert not d.issues_section_visible()
+    assert d.issues_list_count() == 0
 
 
 # ---------------------------------------------------------------------------
@@ -272,25 +275,26 @@ def test_focus_search_selects_existing_text(main_window, spm_workfile):
 
 
 # ---------------------------------------------------------------------------
-# Issues tab: navigation + placeholders
+# Issues section: navigation + conditional presence
 # ---------------------------------------------------------------------------
 
-def test_issues_tab_navigation_and_placeholders(app_driver, spm_workfile):
+def test_issues_section_navigation_and_presence(app_driver, spm_workfile):
     d = app_driver
     d.open(spm_workfile)
 
-    # A valid parameter shows the explanatory 'no issues' placeholder.
+    # A valid parameter has no Issues section at all.
     d.go_to(_CAPACITY)
-    assert d.issues_tab_count() == 0
-    assert "No validation issues" in (d.issues_tab_message() or "")
+    assert not d.issues_section_visible()
+    assert d.issues_list_count() == 0
 
     # An invalid parameter lists its issues; activating one navigates.
     d.edit_field("not-a-number").commit()
-    assert d.issues_tab_count() >= 1
-    # The Issues tab is parameter-scoped: its list only ever contains issues
-    # for the currently-displayed parameter, so activation always navigates
-    # to that same parameter. Unlike the flagship Validation test, the
-    # navigate-away-then-activate displacement pattern is structurally
+    assert d.issues_section_visible()
+    assert d.issues_list_count() >= 1
+    # The Issues section is parameter-scoped: its list only ever contains
+    # issues for the currently-displayed parameter, so activation always
+    # navigates to that same parameter. Unlike the flagship Validation test,
+    # the navigate-away-then-activate displacement pattern is structurally
     # inapplicable here -- this assertion instead verifies that the real
     # activation signal chain fires (catching a broken/removed connection),
     # not that activation navigates across parameters.
@@ -299,71 +303,70 @@ def test_issues_tab_navigation_and_placeholders(app_driver, spm_workfile):
 
 
 # ---------------------------------------------------------------------------
-# Secondary workspace is workspace state, not parameter state
+# Documentation section state is workspace state, not parameter state
 # ---------------------------------------------------------------------------
 
-def test_secondary_workspace_persists_and_resets(app_driver, spm_workfile):
+def test_documentation_section_state_persists_and_resets(app_driver, spm_workfile):
     d = app_driver
     d.open(spm_workfile)
     d.go_to(_MODEL)
 
-    # Opening the Issues tab expands the workspace...
-    d.click_issues_tab()
-    assert d.secondary_expanded() is True
+    # The resident Documentation section starts collapsed; its title row
+    # toggles it open...
+    assert d.documentation_section_visible()
+    assert d.documentation_collapsed() is True
+    d.toggle_documentation_section()
+    assert d.documentation_collapsed() is False
 
     # ...and it stays open across parameter changes.
     d.go_to(_CAPACITY)
-    assert d.secondary_expanded() is True
+    assert d.documentation_collapsed() is False
 
-    # Clicking the active tab collapses it.
-    d.click_issues_tab()
-    assert d.secondary_expanded() is False
+    # Clicking the title row again collapses it.
+    d.toggle_documentation_section()
+    assert d.documentation_collapsed() is True
 
     # Opening a new document resets it to the collapsed default.
-    d.click_issues_tab()
-    assert d.secondary_expanded() is True
+    d.toggle_documentation_section()
+    assert d.documentation_collapsed() is False
     d.open(spm_workfile)
-    assert d.secondary_expanded() is False
+    assert d.documentation_collapsed() is True
 
 
 _VOLTAGE_LIMIT = ("Parameterisation", "Cell", "Upper voltage cut-off [V]")
 _CELL_OBJECT = ("Parameterisation", "Cell")
 
 
-def test_secondary_workspace_suspends_without_a_parameter(app_driver, spm_workfile):
-    """The drawer is parameter-scoped, so it must not stay expanded showing
+def test_sections_hide_without_a_parameter(app_driver, spm_workfile):
+    """The sections are parameter-scoped, so they must not linger showing
     stale/empty content when the Inspector falls back to its placeholder --
-    but the user's last expanded/collapsed intent must survive the trip."""
+    but the Documentation section's open/collapsed choice must survive the
+    trip."""
     d = app_driver
     d.open(spm_workfile)
     d.go_to(_CAPACITY)
 
-    # Opening Issues expands the drawer...
-    d.click_issues_tab()
-    assert d.secondary_expanded() is True
+    # Open the Documentation section...
+    d.toggle_documentation_section()
+    assert d.documentation_collapsed() is False
 
-    # ...selecting an object (no parameter) force-collapses it...
+    # ...selecting an object (no parameter) hides both sections...
     d.select_object(_CELL_OBJECT)
     assert d.showing_placeholder() is True
-    assert d.secondary_expanded() is False
+    assert not d.documentation_section_visible()
+    assert not d.issues_section_visible()
 
-    # ...and selecting a parameter again restores it, Issues still active.
+    # ...and selecting a parameter again restores it, still open.
     d.go_to(_CAPACITY)
-    assert d.secondary_expanded() is True
-    assert "Issues" in d.issues_tab_label()
+    assert d.documentation_section_visible()
+    assert d.documentation_collapsed() is False
 
     # Collapsing while a parameter is shown, then switching parameters,
-    # must not re-expand it.
-    d.click_issues_tab()
-    assert d.secondary_expanded() is False
+    # must not re-open it.
+    d.toggle_documentation_section()
+    assert d.documentation_collapsed() is True
     d.go_to(_VOLTAGE_LIMIT)
-    assert d.secondary_expanded() is False
-
-    # Opening a new document resets to the collapsed default.
-    d.click_issues_tab()
-    assert d.secondary_expanded() is True
-    d.open(spm_workfile)
-    assert d.secondary_expanded() is False
+    assert d.documentation_collapsed() is True
 
 
 # ---------------------------------------------------------------------------

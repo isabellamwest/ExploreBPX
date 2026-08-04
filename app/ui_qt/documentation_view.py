@@ -1,21 +1,26 @@
-"""Documentation tab: long-form technical descriptions inside the Inspector's
-secondary workspace.
+"""Documentation section body: long-form technical descriptions inside the
+Inspector's resident Documentation section.
 
 Renders the ordered (heading, prose) sections that
 :func:`core.parameter_metadata.resolve_parameter_metadata` resolves from the
 technical-descriptions dataset, plus the parameter's symbol as rendered maths
-and a provenance footer. The tab is deliberately *data-shaped*: it renders
+and a provenance footer. The view is deliberately *data-shaped*: it renders
 whatever headings the dataset provides, in dataset order, so a revised
 dataset file changes the app's documentation without any code change.
 
-The ( i ) popover stays the quick glance; this tab is where multi-paragraph
-prose (physical correspondence, model sensitivity, measurement methods) can
-be read properly - it persists beside the editor instead of dismissing on the
-first outside click.
+The ( i ) popover stays the quick glance; this section is where
+multi-paragraph prose (physical correspondence, model sensitivity,
+measurement methods) can be read properly - it persists beside the editor
+instead of dismissing on the first outside click. Unlike the old tab it owns
+no scroll area: it lives inside the Inspector's scrolling page and hugs its
+own content. A parameter without dataset content shows one quiet
+"no description" line, so an expanded section always explains itself; the
+"nothing selected" state has no placeholder here because the Inspector hides
+the whole section instead.
 
-Data contract mirrors :class:`~ui_qt.issues_tab.IssuesTab`:
+Data contract mirrors :class:`~ui_qt.issues_view.IssuesView`:
   - ``show_metadata(metadata)`` is the sole inbound data path; ``None``
-    clears it back to the no-selection placeholder.
+    clears the view entirely.
 """
 
 from __future__ import annotations
@@ -23,68 +28,42 @@ from __future__ import annotations
 import html
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (
-    QLabel,
-    QScrollArea,
-    QStackedWidget,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
 from core.parameter_metadata import ParameterMetadata
 
 from .latex import latex_pixmap
 
-_MSG_NO_SELECTION = "Select a parameter to view its documentation."
 _MSG_NO_DOCS = "No technical description is available for this parameter."
 
 
-class DocumentationTab(QWidget):
-    """Shows the selected parameter's technical description, scrollable."""
+class DocumentationView(QWidget):
+    """Shows the selected parameter's technical description."""
 
     def __init__(self) -> None:
         super().__init__()
-        self.setObjectName("DocumentationTab")
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-
-        self._stack = QStackedWidget()
-
-        self._scroll = QScrollArea()
-        self._scroll.setWidgetResizable(True)
-        self._scroll.setFrameShape(QScrollArea.NoFrame)
-        self._content = QWidget()
-        self._content_layout = QVBoxLayout(self._content)
-        self._content_layout.setContentsMargins(12, 8, 12, 8)
-        self._scroll.setWidget(self._content)
-        self._stack.addWidget(self._scroll)  # index 0 - documentation
-
-        self._placeholder = QLabel(_MSG_NO_SELECTION)
-        self._placeholder.setObjectName("DocumentationPlaceholder")
-        self._placeholder.setAlignment(Qt.AlignCenter)
-        self._placeholder.setWordWrap(True)
-        self._stack.addWidget(self._placeholder)  # index 1 - empty state
-
-        layout.addWidget(self._stack)
-        self._stack.setCurrentIndex(1)  # start on the placeholder
+        self.setObjectName("DocumentationView")
+        self._layout = QVBoxLayout(self)
+        self._layout.setContentsMargins(0, 0, 0, 0)
+        self._layout.setSpacing(6)
 
     def show_metadata(self, metadata: ParameterMetadata | None) -> None:
-        """Render *metadata*'s documentation, or an explanatory placeholder.
+        """Render *metadata*'s documentation, or the "no description" line.
 
         A parameter without dataset content (user-defined, or simply not in
-        the source document) gets the "no description" placeholder rather
-        than a blank pane, so the tab always communicates its state.
+        the source document) gets the quiet placeholder line rather than a
+        blank body, so an expanded section always communicates its state.
+        ``None`` (no parameter shown) clears the view -- the Inspector hides
+        the whole section in that state.
         """
         self._clear()
         if metadata is None:
-            self._placeholder.setText(_MSG_NO_SELECTION)
-            self._stack.setCurrentIndex(1)
             return
         if not metadata.documentation and not metadata.symbol:
-            self._placeholder.setText(_MSG_NO_DOCS)
-            self._stack.setCurrentIndex(1)
+            placeholder = QLabel(_MSG_NO_DOCS)
+            placeholder.setObjectName("DocumentationPlaceholder")
+            placeholder.setWordWrap(True)
+            self._layout.addWidget(placeholder)
             return
 
         # Prose comes from the replaceable dataset file, so every text label is
@@ -101,42 +80,38 @@ class DocumentationTab(QWidget):
                 row.setTextFormat(Qt.PlainText)
                 row.setText(metadata.symbol)
             row.setToolTip(metadata.symbol)
-            self._content_layout.addWidget(row)
+            self._layout.addWidget(row)
 
         for heading, prose in metadata.documentation:
             title = QLabel(heading, objectName="Heading")
             title.setTextFormat(Qt.PlainText)
-            self._content_layout.addWidget(title)
+            self._layout.addWidget(title)
             body = QLabel(prose)
             body.setTextFormat(Qt.PlainText)
             body.setWordWrap(True)
             body.setTextInteractionFlags(Qt.TextSelectableByMouse)
-            self._content_layout.addWidget(body)
+            self._layout.addWidget(body)
 
         if metadata.specification_link:
             href = html.escape(metadata.specification_link, quote=True)
             link = QLabel(f'<a href="{href}">BattINFO ontology entry</a>')
             link.setOpenExternalLinks(True)
             link.setToolTip(metadata.specification_link)
-            self._content_layout.addWidget(link)
+            self._layout.addWidget(link)
 
         if metadata.source:
             footer = QLabel(f"Source: {metadata.source}")
             footer.setTextFormat(Qt.PlainText)
             footer.setObjectName("Hint")
             footer.setWordWrap(True)
-            self._content_layout.addWidget(footer)
-
-        self._content_layout.addStretch(1)
-        self._scroll.verticalScrollBar().setValue(0)
-        self._stack.setCurrentIndex(0)
+            self._layout.addWidget(footer)
 
     def reset(self) -> None:
         self.show_metadata(None)
 
     def _clear(self) -> None:
-        while self._content_layout.count():
-            item = self._content_layout.takeAt(0)
+        while self._layout.count():
+            item = self._layout.takeAt(0)
             widget = item.widget()
             if widget is not None:
                 # Reparent out *now*: deleteLater only reaps when the event

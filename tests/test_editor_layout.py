@@ -3,11 +3,12 @@ list's section-header wash.
 
 Covers the editor splitter's 1px handle width and ``#EditorSplitter``
 objectName (the QSS scoping hook), the tree/parameter-list child views'
-stripped borders, the section header's "+ Add" suffix action, and two
-guards against the specificity traps called out in the design: the
-Inspector's own internal splitter must stay unaffected by the editor-only
-handle rule, and the add-parameter popup's card border must survive the new
-``QTreeView#StructureTree, QListWidget#ParameterListView`` rule.
+stripped borders, the section header's "+ Add" suffix action, and a guard
+against the specificity trap called out in the design: the add-parameter
+popup's card border must survive the new
+``QTreeView#StructureTree, QListWidget#ParameterListView`` rule. (The
+Inspector once had an internal splitter needing its own scoping guard; it
+retired with the secondary-workspace drawer.)
 """
 
 from __future__ import annotations
@@ -67,33 +68,6 @@ def test_editor_splitter_handle_paints_the_hairline_colour(app_driver, valid_spm
     assert pixel == "#d0d7de", (
         f"Editor splitter handle pixel was {pixel}, not #d0d7de -- check the "
         "QSplitter#EditorSplitter::handle rule in style.py."
-    )
-
-
-def test_inspector_internal_splitter_is_unaffected_by_the_editor_rule(
-    app_driver, valid_spm_path
-):
-    """Guards the objectName scoping. A bare ``QSplitter::handle`` rule would
-    also repaint the Inspector's own top/bottom splitter (above its secondary
-    workspace); it must keep its own default handle width and colour."""
-    d = app_driver
-    d.open(valid_spm_path)
-
-    inspector_splitter = d._w._inspector._splitter
-    assert inspector_splitter.objectName() != "EditorSplitter"
-    assert inspector_splitter.handleWidth() != 1, (
-        "Inspector splitter handleWidth() is 1 -- the EditorSplitter's "
-        "setHandleWidth(1) call leaked onto the Inspector's own splitter."
-    )
-
-    handle = inspector_splitter.handle(1)
-    image = handle.grab().toImage()
-    pixel = image.pixelColor(image.width() // 2, image.height() // 2).name()
-    assert pixel != "#d0d7de", (
-        f"Inspector splitter handle pixel was {pixel} -- the "
-        "QSplitter#EditorSplitter::handle rule leaked onto the Inspector's "
-        "own internal splitter. It must be scoped by objectName, not a bare "
-        "QSplitter::handle selector."
     )
 
 

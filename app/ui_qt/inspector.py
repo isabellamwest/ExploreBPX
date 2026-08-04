@@ -1,34 +1,38 @@
 """Inspector (right panel): the work surface for one parameter.
 
-The Inspector has two responsibilities, split top-to-bottom:
+The Inspector is one scrolling page, top to bottom:
 
-  - **Primary editing area** (top): a self-contained ``ParameterCard`` (title,
-    validity badge, per-kind value editor and description) inside a scroll
-    area.  Editing uses a draft buffer: typing validates a candidate dict live
-    (badge updates); Enter commits; Escape discards the draft and restores the
-    committed validation state.  The card owns its own widgets; the Inspector
-    owns the validation decisions and drives the badge via
-    ``ParameterCard.set_validity``.  The badge is *parameter-scoped* in both
-    states -- on selection from ``ParameterItem.issues``, while typing from
-    ``DocumentSession.preview_parameter`` -- so a document-level
-    diagnostic elsewhere in the file never colours this parameter's badge.
+  - **Surface slot** (top): a self-contained ``ParameterCard`` (header band
+    with title and validity mark, per-kind value editor and description) --
+    or the placeholder/ghost/experiment/empty-state surface a reveal calls
+    for.  Editing uses a draft buffer: typing validates a candidate dict live
+    (the header's validity dot/text update); Enter commits; Escape discards
+    the draft and restores the committed validation state.  The card owns its
+    own widgets; the Inspector owns the validation decisions and drives the
+    mark via ``ParameterCard.set_validity``.  The mark is *parameter-scoped*
+    in both states -- on selection from ``ParameterItem.issues``, while
+    typing from ``DocumentSession.preview_parameter`` -- so a document-level
+    diagnostic elsewhere in the file never colours this parameter's mark.
     When ``bpx`` aborted before judging this parameter's section
-    (``validation_completed`` is False), an issue-free parameter badges as
+    (``validation_completed`` is False), an issue-free parameter reads as
     neutral "Not validated" rather than a false green "Valid".
-  - **Secondary workspace** (bottom): a collapsible, tabbed panel for
-    parameter-centric tools (Issues and Documentation today; Analysis,
-    References in future).  Parameter documentation is split by depth: the
-    card's ( i ) popover is the quick glance (symbol, meaning, units, types,
-    ontology link) while the Documentation tab carries the multi-paragraph
-    technical prose, which persists beside the editor instead of dismissing
-    on the first outside click.  This supersedes the earlier popover-only
-    approach, which predated page-long content.  A vertical
-    splitter above the tab strip resizes the whole secondary workspace.
+  - **Issues section**: a full-bleed tinted section listing the shown
+    parameter's validation issues, present only while it *has* issues
+    (committed or live-preview) -- an issue-free parameter's page simply has
+    no Issues band.  The row count sits in the section's title row.
+  - **Documentation section**: a resident, collapsible tinted section for
+    the multi-paragraph technical prose.  Parameter documentation is split
+    by depth: the card's ( i ) popover is the quick glance (symbol, meaning,
+    units, types, ontology link); this section persists beside the editor
+    instead of dismissing on the first outside click.
 
-The secondary workspace is workspace state, not parameter state: it starts
-collapsed, stays open across parameter changes, and only the user collapses it.
-Selecting a parameter refreshes the active tab's content without opening or
-closing the workspace.
+Both sections replaced the old bottom tab drawer ("secondary workspace"):
+same content, in the page's own flow instead of behind tabs.  The
+Documentation section's open/collapsed state is workspace state, not
+parameter state: it starts collapsed, keeps the user's choice across
+parameter changes, and only ``reset`` (a newly opened document) collapses it
+again.  A grid takeover (``expand_toggled``) hides both sections so the grid
+gets the whole pane, and restores them on collapse.
 """
 
 from __future__ import annotations
@@ -38,7 +42,6 @@ from PySide6.QtWidgets import (
     QLabel,
     QScrollArea,
     QSizePolicy,
-    QSplitter,
     QVBoxLayout,
     QWidget,
 )
@@ -57,17 +60,15 @@ from state.reference_snapshot import ReferenceSnapshot
 from .cards.experiment import ExperimentCard, is_validation_run_path
 from .cards.ghost_card import GhostParameterCard
 from .cards.parameter_card import ParameterCard
-from .documentation_tab import DocumentationTab
-from .issues_tab import IssuesTab, issue_count
-from .secondary_workspace import SecondaryWorkspace
+from .documentation_view import DocumentationView
+from .group_box import TintedSection
+from .issues_view import IssuesView
 from .style import ERROR, MUTED, OK, WARNING
 from .validation_empty_state import ValidationEmptyState
 
-_DEFAULT_PANEL_HEIGHT = 200
-
 
 class InspectorPanel(QWidget):
-    """Hosts the editing card and the secondary workspace for one parameter."""
+    """Hosts the editing surface and the Issues/Documentation sections."""
 
     committed = Signal()
     issue_activated = Signal(tuple)
@@ -76,7 +77,6 @@ class InspectorPanel(QWidget):
         super().__init__()
         self._state = state
         self._card = None
-        self._panel_height = _DEFAULT_PANEL_HEIGHT
         #: Reference comparison state, set only by
         #: ``set_comparison`` -- ``None`` whenever no reference is docked or
         #: its decoration is hidden.
@@ -91,11 +91,11 @@ class InspectorPanel(QWidget):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
 
-        # Editing area (top splitter pane): the scrollable ParameterCard, or
-        # the placeholder label when no parameter is selected. The pane is a
-        # white full-bleed page: zero margins here, because each card carries its own
-        # header block and gutter (cards/page.py) and its hairline rule must
-        # span the pane edge to edge.
+        # One scrolling page: the surface slot (the card, or the placeholder
+        # when no parameter is selected), then the Issues and Documentation
+        # sections as full-bleed tinted bands, then the white tail. Zero
+        # margins: each card carries its own header band and gutter
+        # (cards/page.py) and the section washes must span edge to edge.
         scroll = QScrollArea()
         scroll.setObjectName("InspectorScroll")
         scroll.setWidgetResizable(True)
@@ -103,89 +103,144 @@ class InspectorPanel(QWidget):
         self._content.setObjectName("InspectorContent")
         self._content_layout = QVBoxLayout(self._content)
         self._content_layout.setContentsMargins(0, 0, 0, 0)
-        self._content_layout.setSpacing(0)
+        # The 16px white gap between stacked tinted sections (the Workspace
+        # page's rhythm).
+        self._content_layout.setSpacing(16)
         scroll.setWidget(self._content)
 
-        # Secondary workspace (bottom splitter pane).
-        self._secondary = SecondaryWorkspace()
-        self._issues_tab = IssuesTab()
-        self._issues_tab.issue_activated.connect(self.issue_activated)
-        self._secondary.add_tab("issues", "Issues", self._issues_tab)
-        self._docs_tab = DocumentationTab()
-        self._secondary.add_tab("docs", "Documentation", self._docs_tab)
-        self._secondary.expanded_changed.connect(self._on_secondary_expanded)
+        # Surface slot: the one child a reveal replaces. A fixed container
+        # keeps the page's child order stable so section/tail bookkeeping
+        # never depends on what is currently showing.
+        self._surface = QWidget()
+        self._surface_layout = QVBoxLayout(self._surface)
+        self._surface_layout.setContentsMargins(0, 0, 0, 0)
+        self._surface_layout.setSpacing(0)
+        self._content_layout.addWidget(self._surface)
 
-        self._splitter = QSplitter(Qt.Vertical)
-        self._splitter.addWidget(scroll)
-        self._splitter.addWidget(self._secondary)
-        self._splitter.setCollapsible(0, False)
-        self._splitter.setCollapsible(1, False)
-        self._splitter.setStretchFactor(0, 1)
-        self._splitter.setStretchFactor(1, 0)
-        self._splitter.splitterMoved.connect(self._remember_panel_height)
-        outer.addWidget(self._splitter, 1)
+        # Issues section: present only while the shown parameter has issues;
+        # the merged row count sits in the caps-title row's suffix, the same
+        # spot the parameter-list header carries its count.
+        self._issues_view = IssuesView()
+        self._issues_view.issue_activated.connect(self.issue_activated)
+        self._issues_count = QLabel("")
+        self._issues_count.setObjectName("InspectorIssuesCount")
+        self._issues_section = TintedSection(
+            "Issues", object_name="InspectorIssuesSection", suffix=self._issues_count
+        )
+        self._issues_section.body_layout.addWidget(self._issues_view)
+        self._issues_section.hide()
+        self._content_layout.addWidget(self._issues_section)
+
+        # Documentation section: resident and collapsible. Starts collapsed
+        # -- a slim tinted band -- and keeps the user's open/collapsed
+        # choice across parameter changes (workspace state, not parameter
+        # state); only ``reset`` collapses it again.
+        self._docs_view = DocumentationView()
+        self._docs_section = TintedSection(
+            "Documentation", object_name="InspectorDocsSection", collapsible=True
+        )
+        self._docs_section.body_layout.addWidget(self._docs_view)
+        self._docs_section.set_collapsed(True)
+        self._docs_section.hide()
+        self._content_layout.addWidget(self._docs_section)
+
+        self._content_layout.addStretch(1)
+        #: Index of the trailing stretch (the page's white tail). Its
+        #: stretch and the surface slot's are swapped whenever the surface
+        #: must own the leftover space instead (a centred placeholder, a
+        #: grid takeover) -- see ``_set_surface_fills``.
+        self._tail_index = self._content_layout.count() - 1
+
+        #: Whether the current surface is parameter-scoped (sections may
+        #: show at all) and whether a grid has taken the pane over (they
+        #: must not).
+        self._sections_active = False
+        self._grid_expanded = False
+        self._issue_row_count = 0
+
+        outer.addWidget(scroll, 1)
 
     # ------------------------------------------------------------------
-    # Secondary workspace coordination
+    # Surface slot and section coordination
     # ------------------------------------------------------------------
+
+    def _set_surface(self, widget: QWidget, *, fills: bool) -> None:
+        """Install *widget* as the surface slot's content.
+
+        *fills* hands the slot the page's leftover space (a centred
+        placeholder); otherwise the widget sits at its natural height and
+        the white tail keeps the leftover. Always clears ``_card`` and the
+        grid-takeover flag -- callers set ``_card`` after installing.
+        """
+        self._clear_surface()
+        self._surface_layout.addWidget(widget)
+        self._set_surface_fills(fills)
+
+    def _set_surface_fills(self, fills: bool) -> None:
+        self._content_layout.setStretch(0, 1 if fills else 0)
+        self._content_layout.setStretch(self._tail_index, 0 if fills else 1)
 
     def _on_card_expanded(self, expanded: bool) -> None:
         """Give the whole editing pane to a grid that asked to take it over.
 
-        Clearing the card's top alignment lets it (and its expanding grid) fill
-        the pane; the secondary workspace collapses to its tab strip so the grid
-        has the room. Collapsing restores both.
+        The surface slot claims the page's leftover space (so the card --
+        and its now-stretching grid -- fills the pane) and the Issues/
+        Documentation sections get out of the way. Collapsing restores both.
         """
         if self._card is None:
             return
-        self._content_layout.setAlignment(
-            self._card, Qt.Alignment() if expanded else Qt.AlignTop
-        )
-        if expanded:
-            self._secondary.suspend()
-        else:
-            self._secondary.resume()
+        self._grid_expanded = expanded
+        self._set_surface_fills(expanded)
+        self._update_sections()
 
-    def _on_secondary_expanded(self, expanded: bool) -> None:
-        total = self._splitter.height()
-        if not total:
-            return  # not laid out yet; the default splitter sizes are correct
-        if expanded:
-            height = max(self._panel_height, self._secondary.tab_strip_height())
-        else:
-            # Collapsing must give the drawer's space back to the editor.
-            # Lowering the secondary's maximum height alone does not make the
-            # splitter redistribute sizes it was already handed, so clamp pane 1
-            # to its tab strip here -- otherwise the content hides but a dead
-            # band of empty space is left where it was.
-            height = self._secondary.tab_strip_height()
-        self._splitter.setSizes([max(total - height, 0), height])
+    def _update_sections(self) -> None:
+        """Apply the two section-visibility rules: only a parameter-scoped
+        surface shows sections at all, and a grid takeover hides them; the
+        Issues section additionally needs at least one row."""
+        show = self._sections_active and not self._grid_expanded
+        self._issues_section.setVisible(show and self._issue_row_count > 0)
+        self._docs_section.setVisible(show)
 
-    def _remember_panel_height(self, *_args) -> None:
-        if not self._secondary.is_expanded:
-            return
-        bottom = self._splitter.sizes()[1]
-        if bottom > self._secondary.tab_strip_height():
-            self._panel_height = bottom
+    def _show_issue_rows(self, issues, path: tuple[str, ...] | None) -> None:
+        """Rebuild the Issues section -- rows, title-row count, visibility.
+
+        The one path every issues display goes through, committed or
+        live-preview, so the section's count and its rows can never
+        disagree (the view's merged row count is the only count shown).
+        """
+        self._issue_row_count = self._issues_view.show_issues(issues, path)
+        self._issues_count.setText(str(self._issue_row_count))
+        self._update_sections()
+
+    def _activate_sections(self, parameter: ParameterItem, meta) -> None:
+        """Scope both sections to *parameter*. Never touches the
+        Documentation section's open/collapsed state (workspace state, not
+        parameter state)."""
+        self._sections_active = True
+        self._show_issue_rows(parameter.issues, parameter.path)
+        self._docs_view.show_metadata(resolve_parameter_metadata(parameter.path, meta))
+        self._update_sections()
+
+    def _deactivate_sections(self) -> None:
+        """No parameter-scoped surface: clear and hide both sections."""
+        self._sections_active = False
+        self._show_issue_rows((), None)
+        self._docs_view.show_metadata(None)
+        self._update_sections()
 
     def show_placeholder(self) -> None:
-        self._clear_content()
         placeholder = QLabel("Select an object from the structure to inspect + edit it.")
         placeholder.setObjectName("InspectorPlaceholder")
-        # The one content widget with no page header of its own: centred in
-        # the pane (an empty state), not typeset at the top-left of a page.
+        # The one surface with no page header of its own: centred in the
+        # pane (an empty state), not typeset at the top-left of a page.
         placeholder.setAlignment(Qt.AlignCenter)
-        self._content_layout.addWidget(placeholder)
-        self._issues_tab.show_parameter(None)
-        self._docs_tab.show_metadata(None)
-        self._secondary.set_count("issues", 0)
-        self._secondary.suspend()
+        self._set_surface(placeholder, fills=True)
+        self._deactivate_sections()
 
     def reset(self) -> None:
         """Reset to the default state for a newly opened document."""
         self.show_placeholder()
-        self._secondary.reset()
-        self._panel_height = _DEFAULT_PANEL_HEIGHT
+        self._docs_section.set_collapsed(True)
 
     def set_comparison(
         self, comparison: ComparisonResult | None, reference: ReferenceSnapshot | None
@@ -243,17 +298,13 @@ class InspectorPanel(QWidget):
         if row is None or row.state is not RowState.REF_ONLY:
             self.show_placeholder()
             return
-        self._secondary.resume()
-        self._clear_content()
         meta = bpx_gateway.field_meta(section_path + (key,))
         kind = classify(row.ref_value, meta)
-        self._card = GhostParameterCard(section_path, key, row.ref_value, kind)
-        self._card.copy_up_requested.connect(self._on_ghost_copy_up)
-        self._content_layout.addWidget(self._card)
-        self._content_layout.setAlignment(self._card, Qt.AlignTop)
-        self._issues_tab.show_parameter(None)
-        self._docs_tab.show_metadata(None)
-        self._secondary.set_count("issues", 0)
+        card = GhostParameterCard(section_path, key, row.ref_value, kind)
+        card.copy_up_requested.connect(self._on_ghost_copy_up)
+        self._set_surface(card, fills=False)
+        self._card = card
+        self._deactivate_sections()
 
     def reveal(self, parameter: ParameterItem | None) -> None:
         """Show *parameter*'s work surface, or the placeholder for none.
@@ -327,75 +378,63 @@ class InspectorPanel(QWidget):
         if node is None:
             self.show_placeholder()
             return
-        self._secondary.resume()
-        self._clear_content()
         focused_alias = parameter.label if parameter is not None else None
         document_name = (
             session.backing_file.name if session.backing_file else session.document.filename
         )
-        self._card = ExperimentCard(node, focused_alias, document_name=document_name)
-        self._card.bulk_commit_requested.connect(self._on_bulk_commit)
-        self._card.expand_toggled.connect(self._on_card_expanded)
-        self._content_layout.addWidget(self._card)
-        self._content_layout.setAlignment(self._card, Qt.AlignTop)
+        card = ExperimentCard(node, focused_alias, document_name=document_name)
+        card.bulk_commit_requested.connect(self._on_bulk_commit)
+        card.expand_toggled.connect(self._on_card_expanded)
+        self._set_surface(card, fills=False)
+        self._card = card
 
-        # The secondary workspace stays scoped to one parameter, so it shows
-        # the focused array's own issues/documentation (mirroring today's
-        # single-parameter behaviour), or the "nothing selected" state for a
-        # bare run-node reveal.
-        count = self._issues_tab.show_parameter(parameter)
-        self._secondary.set_count("issues", count)
-        meta = bpx_gateway.field_meta(parameter.path) if parameter is not None else None
-        metadata = resolve_parameter_metadata(parameter.path, meta) if parameter is not None else None
-        self._docs_tab.show_metadata(metadata)
+        # The sections stay scoped to one parameter, so they show the
+        # focused array's own issues/documentation (mirroring the
+        # single-parameter card), or hide entirely for a bare run-node
+        # reveal.
+        if parameter is not None:
+            self._activate_sections(parameter, bpx_gateway.field_meta(parameter.path))
+        else:
+            self._deactivate_sections()
 
     def _show_validation_empty_state(self) -> None:
         """Build and show the guided empty state for a zero-run Validation
         section (see ``reveal``/``_is_empty_validation_container``).
 
-        Mirrors ``show_placeholder``'s secondary-workspace state (nothing to
-        show issues/documentation for), not a real card's -- this is a
+        Mirrors ``show_placeholder``'s section state (nothing to show
+        issues/documentation for), not a real card's -- this is a
         substitute for the placeholder, not a parameter work surface.
         """
-        self._clear_content()
-        self._card = ValidationEmptyState()
-        self._card.bulk_commit_requested.connect(self._on_bulk_commit)
-        self._content_layout.addWidget(self._card)
-        self._content_layout.setAlignment(self._card, Qt.AlignTop)
-        self._issues_tab.show_parameter(None)
-        self._docs_tab.show_metadata(None)
-        self._secondary.set_count("issues", 0)
-        self._secondary.suspend()
+        card = ValidationEmptyState()
+        card.bulk_commit_requested.connect(self._on_bulk_commit)
+        self._set_surface(card, fills=False)
+        self._card = card
+        self._deactivate_sections()
 
     def show_parameter(self, parameter: ParameterItem) -> None:
-        self._secondary.resume()
-        self._clear_content()
         meta = bpx_gateway.field_meta(parameter.path)
 
-        self._card = ParameterCard(parameter, meta)
-        self._card.draft_changed.connect(self._debounce.start)
-        self._card.draft_reset.connect(self._on_reset)
-        self._card.commit_requested.connect(self._on_commit)
-        self._card.bulk_commit_requested.connect(self._on_bulk_commit)
-        self._card.expand_toggled.connect(self._on_card_expanded)
-        self._card.rename_requested.connect(self._on_card_rename_requested)
-        self._card.copy_up_requested.connect(self._on_copy_up)
-        # Top-aligned so the card sits at its natural height with space beneath;
-        # expanding (a grid takeover) clears the alignment so the card -- and its
-        # now-stretching grid -- fills the pane. This replaces a trailing stretch
-        # so the switch is a single alignment change, no relayout.
-        self._content_layout.addWidget(self._card)
-        self._content_layout.setAlignment(self._card, Qt.AlignTop)
+        card = ParameterCard(parameter, meta)
+        card.draft_changed.connect(self._debounce.start)
+        card.draft_reset.connect(self._on_reset)
+        card.commit_requested.connect(self._on_commit)
+        card.bulk_commit_requested.connect(self._on_bulk_commit)
+        card.expand_toggled.connect(self._on_card_expanded)
+        card.rename_requested.connect(self._on_card_rename_requested)
+        card.copy_up_requested.connect(self._on_copy_up)
+        # The card sits at its natural height with the page's white tail
+        # beneath; expanding (a grid takeover) hands the surface slot the
+        # leftover space instead -- see _on_card_expanded.
+        self._set_surface(card, fills=False)
+        self._card = card
         self._render_issues(
             parameter.issues, parameter.has_errors, self._committed_validation_completed()
         )
         self._card.set_cell_issues(parameter.issues)
 
-        # Refresh the secondary workspace's tabs without changing its
-        # open/collapsed state (workspace state, not parameter state).
-        count = self._issues_tab.show_parameter(parameter)
-        self._secondary.set_count("issues", count)
-        self._docs_tab.show_metadata(resolve_parameter_metadata(parameter.path, meta))
+        # Refresh both sections; the Documentation section's open/collapsed
+        # state is untouched (workspace state, not parameter state).
+        self._activate_sections(parameter, meta)
         # Populate-after-build: the reference block
         # is entirely outside the draft/commit signals just wired above, so
         # this can never trip the card's own _touched machinery.
@@ -447,11 +486,11 @@ class InspectorPanel(QWidget):
         errors = [i for i in issues if i.severity == Severity.ERROR]
         self._render_issues(issues, bool(errors), preview.validation_completed)
         self._card.set_cell_issues(issues)
-        # The tab badge must count the same
-        # merged rows issues_tab.show_parameter renders, not raw diagnostics
-        # -- a committed-null FloatInt's float_type+int_type pair (V5) is one
-        # displayed row, so len(issues) here previously disagreed with it.
-        self._secondary.set_count("issues", issue_count(issues))
+        # Live preview drives the Issues section like a commit would: rows,
+        # count and visibility all rebuilt from the previewed issues, so the
+        # section appears/disappears while typing and its count can never
+        # disagree with its rows (the merged-row rule lives in the view).
+        self._show_issue_rows(issues, self._card.parameter.path)
 
     def _on_reset(self) -> None:
         if self._card is None:
@@ -463,7 +502,7 @@ class InspectorPanel(QWidget):
             self._committed_validation_completed(),
         )
         self._card.set_cell_issues(self._card.parameter.issues)
-        self._secondary.set_count("issues", issue_count(self._card.parameter.issues))
+        self._show_issue_rows(self._card.parameter.issues, self._card.parameter.path)
 
     def _on_commit(self) -> None:
         if self._card is None or self._state.active is None:
@@ -585,10 +624,11 @@ class InspectorPanel(QWidget):
             "Invalid" if has_errors else "Warning", ERROR if has_errors else WARNING
         )
 
-    def _clear_content(self) -> None:
+    def _clear_surface(self) -> None:
         self._card = None
-        while self._content_layout.count():
-            item = self._content_layout.takeAt(0)
+        self._grid_expanded = False
+        while self._surface_layout.count():
+            item = self._surface_layout.takeAt(0)
             widget = item.widget()
             if widget is not None:
                 # Reparent out of the content widget *now*: deleteLater only

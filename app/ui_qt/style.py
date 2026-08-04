@@ -240,14 +240,6 @@ def all_clear(text: str) -> str:
     return "✓ " + text
 
 
-def validity_pill_qss(background: str) -> str:
-    """Inline stylesheet for a document-validity pill (white text on
-    *background*) -- the parameter card's per-card badge. (The workspace
-    panel used to share this; it has since replaced the pill with the
-    dot-plus-plain-text language.)"""
-    return f"color: white; background: {background}; padding: 2px 9px; border-radius: 4px;"
-
-
 #: The toast pill's action link -- ``ACCENT`` is illegible on the pill's
 #: dark ink ground, so the link carries the accent's light-on-dark tone
 #: instead (QSS cannot reach into rich text; the toast inlines this).
@@ -326,12 +318,18 @@ QLabel#PanelTitle { color: #57606a; font-weight: 600; font-size: 11px; }
 QLabel#Heading { color: #1f2328; font-weight: 600; }
 QLabel#CardDescription { color: #57606a; }
 /* Structured-page inspector: the editing pane is a white page -- frameless
-   scroll area, white content surface -- with each
-   card's header block closed by a single full-bleed hairline. The gutter and
-   rhythm live in cards/page.py; only the surfaces are painted here. */
+   scroll area, white content surface -- opened by each card's full-bleed
+   tinted header band (style.NEUTRAL_WASH, spelled as a literal like the
+   Workspace sections below; no hairline -- the wash edge is the boundary),
+   with the Issues/Documentation sections further down the page on the same
+   wash. The gutter and rhythm live in cards/page.py and
+   group_box.TintedSection; only the surfaces are painted here. */
 QScrollArea#InspectorScroll { border: none; background: #ffffff; }
 QWidget#InspectorContent { background: #ffffff; }
-QFrame#CardPageHeader { border: none; border-bottom: 1px solid #d0d7de; }
+QFrame#CardPageHeader { border: none; background: #f6f8fa; }
+QWidget#InspectorIssuesSection, QWidget#InspectorDocsSection { background: #f6f8fa; }
+QLabel#InspectorIssuesCount { color: #57606a; font-size: 12px; }
+QLabel#CardValidityText { color: #57606a; font-size: 12px; }
 QLabel#InspectorPlaceholder { color: #57606a; }
 /* Unit labels sit directly beside their input (never at the pane edge) and
    stay quiet: they annotate the value, they are not part of it. */
@@ -483,16 +481,9 @@ QToolButton#ActivityButton:hover:!checked { background: #e8eaed; }
 QToolButton#ActivityButton:checked { border-left: 2px solid #1f2328; background: transparent; }
 QWidget#PageHeader { background: #ffffff; border-bottom: 1px solid #d0d7de; }
 QLabel#PageHeaderTitle { color: #57606a; font-size: 11px; font-weight: 600; }
-QWidget#SecondaryTabStrip { background: #f6f8fa; }
-QToolButton#SecondaryTab {
-    background: transparent; border: none; border-top: 2px solid transparent;
-    padding: 4px 12px; font-size: 12px; color: #57606a;
-}
-QToolButton#SecondaryTab:hover:!checked { background: #e8eaed; }
-QToolButton#SecondaryTab:checked {
-    color: #1f2328; font-weight: 600; border-top: 2px solid #1f6feb;
-}
-QListWidget#IssuesList { border: none; background: #ffffff; font-size: 12px; }
+/* The Inspector's Issues list sits directly on its section's wash: no
+   frame, no ground of its own -- rows read on the tint. */
+QListWidget#IssuesList { border: none; background: transparent; font-size: 12px; }
 /* The toolbar search's floating results card: identical treatment to
    QFrame#AddParameterCard (translucent top-level, rounded shadowed card),
    so the app's two floating palettes read as one family. */
@@ -552,8 +543,9 @@ QListWidget#DiagnosticsAllSectionsList { border: none; }
 QListWidget#DiagnosticsAllSectionsList::item { padding: 6px 8px; border-radius: 4px; }
 QListWidget#DiagnosticsAllSectionsList::item:hover { background: #f0f2f4; }
 QListWidget#DiagnosticsAllSectionsList::item:selected { background: #ddeeff; color: #1f2328; }
-QLabel#IssuesPlaceholder { color: #57606a; font-size: 12px; padding: 16px; }
-QLabel#DocumentationPlaceholder { color: #57606a; font-size: 12px; padding: 16px; }
+/* The Documentation section's quiet "no description" line -- in-flow body
+   text on the section wash, not a centred empty state. */
+QLabel#DocumentationPlaceholder { color: #57606a; font-size: 12px; }
 QLabel#Hint { color: #57606a; font-size: 11px; }
 
 /* Mode strip: segmented buttons naming each legal representation of a
