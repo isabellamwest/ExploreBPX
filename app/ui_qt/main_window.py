@@ -145,6 +145,10 @@ class MainWindow(QMainWindow):
         #: a bundled template/example directory. Session-scoped on purpose; not
         #: persisted.
         self._save_dialog_dir: Path | None = None
+        #: When True, ``closeEvent`` skips the unsaved-changes prompt. Set by
+        #: test teardown and by shutdown paths that already decided the
+        #: document's fate; never set by user-facing code.
+        self._suppress_close_guard = False
 
         self._tree = TreePanel()
         self._params = ParameterListPanel()
@@ -1132,6 +1136,19 @@ class MainWindow(QMainWindow):
         super().changeEvent(event)
         if event.type() == QEvent.ActivationChange and self.isActiveWindow():
             self._check_reference_stale()
+
+    def closeEvent(self, event) -> None:  # noqa: N802 - Qt override
+        """Closing the window is the one document-losing exit that used to
+        skip the discard guard entirely: Open, New and Make main all ask
+        before replacing a dirty document, so the X button and Alt+F4 must
+        too. ``_suppress_close_guard`` lets test teardown (and any other
+        programmatic shutdown that has already made its own decision) close
+        without a modal prompt.
+        """
+        if self._suppress_close_guard or self._confirm_discard_if_dirty():
+            event.accept()
+        else:
+            event.ignore()
 
     def _on_source_pull(self, path, is_section: bool) -> None:
         """A ← gutter pull on the Source page: copy the reference's raw

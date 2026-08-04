@@ -127,6 +127,43 @@ def test_open_dirty_save_succeeds_then_proceeds(
     assert saved["Parameterisation"]["Cell"]["Nominal cell capacity [A.h]"] == 6.0
 
 
+def test_close_clean_window_does_not_prompt(app_driver, valid_spm_path, monkeypatch):
+    app_driver.open(valid_spm_path)
+    monkeypatch.setattr(main_window_module.QMessageBox, "question", _fail_if_called)
+
+    assert app_driver._w.close() is True
+
+
+def test_close_dirty_cancel_keeps_window_open(app_driver, spm_workfile, monkeypatch):
+    _make_dirty(app_driver, spm_workfile)
+    monkeypatch.setattr(
+        main_window_module.QMessageBox, "question", lambda *a, **k: QMessageBox.Cancel
+    )
+
+    assert app_driver._w.close() is False
+    assert app_driver._w._state.active.dirty is True
+
+
+def test_close_dirty_discard_closes(app_driver, spm_workfile, monkeypatch):
+    _make_dirty(app_driver, spm_workfile)
+    monkeypatch.setattr(
+        main_window_module.QMessageBox, "question", lambda *a, **k: QMessageBox.Discard
+    )
+
+    assert app_driver._w.close() is True
+
+
+def test_close_dirty_save_writes_then_closes(app_driver, spm_workfile, monkeypatch):
+    _make_dirty(app_driver, spm_workfile)
+    monkeypatch.setattr(
+        main_window_module.QMessageBox, "question", lambda *a, **k: QMessageBox.Save
+    )
+
+    assert app_driver._w.close() is True
+    saved = json.loads(spm_workfile.read_text("utf-8"))
+    assert saved["Parameterisation"]["Cell"]["Nominal cell capacity [A.h]"] == 6.0
+
+
 def test_open_dirty_save_cancelled_save_as_aborts(
     app_driver, spm_workfile, valid_spm_path, monkeypatch
 ):

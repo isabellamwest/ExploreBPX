@@ -143,6 +143,11 @@ def main_window(qtbot):
 
     yield window
 
+    # qtbot's own teardown will call ``window.close()``; a test that ends
+    # with a dirty document must not hang the offscreen run on the
+    # unsaved-changes prompt the real close guard would show.
+    window._suppress_close_guard = True
+
     # The app's transient popups (search results, add-parameter, parameter
     # info) are floating `Qt.FramelessWindowHint | Qt.Tool` top-level
     # windows merely *parented* to a panel for lifetime -- they do not
