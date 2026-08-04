@@ -38,6 +38,34 @@ from core.tree_model import ParameterItem
 from core.values import values_equal
 
 
+def _sub_editor_owns_keys(obj: QObject) -> bool:
+    """Whether *obj* has an editor of its own open right now.
+
+    While one is, Enter and Escape belong to it, not to the card: a combo
+    box's popup uses them to pick and dismiss an entry, and an item view's
+    cell editor uses them to confirm and cancel the cell. The card's filter
+    must stand aside for both, or a keystroke aimed at the inner editor
+    reaches the document.
+
+    The item-view case is not hypothetical. Qt's delegate answers Enter by
+    *queueing* the commit-and-close and returning False, so the key event
+    keeps travelling -- editor, viewport, view -- and this filter, which
+    sits on the view, sees it while the view is still in ``EditingState``.
+    Without this guard a cell-level Enter committed the entire grid draft to
+    the document, and the queued cell write then landed after the card had
+    been rebuilt, losing the character just typed.
+    """
+    # Local imports: this module is imported by every card, and pulling the
+    # widget classes in at module scope re-enters the cards package.
+    from PySide6.QtWidgets import QAbstractItemView, QComboBox
+
+    if isinstance(obj, QComboBox):
+        return obj.view().isVisible()
+    if isinstance(obj, QAbstractItemView):
+        return obj.state() == QAbstractItemView.EditingState
+    return False
+
+
 class EditorCard(QWidget):
     """Abstract value editor for a single :class:`ParameterItem`."""
 
@@ -174,14 +202,8 @@ class EditorCard(QWidget):
 
     def eventFilter(self, obj: QObject, event: QEvent) -> bool:  # noqa: N802
         if event.type() == QEvent.KeyPress:
-            # For combo boxes: pass Enter/Escape through when the popup is open
-            # so that dropdown selection and dismissal work normally.
-            try:
-                from PySide6.QtWidgets import QComboBox  # local import avoids circularity
-                if isinstance(obj, QComboBox) and obj.view().isVisible():
-                    return super().eventFilter(obj, event)
-            except Exception:
-                pass
+            if _sub_editor_owns_keys(obj):
+                return super().eventFilter(obj, event)
 
             key = event.key()
             if key in (Qt.Key_Return, Qt.Key_Enter):

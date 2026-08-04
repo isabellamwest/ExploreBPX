@@ -14,18 +14,22 @@ coerced to ``""`` -- either would silently invent data.
 **Keyboard.** Enter and Escape mean different things depending on where they
 land, and the two layers do not collide:
 
-- inside an open cell editor, Qt's delegate consumes them: Enter confirms the
-  cell, Escape cancels it. Neither reaches the card;
+- inside an open cell editor, they are the cell's: Enter confirms it, Escape
+  cancels it. Neither reaches the document;
 - on the grid itself, they are the app-wide contract from
   :class:`~.base.EditorCard`: Enter commits the draft to the document, Escape
   reverts it.
 
-Two things keep that split legible rather than a trap:
+Three things keep that split legible rather than a trap:
 
+- the card's filter **stands aside while a cell editor is open**
+  (``base._sub_editor_owns_keys``). Qt does not consume Enter in the
+  delegate -- it queues the cell's commit-and-close and lets the key travel
+  on to the view, where the filter sits -- so without that check a
+  cell-level Enter wrote the whole draft to the document;
 - confirming a cell **steps the selection down a row** (:class:`_GridView`),
   so the spreadsheet habit of "Enter, Enter, Enter" walks down the column
-  instead of falling through to the grid layer and committing the document
-  by accident. Only an Enter with no editor open commits;
+  rather than stopping dead on the row just typed;
 - a dirty grid shows an **"Unsaved edits" bar** (:class:`_PendingBar`) naming
   both halves of the contract -- Apply (Enter) and Discard (Esc) -- as
   clickable buttons. The grid never decides when: the owning card drives
@@ -293,13 +297,14 @@ class _GridModel(QAbstractTableModel):
 class _GridView(QTableView):
     """A table view whose cell-editor Enter confirms the cell *and steps down*.
 
-    Qt's default leaves the just-edited cell current, so the very next Enter
-    would fall through to the grid layer -- where the card's event filter
-    commits the whole draft to the document. Spreadsheet muscle memory
-    ("Enter to confirm, Enter to move on") made that an accident waiting to
-    happen. Stepping down keeps repeated Enter cell-scoped: it walks the
-    column, clamped at the last display row, and only an Enter pressed with
-    no editor open commits (see the module docstring).
+    Qt's default leaves the just-edited cell current, so "Enter to confirm,
+    Enter to move on" would type over the row just finished. Stepping down
+    gives that spreadsheet habit the column walk it expects, clamped at the
+    last display row.
+
+    This is convenience, not the safety guard: what stops a cell-level Enter
+    from committing the document is the card's filter standing aside while
+    an editor is open (``base._sub_editor_owns_keys``).
 
     Escape and Tab keep Qt's behaviour: only the delegate's *submit* close
     (``SubmitModelCache``, what its editor emits for Enter) is redirected.
