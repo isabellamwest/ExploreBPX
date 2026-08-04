@@ -1240,6 +1240,7 @@ class MainWindow(QMainWindow):
         if self._state.active is None:
             return False
         session = self._state.active
+        adopted_backing = False
         if session.backing_file is None:
             # A never-saved main's Save As starts in the last Save As folder
             # this run, else Documents -- never wherever the app happens to run
@@ -1257,10 +1258,17 @@ class MainWindow(QMainWindow):
             if not name:
                 return False
             session.backing_file = Path(name)
+            adopted_backing = True
             self._save_dialog_dir = Path(name).parent
         try:
             session.save()
         except OSError as exc:
+            # A backing file adopted by this very Save As must not outlive a
+            # failed write: keeping it would make every later Save retry the
+            # same broken path with no dialog (there is no separate Save As
+            # action), leaving the document effectively un-savable.
+            if adopted_backing:
+                session.backing_file = None
             QMessageBox.critical(self, "Save failed", str(exc))
             return False
         self._update_title()
