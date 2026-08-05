@@ -1,5 +1,28 @@
 # PLAN — multi-reference comparison
 
+## Status / handoff (2026-08-05, self-contained — session memory does not follow the repo)
+
+On main, verified against a 1625-green suite (`QT_QPA_PLATFORM=offscreen python -m pytest`):
+`3088779` Phase 0 pluralization · `adddc7b` Pull `source_label` · `85c6560` grouping helper +
+`core/spread.py` (+40 unit tests) · `02fee76` typography token system (separate track).
+**Next action: Phase 1.** Signed wireframes (rev 3, the visual reference for every surface):
+(internal design archive)
+
+Badge palette validation (dataviz six-checks method, OKLab/Machado-2009 CVD): the chosen set
+passes within-set — worst normal-vision ΔE 15.1 (floor 15), worst CVD ΔE 8.3 (target 8), white
+badge text ≥ 4.5:1 on all four. Nearest reserved-colour neighbour is the slate vs accent
+blue/purple chrome (ΔE 7–8) — accepted; badge letters are the secondary encoding. A slate
+lightness-ramp alternative was considered and rejected; a two-hues×two-lightness set FAILED
+CVD (ΔE 1.6) — never revisit it.
+
+macOS note: the typography module pins `Segoe UI Variable Text, Segoe UI, system-ui` — on a
+Mac it falls through to system-ui, so on-screen proof there renders different metrics than the
+signed Windows screenshots; the offscreen suite is unaffected. Judge layout rules, not glyphs.
+
+Unrelated carry-over so it isn't lost with the old machine's session memory: the typography
+track left two open on-screen questions — Source-page mono density (Courier 12px → Cascadia
+13px) and whether the card-header symbol wants `SYMBOL_OPTICAL_SCALE` above 1.0.
+
 Signed design (2026-08-05, Isabella): up to **4 pinned read-only references**
 (hard cap, 5th rejected with a message), ordered by pin time, each with stable identity =
 two-letter badge + colour by pin order. Pinning **appends** (silent replace dies).
