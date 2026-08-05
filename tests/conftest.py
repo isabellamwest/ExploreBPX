@@ -139,14 +139,17 @@ def main_window(qtbot):
     from ui_qt.main_window import MainWindow
 
     window = MainWindow()
-    qtbot.addWidget(window)
+    # qtbot closes registered widgets from its *plugin* teardown hook, which
+    # runs before this fixture resumes past ``yield`` -- so the close guard
+    # must be suppressed via ``before_close_func``, not post-yield code, or a
+    # test that ends with a dirty document hangs the offscreen run on the
+    # unsaved-changes prompt (``QMessageBox.question`` truly blocks).
+    qtbot.addWidget(
+        window,
+        before_close_func=lambda w: setattr(w, "_suppress_close_guard", True),
+    )
 
     yield window
-
-    # qtbot's own teardown will call ``window.close()``; a test that ends
-    # with a dirty document must not hang the offscreen run on the
-    # unsaved-changes prompt the real close guard would show.
-    window._suppress_close_guard = True
 
     # The app's transient popups (search results, add-parameter, parameter
     # info) are floating `Qt.FramelessWindowHint | Qt.Tool` top-level
