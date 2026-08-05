@@ -733,6 +733,16 @@ def test_pull_parameter_sets_an_existing_value_verbatim():
     assert raw["Header"]["Title"] == "mine"  # source untouched
 
 
+def test_pull_parameter_with_source_label_names_the_source_in_the_undo_label():
+    """Multi-reference track Phase 1: a named source produces `Pull "<key>"
+    from <source>` instead of the plain `Copy up "<key>"`."""
+    raw = {"Header": {"Title": "mine"}}
+    result = command_service.execute(
+        raw, PullParameter(("Header", "Title"), "theirs", source_label="Chen2020")
+    )
+    assert result.label == 'Pull "Title" from Chen2020'
+
+
 def test_pull_parameter_adds_a_missing_key():
     raw = {"Header": {}}
     result = command_service.execute(raw, PullParameter(("Header", "Title"), "theirs"))
@@ -819,6 +829,15 @@ def test_pull_section_sets_the_whole_subtree_verbatim():
     assert result.raw["Parameterisation"]["Cell"] is not ref_section
     assert result.label == 'Copy up "Cell"'
     assert result.select_path == ("Parameterisation", "Cell")
+
+
+def test_pull_section_with_source_label_names_the_source_in_the_undo_label():
+    raw = {"Parameterisation": {"Cell": {"a": 1}}}
+    result = command_service.execute(
+        raw,
+        PullSection(("Parameterisation", "Cell"), {"b": 2}, source_label="Chen2020"),
+    )
+    assert result.label == 'Pull "Cell" from Chen2020'
 
 
 def test_pull_section_creates_missing_ancestors_and_the_section_itself():

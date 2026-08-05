@@ -83,12 +83,12 @@ def execute(raw: dict, command: Command) -> CommandResult:
         updates = _pull_updates(raw, command.path, command.value)
         new = editing.set_values(raw, updates)
         return CommandResult(
-            new, f'Copy up "{command.path[-1]}"', command.path[:-1], command.path
+            new, _pull_label(command.path, command.source_label), command.path[:-1], command.path
         )
     if isinstance(command, PullSection):
         updates = _pull_updates(raw, command.path, command.value)
         new = editing.set_values(raw, updates)
-        return CommandResult(new, f'Copy up "{command.path[-1]}"', command.path)
+        return CommandResult(new, _pull_label(command.path, command.source_label), command.path)
     if isinstance(command, ChangeModel):
         updates = ((("Header", "Model"), command.model),) + tuple(
             (path, {}) for path in _sections_to_add(raw, command.model)
@@ -184,6 +184,19 @@ def _missing_ancestors(raw: dict, path: tuple[str, ...]) -> tuple[tuple[str, ...
             missing.append(prefix)
             node = {}
     return tuple(missing)
+
+
+def _pull_label(path: tuple[str, ...], source_label: str) -> str:
+    """The undo/redo entry title for a "Copy up" pull (multi-reference track
+    Phase 1): `Pull "<key>" from <source_label>` once a source is named, else
+    today's plain `Copy up "<key>"` -- the single-reference callers this
+    phase does not yet touch pass no ``source_label``, so their undo history
+    reads exactly as before.
+    """
+    key = path[-1]
+    if source_label:
+        return f'Pull "{key}" from {source_label}'
+    return f'Copy up "{key}"'
 
 
 def _pull_updates(

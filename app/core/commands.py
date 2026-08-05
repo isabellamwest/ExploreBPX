@@ -151,10 +151,17 @@ class PullParameter(Command):
     in the *same* command (see ``command_service._pull_updates``), so a pull
     that also has to build structure is still one document rebuild and one
     undo entry. One direction only -- the reference is never a target.
+
+    ``source_label`` names which reference the value came from (multi-
+    reference track Phase 1, e.g. a docked file's display name), used by
+    ``command_service.execute`` to title the undo entry `Pull "<key>" from
+    <source_label>`. Defaults to ``""`` -- the single-reference callers this
+    phase does not yet touch keep today's plain `Copy up "<key>"` wording.
     """
 
     path: tuple[str, ...]
     value: object
+    source_label: str = ""
 
 
 @dataclass(frozen=True)
@@ -164,11 +171,13 @@ class PullSection(Command):
 
     Same contract as ``PullParameter``, one level up: ``value`` is the whole
     object at ``path``, replacing or creating it as needed; missing
-    ancestors are created in the same command, one undo entry.
+    ancestors are created in the same command, one undo entry. ``source_label``
+    is the same source-naming field as ``PullParameter``'s.
     """
 
     path: tuple[str, ...]
     value: object
+    source_label: str = ""
 
 
 @dataclass(frozen=True)
