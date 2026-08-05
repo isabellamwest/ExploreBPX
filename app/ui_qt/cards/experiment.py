@@ -355,7 +355,7 @@ class ExperimentCard(QWidget):
         # ``_refresh_derived_state`` from the same per-column diff Enter
         # would commit.
         if not read_only:
-            self._grid.apply_clicked.connect(self._commit_dirty_columns)
+            self._grid.apply_clicked.connect(self.commit_dirty_columns)
             self._grid.discard_clicked.connect(self._revert)
 
         self._refresh_derived_state()
@@ -372,18 +372,45 @@ class ExperimentCard(QWidget):
         if event.type() == QEvent.KeyPress:
             key = event.key()
             if key in (Qt.Key_Return, Qt.Key_Enter):
-                self._commit_dirty_columns()
+                self.commit_dirty_columns()
                 return True
             if key == Qt.Key_Escape:
                 self._revert()
                 return True
         return super().eventFilter(obj, event)
 
-    def _commit_dirty_columns(self) -> None:
+    def commit_dirty_columns(self) -> None:
+        """Commit every column whose draft differs from its baseline as one
+        ``SetValues``, exactly what Enter and the pending bar's Apply button
+        already trigger (see the constructor and ``eventFilter`` above).
+
+        Public (not ``_``-prefixed) so ``InspectorPanel.apply_pending_draft``
+        can reach this same path for a caller other than Enter -- Save,
+        Export -- without duplicating the update-building logic
+        (:meth:`_dirty_updates`) outside this card.
+        """
         updates = self._dirty_updates()
         if not updates:
             return  # no-op Enter: nothing actually changed
         self.bulk_commit_requested.emit(SetValues(updates, label="Edit experiment"))
+
+    def commit_blocked_reason(self) -> str | None:
+        """Never blocked: unlike a single-value card's draft, a column here
+        has no "no representation at all" state -- every cell is a plain
+        number, string, or blank, and Enter already commits unconditionally
+        (see the module docstring's Commit path section). Defined so
+        ``InspectorPanel.apply_pending_draft`` -- which asks every card this
+        question before committing -- gets a real answer instead of an
+        ``AttributeError``.
+        """
+        return None
+
+    def commit_open_subeditor(self) -> None:
+        """Commit this card's own open cell editor, if one is open -- see
+        ``EditorCard.commit_open_subeditor``. ``ExperimentCard`` does not
+        subclass ``EditorCard`` (see the module docstring), so it repeats
+        this one-line hook rather than inheriting it."""
+        self._grid.commit_open_editor()
 
     def _revert(self) -> None:
         for index, original in enumerate(self._originals):

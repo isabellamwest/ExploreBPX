@@ -75,3 +75,20 @@ def test_grid_enter_with_no_editor_open_still_commits(two_row_draft, main_window
 
     assert _stored(main_window) != before
     assert main_window._state.active.dirty is True
+
+
+def test_save_flushes_a_still_open_cell_editors_typed_text(two_row_draft, main_window):
+    """Save must not silently drop a cell edit that was never confirmed.
+
+    Applying the pending draft on Save has to reach into an open cell editor
+    the same way the grid's own Enter does (``_GridView.commit_active_editor``),
+    or the typed character never leaves the editor widget at all.
+    """
+    d = two_row_draft
+    d.open_grid_cell_editor(1, 0)  # types "1"; the editor stays open
+
+    assert main_window._save() is True
+
+    assert _stored(main_window)["x"][1] == 1
+    assert main_window._inspector.has_pending_draft() is False
+    assert main_window._state.active.dirty is False

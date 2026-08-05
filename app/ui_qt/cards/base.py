@@ -133,6 +133,21 @@ class EditorCard(QWidget):
         """
         return None
 
+    def commit_open_subeditor(self) -> None:
+        """Commit any grid cell editor this card has open right now, as Enter
+        would.
+
+        A grid-bearing card's ``value()`` reads the grid's *model*, and an
+        open cell editor's typed text lives only in the editor widget until
+        Qt's delegate commits it -- normally on the cell's own Enter (see
+        ``cards.grid._GridView``). ``InspectorPanel.apply_pending_draft``
+        calls this before reading the draft, for a caller (Save, Export)
+        that is not that Enter -- otherwise the last keystroke is silently
+        missing from what gets read. A no-op for every card without a grid
+        of its own; the two that have one (``SeriesCard``, ``ModalCard``)
+        override it.
+        """
+
     def set_cell_issues(self, issues) -> None:
         """Render the validator's per-cell diagnostics, if this card has cells.
 

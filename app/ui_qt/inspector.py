@@ -489,12 +489,38 @@ class InspectorPanel(QWidget):
         so the caller aborts rather than saving a document that does not
         include what the user is looking at. No draft, or one that applies
         cleanly, both answer True.
+
+        An open grid cell editor is committed first, unconditionally: its
+        typed text lives only in the editor widget, not in the model
+        ``is_dirty`` reads, until it is (:meth:`EditorCard.
+        commit_open_subeditor`) -- without this, a cell edited but never
+        confirmed would look like no draft at all and vanish silently. Not
+        every ``_card`` has this method (``GhostParameterCard`` and
+        ``ValidationEmptyState`` are permanently non-dirty and never carry
+        one), hence the same ``getattr``-guarded call
+        :meth:`open_rename_editor` already uses for the same reason.
+
+        An :class:`~.cards.experiment.ExperimentCard` does not commit
+        through ``value()``/:meth:`_on_commit` -- it has no single value,
+        just several independently-dirty columns -- so it is committed
+        through its own :meth:`~.cards.experiment.ExperimentCard.
+        commit_dirty_columns`, exactly what its own Enter and Apply button
+        already call, one ``SetValues`` through the same
+        ``bulk_commit_requested`` -> :meth:`_on_bulk_commit` spine. The
+        ``isinstance`` check mirrors the one :meth:`_apply_reference_block`
+        already makes on ``_card``.
         """
+        committer = getattr(self._card, "commit_open_subeditor", None)
+        if callable(committer):
+            committer()
         if not self.has_pending_draft():
             return True
         if self._card.commit_blocked_reason() is not None:
             return False
-        self._on_commit()
+        if isinstance(self._card, ExperimentCard):
+            self._card.commit_dirty_columns()
+        else:
+            self._on_commit()
         return True
 
     def _validate_draft(self) -> None:

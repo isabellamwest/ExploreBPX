@@ -325,6 +325,11 @@ class ParameterCard(QWidget):
         """Why the inner editor's draft has no representation, if it has none."""
         return self._editor.commit_blocked_reason()
 
+    def commit_open_subeditor(self) -> None:
+        """Delegate to the inner editor -- see
+        ``EditorCard.commit_open_subeditor``."""
+        self._editor.commit_open_subeditor()
+
     def set_cell_issues(self, issues) -> None:
         """Pass the validator's per-cell diagnostics to the inner editor."""
         self._editor.set_cell_issues(issues)

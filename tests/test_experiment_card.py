@@ -230,6 +230,56 @@ def test_editing_two_columns_commits_both_in_one_undo_step(
 
 
 # ----------------------------------------------------------------------
+# Save flushes a dirty ExperimentCard, the same way it flushes any other
+# card's pending draft (see MainWindow._save / InspectorPanel.apply_
+# pending_draft). A dirty ExperimentCard used to crash every one of Save,
+# Export, Open, New, close and Make main: ``apply_pending_draft`` reached
+# ``self._card.commit_blocked_reason()``, which ExperimentCard never
+# defined (it has no single-value draft to judge).
+# ----------------------------------------------------------------------
+
+
+def _run_on_disk(path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))["Validation"]["C/20 discharge"]
+
+
+def test_save_commits_a_dirty_experiment_as_one_undo_step(
+    app_driver, main_window, spm_with_validation_path
+):
+    d = app_driver
+    d.open(spm_with_validation_path).go_to(_TIME)
+    d.set_experiment_cell("Time [s]", 1, "999")  # a standing draft, no Enter yet
+
+    assert main_window._save() is True
+
+    assert _run_on_disk(spm_with_validation_path)["Time [s]"] == [0, 999, 200]
+    assert d.experiment_column_values("Current [A]") == [-0.6, -0.6, -0.6]  # untouched
+    assert d.undo_enabled() is True
+
+    d.undo()
+
+    assert d.experiment_column_values("Time [s]") == [0, 100, 200]
+    assert d.undo_enabled() is False
+
+
+def test_save_flushes_a_still_open_experiment_cell_editor(
+    app_driver, main_window, spm_with_validation_path
+):
+    """Save must reach into an open cell editor exactly like the grid's own
+    Enter does (``MultiColumnGrid.commit_open_editor``), or the typed
+    character never leaves the editor widget at all."""
+    d = app_driver
+    d.open(spm_with_validation_path).go_to(_TIME)
+    d.open_experiment_cell_editor("Time [s]", 1)  # types "1"; the editor stays open
+
+    assert main_window._save() is True
+
+    assert _run_on_disk(spm_with_validation_path)["Time [s]"] == [0, 1, 200]
+    assert d.experiment_cell_editor_open() is False
+    assert d.undo_enabled() is True
+
+
+# ----------------------------------------------------------------------
 # Ragged columns: independent lengths, never padded
 # ----------------------------------------------------------------------
 

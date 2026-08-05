@@ -104,6 +104,9 @@ class SeriesCard(EditorCard):
     def set_cell_issues(self, issues) -> None:
         self._grid.set_cell_issues(series_cells(issues, self.parameter.label))
 
+    def commit_open_subeditor(self) -> None:
+        self._grid.commit_open_editor()
+
     # ------------------------------------------------------------------
     # CSV import
     # ------------------------------------------------------------------

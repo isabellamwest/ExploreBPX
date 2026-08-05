@@ -211,6 +211,14 @@ class ModalCard(EditorCard):
         tinting a hidden body's grid from them would be nonsense."""
         self._body.set_cell_issues(issues)
 
+    def commit_open_subeditor(self) -> None:
+        """Commit the active body's open cell editor, if it has a grid --
+        see ``EditorCard.commit_open_subeditor``. A hidden body's editor is
+        never open, so only the active one can need this."""
+        grid = self._body.pending_grid()
+        if grid is not None:
+            grid.commit_open_editor()
+
     @property
     def accepts_multiline_input(self) -> bool:
         return self._body.accepts_multiline_input

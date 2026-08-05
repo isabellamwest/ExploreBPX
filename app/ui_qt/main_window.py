@@ -1329,8 +1329,17 @@ class MainWindow(QMainWindow):
         and dialog filter both reflect the chosen format, not whatever the
         backing file happened to be saved as -- exporting a .json document
         as YAML proposes "foo (copy).yaml", not "foo (copy).json".
+
+        A card draft the user typed but never pressed Enter on is applied
+        first, exactly as :meth:`_save` does -- otherwise the export would
+        silently omit what is on screen.
         """
         if self._state.active is None or self._state.active.document is None:
+            return
+        if not self._inspector.apply_pending_draft():
+            # The draft cannot be written at all and the card says why
+            # inline -- see _save. Exporting anyway would write a file that
+            # does not contain what the user is looking at.
             return
         session = self._state.active
         suffix = ".yaml" if fmt == "yaml" else ".json"

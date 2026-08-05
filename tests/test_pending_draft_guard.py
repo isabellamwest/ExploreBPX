@@ -136,3 +136,48 @@ def test_a_blocked_draft_aborts_the_save(app_driver, spm_workfile, monkeypatch):
 
     assert window._save() is False
     assert _on_disk(spm_workfile) == original
+
+
+# ----------------------------------------------------------------------
+# Export mirrors Save's own draft-flush semantics (see MainWindow._export_as)
+# ----------------------------------------------------------------------
+
+
+def test_export_applies_a_draft_the_user_never_pressed_enter_on(
+    app_driver, spm_workfile, tmp_path, monkeypatch
+):
+    app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(6.5)
+    window = app_driver._w
+    assert window._state.active.dirty is False  # the draft is not in the document
+
+    export_path = tmp_path / "exported.json"
+    monkeypatch.setattr(
+        main_window_module.QFileDialog,
+        "getSaveFileName",
+        lambda *a, **k: (str(export_path), ""),
+    )
+
+    window._export_as("json")
+
+    assert export_path.exists()
+    assert _on_disk(export_path) == 6.5
+
+
+def test_export_aborts_when_the_draft_is_unwritable(
+    app_driver, spm_workfile, tmp_path, monkeypatch
+):
+    app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(6.5)
+    window = app_driver._w
+    card = window._inspector._card
+    monkeypatch.setattr(card, "commit_blocked_reason", lambda: "unparseable")
+
+    export_path = tmp_path / "exported.json"
+    monkeypatch.setattr(
+        main_window_module.QFileDialog,
+        "getSaveFileName",
+        lambda *a, **k: (str(export_path), ""),
+    )
+
+    window._export_as("json")
+
+    assert not export_path.exists()

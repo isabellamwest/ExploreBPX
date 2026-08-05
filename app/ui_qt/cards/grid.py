@@ -319,6 +319,25 @@ class _GridView(QTableView):
             return
         super().closeEditor(editor, hint)
 
+    def commit_active_editor(self) -> None:
+        """Force an open cell editor to commit its typed text, as Enter would.
+
+        A caller that reads the model for a reason other than a cell-level
+        Enter -- the owning card's ``value()``, when the Inspector applies a
+        pending draft on Save -- must run this first: the typed text lives
+        only in the editor widget, not the model, until Qt's delegate commits
+        it. ``indexWidget`` reaches the delegate's live editor here even
+        though it was never made persistent, because Qt's own bookkeeping
+        keeps both kinds in the same lookup. A no-op when no editor is open.
+        """
+        if self.state() != QAbstractItemView.EditingState:
+            return
+        editor = self.indexWidget(self.currentIndex())
+        if editor is None:
+            return
+        self.commitData(editor)
+        self.closeEditor(editor, QAbstractItemDelegate.SubmitModelCache)
+
 
 class _PendingBar(QWidget):
     """The "Unsaved edits · Apply · Discard" strip under a dirty grid.
@@ -695,6 +714,13 @@ class NumericGrid(QWidget):
         shows exactly when Enter would actually write the file.
         """
         self._pending_bar.setVisible(pending)
+
+    def commit_open_editor(self) -> None:
+        """Commit an open cell editor's typed text to the model, as Enter
+        would -- see ``_GridView.commit_active_editor``. ``values()`` reads
+        the model, so a caller that reads it for a reason other than the
+        grid's own Enter must call this first."""
+        self._view.commit_active_editor()
 
     def insert_row(self) -> None:
         """Add an empty row below the current one, or at the end.
@@ -1169,6 +1195,11 @@ class MultiColumnGrid(QWidget):
         is never built."""
         if self._pending_bar is not None:
             self._pending_bar.setVisible(pending)
+
+    def commit_open_editor(self) -> None:
+        """Commit an open cell editor's typed text to the model, as Enter
+        would -- see ``NumericGrid.commit_open_editor``."""
+        self._view.commit_active_editor()
 
     def focus_column(self, column: int) -> None:
         """Give the view's current-cell ring to *column*'s first cell.
