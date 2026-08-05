@@ -31,6 +31,7 @@ from ui_qt import style
 from ui_qt.add_parameter_popup import (
     _OTHER_HEADER,
     _SUGGESTED_HEADER,
+    _TAB_LABELS,
     AddParameterPopup,
 )
 from ui_qt.parameter_list import ParameterListPanel
@@ -109,6 +110,56 @@ def popup(qtbot) -> AddParameterPopup:
     p = AddParameterPopup()
     qtbot.addWidget(p)
     return p
+
+
+# ---------------------------------------------------------------------------
+# AddParameterPopup: Standard/Custom tab strip
+# ---------------------------------------------------------------------------
+
+
+def test_popup_opens_on_standard_tab_with_tab_strip_visible(popup, anchor):
+    popup.open_for_section(anchor, "Cell", existing_aliases=set())
+    assert popup._active_tab == _TAB_LABELS[0]
+    assert popup._tab_strip.isVisible() is True
+    assert popup._tab_strip.current_index() == 0
+    assert popup._input.isVisible() is True
+    assert popup._list.isVisible() is True
+    assert popup._form.isVisible() is False
+
+
+def test_clicking_custom_tab_switches_directly_without_the_footer(popup, anchor, qtbot):
+    """The Custom tab is reachable on its own, not only through the pinned
+    footer -- clicking it shows the form directly."""
+    popup.open_for_section(anchor, "Cell", existing_aliases=set())
+    popup._tab_strip._buttons[1].click()
+
+    assert popup._active_tab == "Custom"
+    assert popup._form.isVisible() is True
+    assert popup._input.isVisible() is False
+    assert popup._list.isVisible() is False
+
+
+def test_direct_custom_tab_add_emits_key_and_seed(popup, anchor, qtbot):
+    popup.open_for_section(anchor, "Cell", existing_aliases=set())
+    popup._tab_strip._buttons[1].click()  # straight to Custom, no footer involved
+    popup._form_name.setText("Straight to custom")
+    popup._form_unit.setText("V")
+
+    with qtbot.waitSignal(popup.custom_parameter_requested) as blocker:
+        popup._form_add.click()
+    assert blocker.args == ["Straight to custom [V]", 0.0]  # Scalar is the default type
+
+
+def test_clicking_standard_tab_after_custom_returns_without_clearing_via_cancel(popup, anchor):
+    """Clicking the Standard tab directly (not Cancel) still switches back --
+    only Cancel is documented to clear the form's fields."""
+    popup.open_for_section(anchor, "Cell", existing_aliases=set())
+    popup._tab_strip._buttons[1].click()
+    popup._tab_strip._buttons[0].click()
+
+    assert popup._active_tab == "Standard"
+    assert popup._input.isVisible() is True
+    assert popup._form.isVisible() is False
 
 
 def test_empty_input_lists_the_whole_standard_in_two_groups(popup, anchor):
@@ -408,39 +459,40 @@ def test_footer_withheld_when_typed_text_exactly_matches_a_suggestion(popup, anc
 
 
 def test_click_activates_custom_footer(popup, anchor, qtbot):
-    """Clicking the pinned footer expands the inline form in place -- no new
-    window, and nothing is created yet."""
+    """Clicking the pinned footer switches the popup to its Custom tab --
+    no new window, and nothing is created yet."""
     popup.open_for_section(anchor, "Cell", existing_aliases=set())
     popup._input.setText("New Param")
     with qtbot.assertNotEmitted(popup.custom_parameter_requested):
         popup._create_button.click()
     assert popup.isVisible() is True
-    assert popup._form_visible is True
-    assert popup._create_button.isVisible() is False
+    assert popup._active_tab == "Custom"
+    assert popup._form.isVisible() is True
+    assert popup._input.isVisible() is False  # Standard tab's own content is hidden
     assert popup._form_name.text() == "New Param"  # typed text seeds Name
 
 
 def test_enter_activates_custom_footer_when_it_is_the_only_target(popup, anchor, qtbot):
     popup.open_for_section(anchor, "Cell", existing_aliases=set())
     popup._input.setText("New Param")  # matches no BPX alias
-    # With no rows, the footer is the default keyboard target, so Enter expands it.
+    # With no rows, the footer is the default keyboard target, so Enter switches tab.
     assert popup._footer_selected is True
     with qtbot.assertNotEmitted(popup.custom_parameter_requested):
         popup._activate()
-    assert popup._form_visible is True
+    assert popup._active_tab == "Custom"
     assert popup._form_name.text() == "New Param"
 
 
 # ---------------------------------------------------------------------------
-# AddParameterPopup: inline custom-parameter form (type-at-creation)
+# AddParameterPopup: Custom tab form (type-at-creation)
 # ---------------------------------------------------------------------------
 
 
 def _expand_form(popup, anchor, typed: str = "Foo") -> None:
     popup.open_for_section(anchor, "Cell", existing_aliases=set())
     popup._input.setText(typed)
-    popup._activate()  # expands the pinned footer into the form
-    assert popup._form_visible is True
+    popup._activate()  # the footer switches to the Custom tab
+    assert popup._active_tab == "Custom"
 
 
 def test_form_key_composition_without_a_unit(popup, anchor, qtbot):
@@ -515,8 +567,8 @@ def test_add_refuses_a_composed_key_that_collides_with_an_existing_parameter(pop
     popup.open_for_section(anchor, "Cell", existing_aliases=existing)
     popup._input.setText("Diffusivity constant")
     assert popup._footer_shown is True  # no alias matches the bare name exactly
-    popup._activate()  # expands the form; Name pre-seeded, Unit still blank
-    assert popup._form_visible is True
+    popup._activate()  # switches to Custom; Name pre-seeded, Unit still blank
+    assert popup._active_tab == "Custom"
 
     popup._form_unit.setText("m2.s-1")  # now composes back to the existing key
     with qtbot.assertNotEmitted(popup.custom_parameter_requested):
@@ -524,7 +576,7 @@ def test_add_refuses_a_composed_key_that_collides_with_an_existing_parameter(pop
 
     assert popup._form_message.isVisible() is True
     assert popup.isVisible() is True  # refused in place -- nothing created, popup stays open
-    assert popup._form_visible is True  # the form itself is untouched, ready to correct
+    assert popup._active_tab == "Custom"  # the form itself is untouched, ready to correct
 
 
 def test_editing_name_after_a_collision_clears_the_message_and_allows_a_fresh_add(popup, anchor, qtbot):
@@ -571,29 +623,20 @@ def test_scalar_warning_shown_only_for_scalar_type(popup, anchor):
     assert popup._form_warning.isVisible() is True
 
 
-def test_cancel_collapses_the_form_and_clears_its_fields(popup, anchor, qtbot):
+def test_cancel_returns_to_standard_tab_and_clears_the_form(popup, anchor, qtbot):
     _expand_form(popup, anchor)
     popup._form_unit.setText("V")
 
     with qtbot.assertNotEmitted(popup.custom_parameter_requested):
         popup._form_cancel.click()
 
-    assert popup._form_visible is False
+    assert popup._active_tab == "Standard"
     assert popup._form.isVisible() is False
+    assert popup._input.isVisible() is True  # Standard tab's own content is back
     assert popup._create_button.isVisible() is True  # the plain footer is back
     assert popup._form_name.text() == ""
     assert popup._form_unit.text() == ""
     assert popup.isVisible() is True  # cancelling stays in the popup, doesn't close it
-
-
-def test_changing_the_typed_text_collapses_an_open_form(popup, anchor):
-    """The form was expanded for a specific typed alias; once that text
-    changes the form's context is stale, so it collapses back to the plain
-    footer rather than silently keeping stale Name/Unit/type state around."""
-    _expand_form(popup, anchor)
-    popup._input.setText("Foo!")  # still matches nothing -> footer re-offered
-    assert popup._form_visible is False
-    assert popup._create_button.isVisible() is True
 
 
 # ---------------------------------------------------------------------------
@@ -623,8 +666,8 @@ def test_keyboard_navigation_skips_headers_and_reaches_the_footer(popup, anchor,
     popup._move_selection(-1)  # wraps up onto the footer
     assert popup._footer_selected is True
     with qtbot.assertNotEmitted(popup.custom_parameter_requested):
-        popup._activate()  # Enter on the footer expands the form, doesn't create yet
-    assert popup._form_visible is True
+        popup._activate()  # Enter on the footer switches to Custom, doesn't create yet
+    assert popup._active_tab == "Custom"
     assert popup._form_name.text() == "Densit"
 
 
@@ -707,12 +750,16 @@ def test_outside_click_on_trigger_button_closes_without_reopening(panel, qtbot):
 def test_reopening_for_a_new_section_clears_stale_state(popup, anchor):
     popup.open_for_section(anchor, "Cell", existing_aliases=set())
     popup._input.setText("Leftover")
+    popup._activate()  # switches to Custom, with "Leftover" in Name
     assert popup._footer_shown is True
+    assert popup._active_tab == "Custom"
 
     popup.open_for_section(anchor, "Electrolyte", existing_aliases={"Leftover"})
     assert popup._input.text() == ""
     assert popup._footer_shown is False  # empty input, no fresh alias to create
     assert "Leftover" not in _aliases(popup)  # fresh section, not the stale one
+    assert popup._active_tab == "Standard"  # always reopens on Standard
+    assert popup._form_name.text() == ""  # the Custom form's stale Name is cleared too
 
 
 def test_list_scrolls_when_content_exceeds_the_visible_row_cap(popup, anchor):
@@ -784,14 +831,14 @@ def test_header_hides_again_once_selection_clears(panel):
 
 
 def test_custom_parameter_form_add_carries_section_path_key_and_seed(panel, qtbot):
-    """The inline form's "Add" -- not the footer activation itself -- is what
+    """The Custom tab's "Add" -- not the footer activation itself -- is what
     fires ``add_parameter_requested``, now carrying a seed (Scalar's ``0.0``,
     the default type) alongside the section path and composed key."""
     panel.show_node(_section_node())
     panel._open_add_popup()
     panel._popup._input.setText("New Param")
-    panel._popup._activate()  # expands the inline form; doesn't emit yet
-    assert panel._popup._form_visible is True
+    panel._popup._activate()  # the footer switches to the Custom tab; doesn't emit yet
+    assert panel._popup._active_tab == "Custom"
     with qtbot.waitSignal(panel.add_parameter_requested) as blocker:
         panel._popup._form_add.click()
     assert blocker.args == [_CELL, "New Param", 0.0]
@@ -904,7 +951,7 @@ def test_add_custom_parameter_end_to_end(app_driver, spm_workfile):
 
     d.open_add_parameter_popup()
     d.type_new_parameter_alias("My custom parameter")
-    d.activate_selected_add_parameter_row()  # expands the inline form
+    d.activate_selected_add_parameter_row()  # switches to the Custom tab
     assert d.add_parameter_custom_form_visible() is True
     d.submit_custom_parameter_form()  # Scalar is the default type
 
@@ -933,7 +980,7 @@ def test_add_refuses_a_colliding_composed_key_end_to_end(app_driver, spm_workfil
 
     d.open_add_parameter_popup()
     d.type_new_parameter_alias("Nominal cell capacity")  # no exact alias match -> footer offered
-    d.activate_selected_add_parameter_row()  # expands the inline form
+    d.activate_selected_add_parameter_row()  # switches to the Custom tab
     assert d.add_parameter_custom_form_visible() is True
     d.type_custom_parameter_unit("A.h")  # composes back to the existing alias
     d.submit_custom_parameter_form()

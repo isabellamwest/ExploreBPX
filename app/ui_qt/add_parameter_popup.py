@@ -28,20 +28,29 @@ the *whole* BPX standard for the target section up front -- no typing required
   (:func:`core.bpx_gateway.searchable_parameters`) that this section doesn't
   expect and doesn't already have, in plain text.
 
-Typing filters both groups by substring. The "Create custom parameter"
-fallback is a **pinned footer action**, not a scrolling row: it stays put
-beneath the list (separated by a divider), reachable by keyboard as the last
-navigable entry. Activating it expands an **inline form in place** -- no new
-window -- with a Name field, an optional Unit field, and a Scalar/Text/
-Boolean/Table/Series type picker (Scalar checked by default). "Add" composes
-the key (``name`` plus `` [unit]`` when a unit is given) and seeds the value
-for the chosen type -- ``0.0``/``""``/``False``/an empty table/an empty list
--- so the new parameter lands straight on its matching card
-(:mod:`ui_qt.cards`) instead of the metadata-less raw fallback. If the
-composed key already names a parameter in this section, "Add" refuses (a
-plain inline message explains why) rather than silently overwriting it --
-``core.editing.add_parameter`` writes unconditionally, so this is the only
-guard against it.
+A two-segment "Standard" | "Custom" tab strip (:class:`~ui_qt.cards.modal.
+ModeStrip`, already used elsewhere for a Chart/Table toggle -- so it already
+carries a tab role, not just a value-type picker) sits above everything else;
+the popup always opens on **Standard**.
+
+**Standard** is the list described above: typing filters both groups by
+substring, and the "Create custom parameter" fallback is a **pinned footer
+action**, not a scrolling row -- it stays put beneath the list (separated by
+a divider), reachable by keyboard as the last navigable entry. Activating it
+(click or Enter) switches to **Custom**, pre-filling Name with whatever text
+was typed.
+
+**Custom** is a plain form, shown directly rather than expanded in place: a
+Name field, an optional Unit field, and a Scalar/Text/Boolean/Table/Series
+type picker (Scalar checked by default). "Add" composes the key (``name``
+plus `` [unit]`` when a unit is given) and seeds the value for the chosen
+type -- ``0.0``/``""``/``False``/an empty table/an empty list -- so the new
+parameter lands straight on its matching card (:mod:`ui_qt.cards`) instead of
+the metadata-less raw fallback. If the composed key already names a
+parameter in this section, "Add" refuses (a plain inline message explains
+why) rather than silently overwriting it -- ``core.editing.add_parameter``
+writes unconditionally, so this is the only guard against it. Cancel clears
+the form and switches back to Standard.
 
 A suggestion row (either group) skips the form entirely: it emits its known
 alias with an honest empty value (``None``), letting
@@ -81,8 +90,8 @@ from ui_qt.floating_card import SHADOW_MARGIN as _SHADOW_MARGIN
 from ui_qt.floating_card import floating_card
 from ui_qt.parameter_row import ParameterRowDelegate
 
-#: The inline custom-parameter form's type picker, in the order the row shows
-#: them, mapped to the seed value each type commits when "Add" is pressed.
+#: The Custom tab's type picker, in the order the row shows them, mapped to
+#: the seed value each type commits when "Add" is pressed.
 #: Chosen so ``core.parameter_types.classify`` (no schema metadata exists for
 #: a custom alias) lands the new parameter on the matching kind -- SCALAR/
 #: TEXT/BOOLEAN/TABLE/SERIES -- with an honest "nothing set yet" value for
@@ -117,6 +126,11 @@ _CARD_WIDTH = 380
 
 _SUGGESTED_HEADER = "Suggested for this section"
 _OTHER_HEADER = "Other parameters"
+
+#: The popup's two tabs, in strip order. "Standard" is the grouped
+#: BPX-alias list; "Custom" is the hand-typed parameter form. The popup
+#: always opens on "Standard".
+_TAB_LABELS = ("Standard", "Custom")
 
 
 def _kind_label(meta) -> str | None:
@@ -291,12 +305,13 @@ class _SuggestionDelegate(ParameterRowDelegate):
 
 
 class AddParameterPopup(QWidget):
-    """Frameless popup listing the whole BPX standard for a section (suggested
-    fields highlighted) plus a pinned custom-add footer."""
+    """Frameless popup with a "Standard" | "Custom" tab strip: Standard lists
+    the whole BPX standard for a section (suggested fields highlighted) with
+    a pinned custom-add footer; Custom is a plain hand-typed parameter form."""
 
     #: (key, seed) -- a suggestion row (either group) always carries seed
-    #: ``None`` (the honest empty value); the inline custom-parameter form's
-    #: "Add" carries whichever seed its selected type maps to
+    #: ``None`` (the honest empty value); the Custom tab's form's "Add"
+    #: carries whichever seed its selected type maps to
     #: (``_CUSTOM_TYPE_SEEDS``).
     custom_parameter_requested = Signal(str, object)
 
@@ -337,9 +352,12 @@ class AddParameterPopup(QWidget):
         self._typed: str = ""
         self._footer_shown: bool = False
         self._footer_selected: bool = False
-        #: Whether the footer is currently expanded into the inline
-        #: custom-parameter form (see ``_show_custom_form``).
-        self._form_visible: bool = False
+        #: Which tab is on screen -- one of ``_TAB_LABELS``. The popup always
+        #: opens on "Standard" (see ``open_for_section``).
+        self._active_tab: str = _TAB_LABELS[0]
+
+        self._tab_strip = ModeStrip(_TAB_LABELS, self._on_tab_clicked)
+        self._tab_strip.select(0)
 
         self._input = _PopupInput()
         self._input.setObjectName("AddParameterInput")
@@ -374,7 +392,7 @@ class AddParameterPopup(QWidget):
         self._create_button.setIcon(_plus_icon())
         self._create_button.setFocusPolicy(Qt.NoFocus)
         self._create_button.setCursor(Qt.PointingHandCursor)
-        self._create_button.clicked.connect(self._show_custom_form)
+        self._create_button.clicked.connect(self._activate_footer)
         self._create_button.hide()
 
         self._form = self._build_custom_form()
@@ -382,6 +400,7 @@ class AddParameterPopup(QWidget):
 
         card, card_layout = floating_card(self, "AddParameterCard", width=_CARD_WIDTH)
         self._card = card
+        card_layout.addWidget(self._tab_strip)
         card_layout.addWidget(self._input)
         card_layout.addWidget(self._list)
         card_layout.addWidget(self._divider)
@@ -441,6 +460,8 @@ class AddParameterPopup(QWidget):
         self._input.setPlaceholderText(f"Add parameter to {section_label}…")
         self._input.clear()
         self._refresh_rows("")
+        self._reset_custom_form()
+        self._set_active_tab(_TAB_LABELS[0])  # always reopen on Standard
         bottom_left = anchor.mapToGlobal(anchor.rect().bottomLeft())
         # Offset by the shadow margin so the visible card -- not the transparent
         # padding -- aligns with the anchor's left edge, leaving a small gap.
@@ -460,12 +481,7 @@ class AddParameterPopup(QWidget):
         typing filters both groups by substring. The "Suggested" group is
         omitted entirely when the section has no resolvable expected fields, so
         such sections just show the full "other" list with no header.
-
-        A typed-text change always means the section/text context the inline
-        custom-parameter form was expanded for is stale, so this collapses it
-        back to the plain footer first (a no-op if it wasn't expanded).
         """
-        self._collapse_custom_form()
         self._list.clear()
         typed = text.strip()
         needle = typed.lower()
@@ -544,20 +560,48 @@ class AddParameterPopup(QWidget):
 
     def _set_footer(self, show: bool) -> None:
         """Show/hide the pinned custom-add footer (and its divider) and keep
-        its label in step with the typed text."""
+        its label in step with the typed text. Actual visibility also
+        depends on the active tab -- see ``_update_footer_visibility``."""
         self._footer_shown = show
-        self._divider.setVisible(show)
-        self._create_button.setVisible(show)
         if show:
             self._create_button.setText(f"  Create custom parameter “{self._typed}”")
+        self._update_footer_visibility()
 
-    # -- inline custom-parameter form ---------------------------------
+    # -- tabs ----------------------------------------------------------
+    def _on_tab_clicked(self, index: int) -> None:
+        self._set_active_tab(_TAB_LABELS[index])
+
+    def _set_active_tab(self, tab: str) -> None:
+        """Show *tab*'s widgets, hide the other's, and keep the tab strip
+        itself in step -- the single place every tab switch (open, a tab
+        click, the footer, Cancel) goes through."""
+        self._active_tab = tab
+        standard = tab == _TAB_LABELS[0]
+        self._tab_strip.select(0 if standard else 1)
+        self._input.setVisible(standard)
+        self._list.setVisible(standard)
+        self._update_footer_visibility()
+        self._form.setVisible(not standard)
+        self._refit()
+        if standard:
+            self._input.setFocus()
+        else:
+            self._form_name.setFocus()
+            self._form_name.selectAll()
+
+    def _update_footer_visibility(self) -> None:
+        """The pinned footer (and its divider) only ever shows on the
+        Standard tab, and only while ``_footer_shown``."""
+        visible = self._footer_shown and self._active_tab == _TAB_LABELS[0]
+        self._divider.setVisible(visible)
+        self._create_button.setVisible(visible)
+
+    # -- custom-parameter form ------------------------------------------
     def _build_custom_form(self) -> QWidget:
-        """Build (but do not show) the form the pinned footer expands into:
-        Name, an optional Unit, a Scalar/Text/Boolean/Table/Series type
-        picker (plain text, no icons -- a standing project rule), the
-        Scalar-only seed warning, a same-styled collision message, and
-        Add/Cancel."""
+        """Build (but do not show) the Custom tab's form: Name, an optional
+        Unit, a Scalar/Text/Boolean/Table/Series type picker (plain text, no
+        icons -- a standing project rule), the Scalar-only seed warning, a
+        same-styled collision message, and Add/Cancel."""
         self._form_name = QLineEdit()
         self._form_name.setObjectName("AddParameterInput")  # same look as the search field
         self._form_name.setPlaceholderText("Name")
@@ -609,42 +653,40 @@ class AddParameterPopup(QWidget):
         self._form_name.textChanged.connect(self._clear_collision_message)
         self._form_unit.textChanged.connect(self._clear_collision_message)
         self._form_add.clicked.connect(self._submit_custom_form)
-        self._form_cancel.clicked.connect(self._collapse_custom_form)
+        self._form_cancel.clicked.connect(self._cancel_custom_form)
         return form
 
-    def _show_custom_form(self, *_args) -> None:
-        """Expand the pinned footer into the inline form, in place -- never a
-        new window. The typed search text seeds Name, since it is the alias
-        the user was already typing toward; Unit starts blank and Scalar
-        starts selected."""
-        self._form_visible = True
-        self._create_button.hide()
-        self._form_name.setText(self._typed)
+    def _activate_footer(self, *_args) -> None:
+        """The pinned footer's click handler: same switch-to-Custom route as
+        Enter on the keyboard-selected footer (``_activate``)."""
+        self._switch_to_custom_tab(self._typed)
+
+    def _switch_to_custom_tab(self, prefill: str) -> None:
+        """Switch to the Custom tab, pre-filling Name with *prefill* -- the
+        search text the footer was offering to create -- and resetting
+        Unit/type/messages to their defaults."""
+        self._form_name.setText(prefill)
         self._form_unit.clear()
         self._form_type_strip.select(0)
         self._form_warning.setVisible(True)
         self._form_message.hide()
         self._update_form_add_enabled()
-        self._form.show()
-        self._refit()
-        self._form_name.setFocus()
-        self._form_name.selectAll()
+        self._set_active_tab(_TAB_LABELS[1])
 
-    def _collapse_custom_form(self, *_args) -> None:
-        """Collapse the form back to the plain pinned footer button (Cancel,
-        or a fresh ``_refresh_rows`` making its typed context stale),
-        clearing its fields so the next expansion starts fresh."""
-        if not self._form_visible:
-            return
-        self._form_visible = False
-        self._form.hide()
+    def _cancel_custom_form(self, *_args) -> None:
+        """Cancel: clear the form's fields and switch back to Standard."""
+        self._reset_custom_form()
+        self._set_active_tab(_TAB_LABELS[0])
+
+    def _reset_custom_form(self) -> None:
+        """Clear the custom form back to its defaults -- shared by Cancel and
+        by ``open_for_section``, so a freshly (re)opened popup never carries
+        a previous section's stale Name/Unit/type/collision state."""
         self._form_name.clear()
         self._form_unit.clear()
         self._form_type_strip.select(0)
         self._form_warning.setVisible(True)
         self._form_message.hide()
-        self._create_button.show()
-        self._refit()
 
     def _update_form_add_enabled(self, *_args) -> None:
         """Add stays disabled while Name is empty/whitespace -- there is
@@ -705,13 +747,12 @@ class AddParameterPopup(QWidget):
 
     def _refit(self) -> None:
         """Shrink the popup back to fit whatever it is currently showing --
-        the list (after ``_resize_list``) or the inline custom-parameter form
-        appearing/collapsing -- or dead space would linger from a taller
-        prior state. Two Qt details make this more than a bare
-        ``adjustSize``: a top-level's layout sets the window's *minimum* size
-        and only ever raises it (so a prior taller minimum would pin the
-        height), and ``adjustSize`` reads a cached hint, so the layout must
-        be re-activated first.
+        the list (after ``_resize_list``) or the Custom tab's form -- or dead
+        space would linger from a taller prior state/tab. Two Qt details make
+        this more than a bare ``adjustSize``: a top-level's layout sets the
+        window's *minimum* size and only ever raises it (so a prior taller
+        minimum would pin the height), and ``adjustSize`` reads a cached
+        hint, so the layout must be re-activated first.
         """
         if not self.isVisible():
             return
@@ -767,8 +808,8 @@ class AddParameterPopup(QWidget):
 
     def _activate(self, *_args) -> None:
         if self._footer_selected and self._footer_shown:
-            if not self._form_visible:  # already expanded: don't re-seed it
-                self._show_custom_form()
+            if self._active_tab != _TAB_LABELS[1]:  # already there: don't re-seed it
+                self._switch_to_custom_tab(self._typed)
             return
         item = self._list.currentItem()
         if item is None:
