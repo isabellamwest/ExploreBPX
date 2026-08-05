@@ -237,15 +237,15 @@ def test_float_int_to_interpolated_table_commits_a_real_dict():
 def test_function_card_table_mode_has_a_csv_import_button_always_visible():
     """The entry point itself, not just the write path the tests above reach
     past: ``InterpolatedTable``'s grid must actually opt into ``csv_import``,
-    and the button must stay visible whether or not the grid is expanded."""
+    and the button must stay visible whatever height the grid has grown to."""
     card = _fn(3.7)
     card.select_mode(INTERPOLATED_TABLE)
     grid = card._modes[2].body._grid
     assert grid._import_button is not None
     assert not grid._import_button.isHidden()
-    grid._toggle_expanded()
+    grid.set_fill_available(True)
     assert not grid._import_button.isHidden()
-    grid._toggle_expanded()
+    grid.set_fill_available(False)
     assert not grid._import_button.isHidden()
 
 
@@ -581,14 +581,14 @@ def test_table_ragged_value_falls_back_to_raw():
 def test_table_card_has_a_csv_import_button_always_visible():
     """The entry point itself, not just the write path the test below reaches
     past: the grid must actually opt into ``csv_import``, and the button must
-    stay visible whether or not the grid is expanded."""
+    stay visible whatever height the grid has grown to."""
     card = _table({"x": [0, 1], "y": [1, 2]})
     grid = card._modes[0].body._grid
     assert grid._import_button is not None
     assert not grid._import_button.isHidden()
-    grid._toggle_expanded()
+    grid.set_fill_available(True)
     assert not grid._import_button.isHidden()
-    grid._toggle_expanded()
+    grid.set_fill_available(False)
     assert not grid._import_button.isHidden()
 
 

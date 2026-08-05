@@ -18,7 +18,7 @@ pytest.importorskip("PySide6")
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
-from ui_qt.cards.grid import MultiColumnGrid
+from ui_qt.cards.grid import VISIBLE_ROWS, MultiColumnGrid
 from ui_qt.cards.paste_dialog import PastePreviewResult
 
 
@@ -396,13 +396,26 @@ def test_focus_column_is_a_noop_for_an_out_of_range_column():
 # ----------------------------------------------------------------------
 
 
-def test_add_toolbar_widget_places_it_before_the_trailing_stretch():
+def test_add_toolbar_widget_right_aligns_a_named_action():
+    """The default: past the trailing stretch, at the right end of the row --
+    where the app puts named actions."""
     from PySide6.QtWidgets import QLabel
 
     grid = MultiColumnGrid(("x",))
     extra = QLabel("extra")
 
     grid.add_toolbar_widget(extra)
+
+    assert grid._buttons.itemAt(grid._buttons.count() - 1).widget() is extra
+
+
+def test_add_toolbar_widget_can_sit_beside_the_row_buttons():
+    from PySide6.QtWidgets import QLabel
+
+    grid = MultiColumnGrid(("x",))
+    extra = QLabel("extra")
+
+    grid.add_toolbar_widget(extra, align_right=False)
 
     assert grid._buttons.itemAt(grid._buttons.count() - 2).widget() is extra
 
@@ -498,47 +511,48 @@ def test_read_only_grid_has_no_context_menu_actions():
 
 
 # ----------------------------------------------------------------------
-# Expand affordance (Phase 3 gap vs NumericGrid.expand_toggled)
+# Auto-fit height (the same contract NumericGrid.fit_to_extra_height has)
 # ----------------------------------------------------------------------
 
 
-def test_expand_button_placement_mirrors_numeric_grid():
-    """Same named-action convention and placement (after the +/- row's
-    stretch) as ``NumericGrid.expand_toggled`` -- see ``test_grid_bulk.py``'s
-    own ``test_bulk_grid_has_expand_and_paste_affordances``."""
-    grid = MultiColumnGrid(("x", "y"))
-    assert grid._expand_button is not None
-    assert grid._expand_button.text() == "Expand"
-
-
-def test_read_only_grid_has_no_expand_button():
-    grid = MultiColumnGrid(("x", "y"), read_only=True)
-    assert grid._expand_button is None
-
-
-def test_expand_toggle_emits_and_relabels():
-    grid = MultiColumnGrid(("x", "y"))
-    seen = []
-    grid.expand_toggled.connect(seen.append)
-
-    grid._toggle_expanded()
-    assert seen == [True]
-    assert grid.is_expanded is True
-    assert grid._expand_button.text() == "Collapse"
-
-    grid._toggle_expanded()
-    assert seen == [True, False]
-    assert grid.is_expanded is False
-    assert grid._expand_button.text() == "Expand"
-
-
-def test_set_expanded_is_reversible():
+def test_fill_is_reversible():
     grid = MultiColumnGrid(("x",))
+    grid.set_column_values(0, [float(i) for i in range(40)])
     compact = grid._view.maximumHeight()
-    grid.set_expanded(True)
+
+    grid.set_fill_available(True)
     assert grid._view.maximumHeight() > compact
-    grid.set_expanded(False)
+    assert grid._view.minimumHeight() == compact
+
+    grid.set_fill_available(False)
     assert grid._view.maximumHeight() == compact
+
+
+def test_fill_never_grows_past_the_last_row():
+    grid = MultiColumnGrid(("x",))
+    grid.set_column_values(0, [0.0, 1.0, 2.0])
+    grid.set_fill_available(True)
+    assert grid._view.maximumHeight() == grid._compact_height()
+
+
+def test_fill_ceiling_follows_the_row_count():
+    grid = MultiColumnGrid(("x",))
+    grid.set_column_values(0, [float(i) for i in range(40)])
+    grid.set_fill_available(True)
+    tall = grid._view.maximumHeight()
+
+    grid.set_column_values(0, [0.0, 1.0])
+
+    assert grid._view.maximumHeight() < tall
+    assert grid._view.maximumHeight() == grid._compact_height()
+
+
+def test_wants_fill_only_once_rows_outrun_the_compact_window():
+    grid = MultiColumnGrid(("x",))
+    grid.set_column_values(0, [float(i) for i in range(VISIBLE_ROWS)])
+    assert grid.wants_fill is False
+    grid.set_column_values(0, [float(i) for i in range(VISIBLE_ROWS + 1)])
+    assert grid.wants_fill is True
 
 
 def test_paste_is_a_noop_when_read_only(monkeypatch):

@@ -16,7 +16,7 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QLabel
 
 from core import bpx_gateway
 from core.compare import RowState
@@ -66,18 +66,25 @@ def _series_card_with_description() -> ParameterCard:
     return ParameterCard(param, None)
 
 
-def test_description_hides_while_the_grid_is_expanded():
-    """Expanding a grid takes over the pane; the description hides to make room
-    (the preview chart above the grid stays), and returns on collapse."""
+def test_description_stays_put_however_tall_the_grid_grows():
+    """The description describes the parameter, so it never moves or hides:
+    a grid growing into the page's leftover height takes that height from the
+    white tail below, not from the header band."""
     card = _series_card_with_description()
-    assert card._description_widgets  # a description block was built
-    assert all(w.isVisibleTo(card) for w in card._description_widgets)
+    description = card.findChild(QLabel, "CardDescription")
+    assert description is not None
+    assert description.isVisibleTo(card)
 
-    card._editor.expand_toggled.emit(True)
-    assert all(not w.isVisibleTo(card) for w in card._description_widgets)
+    card.growable_grid().set_fill_available(True)
 
-    card._editor.expand_toggled.emit(False)
-    assert all(w.isVisibleTo(card) for w in card._description_widgets)
+    assert description.isVisibleTo(card)
+
+
+def test_a_grid_card_offers_its_grid_for_the_pages_leftover_height():
+    """The Inspector reaches the editor's grid through the card -- a card with
+    no grid (a scalar) offers nothing and keeps the page's white tail."""
+    card = _series_card_with_description()
+    assert card.growable_grid() is card._editor._grid
 
 
 def _layout_index(layout, item) -> int:
@@ -94,7 +101,7 @@ def test_description_sits_directly_under_title_without_reference():
     Structured-page layout: the description closes the header block, and the
     editor lives in the content column below it."""
     card = _series_card_with_description()
-    description = card._description_widgets[0]
+    description = card.findChild(QLabel, "CardDescription")
     header_frame = description.parentWidget()
     header_box = header_frame.layout()
     desc_index = _layout_index(header_box, description)
@@ -113,7 +120,7 @@ def test_description_sits_directly_under_title_with_reference_docked():
     joins the editor's own row (aligned-rows layout), not the header."""
     card = _series_card_with_description()
     card.set_reference([1, 2, 3], RowState.DIFFERS, ParameterKind.SERIES)
-    description = card._description_widgets[0]
+    description = card.findChild(QLabel, "CardDescription")
     header_box = description.parentWidget().layout()
     desc_index = _layout_index(header_box, description)
     expected_desc_index = 2 if card._rename_row is not None else 1
@@ -256,20 +263,19 @@ def test_undocking_the_reference_clears_the_table_overlay():
 
 
 @requires_charts
-def test_expanding_the_grid_keeps_the_chart_overlay():
-    """The reference *section* (grid + heading) hides while a grid takes
-    over the pane (known Qt pitfall), but the chart overlay lives inside
-    the editor itself and is untouched -- it carries the comparison while
-    expanded."""
+def test_growing_the_grid_keeps_the_reference_section_and_its_overlay():
+    """A grid growing into the page's leftover height is a resize, not a
+    takeover: the reference section stays, and so does the chart overlay
+    inside the editor that carries the comparison."""
     card = _table_card({"x": [0, 1], "y": [2, 3]})
     card.set_reference({"x": [0, 5], "y": [2, 9]}, RowState.DIFFERS, ParameterKind.TABLE)
     preview = card._editor._table_body._preview
     assert preview._ref_points
 
-    card._editor.expand_toggled.emit(True)
+    card.growable_grid().set_fill_available(True)
 
-    assert not card._reference_block.isVisibleTo(card)
-    assert preview._ref_points  # the overlay itself is never touched
+    assert card._reference_block.isVisibleTo(card)
+    assert preview._ref_points
     assert preview.isVisibleTo(card._editor)
 
 

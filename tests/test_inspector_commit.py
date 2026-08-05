@@ -155,34 +155,33 @@ def test_model_popup_pick_switches_model_and_completes_structure(qtbot, spm_work
     assert "Electrolyte" not in raw["Parameterisation"]
 
 
-def test_expanding_a_grid_hides_the_sections_and_takes_the_pane(
-    qtbot, spm_with_validation_path
-):
-    """When a grid takes over the pane, the Issues/Documentation sections
-    must get out of the way and the surface slot must claim the page's
-    leftover space; collapsing restores both (including a section the
-    parameter's own issues would show)."""
+def test_a_long_grid_takes_the_pages_leftover_height(qtbot, spm_with_validation_path):
+    """A grid with more rows than its compact window shows takes the page's
+    stretch, so it grows into the pane instead of scrolling eight rows at a
+    time above a slab of white. A short one leaves the white tail alone, and
+    either way the Issues/Documentation sections stay where they are."""
     time_path = ("Validation", "C/20 discharge", "Time [s]")
     state, panel = _panel_on(qtbot, spm_with_validation_path, time_path)
-    panel.resize(460, 720)
+    panel.resize(460, 900)
     panel.show()
     qtbot.waitExposed(panel)
-    assert panel._docs_section.isVisibleTo(panel)
 
-    panel._card._editor._grid._toggle_expanded()
-    qtbot.wait(1)
-
-    assert not panel._docs_section.isVisibleTo(panel)
-    assert not panel._issues_section.isVisibleTo(panel)
-    # The surface slot owns the page's leftover space, the tail does not.
-    assert panel._content_layout.stretch(0) == 1
-    assert panel._content_layout.stretch(panel._tail_index) == 0
-
-    panel._card._editor._grid._toggle_expanded()
-    qtbot.wait(1)
-    assert panel._docs_section.isVisibleTo(panel)
+    grid = panel._card.growable_grid()
+    # Three rows: nothing to grow into, so the page keeps its white tail.
+    assert grid.wants_fill is False
     assert panel._content_layout.stretch(0) == 0
     assert panel._content_layout.stretch(panel._tail_index) == 1
+    compact = grid._view.height()
+
+    # A long array claims the leftover instead, and the sections stay put.
+    grid.set_values([[float(i)] for i in range(200)])
+    qtbot.wait(50)
+
+    assert grid.wants_fill is True
+    assert panel._content_layout.stretch(0) == 1
+    assert panel._content_layout.stretch(panel._tail_index) == 0
+    assert grid._view.height() > compact
+    assert panel._docs_section.isVisibleTo(panel)
 
 
 def test_real_edit_still_commits_and_emits(qtbot, spm_workfile):

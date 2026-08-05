@@ -50,9 +50,6 @@ class ModeBody(QWidget):
     """Base class for a single representation's editor."""
 
     changed = Signal()
-    #: Forwarded up to the card when a grid body asks to expand. A body with no
-    #: grid (numbers, expressions, JSON) never emits it.
-    expand_toggled = Signal(bool)
 
     def value(self) -> object:
         """The body's current draft, in raw-dict form."""
@@ -215,7 +212,6 @@ class TableBody(ModeBody):
 
         self._grid = NumericGrid(("x", "y"), csv_import=True)
         self._grid.changed.connect(self._on_grid_changed)
-        self._grid.expand_toggled.connect(self.expand_toggled)
         layout.addWidget(self._grid, 1)
 
         layout.addWidget(
@@ -225,7 +221,7 @@ class TableBody(ModeBody):
                     "Click a cell and type, or double-click, to edit it; Enter confirms the cell and moves down.",
                     "Your edits stay a draft until applied: Enter on the grid (or Apply) writes them to the file, Esc (or Discard) reverts.",
                     "Paste two columns from a spreadsheet with Ctrl+V, or right-click → Paste.",
-                    "Use + and − to add or remove points; Expand fills the panel.",
+                    "Use + and − to add or remove points; the table grows to fill the panel.",
                     "Import CSV… loads x and y from the columns of a file.",
                 )
             )
@@ -312,7 +308,7 @@ class MaterialMapBody(ModeBody):
             button.setAutoRaise(True)
             button.setPopupMode(QToolButton.InstantPopup)
             button.setMenu(self._menu)
-            self._grid.add_toolbar_widget(button)
+            self._grid.add_toolbar_widget(button, align_right=False)
 
         self._error = QLabel()
         self._error.setWordWrap(True)

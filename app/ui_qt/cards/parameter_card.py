@@ -88,7 +88,6 @@ class ParameterCard(QWidget):
     draft_changed = Signal()
     draft_reset = Signal()
     commit_requested = Signal()
-    expand_toggled = Signal(bool)
     bulk_commit_requested = Signal(object)
     #: (path, new_key) -- the inline rename row's "Apply". Only ever emitted
     #: when the pencil button exists at all (``self._renamable``).
@@ -180,17 +179,13 @@ class ParameterCard(QWidget):
         # it never moves depending on whether a reference is docked. Not a
         # boxed text widget, which read as another input
         # and claimed a fixed slab of height whatever its one sentence
-        # needed. Selectable so it can still be copied. Hidden while the
-        # editor's grid takes over the pane (a big table needs the room; the
-        # live preview chart above the grid stays).
-        self._description_widgets: list[QWidget] = []
+        # needed. Selectable so it can still be copied.
         if parameter.description:
             desc = QLabel(parameter.description)
             desc.setObjectName("CardDescription")
             desc.setWordWrap(True)
             desc.setTextInteractionFlags(Qt.TextSelectableByMouse)
             header_box.addWidget(desc)
-            self._description_widgets = [desc]
         layout.addWidget(header_frame)
 
         body, self._body_layout = page_content()
@@ -206,8 +201,6 @@ class ParameterCard(QWidget):
         self._editor.draft_changed.connect(self.draft_changed)
         self._editor.draft_reset.connect(self.draft_reset)
         self._editor.commit_requested.connect(self.commit_requested)
-        self._editor.expand_toggled.connect(self.expand_toggled)
-        self._editor.expand_toggled.connect(self._on_expand_toggled)
         self._editor.bulk_commit_requested.connect(self.bulk_commit_requested)
         self._value_row = QHBoxLayout()
         # Same spacing as ReferenceValueBlock's label/value gap -- with the
@@ -215,8 +208,9 @@ class ParameterCard(QWidget):
         self._value_row.setSpacing(style.ROLE_ROW_SPACING)
         self._value_row.addWidget(self._editor, 1)
         # Stretch 1: inert while the card sits at its natural height (the
-        # Inspector top-aligns it), but a grid takeover clears that alignment
-        # and this is what hands the editor the whole pane.
+        # Inspector top-aligns it), but this is what carries the pane's
+        # leftover height down to a grid big enough to want it -- the
+        # reference section below never absorbs it (see ``growable_grid``).
         self._body_layout.addLayout(self._value_row, 1)
 
         # Reference section: the "Main file" heading above plus this
@@ -225,9 +219,7 @@ class ParameterCard(QWidget):
         # with no reference docked this never runs, so the card stays
         # exactly today's, no extra widget instantiated at all.
         self._reference_block: ReferenceValueBlock | None = None
-        #: Whether the reference section is currently meant to be showing --
-        #: distinct from a widget's own ``isVisible()``, which the grid-expand
-        #: toggle also drives (see ``_on_expand_toggled``).
+        #: Whether the reference section is currently meant to be showing.
         self._reference_active = False
 
     def set_reference(
@@ -301,19 +293,10 @@ class ParameterCard(QWidget):
         self._main_file_heading.show()
         self._reference_block.show()
 
-    def _on_expand_toggled(self, expanded: bool) -> None:
-        """Hide the description and the whole reference section (the "Main"
-        role label + the "Reference" label/value row) while the grid is
-        expanded, restore on collapse -- but only the reference section's
-        own showing state, so collapsing never reveals it when no reference
-        is docked."""
-        for widget in self._description_widgets:
-            widget.setVisible(not expanded)
-        show_reference = self._reference_active and not expanded
-        if self._main_file_heading is not None:
-            self._main_file_heading.setVisible(show_reference)
-        if self._reference_block is not None:
-            self._reference_block.setVisible(show_reference)
+    def growable_grid(self):
+        """The inner editor's grid, if it has one -- see
+        ``EditorCard.growable_grid``."""
+        return self._editor.growable_grid()
 
     def value(self) -> object:
         """Return the inner editor's current draft value in raw-dict form."""

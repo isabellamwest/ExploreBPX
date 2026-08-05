@@ -208,19 +208,14 @@ def test_dropped_file_fills_mapped_columns_the_same_way_as_browse(
     assert d.experiment_dropzone_shown() is False
 
 
-def test_experiment_card_forwards_the_grids_expand_toggle(
+def test_experiment_card_offers_its_grid_for_the_pages_leftover_height(
     app_driver, spm_with_validation_path
 ):
     d = app_driver
     d.open(spm_with_validation_path).go_to(_RUN)
     card = d.experiment_card()
-    seen = []
-    card.expand_toggled.connect(seen.append)
 
-    card._grid._toggle_expanded()
-
-    assert seen == [True]
-    assert card._grid.is_expanded is True
+    assert card.growable_grid() is card._grid
 
 
 def test_sample_count_chip_reports_each_columns_length(

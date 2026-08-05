@@ -1,4 +1,4 @@
-"""NumericGrid bulk affordances: expand toggle, clipboard paste, CSV import.
+"""NumericGrid bulk affordances: auto-fit height, clipboard paste, CSV import.
 
 The paste *dialog* and the CSV mapping dialog are not exercised here (both are
 modal): paste parsing is tested in ``test_paste.py``, the CSV parser and
@@ -19,7 +19,7 @@ pytest.importorskip("PySide6")
 from PySide6.QtWidgets import QApplication
 
 import ui_qt.cards.grid as grid_module
-from ui_qt.cards.grid import NumericGrid
+from ui_qt.cards.grid import VISIBLE_ROWS, NumericGrid
 from ui_qt.cards.paste_dialog import PastePreviewResult
 
 
@@ -28,37 +28,19 @@ def _qapp():
     yield QApplication.instance() or QApplication([])
 
 
-def test_bulk_grid_has_expand_and_paste_affordances():
+def test_bulk_grid_has_paste_affordances():
     """Paste has no button: it lives in the grid's right-click menu, and the
-    same action's WidgetShortcut is what makes Ctrl+V work. Expand is a text
-    action, matching the app's named-action convention."""
+    same action's WidgetShortcut is what makes Ctrl+V work."""
     grid = NumericGrid(("x", "y"))
-    assert grid._expand_button is not None
-    assert grid._expand_button.text() == "Expand"
     actions = [a.text() for a in grid._view.actions()]
     assert actions == ["Paste", "Add row", "Remove row"]
 
 
-def test_non_bulk_grid_has_no_expand_or_paste():
-    """The material map (bulk=False) is a tiny key/value grid: no expand, no
-    paste in its context menu."""
+def test_non_bulk_grid_has_no_paste():
+    """The material map (bulk=False) is a tiny key/value grid: no paste in its
+    context menu."""
     grid = NumericGrid(("Material", "Value"), text_columns=frozenset({0}), bulk=False)
-    assert grid._expand_button is None
     assert grid._view.actions() == []
-
-
-def test_expand_toggle_emits_and_relabels():
-    grid = NumericGrid(("x", "y"))
-    seen = []
-    grid.expand_toggled.connect(seen.append)
-    grid._toggle_expanded()
-    assert seen == [True]
-    assert grid.is_expanded is True
-    assert grid._expand_button.text() == "Collapse"
-    grid._toggle_expanded()
-    assert seen == [True, False]
-    assert grid.is_expanded is False
-    assert grid._expand_button.text() == "Expand"
 
 
 def test_apply_paste_replace_and_append_emit_changed():
@@ -82,13 +64,56 @@ def test_apply_paste_keeps_non_numeric_cells_verbatim():
     assert grid.values() == [[0.0, "oops"]]  # never coerced to 0
 
 
-def test_set_expanded_is_reversible():
+def test_fill_is_reversible():
     grid = NumericGrid(("x",))
+    grid.set_values([[float(i)] for i in range(40)])
     compact = grid._view.maximumHeight()
-    grid.set_expanded(True)
+
+    grid.set_fill_available(True)
     assert grid._view.maximumHeight() > compact
-    grid.set_expanded(False)
+    assert grid._view.minimumHeight() == compact
+
+    grid.set_fill_available(False)
     assert grid._view.maximumHeight() == compact
+
+
+def test_fill_never_grows_past_the_last_row():
+    """The ceiling is the grid's own content, so a filling grid can never
+    show a slab of blank rows below the data."""
+    grid = NumericGrid(("x",))
+    grid.set_values([[float(i)] for i in range(12)])
+    grid.set_fill_available(True)
+    assert grid._view.maximumHeight() == grid._height_for_rows(12)
+
+
+def test_fill_ceiling_follows_the_row_count():
+    """Rows added or removed move the ceiling with them -- no host call."""
+    grid = NumericGrid(("x",))
+    grid.set_values([[float(i)] for i in range(40)])
+    grid.set_fill_available(True)
+    tall = grid._view.maximumHeight()
+
+    grid.set_values([[0.0], [1.0]])
+
+    assert grid._view.maximumHeight() < tall
+    assert grid._view.maximumHeight() == grid._compact_height()
+
+
+def test_wants_fill_only_once_rows_outrun_the_compact_window():
+    grid = NumericGrid(("x",))
+    grid.set_values([[float(i)] for i in range(VISIBLE_ROWS)])
+    assert grid.wants_fill is False
+    grid.set_values([[float(i)] for i in range(VISIBLE_ROWS + 1)])
+    assert grid.wants_fill is True
+
+
+def test_non_bulk_grid_never_fills():
+    """The material map stays its compact self whatever the page offers."""
+    grid = NumericGrid(("Material", "Value"), text_columns=frozenset({0}), bulk=False)
+    grid.set_values([[f"m{i}", float(i)] for i in range(40)])
+    assert grid.wants_fill is False
+    grid.set_fill_available(True)
+    assert grid._view.maximumHeight() == grid._compact_height()
 
 
 # ----------------------------------------------------------------------

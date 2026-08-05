@@ -182,10 +182,6 @@ class ExperimentCard(QWidget):
     #: ``_on_bulk_commit`` to execute as one undo step -- see the module
     #: docstring.
     bulk_commit_requested = Signal(object)
-    #: Forwarded verbatim from the grid's own ``expand_toggled`` (see
-    #: ``MultiColumnGrid``), the same contract every other card's grid-
-    #: takeover uses (``InspectorPanel._on_card_expanded``).
-    expand_toggled = Signal(bool)
 
     def __init__(
         self,
@@ -301,7 +297,6 @@ class ExperimentCard(QWidget):
             self._grid.set_column_values(index, values)
         self._grid.set_cell_issues(experiment_cells(self._all_issues(), headers))
         self._grid.changed.connect(self._on_grid_changed)
-        self._grid.expand_toggled.connect(self.expand_toggled)
         body_layout.addWidget(self._grid, 1)
 
         # "+ Temperature [K]" only while it is genuinely absent: present-but-
@@ -411,6 +406,12 @@ class ExperimentCard(QWidget):
         subclass ``EditorCard`` (see the module docstring), so it repeats
         this one-line hook rather than inheriting it."""
         self._grid.commit_open_editor()
+
+    def growable_grid(self):
+        """This run's grid, for the Inspector's leftover page height -- see
+        ``EditorCard.growable_grid``, repeated here for the same reason
+        ``commit_open_subeditor`` is."""
+        return self._grid
 
     def _revert(self) -> None:
         for index, original in enumerate(self._originals):

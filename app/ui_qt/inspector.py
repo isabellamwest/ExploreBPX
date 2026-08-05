@@ -31,13 +31,18 @@ same content, in the page's own flow instead of behind tabs.  The
 Documentation section's open/collapsed state is workspace state, not
 parameter state: it starts collapsed, keeps the user's choice across
 parameter changes, and only ``reset`` (a newly opened document) collapses it
-again.  A grid takeover (``expand_toggled``) hides both sections so the grid
-gets the whole pane, and restores them on collapse.
+again.
+
+The page is top-aligned, with its leftover height as a white tail below the
+last section -- except when the card's grid has more rows than its compact
+window shows, and takes that height instead (see ``_apply_grid_fill``), so a
+long table grows into the pane rather than scrolling eight rows at a time
+above a slab of white.
 """
 
 from __future__ import annotations
 
-from PySide6.QtCore import QTimer, Qt, Signal
+from PySide6.QtCore import QEvent, QTimer, Qt, Signal
 from PySide6.QtWidgets import (
     QLabel,
     QScrollArea,
@@ -152,13 +157,46 @@ class InspectorPanel(QWidget):
         self._tail_index = self._content_layout.count() - 1
 
         #: Whether the current surface is parameter-scoped (sections may
-        #: show at all) and whether a grid has taken the pane over (they
-        #: must not).
+        #: show at all), and whether it currently owns the page's leftover
+        #: height (see ``_set_surface_fills``).
         self._sections_active = False
-        self._grid_expanded = False
+        self._surface_fills = False
         self._issue_row_count = 0
 
+        # Re-decide which way the page's leftover height should go whenever
+        # the card's content can have changed shape (a mode switch, a row
+        # added or removed, a section shown). Coalesced onto one zero-delay
+        # timer -- and never restarted while it is already pending, or a
+        # stream of layout requests would defer it indefinitely.
+        self._fill_timer = QTimer(self, singleShot=True, interval=0)
+        self._fill_timer.timeout.connect(self._apply_grid_fill)
+        self._content.installEventFilter(self)
+
         outer.addWidget(scroll, 1)
+
+    def eventFilter(self, obj, event) -> bool:  # noqa: N802
+        if event.type() == QEvent.LayoutRequest and not self._fill_timer.isActive():
+            self._fill_timer.start()
+        return False
+
+    def _apply_grid_fill(self) -> None:
+        """Hand the page's leftover height to the card's grid, or to the tail.
+
+        A grid with more rows than its compact window shows is the one editor
+        that can use the space, so it -- and the surface slot above it -- take
+        the page's stretch and the grid grows until either the pane is full or
+        its last row is visible. Everything else keeps the top-aligned page
+        with its white tail, which is what a scalar, an expression or a short
+        table should look like.
+        """
+        if self._card is None:
+            return  # the placeholder owns its own fill (it centres in the pane)
+        grid = getattr(self._card, "growable_grid", None)
+        grid = grid() if grid is not None else None
+        fills = grid is not None and grid.wants_fill
+        if grid is not None:
+            grid.set_fill_available(fills)
+        self._set_surface_fills(fills)
 
     # ------------------------------------------------------------------
     # Surface slot and section coordination
@@ -169,35 +207,30 @@ class InspectorPanel(QWidget):
 
         *fills* hands the slot the page's leftover space (a centred
         placeholder); otherwise the widget sits at its natural height and
-        the white tail keeps the leftover. Always clears ``_card`` and the
-        grid-takeover flag -- callers set ``_card`` after installing.
+        the white tail keeps the leftover. A grid-bearing card revises that
+        for itself once installed (see ``_apply_grid_fill``). Always clears
+        ``_card`` -- callers set it after installing.
         """
         self._clear_surface()
         self._surface_layout.addWidget(widget)
         self._set_surface_fills(fills)
 
     def _set_surface_fills(self, fills: bool) -> None:
+        # Only on a real change: ``setStretch`` invalidates the layout
+        # unconditionally, and ``_apply_grid_fill`` runs off a layout request
+        # -- re-applying the same value would keep the page relaying out
+        # forever on an idle window.
+        if fills == self._surface_fills:
+            return
+        self._surface_fills = fills
         self._content_layout.setStretch(0, 1 if fills else 0)
         self._content_layout.setStretch(self._tail_index, 0 if fills else 1)
 
-    def _on_card_expanded(self, expanded: bool) -> None:
-        """Give the whole editing pane to a grid that asked to take it over.
-
-        The surface slot claims the page's leftover space (so the card --
-        and its now-stretching grid -- fills the pane) and the Issues/
-        Documentation sections get out of the way. Collapsing restores both.
-        """
-        if self._card is None:
-            return
-        self._grid_expanded = expanded
-        self._set_surface_fills(expanded)
-        self._update_sections()
-
     def _update_sections(self) -> None:
-        """Apply the two section-visibility rules: only a parameter-scoped
-        surface shows sections at all, and a grid takeover hides them; the
-        Issues section additionally needs at least one row."""
-        show = self._sections_active and not self._grid_expanded
+        """Apply the section-visibility rule: only a parameter-scoped surface
+        shows sections at all, and the Issues section additionally needs at
+        least one row."""
+        show = self._sections_active
         self._issues_section.setVisible(show and self._issue_row_count > 0)
         self._docs_section.setVisible(show)
 
@@ -384,9 +417,9 @@ class InspectorPanel(QWidget):
         )
         card = ExperimentCard(node, focused_alias, document_name=document_name)
         card.bulk_commit_requested.connect(self._on_bulk_commit)
-        card.expand_toggled.connect(self._on_card_expanded)
         self._set_surface(card, fills=False)
         self._card = card
+        self._apply_grid_fill()
 
         # The sections stay scoped to one parameter, so they show the
         # focused array's own issues/documentation (mirroring the
@@ -419,14 +452,13 @@ class InspectorPanel(QWidget):
         card.draft_reset.connect(self._on_reset)
         card.commit_requested.connect(self._on_commit)
         card.bulk_commit_requested.connect(self._on_bulk_commit)
-        card.expand_toggled.connect(self._on_card_expanded)
         card.rename_requested.connect(self._on_card_rename_requested)
         card.copy_up_requested.connect(self._on_copy_up)
         # The card sits at its natural height with the page's white tail
-        # beneath; expanding (a grid takeover) hands the surface slot the
-        # leftover space instead -- see _on_card_expanded.
+        # beneath, unless its grid has rows to spare -- see _apply_grid_fill.
         self._set_surface(card, fills=False)
         self._card = card
+        self._apply_grid_fill()
         self._render_issues(
             parameter.issues, parameter.has_errors, self._committed_validation_completed()
         )
@@ -679,7 +711,6 @@ class InspectorPanel(QWidget):
 
     def _clear_surface(self) -> None:
         self._card = None
-        self._grid_expanded = False
         while self._surface_layout.count():
             item = self._surface_layout.takeAt(0)
             widget = item.widget()

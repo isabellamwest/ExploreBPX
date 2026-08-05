@@ -73,8 +73,10 @@ from ..style import ACCENT, BORDER, ERROR_TINT, MUTED, NEUTRAL_TINT
 from .csv_dialog import CsvImportDialog
 from .paste_dialog import PastePreviewDialog, PastePreviewResult
 
-#: Rows shown before the grid scrolls. The grid keeps this height whatever it
-#: holds, so adding a row never reflows the Inspector around it.
+#: Rows shown before the grid scrolls -- the grid's compact height, and its
+#: floor whatever it holds, so adding a row never reflows the Inspector around
+#: it. A grid with more rows than this may grow past it when its host offers
+#: the room (see :meth:`NumericGrid.set_fill_available`).
 VISIBLE_ROWS = 8
 
 
@@ -404,12 +406,6 @@ class NumericGrid(QWidget):
     #: so seeding must never mark the card touched (see ``EditorCard``).
     changed = Signal()
 
-    #: Emitted when the user toggles the expand (⤢) affordance: ``True`` to take
-    #: over the pane, ``False`` to collapse. The grid grows itself; a host (the
-    #: Inspector) may additionally react -- hiding the secondary workspace -- but
-    #: the grid works standalone when nobody listens.
-    expand_toggled = Signal(bool)
-
     #: Emitted when the pending bar's Apply button is clicked. The owning card
     #: routes it into the same path as Enter on the grid (``commit_requested``);
     #: the grid itself commits nothing.
@@ -429,10 +425,13 @@ class NumericGrid(QWidget):
     ) -> None:
         super().__init__(parent)
         self._model = _GridModel(headers, text_columns, context_columns, self)
-        #: Bulk affordances (expand + clipboard paste) suit a numeric array, not
-        #: the tiny key/value material map -- which passes ``bulk=False``.
+        #: Bulk affordances (auto-fit height + clipboard paste) suit a numeric
+        #: array, not the tiny key/value material map -- which passes
+        #: ``bulk=False``.
         self._bulk = bulk
-        self._expanded = False
+        #: Whether the view may grow into the height the layout offers it --
+        #: see :meth:`set_fill_available`.
+        self._fills = False
 
         self._view = _GridView()
         self._view.setModel(self._model)
@@ -458,14 +457,8 @@ class NumericGrid(QWidget):
 
         # Paste needs no button: Ctrl+V works whenever the grid has focus, and
         # the same action sits in the grid's right-click menu -- spreadsheet
-        # muscle memory, with no chrome on the card. Expand/Collapse is a text
-        # action, the app's convention for named actions (Save, Export, Undo).
-        self._expand_button = None
+        # muscle memory, with no chrome on the card.
         if self._bulk:
-            self._expand_button = self._row_button(
-                "Expand", "Grow the editor to fill the panel", self._toggle_expanded
-            )
-            self._buttons.addWidget(self._expand_button)
             self._view.installEventFilter(self)
             self._install_context_menu()
 
@@ -502,6 +495,10 @@ class NumericGrid(QWidget):
         self._model.dataChanged.connect(self._on_data_changed)
         self._model.modelReset.connect(self._refresh_buttons)
         self.changed.connect(self._refresh_buttons)
+        # A filling grid's ceiling is its own row count, so it moves with
+        # every row added or removed.
+        self._model.modelReset.connect(self._refresh_fill)
+        self.changed.connect(self._refresh_fill)
         self._refresh_buttons()
 
     def _on_data_changed(self, _top_left, _bottom_right, roles=()) -> None:
@@ -526,11 +523,59 @@ class NumericGrid(QWidget):
         return button
 
     def _compact_height(self) -> int:
+        return self._height_for_rows(VISIBLE_ROWS)
+
+    def _height_for_rows(self, rows: int) -> int:
         header = self._view.horizontalHeader().sizeHint().height()
         row = self._view.verticalHeader().defaultSectionSize()
-        return header + row * VISIBLE_ROWS + 2 * self._view.frameWidth()
+        return header + row * rows + 2 * self._view.frameWidth()
 
-    # --- bulk affordances: expand + clipboard paste -------------------
+    def set_fill_available(self, fill: bool) -> None:
+        """Let the view grow into whatever height the layout hands this grid
+        (*fill*), or hold it to the compact eight-row window.
+
+        Growth stops at the grid's own last row -- the view's maximum is the
+        height its rows actually need -- so filling never shows a slab of
+        blank rows below the data. A non-bulk grid (the tiny material map)
+        never fills; it is a handful of named values, not an array.
+        """
+        fill = fill and self._bulk
+        self._fills = fill
+        if fill:
+            self._view.setMinimumHeight(self._compact_height())
+            self._view.setMaximumHeight(max(self._compact_height(), self._full_height()))
+            self._view.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+            # The grid *widget* must expand too, not just its inner view: the
+            # card's layout sizes this NumericGrid, and if it stays Preferred
+            # the leftover pane height lands as a gap above the grid rather
+            # than growing it.
+            self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        else:
+            self._view.setFixedHeight(self._compact_height())
+            self._view.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+            self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+
+    def _full_height(self) -> int:
+        return self._height_for_rows(self._model.rowCount())
+
+    def _refresh_fill(self) -> None:
+        """Re-apply the current fill state against the new row count -- the
+        maximum is the data's own height, so it moves with every added or
+        removed row."""
+        if self._fills:
+            self.set_fill_available(True)
+
+    @property
+    def wants_fill(self) -> bool:
+        """True when the grid holds more rows than the compact window shows.
+
+        The one case where filling the pane shows the user anything they could
+        not already see; a short table stays compact and the page keeps its
+        white tail.
+        """
+        return self._bulk and self._model.rowCount() > VISIBLE_ROWS
+
+    # --- bulk affordances: clipboard paste ----------------------------
     def _install_context_menu(self) -> None:
         """Right-click on the grid offers Paste and the row actions.
 
@@ -552,42 +597,6 @@ class NumericGrid(QWidget):
         remove.triggered.connect(self.remove_row)
         self._view.addActions([self._paste_action, add, remove])
         self._view.setContextMenuPolicy(Qt.ActionsContextMenu)
-
-    def _toggle_expanded(self) -> None:
-        self.set_expanded(not self._expanded)
-        self.expand_toggled.emit(self._expanded)
-
-    def set_expanded(self, expanded: bool) -> None:
-        """Grow the grid to fill the pane (expanded) or return to compact height.
-
-        Expanding reveals the Paste button and lets the view stretch; collapsing
-        restores the fixed eight-row height so the surrounding card is unchanged.
-        """
-        self._expanded = expanded
-        if expanded:
-            self._view.setMinimumHeight(self._compact_height())
-            self._view.setMaximumHeight(16_777_215)  # Qt's QWIDGETSIZE_MAX
-            self._view.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
-            # The grid *widget* must expand too, not just its inner view: the
-            # card's layout sizes this NumericGrid, and if it stays Preferred
-            # the leftover pane height lands as a gap above the grid rather
-            # than growing it.
-            self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
-        else:
-            self._view.setFixedHeight(self._compact_height())
-            self._view.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
-            self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
-        if self._expand_button is not None:
-            self._expand_button.setText("Collapse" if expanded else "Expand")
-            self._expand_button.setToolTip(
-                "Return the editor to its compact size"
-                if expanded
-                else "Grow the editor to fill the panel"
-            )
-
-    @property
-    def is_expanded(self) -> bool:
-        return self._expanded
 
     def paste(self) -> None:
         """Parse the clipboard, preview it, and (on confirm) replace or append."""
@@ -747,14 +756,19 @@ class NumericGrid(QWidget):
         self._view.setCurrentIndex(self._model.index(at, 0))
         self.changed.emit()
 
-    def add_toolbar_widget(self, widget: QWidget) -> None:
-        """Place *widget* in the +/− button row, before the trailing stretch.
+    def add_toolbar_widget(self, widget: QWidget, *, align_right: bool = True) -> None:
+        """Place *widget* in the +/− button row.
 
-        Lets a specialised card (the material map) add its own affordance --
-        a suggestions dropdown -- alongside the shared add/remove buttons
-        without the grid needing to know what it is.
+        Lets a specialised card add its own affordance -- a CSV import, a
+        suggestions dropdown -- without the grid needing to know what it is.
+        Named actions ("Import CSV…") sit at the right end of the row, the
+        app's convention; *align_right* False puts the widget beside +/−
+        instead, where it reads as part of the row's own controls.
         """
-        self._buttons.insertWidget(self._buttons.count() - 1, widget)
+        if align_right:
+            self._buttons.addWidget(widget)
+        else:
+            self._buttons.insertWidget(self._buttons.count() - 1, widget)
 
     def remove_row(self) -> None:
         """Remove the current row, or the last one when nothing is selected.
@@ -975,11 +989,6 @@ class MultiColumnGrid(QWidget):
     #: restores one column -- see ``NumericGrid.changed``.
     changed = Signal()
 
-    #: Emitted when the user toggles the expand (⤢) affordance -- the exact
-    #: contract ``NumericGrid.expand_toggled`` documents (``True`` takes over
-    #: the pane, the grid grows itself, a host may additionally react).
-    expand_toggled = Signal(bool)
-
     #: Apply/Discard from the pending bar -- the exact contract
     #: ``NumericGrid.apply_clicked``/``discard_clicked`` document. Never
     #: emitted by a read-only grid, whose bar is not built at all.
@@ -995,7 +1004,8 @@ class MultiColumnGrid(QWidget):
         super().__init__(parent)
         self._model = _MultiColumnGridModel(headers, read_only, self)
         self._read_only = read_only
-        self._expanded = False
+        #: See ``NumericGrid.set_fill_available`` -- identical contract.
+        self._fills = False
 
         self._view = _GridView()
         self._view.setModel(self._model)
@@ -1017,13 +1027,12 @@ class MultiColumnGrid(QWidget):
         # A read-only grid (a future card's display-only view) has nothing to
         # add or remove, so the button row simply doesn't exist for it --
         # the same absent-not-disabled convention as NumericGrid's
-        # ``_import_button``/``_expand_button``. Kept as ``self._buttons`` (not
+        # ``_import_button``. Kept as ``self._buttons`` (not
         # a local) so a caller (``ExperimentCard``'s "+ Temperature [K]"
         # button, its length-mismatch chip) can append into the same row via
         # :meth:`add_toolbar_widget`, exactly like ``NumericGrid``.
         self._add_button = None
         self._remove_button = None
-        self._expand_button = None
         self._buttons = None
         self._pending_bar = None
         if not read_only:
@@ -1034,14 +1043,6 @@ class MultiColumnGrid(QWidget):
             self._buttons.addWidget(self._add_button)
             self._buttons.addWidget(self._remove_button)
             self._buttons.addStretch(1)
-            # Expand/Collapse, same named-action convention and placement
-            # (after the stretch) as ``NumericGrid``'s -- see its own
-            # constructor -- so an ``ExperimentCard``'s long grid can take
-            # over the pane exactly like a series card's could.
-            self._expand_button = self._row_button(
-                "Expand", "Grow the editor to fill the panel", self._toggle_expanded
-            )
-            self._buttons.addWidget(self._expand_button)
             layout.addLayout(self._buttons)
             # Hidden until the owning card reports a real dirty draft (see
             # ``set_pending``) -- same contract as ``NumericGrid``'s bar.
@@ -1058,6 +1059,9 @@ class MultiColumnGrid(QWidget):
         # silent so set_column_values can seed through it, so those two
         # methods emit ``changed`` themselves.
         self._model.dataChanged.connect(self._on_data_changed)
+        # A filling grid's ceiling is its own row count -- see ``NumericGrid``.
+        self._model.modelReset.connect(self._refresh_fill)
+        self.changed.connect(self._refresh_fill)
 
     def _on_data_changed(self, _top_left, _bottom_right, roles=()) -> None:
         """A cell edit marks the card dirty; a validator re-tint does not --
@@ -1076,9 +1080,40 @@ class MultiColumnGrid(QWidget):
         return button
 
     def _compact_height(self) -> int:
+        return self._height_for_rows(VISIBLE_ROWS)
+
+    def _height_for_rows(self, rows: int) -> int:
         header = self._view.horizontalHeader().sizeHint().height()
         row = self._view.verticalHeader().defaultSectionSize()
-        return header + row * VISIBLE_ROWS + 2 * self._view.frameWidth()
+        return header + row * rows + 2 * self._view.frameWidth()
+
+    def set_fill_available(self, fill: bool) -> None:
+        """Grow into the height the layout offers, or hold the compact window
+        -- the exact contract ``NumericGrid.set_fill_available`` documents,
+        row-count ceiling included."""
+        self._fills = fill
+        if fill:
+            self._view.setMinimumHeight(self._compact_height())
+            self._view.setMaximumHeight(max(self._compact_height(), self._full_height()))
+            self._view.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+            self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        else:
+            self._view.setFixedHeight(self._compact_height())
+            self._view.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+            self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+
+    def _full_height(self) -> int:
+        return self._height_for_rows(self._model.rowCount())
+
+    def _refresh_fill(self) -> None:
+        if self._fills:
+            self.set_fill_available(True)
+
+    @property
+    def wants_fill(self) -> bool:
+        """True when the longest column runs past the compact window -- see
+        ``NumericGrid.wants_fill``."""
+        return self._model.rowCount() > VISIBLE_ROWS
 
     # --- bulk affordance: per-column clipboard paste --------------------
     def _install_context_menu(self) -> None:
@@ -1098,35 +1133,6 @@ class MultiColumnGrid(QWidget):
         remove.triggered.connect(self.remove_cell)
         self._view.addActions([self._paste_action, add, remove])
         self._view.setContextMenuPolicy(Qt.ActionsContextMenu)
-
-    def _toggle_expanded(self) -> None:
-        self.set_expanded(not self._expanded)
-        self.expand_toggled.emit(self._expanded)
-
-    def set_expanded(self, expanded: bool) -> None:
-        """Grow the grid to fill the pane (expanded) or return to compact
-        height -- identical mechanics to ``NumericGrid.set_expanded``."""
-        self._expanded = expanded
-        if expanded:
-            self._view.setMinimumHeight(self._compact_height())
-            self._view.setMaximumHeight(16_777_215)  # Qt's QWIDGETSIZE_MAX
-            self._view.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
-            self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
-        else:
-            self._view.setFixedHeight(self._compact_height())
-            self._view.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
-            self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
-        if self._expand_button is not None:
-            self._expand_button.setText("Collapse" if expanded else "Expand")
-            self._expand_button.setToolTip(
-                "Return the editor to its compact size"
-                if expanded
-                else "Grow the editor to fill the panel"
-            )
-
-    @property
-    def is_expanded(self) -> bool:
-        return self._expanded
 
     def paste(self) -> None:
         """Parse the clipboard into the focused column and preview it.
@@ -1216,8 +1222,8 @@ class MultiColumnGrid(QWidget):
             return
         self._view.setCurrentIndex(self._model.index(0, column))
 
-    def add_toolbar_widget(self, widget: QWidget) -> None:
-        """Place *widget* in the +/− button row, before the trailing stretch.
+    def add_toolbar_widget(self, widget: QWidget, *, align_right: bool = True) -> None:
+        """Place *widget* in the +/− button row.
 
         Mirrors ``NumericGrid.add_toolbar_widget``; absent (not disabled) when
         the grid is read-only, since that row is never built at all then (see
@@ -1225,7 +1231,10 @@ class MultiColumnGrid(QWidget):
         """
         if self._buttons is None:
             return
-        self._buttons.insertWidget(self._buttons.count() - 1, widget)
+        if align_right:
+            self._buttons.addWidget(widget)
+        else:
+            self._buttons.insertWidget(self._buttons.count() - 1, widget)
 
     def _focused_column(self) -> int:
         index = self._view.currentIndex()

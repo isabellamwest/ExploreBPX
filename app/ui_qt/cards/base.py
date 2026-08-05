@@ -72,9 +72,6 @@ class EditorCard(QWidget):
     draft_changed = Signal()
     draft_reset = Signal()
     commit_requested = Signal()
-    #: Emitted (with the new expanded state) when a card's grid asks to take
-    #: over the Inspector pane. Cards without a grid never emit it.
-    expand_toggled = Signal(bool)
     #: Emitted with a ready-made :class:`core.commands.SetValues` when the
     #: user confirms an edit that spans *several* parameters (CSV import
     #: filling a Validation run's four arrays). Unlike ``commit_requested``,
@@ -147,6 +144,19 @@ class EditorCard(QWidget):
         of its own; the two that have one (``SeriesCard``, ``ModalCard``)
         override it.
         """
+
+    def growable_grid(self):
+        """The one grid that should absorb the Inspector's leftover page
+        height, or ``None`` for a card with nothing to grow.
+
+        A grid is the only editor whose content can outrun its window, so it
+        is the only one worth growing: the host hands the page's stretch to a
+        grid with rows to spare (``NumericGrid.set_fill_available``), rather
+        than leaving a table at eight rows above a slab of white. Cards
+        without a grid keep the default ``None`` and the page keeps its white
+        tail.
+        """
+        return None
 
     def set_cell_issues(self, issues) -> None:
         """Render the validator's per-cell diagnostics, if this card has cells.

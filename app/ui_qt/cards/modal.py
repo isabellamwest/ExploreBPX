@@ -123,7 +123,6 @@ class ModalCard(EditorCard):
         modes[initial].body.set_value(self._original)
         for mode in modes:
             mode.body.changed.connect(self.draft_changed)
-            mode.body.expand_toggled.connect(self.expand_toggled)
             self._install_keyboard_handler(mode.body.focus_widget())
             # Every grid-bearing body gets the card-level "Unsaved edits"
             # bar: dirtiness is a property of the *card* (its active draft
@@ -190,6 +189,11 @@ class ModalCard(EditorCard):
     def focus_widget(self) -> QWidget:
         """The active body's input widget -- what Enter and Escape act on."""
         return self._body.focus_widget()
+
+    def growable_grid(self):
+        """The active body's grid, if it has one: only the mode on show can
+        take the page's leftover height, and a mode switch re-offers it."""
+        return self._body.pending_grid()
 
     def reference_value_width(self) -> int | None:
         """Mirror the active body's input width -- a FloatInt mode caps the

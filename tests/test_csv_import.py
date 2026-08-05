@@ -318,14 +318,14 @@ def _validation_card():
     return create_card(param, None)
 
 
-def test_import_button_is_always_visible_not_only_when_expanded():
-    """Import sits inline in the grid's +/-/Expand row now, the same surface
-    an x/y table's import uses -- not gated on the expanded takeover."""
+def test_import_button_is_always_visible_whatever_the_grid_height():
+    """Import sits inline in the grid's +/- row, the same surface an x/y
+    table's import uses -- never gated on how tall the grid has grown."""
     card = _validation_card()
     assert not card._import_button.isHidden()
-    card._grid._toggle_expanded()
+    card._grid.set_fill_available(True)
     assert not card._import_button.isHidden()
-    card._grid._toggle_expanded()
+    card._grid.set_fill_available(False)
     assert not card._import_button.isHidden()
 
 
