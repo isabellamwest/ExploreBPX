@@ -40,11 +40,13 @@ from PySide6.QtWidgets import (
 
 from core.document import BPXDocument
 from core.document_factory import SUPPORTED_MODELS
-from state.reference_snapshot import ReferenceSnapshot
+from state.app_state import REFERENCE_PIN_CAP
 
 from . import icons
 from .group_box import TintedSection
+from .reference_identity import ReferencePin, badge_label
 from .style import ERROR, OK, WARNING
+from . import typography
 from .typography import panel_title
 
 _INFO_PANEL_EMPTY_STATE_TEXT = "No document open"
@@ -109,10 +111,140 @@ def _validity_dot_label() -> QLabel:
     (:mod:`ui_qt.icons`), rendered as a rich-text ``<img>`` exactly like the
     Diagnostics strip chips, so the two surfaces can never drift. The text
     itself lives in a separate plain ``QLabel`` (the ``_info_badge``/
-    ``_reference_badge`` the tests and driver read via ``text()``)."""
+    pin-detail labels the tests and driver read via ``text()``)."""
     label = QLabel()
     label.setObjectName("ValidityDot")
     return label
+
+
+class _ReferencePinRow(QFrame):
+    """One pinned reference's row in the References section (design rule 1).
+
+    Collapsed: badge, name, model, Remove -- deliberately no validity dot;
+    the full record (origin, validity spelled out beside its dot, model and
+    BPX version, contents, citation or file path) lives in the expandable
+    detail, so the dot can never be misread at a glance. Rows are rebuilt
+    wholesale on every refresh (never mutated in place), so no stale button
+    connection can survive a pin change; expansion state is the panel's to
+    remember across rebuilds.
+    """
+
+    remove_requested = Signal()
+    toggle_requested = Signal()
+
+    def __init__(self, pin: ReferencePin, expanded: bool) -> None:
+        super().__init__()
+        self.setObjectName("ReferencePinRow")
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        header = QWidget()
+        header.setObjectName("ReferencePinHeader")
+        header.setCursor(Qt.PointingHandCursor)
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(8, 5, 8, 5)
+        header_layout.setSpacing(8)
+        header_layout.addWidget(badge_label(pin))
+        name = QLabel(pin.name)
+        name.setObjectName("ReferencePinName")
+        name.setFont(typography.semibold(name.font()))
+        header_layout.addWidget(name)
+        model = QLabel(pin.snapshot.model or "-")
+        model.setObjectName("ReferencePinModel")
+        header_layout.addWidget(model)
+        header_layout.addStretch(1)
+        self._remove_button = QPushButton("Remove")
+        self._remove_button.setObjectName("ReferencePinRemove")
+        self._remove_button.setFlat(True)
+        self._remove_button.setCursor(Qt.PointingHandCursor)
+        self._remove_button.clicked.connect(self.remove_requested)
+        header_layout.addWidget(self._remove_button)
+        self._chevron = QLabel("▾" if expanded else "▸")
+        self._chevron.setObjectName("ReferencePinChevron")
+        header_layout.addWidget(self._chevron)
+        # The whole header toggles the detail; the Remove button consumes
+        # its own clicks before they reach the header.
+        header.mousePressEvent = lambda event: self.toggle_requested.emit()
+        layout.addWidget(header)
+
+        self._detail = self._build_detail(pin)
+        self._detail.setVisible(expanded)
+        layout.addWidget(self._detail)
+
+    @staticmethod
+    def _build_detail(pin: ReferencePin) -> QWidget:
+        """The expanded record: keyed rows in the section's shared form
+        style. Row set varies by origin -- Citation for a library set (when
+        its file carries one), File path for a file reference."""
+        snapshot = pin.snapshot
+        detail = QFrame()
+        detail.setObjectName("ReferencePinDetail")
+        form = QFormLayout(detail)
+        form.setContentsMargins(36, 4, 8, 8)
+        form.setHorizontalSpacing(12)
+        form.setVerticalSpacing(4)
+        form.setFormAlignment(Qt.AlignLeft | Qt.AlignTop)
+        form.setLabelAlignment(Qt.AlignLeft)
+        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+
+        def add_row(key: str, widget: QWidget) -> None:
+            label = QLabel(f"{key}:")
+            label.setObjectName("WorkspaceCardKey")
+            form.addRow(label, widget)
+
+        def add_text_row(key: str, text: str, object_name: str) -> None:
+            value = QLabel(text)
+            value.setObjectName(object_name)
+            value.setWordWrap(True)
+            add_row(key, value)
+
+        origin = (
+            "Reference library · PyBaMM" if snapshot.set_id is not None else "File on disk"
+        )
+        add_text_row("Origin", origin, "ReferencePinOrigin")
+
+        validity = QWidget()
+        validity_layout = QHBoxLayout(validity)
+        validity_layout.setContentsMargins(0, 0, 0, 0)
+        validity_layout.setSpacing(6)
+        text, colour = _reference_validity_text(snapshot.error_count, snapshot.warning_count)
+        dot = _validity_dot_label()
+        dot.setText(icons.html_img(icons.DOT, color=colour))
+        validity_layout.addWidget(dot, 0, Qt.AlignVCenter)
+        validity_text = QLabel(text)
+        validity_text.setObjectName("ReferencePinValidity")
+        validity_layout.addWidget(validity_text, 0, Qt.AlignVCenter)
+        validity_layout.addStretch(1)
+        add_row("Validity", validity)
+
+        model_text = snapshot.model or "-"
+        if snapshot.bpx_version:
+            model_text = f"{model_text} · BPX {snapshot.bpx_version}"
+        add_text_row("Model", model_text, "ReferencePinDetailModel")
+        add_text_row(
+            "Contents",
+            f"{snapshot.section_count} sections · {snapshot.parameter_count} parameters",
+            "ReferencePinContents",
+        )
+        if snapshot.set_id is not None:
+            if snapshot.citation:
+                add_text_row("Citation", snapshot.citation, "ReferencePinCitation")
+        elif snapshot.path is not None:
+            # Middle-shortened textually (a path has no spaces, so word wrap
+            # breaks mid-string and overflows the row); the full path stays
+            # one hover away.
+            full = str(snapshot.path)
+            shown = full if len(full) <= 60 else f"{full[:20]}…{full[-39:]}"
+            path_value = QLabel(shown)
+            path_value.setObjectName("ReferencePinPath")
+            path_value.setToolTip(full)
+            add_row("File path", path_value)
+        return detail
+
+    def set_expanded(self, expanded: bool) -> None:
+        self._detail.setVisible(expanded)
+        self._chevron.setText("▾" if expanded else "▸")
 
 
 class WorkspacePanel(QWidget):
@@ -124,8 +256,9 @@ class WorkspacePanel(QWidget):
     open_reference_requested = Signal()
     open_library_requested = Signal()
     new_from_file_requested = Signal()
-    remove_reference_requested = Signal()
-    make_main_requested = Signal()
+    #: Carries the pin's ``ReferenceSnapshot`` -- ``AppState.remove_reference``
+    #: removes by snapshot identity, so the panel names exactly which pin.
+    remove_reference_requested = Signal(object)
 
     def __init__(self) -> None:
         super().__init__()
@@ -230,25 +363,6 @@ class WorkspacePanel(QWidget):
             fields[key] = value
         return form, fields
 
-    def _build_validity_row(self) -> tuple[QHBoxLayout, QLabel, QLabel]:
-        """The dot-plus-text validity line: a coloured mark from the shared
-        dot family beside a plain-text label. Two widgets on purpose -- the
-        text label keeps returning the bare wording ("3 warnings") from
-        ``text()``, which the tests and the driver read. Used for the
-        reference section's own validity line, still shown in its body (only
-        the main section's validity summary moved into its title row --
-        see :meth:`_build_validity_suffix`)."""
-        row = QHBoxLayout()
-        row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(6)
-        dot = _validity_dot_label()
-        text = QLabel()
-        text.setObjectName("DocInfoBadge")
-        row.addWidget(dot, 0, Qt.AlignVCenter)
-        row.addWidget(text, 0, Qt.AlignVCenter)
-        row.addStretch(1)
-        return row, dot, text
-
     def _build_validity_suffix(self) -> tuple[QWidget, QLabel, QLabel]:
         """The main section's title-row suffix: the same dot-plus-text
         validity mark as :meth:`_build_validity_row`, wrapped in a plain
@@ -290,63 +404,43 @@ class WorkspacePanel(QWidget):
         return section
 
     def _build_reference_section(self) -> QWidget:
-        """The reference tinted section: the same anatomy as the main
-        section -- caps title, identity, validity line, key/value rows --
-        so the two read as the same component. Its title mirrors the
-        primary section's format ("Reference document"); the reference-
-        specific marks are that title's purple and the small light
-        Read-only tag as its suffix -- the section must never read louder
-        than the document's own."""
+        """The References tinted section (design rule 1): one collapsed,
+        expandable row per pinned reference, then the two pin entry points
+        with the "N of 4 pinned" note as the footer. The title carries the
+        feature's purple and the small light Read-only tag -- the section
+        must never read louder than the document's own."""
         self._reference_tag = QLabel("Read-only")
         self._reference_tag.setObjectName("ReferenceReadOnlyTag")
         section = TintedSection(
-            "Reference document",
+            "References",
             object_name="WorkspaceReferenceSection",
             title_object_name="ReferenceHeading",
             suffix=self._reference_tag,
         )
         body = section.body_layout
 
-        self._reference_filename = QLabel()
-        self._reference_filename.setObjectName("WorkspaceCardTitle")
-        self._reference_filename.setWordWrap(True)
-        body.addWidget(self._reference_filename)
+        #: Which pins are expanded, keyed by origin identity (path or set
+        #: id) -- rows are rebuilt wholesale on every refresh, so the panel,
+        #: not the row, remembers expansion across rebuilds.
+        self._expanded_pins: set[str] = set()
+        self._pin_rows: list[_ReferencePinRow] = []
+        self._pin_rows_layout = QVBoxLayout()
+        self._pin_rows_layout.setContentsMargins(0, 4, 0, 0)
+        self._pin_rows_layout.setSpacing(5)
+        body.addLayout(self._pin_rows_layout)
 
-        badge_row, self._reference_dot, self._reference_badge = self._build_validity_row()
-        body.addLayout(badge_row)
-
-        self._reference_form, self._reference_fields = self._build_kv_form(("Model", "Contents"))
-        body.addLayout(self._reference_form)
-
-        # Make main comes first, at the same plain weight as Remove --
-        # neither is styled as a loud action, so the section still never
-        # reads louder than the document section above it.
-        action_row = QHBoxLayout()
-        action_row.setSpacing(8)
-        self._reference_make_main_button = QPushButton("Make main")
-        self._reference_make_main_button.setObjectName("ReferenceTileMakeMain")
-        self._reference_make_main_button.clicked.connect(self.make_main_requested)
-        action_row.addWidget(self._reference_make_main_button)
-        self._reference_remove_button = QPushButton("Remove")
-        self._reference_remove_button.setObjectName("ReferenceTileRemove")
-        self._reference_remove_button.clicked.connect(self.remove_reference_requested)
-        action_row.addWidget(self._reference_remove_button)
-        action_row.addStretch(1)
-        body.addLayout(action_row)
-
-        # The dock affordances: with no reference docked the section is the
-        # reference library's front door --
-        # the teaching line over these two buttons. Both buttons stay while
-        # a reference is docked: docking over one replaces it silently (a
-        # snapshot is disposable), the flow the reference-open tests pin.
+        # With no reference pinned the section is the reference library's
+        # front door -- the teaching line over the two pin buttons.
         self._reference_empty_text = QLabel(
-            "No reference docked. Compare the main document against a "
-            "published set or a file."
+            "No references pinned. Compare the main document against "
+            "published sets or files."
         )
         self._reference_empty_text.setObjectName("ReferenceEmptyStateText")
         self._reference_empty_text.setWordWrap(True)
         body.addWidget(self._reference_empty_text)
 
+        # Footer: both entry points stay put in every state; at the pin cap
+        # they disable rather than disappear, beside the note saying why.
         dock_row = QHBoxLayout()
         dock_row.setSpacing(8)
         self._reference_library_button = QPushButton("From the reference library…")
@@ -358,9 +452,69 @@ class WorkspacePanel(QWidget):
         self._open_reference_button.clicked.connect(self.open_reference_requested)
         dock_row.addWidget(self._open_reference_button)
         dock_row.addStretch(1)
+        self._pin_cap_note = QLabel()
+        self._pin_cap_note.setObjectName("ReferencePinCapNote")
+        dock_row.addWidget(self._pin_cap_note)
         body.addLayout(dock_row)
 
         return section
+
+    @staticmethod
+    def _pin_key(pin: ReferencePin) -> str:
+        """A pin's origin identity for expansion memory: its set id or its
+        path -- stable across rebuilds, unlike the row widgets."""
+        snapshot = pin.snapshot
+        if snapshot.set_id is not None:
+            return f"set:{snapshot.set_id}"
+        return f"path:{snapshot.path}"
+
+    def _set_references(self, pins: list[ReferencePin]) -> None:
+        """Rebuild the pin rows wholesale for the current pin list.
+
+        Wholesale on purpose (the Qt-risk note in the plan): every row and
+        its button connections are torn down and rebuilt, so a removed
+        pin's Remove can never fire against a stale snapshot. Expansion
+        survives via ``_expanded_pins``, keyed by origin, and entries for
+        unpinned references are dropped so the set cannot grow stale.
+        """
+        for row in self._pin_rows:
+            self._pin_rows_layout.removeWidget(row)
+            # Hidden before deleteLater: a removed widget keeps painting at
+            # its old geometry until the event loop runs deferred deletion,
+            # which briefly ghosted the old row over the footer.
+            row.hide()
+            row.deleteLater()
+        self._pin_rows = []
+        keys = {self._pin_key(pin) for pin in pins}
+        self._expanded_pins &= keys
+        for pin in pins:
+            key = self._pin_key(pin)
+            row = _ReferencePinRow(pin, expanded=key in self._expanded_pins)
+            row.remove_requested.connect(
+                lambda snapshot=pin.snapshot: self.remove_reference_requested.emit(snapshot)
+            )
+            row.toggle_requested.connect(
+                lambda key=key, row=row: self._toggle_pin_row(key, row)
+            )
+            self._pin_rows_layout.addWidget(row)
+            self._pin_rows.append(row)
+
+        self._reference_empty_text.setVisible(not pins)
+        at_cap = len(pins) >= REFERENCE_PIN_CAP
+        self._reference_library_button.setEnabled(not at_cap)
+        self._open_reference_button.setEnabled(not at_cap)
+        self._pin_cap_note.setText(
+            f"{len(pins)} of {REFERENCE_PIN_CAP} pinned" if pins else ""
+        )
+        self._pin_cap_note.setVisible(bool(pins))
+
+    def _toggle_pin_row(self, key: str, row: _ReferencePinRow) -> None:
+        if key in self._expanded_pins:
+            self._expanded_pins.discard(key)
+            row.set_expanded(False)
+        else:
+            self._expanded_pins.add(key)
+            row.set_expanded(True)
 
     def _build_new_chooser(self) -> QWidget:
         """Inline "New" surface: one flat, name-first row per supported model
@@ -432,7 +586,7 @@ class WorkspacePanel(QWidget):
         row_layout.addWidget(self._new_from_file_button)
 
         self._new_from_file_descriptor = QLabel(
-            "Start from a copy · the file docks as reference"
+            "Start from a copy · the file is pinned as a reference"
         )
         self._new_from_file_descriptor.setObjectName("NewChooserDescriptor")
         self._new_from_file_descriptor.setWordWrap(True)
@@ -447,9 +601,9 @@ class WorkspacePanel(QWidget):
         dirty: bool,
         error_count: int = 0,
         warning_count: int = 0,
-        references: list[ReferenceSnapshot] | None = None,
+        pins: list[ReferencePin] | None = None,
     ) -> None:
-        """Update the main-document and reference sections from current state.
+        """Update the main-document and References sections from current state.
 
         Identity (Title/Model/BPX version) and the section/parameter counts are
         read only through the document's own properties; ``filename``/``dirty``
@@ -460,13 +614,11 @@ class WorkspacePanel(QWidget):
         ``document.error_count``/``warning_count``, so the badge can never
         disagree with the Diagnostics rail badge over an absorbed diagnostic.
 
-        ``references`` is independent of ``document``: a reference may be
-        docked with no main document open, so its section is updated
-        regardless of which branch below runs. Phase 0 of the multi-reference
-        track: the list holds at most one entry today, and the section below
-        still renders only the first.
+        ``pins`` is independent of ``document``: references may be pinned
+        with no main document open, so the References section is updated
+        regardless of which branch below runs.
         """
-        self._set_reference(references[0] if references else None)
+        self._set_references(list(pins) if pins else [])
 
         if document is None:
             self._info_title.setText(_INFO_PANEL_EMPTY_STATE_TEXT)
@@ -490,37 +642,6 @@ class WorkspacePanel(QWidget):
             f"{document.section_count} sections · {document.parameter_count} parameters"
         )
         self._set_validity_badge(error_count, warning_count)
-
-    def _set_reference(self, reference: ReferenceSnapshot | None) -> None:
-        """Populate the reference section for the docked or empty state.
-
-        The section is always visible, even with no reference docked, since
-        it is then the reference library's front door -- the teaching line
-        over the two dock buttons. The dock buttons stay in both states --
-        see ``_build_reference_section``."""
-        docked = reference is not None
-        self._reference_empty_text.setVisible(not docked)
-        self._reference_filename.setVisible(docked)
-        self._reference_dot.setVisible(docked)
-        self._reference_badge.setVisible(docked)
-        self._set_form_rows_visible(self._reference_form, docked)
-        self._reference_remove_button.setVisible(docked)
-        # "Make main" promotes a file on disk; a bundled library set has no
-        # path to promote, so the button disappears rather than sit as a
-        # disabled placeholder (the standing no-dead-controls rule).
-        self._reference_make_main_button.setVisible(
-            docked and reference.path is not None
-        )
-        if reference is None:
-            return
-        self._reference_filename.setText(reference.filename)
-        self._reference_fields["Model"].setText(reference.model or "-")
-        self._reference_fields["Contents"].setText(
-            f"{reference.section_count} sections · {reference.parameter_count} parameters"
-        )
-        text, colour = _reference_validity_text(reference.error_count, reference.warning_count)
-        self._reference_badge.setText(text)
-        self._reference_dot.setText(icons.html_img(icons.DOT, color=colour))
 
     def _set_validity_badge(self, errors: int, warnings: int) -> None:
         if not errors and not warnings:

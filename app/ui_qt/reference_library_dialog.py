@@ -1,9 +1,9 @@
 """``ReferenceLibraryDialog``: browse the bundled PyBaMM reference sets and
-choose one to dock as the workspace Reference.
+choose one to pin as a read-only reference.
 
-A pure chooser: it holds no app state and never docks anything itself --
+A pure chooser: it holds no app state and never pins anything itself --
 accepting simply reports :meth:`selected_set_id` and the caller routes it through
-``AppState.open_reference_set``. The sets carry no ``Validation`` runs
+``AppState.pin_reference_set``. The sets carry no ``Validation`` runs
 (PyBaMM parameter sets hold no cycling data), which is why this exists
 apart from the run-comparison ``DatabaseExamplesDialog``; see the
 "Bundled PyBaMM parameter sets" entry in ``docs/future.md``.
@@ -110,10 +110,17 @@ class _SetRow(QFrame):
 
 
 class ReferenceLibraryDialog(QDialog):
-    """Choose one bundled reference set -- see the module docstring."""
+    """Choose one bundled reference set -- see the module docstring.
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    *at_cap* disables the pin button with the footer hint saying why --
+    belt-and-braces (the Workspace entry buttons already disable at the
+    cap, and ``AppState.pin_reference_set`` rejects a fifth pin anyway),
+    but the dialog must never look like it can do what it can't.
+    """
+
+    def __init__(self, parent: QWidget | None = None, *, at_cap: bool = False) -> None:
         super().__init__(parent)
+        self._at_cap = at_cap
         self.setWindowTitle("Reference library")
         self.resize(720, 430)
 
@@ -206,14 +213,20 @@ class ReferenceLibraryDialog(QDialog):
 
     def _build_footer(self) -> QHBoxLayout:
         footer = QHBoxLayout()
-        hint = QLabel("Docks as the read-only Reference · replaces any docked reference")
+        hint_text = (
+            "4 of 4 pinned · remove a reference to pin another"
+            if self._at_cap
+            else "Pins as a read-only reference · up to 4 pinned"
+        )
+        hint = QLabel(hint_text)
         hint.setObjectName("Hint")
         footer.addWidget(hint)
         footer.addStretch(1)
         buttons = QDialogButtonBox()
-        self._dock_button = buttons.addButton("Dock as reference", QDialogButtonBox.AcceptRole)
-        self._dock_button.setObjectName("ReferenceLibraryDockButton")
-        self._dock_button.setDefault(True)
+        self._pin_button = buttons.addButton("Pin as reference", QDialogButtonBox.AcceptRole)
+        self._pin_button.setObjectName("ReferenceLibraryPinButton")
+        self._pin_button.setDefault(True)
+        self._pin_button.setEnabled(not self._at_cap)
         buttons.addButton(QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)

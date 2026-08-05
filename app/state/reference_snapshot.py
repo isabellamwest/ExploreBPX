@@ -28,10 +28,13 @@ class ReferenceSnapshot:
     A snapshot has exactly one origin: a file on disk (``path`` set,
     ``set_id`` None) or a bundled reference-library set (``set_id`` set,
     ``path``/``mtime`` None -- there is no file to go stale against or
-    reload, and no path to promote via "Make main"). ``filename`` doubles
-    as the display label either way: the file's name, or the set's curated
-    short title. ``mtime`` is captured for stale-on-disk detection and
-    otherwise unused.
+    reload). ``filename`` doubles as the display label either way: the
+    file's name, or the set's curated short title. ``mtime`` is captured
+    for stale-on-disk detection and otherwise unused. ``bpx_version`` and
+    ``citation`` feed the Workspace pin row's expanded detail:
+    ``bpx_version`` through the same ``identity`` derivation as ``model``;
+    ``citation`` is the library set's own ``Header.References`` ("" for a
+    file reference -- a file names no external source to cite).
     """
 
     raw: dict
@@ -44,6 +47,8 @@ class ReferenceSnapshot:
     parameter_count: int
     mtime: float | None
     set_id: str | None = None
+    bpx_version: str | None = None
+    citation: str = ""
 
     @classmethod
     def load(cls, path: Path) -> "ReferenceSnapshot":
@@ -66,6 +71,7 @@ class ReferenceSnapshot:
             section_count=document.section_count,
             parameter_count=document.parameter_count,
             mtime=path.stat().st_mtime,
+            bpx_version=identity.bpx_version or None,
         )
 
     @classmethod
@@ -98,4 +104,6 @@ class ReferenceSnapshot:
             parameter_count=document.parameter_count,
             mtime=None,
             set_id=set_id,
+            bpx_version=identity.bpx_version or None,
+            citation=ref_set.references,
         )

@@ -1,6 +1,6 @@
-"""Workspace-page workflows for the bundled reference library: the reference
-card's empty-state front door, docking a bundled set, silent replace in
-both directions, and the path-less guards (no Make main, no stale band) --
+"""Workspace-page workflows for the bundled reference library: the
+References section's empty-state front door, pinning a bundled set, sets
+and files pinned side by side, and the path-less guards (no stale band) --
 all in domain terms via ``AppDriver``.
 
 The modal dialog itself is covered in ``test_reference_library_dialog.py``;
@@ -48,88 +48,92 @@ def _stub_open_dialog(monkeypatch, path) -> None:
     )
 
 
-def test_library_button_docks_the_accepted_set(app_driver, monkeypatch):
+def test_library_button_pins_the_accepted_set(app_driver, monkeypatch):
     d = app_driver
     _stub_library_dialog(monkeypatch, accepted=True, set_id=_CHEN)
 
     d.click_reference_from_library()
 
     entry = _entry(_CHEN)
-    assert d.reference_tile_visible()
-    text = d.reference_tile_text()
-    assert entry.short_title in text
-    assert "Read-only" in text
-    assert f"Model: {entry.model}" in text
-    assert "Validity: Valid" in text
-    assert d.toast_text() == f"{entry.short_title} · docked as reference"
+    assert d.reference_pin_count() == 1
+    header = d.reference_pin_header_texts()[0]
+    # The pin row shows the chip-length display name (the short title's
+    # cell parenthetical dropped) and the model.
+    assert entry.short_title.split(" (")[0] in header
+    assert header.endswith(entry.model)
+    assert d.toast_text() == f"{entry.short_title} · pinned as reference"
 
 
-def test_cancelling_the_dialog_docks_nothing(app_driver, monkeypatch):
+def test_cancelling_the_dialog_pins_nothing(app_driver, monkeypatch):
     d = app_driver
     _stub_library_dialog(monkeypatch, accepted=False)
 
     d.click_reference_from_library()
 
-    assert not d.reference_tile_visible()
+    assert d.reference_pin_count() == 0
     assert d.reference_empty_state_visible()
-    assert d._w._state.reference is None
+    assert d._w._state.references == []
 
 
-def test_docked_library_set_hides_make_main_but_keeps_remove(app_driver):
+def test_pinned_library_set_detail_shows_origin_and_citation(app_driver):
     d = app_driver
-    d.dock_library_reference(_CHEN)
+    d.pin_library_reference(_CHEN)
 
-    assert d.reference_tile_visible()
-    # No file on disk to promote: the button hides, never sits disabled.
-    assert not d.reference_make_main_button_visible()
+    d.toggle_reference_pin(0)
 
-    d.click_reference_remove()
+    detail = d.reference_pin_detail_text(0)
+    entry = _entry(_CHEN)
+    assert "Origin: Reference library · PyBaMM" in detail
+    assert "Validity: Valid" in detail
+    # A library set has no file path row; its citation row carries the
+    # file's own Header.References verbatim.
+    assert "File path:" not in detail
+    if entry.references:
+        assert f"Citation: {entry.references}" in detail
 
-    assert not d.reference_tile_visible()
+    d.click_reference_remove(0)
+
+    assert d.reference_pin_count() == 0
     assert d.reference_empty_state_visible()
-    assert d._w._state.reference is None
+    assert d._w._state.references == []
 
 
-def test_docking_the_same_set_again_is_a_quiet_noop(app_driver):
+def test_pinning_the_same_set_again_is_a_quiet_noop(app_driver):
     d = app_driver
-    d.dock_library_reference(_CHEN)
+    d.pin_library_reference(_CHEN)
 
-    d.dock_library_reference(_CHEN)
+    d.pin_library_reference(_CHEN)
 
-    assert d.toast_text() == "Already docked as reference"
-    assert d._w._state.reference.set_id == _CHEN
+    assert d.toast_text() == "Already pinned as reference"
+    assert [r.set_id for r in d._w._state.references] == [_CHEN]
 
 
-def test_silent_replace_in_both_directions(app_driver, valid_spm_path, monkeypatch):
-    """Library set over file reference and back -- no confirm step either
-    way (a snapshot is disposable, immutable state)."""
+def test_sets_and_files_pin_side_by_side(app_driver, valid_spm_path, monkeypatch):
+    """A library set beside a file reference -- pinning appends, no silent
+    replace in either direction (the single-reference swap died with
+    Phase 1)."""
     d = app_driver
     _stub_open_dialog(monkeypatch, valid_spm_path)
     d.click_workspace_open_reference()
-    assert d.reference_make_main_button_visible()
 
-    d.dock_library_reference(_PRADA)
+    d.pin_library_reference(_PRADA)
 
-    entry = _entry(_PRADA)
-    assert entry.short_title in d.reference_tile_text()
-    assert not d.reference_make_main_button_visible()
-
-    d.click_workspace_open_reference()
-
-    assert valid_spm_path.name in d.reference_tile_text()
-    assert d.reference_make_main_button_visible()
+    assert d.reference_pin_count() == 2
+    headers = d.reference_pin_header_texts()
+    assert valid_spm_path.stem in headers[0]
+    assert _entry(_PRADA).short_title.split(" (")[0] in headers[1]
 
 
 def test_library_reference_powers_the_source_page_comparison(
     app_driver, valid_spm_path
 ):
-    """The docked set is an ordinary reference downstream: the Source page
+    """The pinned set is an ordinary reference downstream: the Source page
     goes two-pane, headed by the set's display title, with no stale band
-    (nothing on disk to go stale against) and no ⇄ Make main."""
+    (nothing on disk to go stale against)."""
     d = app_driver
     d.open(valid_spm_path)
 
-    d.dock_library_reference(_CHEN)
+    d.pin_library_reference(_CHEN)
 
     headers = d.source_pane_headers()
     assert headers is not None

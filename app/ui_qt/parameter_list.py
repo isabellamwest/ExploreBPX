@@ -42,11 +42,10 @@ from PySide6.QtWidgets import (
 
 from core import completion, structure
 from core.bpx_gateway import field_meta
-from core.compare import ComparisonResult, RowState
+from core.compare import RowDiff, RowState
 from core.completion import MissingField
 from core.parameter_types import classify
 from core.tree_model import TreeNode
-from state.reference_snapshot import ReferenceSnapshot
 
 from . import parameter_row, style, typography
 from .add_parameter_popup import AddParameterPopup, suggestion_row_html, suggestion_row_text
@@ -54,17 +53,12 @@ from .cards.experiment import is_validation_run_path
 from .comparison_strip import ComparisonStrip
 from .group_box import TintedSectionHeader
 from .parameter_row import ParameterRowDelegate
+from .reference_identity import ReferencePin
 
-#: RowState -> gutter-bar variant (:data:`parameter_row.REF_BAR_ROLE`).
-#: DIFFERS and FILLABLE both read "the reference disagrees or has something
-#: this file doesn't" (solid bar); EQUAL is the quiet pale bar, so "same"
-#: and "not in the reference" (MAIN_ONLY, no bar at all) stay tellable
-#: apart. Comparison is information, not a severity: no warning tint.
-_ROW_BAR_VARIANTS = {
-    RowState.DIFFERS: "differs",
-    RowState.FILLABLE: "differs",
-    RowState.EQUAL: "equal",
-}
+#: Row states that light the solid "differs" gutter bar: DIFFERS and
+#: FILLABLE both read "the reference disagrees or has something this file
+#: doesn't". Comparison is information, not a severity: no warning tint.
+_DIFFER_ROW_STATES = (RowState.DIFFERS, RowState.FILLABLE)
 
 #: Models under which the "fields to add" group may appear at all: Partial
 #: suggests every expected field (none Required); a concrete model suggests
@@ -172,12 +166,12 @@ class ParameterListPanel(QWidget):
         #: (grey, no dot) here even though the card badge/Issues tab still
         #: report it verbatim.
         self._visible_issue_severities: dict[tuple[str, ...], str] = {}
-        #: Comparison state, set only by ``MainWindow.set_comparison`` --
-        #: ``None`` whenever no reference is docked or no document is open.
-        #: Phase 0 of the multi-reference track: internals still read only
-        #: the first pinned reference's comparison (see ``set_comparison``).
-        self._comparison: ComparisonResult | None = None
-        self._reference: ReferenceSnapshot | None = None
+        #: Pinned-reference identity + comparison state, set only by
+        #: ``MainWindow`` via ``set_comparison`` -- empty whenever no
+        #: reference is pinned. Every comparison-aware render below unions
+        #: over all pins (a row's bar lights when it differs from *any*
+        #: pinned reference; a ghost row exists when *any* pin has the key).
+        self._pins: list[ReferencePin] = []
 
         self._count_label = QLabel()
         self._count_label.setObjectName("ParameterListHeaderCount")
@@ -246,25 +240,33 @@ class ParameterListPanel(QWidget):
         """
         self._visible_issue_severities = severities
 
-    def set_comparison(
-        self,
-        comparisons: list[ComparisonResult],
-        references: list[ReferenceSnapshot],
-    ) -> None:
-        """Set the reference comparison state and re-render whatever
+    def set_comparison(self, pins: list[ReferencePin]) -> None:
+        """Set the pinned-reference comparison state and re-render whatever
         section is currently shown.
 
         Called by ``MainWindow`` -- the single place computing this state --
-        on every document change and every reference dock/undock. Phase 0 of
-        the multi-reference track: both lists hold at most one entry today,
-        and every render below still reads only the first (*comparisons*/
-        *references* empty with no reference docked or no document open).
+        on every document change and every pin/unpin (*pins* empty with no
+        reference pinned; each pin's ``comparison`` is ``None`` with no
+        document open).
         """
-        self._comparison = comparisons[0] if comparisons else None
-        self._reference = references[0] if references else None
-        self._strip.set_state(references, comparisons)
+        self._pins = list(pins)
+        self._strip.set_state(self._pins)
         if self._node is not None:
             self.show_node(self._node, self._model)
+
+    def _row_diffs(
+        self, section_path: tuple[str, ...], key: str
+    ) -> list[tuple[ReferencePin, RowDiff]]:
+        """Every pin's ``RowDiff`` for *key*, in pin order, skipping pins
+        with no comparison or no row there."""
+        diffs = []
+        for pin in self._pins:
+            if pin.comparison is None:
+                continue
+            row = pin.comparison.row(section_path, key)
+            if row is not None:
+                diffs.append((pin, row))
+        return diffs
 
     def show_node(self, node: TreeNode | None, model: str | None = None) -> None:
         self._node = node
@@ -302,35 +304,71 @@ class ParameterListPanel(QWidget):
             item.setData(parameter_row.VALUE_GHOST_ROLE, ghost)
             if not is_empty:
                 item.setToolTip(parameter_row.value_tooltip(parameter.value))
-            row_diff = self._comparison.row(node.path, parameter.path[-1]) if self._comparison else None
-            if row_diff is not None:
-                variant = _ROW_BAR_VARIANTS.get(row_diff.state)
-                if variant is not None:
-                    item.setData(parameter_row.REF_BAR_ROLE, variant)
-                if variant == "differs":
-                    # The list says "differs"; the hover says from what. The
-                    # main value's own tooltip line (set above) stays first.
-                    ref_line = "Reference: " + parameter_row.value_tooltip(row_diff.ref_value)
-                    existing = item.toolTip()
-                    item.setToolTip(existing + "\n" + ref_line if existing else ref_line)
+            diffs = self._row_diffs(node.path, parameter.path[-1])
+            states = [row.state for _pin, row in diffs]
+            # Differs-from-any (design rule 6's row-level twin): solid bar
+            # when any pin disagrees, the quiet pale bar when at least one
+            # matches and none disagree, no bar when no pin has the key.
+            if any(state in _DIFFER_ROW_STATES for state in states):
+                variant = "differs"
+            elif RowState.EQUAL in states:
+                variant = "equal"
+            else:
+                variant = None
+            if variant is not None:
+                item.setData(parameter_row.REF_BAR_ROLE, variant)
+            if variant == "differs":
+                # The list says "differs"; the hover says from what, per
+                # pin. The main value's own tooltip line (set above) stays
+                # first.
+                ref_lines = [
+                    f"{pin.name}: " + parameter_row.value_tooltip(row.ref_value)
+                    for pin, row in diffs
+                    if row.state in _DIFFER_ROW_STATES
+                ]
+                existing = item.toolTip()
+                joined = "\n".join(ref_lines)
+                item.setToolTip(existing + "\n" + joined if existing else joined)
             self._list.addItem(item)
         self._append_ghost_rows(node)
         self._append_missing_fields_group(node, model)
 
+    def _ghost_keys(self, section_path: tuple[str, ...]) -> tuple[str, ...]:
+        """REF_ONLY keys for this section, unioned over every pin: a key
+        ghost-rendered if *any* pinned reference has it and the main does
+        not. Order is first-pinned-first, each pin's own section order
+        within."""
+        keys: list[str] = []
+        seen: set[str] = set()
+        for pin in self._pins:
+            if pin.comparison is None:
+                continue
+            section = pin.comparison.section(section_path)
+            if section is None:
+                continue
+            for key in section.ghost_keys:
+                if key not in seen:
+                    seen.add(key)
+                    keys.append(key)
+        return tuple(keys)
+
     def _append_ghost_rows(self, node: TreeNode) -> None:
         """Append REF_ONLY ghost rows for this section, per the merge rule:
-        synthetic, read-only rows for keys the reference has and the main
-        document does not. Rendered via the same
-        synthetic-row precedent as the "fields to add" group -- role 256
-        stays ``None`` so removal/context-menu/Enter-to-activate all treat
-        them as non-existent parameters (see :meth:`_activate_item`)."""
-        if self._comparison is None:
-            return
-        section = self._comparison.section(node.path)
-        if section is None:
-            return
-        for key in section.ghost_keys:
-            self._list.addItem(self._make_ghost_item(node.path, key, section.rows[key].ref_value))
+        synthetic, read-only rows for keys at least one pinned reference has
+        and the main document does not. The row's value preview shows the
+        first-pinned holder's value (the ghost card is where per-reference
+        values group and pull). Rendered via the same synthetic-row
+        precedent as the "fields to add" group -- role 256 stays ``None``
+        so removal/context-menu/Enter-to-activate all treat them as
+        non-existent parameters (see :meth:`_activate_item`)."""
+        for key in self._ghost_keys(node.path):
+            for pin in self._pins:
+                if pin.comparison is None:
+                    continue
+                row = pin.comparison.row(node.path, key)
+                if row is not None and row.state is RowState.REF_ONLY:
+                    self._list.addItem(self._make_ghost_item(node.path, key, row.ref_value))
+                    break
 
     def _make_ghost_item(
         self, section_path: tuple[str, ...], key: str, ref_value: object
@@ -381,9 +419,8 @@ class ParameterListPanel(QWidget):
         if is_validation_run_path(node.path):
             return
         missing = completion.completion_for(node.path, node.value, model).missing_fields
-        if self._comparison is not None:
-            section = self._comparison.section(node.path)
-            ghost_keys = frozenset(section.ghost_keys) if section is not None else frozenset()
+        ghost_keys = frozenset(self._ghost_keys(node.path))
+        if ghost_keys:
             missing = tuple(field for field in missing if field.alias not in ghost_keys)
         if not missing:
             return

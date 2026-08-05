@@ -11,15 +11,15 @@ Top to bottom, a ``ParameterCard`` holds:
      under the title (and the rename row, when open), in both modes below,
      for consistency: it describes the parameter, not either value,
   3. the per-kind value editor (:func:`create_card`),
-  4. a docked reference's value for this parameter (:meth:`set_reference`),
-     when one exists -- the aligned-rows layout: a "Main" role label joins
-     the editor's own row and a matching "Reference" label sits beside the
-     flat read-only value row (:class:`~.reference_block.ReferenceValueBlock`,
-     shared with ``GhostParameterCard``), both labels in one fixed-width
-     column so the two values start at the same x, with a quiet "Copy up"
-     action after the reference value. The "Main" label and the whole
-     reference section are absent entirely with no reference docked -- the
-     card is then exactly today's, full width.
+  4. the pinned references' values for this parameter
+     (:meth:`set_reference_groups`), when any pin has it -- the aligned-rows
+     ledger (design rule 3): a "Main" role label joins the editor's own row,
+     and one :class:`~.reference_block.ReferenceLedger` row per distinct
+     reference value sits below (shared with ``GhostParameterCard``), badge
+     clusters in the same fixed-width role column so every value starts at
+     the same x, with a quiet "Pull" (or muted "same") after each value.
+     The "Main" label and the whole ledger are absent entirely with no
+     reference pinned -- the card is then exactly today's, full width.
 
 ``ParameterCard`` is a pure composition container. It forwards the inner
 editor's ``draft_changed`` / ``draft_reset`` / ``commit_requested`` signals
@@ -57,21 +57,22 @@ from PySide6.QtWidgets import (
 
 from core import structure
 from core.bpx_gateway import FieldMeta
-from core.compare import RowState, matching_table_rows
+from core.compare import ValueGroup, matching_table_rows
 from core.parameter_metadata import resolve_parameter_metadata
-from core.parameter_types import ParameterKind, split_name_and_unit
+from core.parameter_types import ParameterKind, classify, split_name_and_unit
 from core.tree_model import ParameterItem
 
 from ..icons import DOT, PENCIL, hover_icon, html_img
 from ..latex import symbol_label
 from ..parameter_info_popover import ParameterInfoPopover
 from ..parameter_row import value_preview
+from ..reference_identity import ReferencePin
 from .. import style, typography
 from ..style import ERROR, MUTED
 from .bodies import table_rows
 from .function import table_is_representable
 from .page import page_content, page_header
-from .reference_block import ReferenceValueBlock
+from .reference_block import LedgerRowSpec, ReferenceLedger
 from .registry import create_card
 
 #: Kinds whose main editor shows a unit label (``ScalarCard``/``IntegerCard``
@@ -92,10 +93,10 @@ class ParameterCard(QWidget):
     #: (path, new_key) -- the inline rename row's "Apply". Only ever emitted
     #: when the pencil button exists at all (``self._renamable``).
     rename_requested = Signal(tuple, str)
-    #: The reference row's "Copy up" button. Forwarded verbatim from the
-    #: (lazily built) reference block; ``InspectorPanel``
-    #: wires this to a ``PullParameter`` command.
-    copy_up_requested = Signal()
+    #: A ledger row's "Pull", carrying that row's ``ValueGroup``. Forwarded
+    #: verbatim from the (lazily built) ledger; ``InspectorPanel`` wires
+    #: this to a source-named ``PullParameter`` command.
+    pull_requested = Signal(object)
 
     def __init__(self, parameter: ParameterItem, meta: FieldMeta | None) -> None:
         super().__init__()
@@ -204,7 +205,7 @@ class ParameterCard(QWidget):
         self._editor.commit_requested.connect(self.commit_requested)
         self._editor.bulk_commit_requested.connect(self.bulk_commit_requested)
         self._value_row = QHBoxLayout()
-        # Same spacing as ReferenceValueBlock's label/value gap -- with the
+        # Same spacing as the ledger rows' cluster/value gap -- with the
         # shared fixed label width this is what aligns the two value columns.
         self._value_row.setSpacing(style.ROLE_ROW_SPACING)
         self._value_row.addWidget(self._editor, 1)
@@ -214,56 +215,73 @@ class ParameterCard(QWidget):
         # reference section below never absorbs it (see ``growable_grid``).
         self._body_layout.addLayout(self._value_row, 1)
 
-        # Reference section: the "Main file" heading above plus this
-        # "Reference file" heading + value row, built lazily,
-        # only once ``set_reference`` is first called with real content --
-        # with no reference docked this never runs, so the card stays
-        # exactly today's, no extra widget instantiated at all.
-        self._reference_block: ReferenceValueBlock | None = None
+        # Reference section: the "Main" role label plus the ledger, built
+        # lazily, only once ``set_reference_groups`` is first called with
+        # real content -- with no reference pinned this never runs, so the
+        # card stays exactly today's, no extra widget instantiated at all.
+        self._reference_ledger: ReferenceLedger | None = None
         #: Whether the reference section is currently meant to be showing.
         self._reference_active = False
 
-    def set_reference(
-        self, ref_value: object, ref_state: RowState | None, kind: ParameterKind | None
+    def set_reference_groups(
+        self, groups: tuple[ValueGroup, ...], pins: list[ReferencePin]
     ) -> None:
-        """Show/refresh/hide the reference section.
+        """Show/refresh/hide the reference ledger (design rule 3).
 
-        *ref_state* is ``None`` when there is nothing to show (no reference
-        docked, comparison hidden, or the reference lacks this key --
-        MAIN_ONLY) -- the "Main" label and reference block hide in
-        every such case, returning the editor to the full row width. Populate-only: this never touches ``self._editor``'s
-        draft/commit signals (known Qt pitfall), so calling it can never
-        trip ``_touched``, whatever order it is called relative to
-        construction -- it does, however, always tell the editor whether to
-        overlay a table reference on its own live preview
+        *groups* is this parameter's per-value grouping over every pinned
+        reference (``core.compare.group_reference_values``); empty when
+        there is nothing to show (no reference pinned, or no pinned
+        reference has this key) -- the "Main" label and ledger hide in
+        every such case, returning the editor to the full row width.
+        Populate-only: this never touches ``self._editor``'s draft/commit
+        signals (known Qt pitfall), so calling it can never trip
+        ``_touched``, whatever order it is called relative to construction
+        -- it does, however, always tell the editor whether to overlay a
+        table reference on its own live preview
         (:meth:`~.base.EditorCard.set_reference_table`), a no-op for any
         editor that is not table-shaped.
         """
-        self._reference_active = ref_state is not None and ref_state is not RowState.MAIN_ONLY
+        self._reference_active = bool(groups)
         if not self._reference_active:
             if self._main_file_heading is not None:
                 self._main_file_heading.hide()
-            if self._reference_block is not None:
-                self._reference_block.hide()
+            if self._reference_ledger is not None:
+                self._reference_ledger.hide()
             self._editor.set_reference_table(None)
             return
-        if self._reference_block is None:
+        if self._reference_ledger is None:
             self._main_file_heading = QLabel("Main")
             self._main_file_heading.setObjectName("MainFileHeading")
             # Into the editor's own row, not above it: the fixed label width
-            # (matched by ReferenceValueBlock's "Reference" label) is what
-            # aligns the editor with the reference value below.
+            # (matched by the ledger's badge-cluster column) is what aligns
+            # the editor with the reference values below.
             self._main_file_heading.setFixedWidth(style.ROLE_LABEL_WIDTH)
             self._value_row.insertWidget(0, self._main_file_heading, 0, Qt.AlignTop)
-            self._reference_block = ReferenceValueBlock()
-            self._reference_block.copy_up_requested.connect(self.copy_up_requested)
-            self._body_layout.addWidget(self._reference_block)
-        same = ref_state is RowState.EQUAL
-        # A differing, table-representable reference gets the richer
-        # treatment (grid + chart overlay); an EQUAL table keeps today's
-        # compact one-liner, same as every other equal value.
-        if not same and table_is_representable(ref_value):
-            ref_rows = table_rows(ref_value)
+            self._reference_ledger = ReferenceLedger()
+            self._reference_ledger.pull_requested.connect(self.pull_requested)
+            self._body_layout.addWidget(self._reference_ledger)
+        specs = [self._row_spec(group, pins) for group in groups]
+        self._reference_ledger.set_rows(specs)
+        # The editor's own chart overlay stays single-series until Phase 2's
+        # per-pin overlay lands: it shows the first differing table group.
+        overlay = next(
+            (spec.table[0] for spec in specs if spec.table is not None), None
+        )
+        self._editor.set_reference_table(overlay)
+        self._main_file_heading.show()
+        self._reference_ledger.show()
+
+    def _row_spec(self, group: ValueGroup, pins: list[ReferencePin]) -> LedgerRowSpec:
+        """One group's ledger-row content, classified the same way the
+        single-reference block classified its value."""
+        kind = classify(group.value, self._meta)
+        table: tuple[list[list[object]], list[bool]] | None = None
+        text, monospace, unit, width = "", False, "", None
+        # A differing, table-representable value gets the richer treatment
+        # (grid + chart overlay); an EQUAL table keeps the compact
+        # one-liner, same as every other equal value.
+        if not group.equals_main and table_is_representable(group.value):
+            ref_rows = table_rows(group.value)
             main_rows = table_rows(self.parameter.value)
             if main_rows:
                 matches = matching_table_rows(main_rows, ref_rows)
@@ -272,27 +290,27 @@ class ParameterCard(QWidget):
                 # row-by-row -- marking every row purple would read as pure
                 # noise, so the whole grid stays quiet instead.
                 matches = [True] * len(ref_rows)
-            self._reference_block.set_table_rows(ref_rows, matches)
-            self._editor.set_reference_table(ref_rows)
+            table = (ref_rows, matches)
+        elif isinstance(group.value, str):
+            # The full expression, not value_preview's truncated first
+            # line -- that one-line form still serves the parameter
+            # list row it was built for.
+            text, monospace = group.value, True
+            width = self._editor.reference_value_width()
         else:
-            if isinstance(ref_value, str):
-                # The full expression, not value_preview's truncated first
-                # line -- that one-line form still serves the parameter
-                # list row it was built for.
-                text, monospace = ref_value, True
-            else:
-                text, monospace = value_preview(ref_value, kind)[0], False
+            text = value_preview(group.value, kind)[0]
             unit = self.parameter.unit if kind in _UNIT_LABEL_KINDS else ""
-            self._reference_block.set_content(
-                text,
-                unit,
-                same,
-                width=self._editor.reference_value_width(),
-                monospace=monospace,
-            )
-            self._editor.set_reference_table(None)
-        self._main_file_heading.show()
-        self._reference_block.show()
+            width = self._editor.reference_value_width()
+        return LedgerRowSpec(
+            pins=tuple(pins[index] for index in group.indices),
+            text=text,
+            monospace=monospace,
+            same=group.equals_main,
+            unit=unit,
+            width=width,
+            table=table,
+            group=group,
+        )
 
     def growable_grid(self):
         """The inner editor's grid, if it has one -- see

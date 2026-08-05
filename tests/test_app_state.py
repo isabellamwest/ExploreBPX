@@ -2,9 +2,22 @@
 
 from __future__ import annotations
 
+import shutil
+
 from core.document import BPXDocument
-from state.app_state import AppState, OpenReferenceOutcome
+from state.app_state import REFERENCE_PIN_CAP, AppState, PinReferenceOutcome
 from state.document_session import DocumentSession
+
+
+def _copies(source, tmp_path, count: int) -> list:
+    """Distinct on-disk copies of *source* -- path-deduped pins need
+    genuinely different resolved paths."""
+    paths = []
+    for index in range(count):
+        target = tmp_path / f"copy_{index}.json"
+        shutil.copy(source, target)
+        paths.append(target)
+    return paths
 
 
 def _loaded_session(valid_spm_bytes) -> DocumentSession:
@@ -233,99 +246,184 @@ def test_new_document_unknown_model_leaves_previous_session_intact(valid_spm_pat
 
 
 # ---------------------------------------------------------------------------
-# open_reference / remove_reference (M1: reference in state + Workspace)
+# pin_reference / remove_reference (multi-reference Phase 1: append + cap)
 # ---------------------------------------------------------------------------
 
-def test_open_reference_docks_a_snapshot(nmc_pouch_cell_path):
+def test_pin_reference_pins_a_snapshot(nmc_pouch_cell_path):
     state = AppState()
 
-    outcome = state.open_reference(nmc_pouch_cell_path)
+    outcome = state.pin_reference(nmc_pouch_cell_path)
 
-    assert outcome is OpenReferenceOutcome.ADDED
-    assert state.reference is not None
-    assert state.reference.filename == nmc_pouch_cell_path.name
-    assert state.reference.model == "DFN"
+    assert outcome is PinReferenceOutcome.PINNED
+    assert len(state.references) == 1
+    assert state.references[0].filename == nmc_pouch_cell_path.name
+    assert state.references[0].model == "DFN"
 
 
-def test_open_reference_with_no_main_document_is_allowed(nmc_pouch_cell_path):
+def test_pin_reference_with_no_main_document_is_allowed(nmc_pouch_cell_path):
     """A reference-only workspace is a legal state (no main document open)."""
     state = AppState()
     assert state.active is None
 
-    outcome = state.open_reference(nmc_pouch_cell_path)
+    outcome = state.pin_reference(nmc_pouch_cell_path)
 
-    assert outcome is OpenReferenceOutcome.ADDED
+    assert outcome is PinReferenceOutcome.PINNED
     assert state.active is None
-    assert state.reference is not None
+    assert state.references
 
 
-def test_open_reference_a_second_time_replaces_the_first(
-    nmc_pouch_cell_path, valid_spm_path
+def test_pin_reference_appends_in_pin_order(nmc_pouch_cell_path, valid_spm_path):
+    """Pinning a second reference appends -- the silent replace died with
+    the single-reference design."""
+    state = AppState()
+    state.pin_reference(nmc_pouch_cell_path)
+
+    outcome = state.pin_reference(valid_spm_path)
+
+    assert outcome is PinReferenceOutcome.PINNED
+    assert [r.filename for r in state.references] == [
+        nmc_pouch_cell_path.name,
+        valid_spm_path.name,
+    ]
+
+
+def test_pin_reference_same_path_again_is_already_pinned(nmc_pouch_cell_path):
+    state = AppState()
+    state.pin_reference(nmc_pouch_cell_path)
+
+    outcome = state.pin_reference(nmc_pouch_cell_path)
+
+    assert outcome is PinReferenceOutcome.ALREADY_PINNED
+    assert len(state.references) == 1  # unchanged
+
+
+def test_pin_reference_matching_the_main_file_is_is_main(valid_spm_path):
+    state = AppState()
+    state.open(valid_spm_path)
+
+    outcome = state.pin_reference(valid_spm_path)
+
+    assert outcome is PinReferenceOutcome.IS_MAIN
+    assert state.references == []  # nothing pinned
+
+
+def test_fifth_pin_is_rejected_at_cap(valid_spm_path, tmp_path):
+    state = AppState()
+    paths = _copies(valid_spm_path, tmp_path, REFERENCE_PIN_CAP + 1)
+    for path in paths[:REFERENCE_PIN_CAP]:
+        assert state.pin_reference(path) is PinReferenceOutcome.PINNED
+    assert state.at_reference_cap
+
+    outcome = state.pin_reference(paths[REFERENCE_PIN_CAP])
+
+    assert outcome is PinReferenceOutcome.AT_CAP
+    assert len(state.references) == REFERENCE_PIN_CAP
+    assert [r.path for r in state.references] == paths[:REFERENCE_PIN_CAP]
+
+
+def test_repinning_an_already_pinned_path_at_cap_stays_already_pinned(
+    valid_spm_path, tmp_path
 ):
+    """Dedupe outranks the cap: re-pinning an existing pin at 4/4 is the
+    quiet ALREADY_PINNED no-op, never a misleading AT_CAP."""
     state = AppState()
-    state.open_reference(nmc_pouch_cell_path)
+    paths = _copies(valid_spm_path, tmp_path, REFERENCE_PIN_CAP)
+    for path in paths:
+        state.pin_reference(path)
 
-    outcome = state.open_reference(valid_spm_path)
-
-    assert outcome is OpenReferenceOutcome.ADDED
-    assert state.reference.filename == valid_spm_path.name
-    assert state.reference.model == "SPM"
+    assert state.pin_reference(paths[0]) is PinReferenceOutcome.ALREADY_PINNED
 
 
-def test_open_reference_same_path_again_is_already_reference(nmc_pouch_cell_path):
-    state = AppState()
-    state.open_reference(nmc_pouch_cell_path)
-
-    outcome = state.open_reference(nmc_pouch_cell_path)
-
-    assert outcome is OpenReferenceOutcome.ALREADY_REFERENCE
-    assert state.reference.filename == nmc_pouch_cell_path.name  # unchanged
-
-
-def test_open_reference_matching_the_main_file_is_is_main(valid_spm_path):
+def test_close_leaves_the_references_untouched(valid_spm_path, nmc_pouch_cell_path):
     state = AppState()
     state.open(valid_spm_path)
-
-    outcome = state.open_reference(valid_spm_path)
-
-    assert outcome is OpenReferenceOutcome.IS_MAIN
-    assert state.reference is None  # nothing docked
-
-
-def test_close_leaves_the_reference_untouched(valid_spm_path, nmc_pouch_cell_path):
-    state = AppState()
-    state.open(valid_spm_path)
-    state.open_reference(nmc_pouch_cell_path)
+    state.pin_reference(nmc_pouch_cell_path)
 
     state.close()
 
     assert state.active is None
-    assert state.reference is not None
-    assert state.reference.filename == nmc_pouch_cell_path.name
+    assert len(state.references) == 1
+    assert state.references[0].filename == nmc_pouch_cell_path.name
 
 
-def test_opening_a_new_main_leaves_the_reference_untouched(
+def test_opening_a_new_main_leaves_the_references_untouched(
     valid_spm_path, nmc_pouch_cell_path, tmp_path
 ):
-    import shutil
-
     state = AppState()
     state.open(valid_spm_path)
-    state.open_reference(nmc_pouch_cell_path)
+    state.pin_reference(nmc_pouch_cell_path)
 
     other = tmp_path / "other.json"
     shutil.copy(valid_spm_path, other)
     state.open(other)
 
     assert state.active.backing_file == other
-    assert state.reference is not None
-    assert state.reference.filename == nmc_pouch_cell_path.name
+    assert len(state.references) == 1
+    assert state.references[0].filename == nmc_pouch_cell_path.name
 
 
-def test_remove_reference_clears_it(nmc_pouch_cell_path):
+def test_remove_reference_removes_exactly_that_pin(
+    valid_spm_path, nmc_pouch_cell_path, tmp_path
+):
+    """Removing a middle pin shifts later pins up (decision D1: identity
+    follows the current list index) and touches nothing else."""
     state = AppState()
-    state.open_reference(nmc_pouch_cell_path)
+    other = tmp_path / "other.json"
+    shutil.copy(valid_spm_path, other)
+    state.pin_reference(nmc_pouch_cell_path)
+    state.pin_reference(valid_spm_path)
+    state.pin_reference(other)
+    middle = state.references[1]
 
-    state.remove_reference()
+    state.remove_reference(middle)
 
-    assert state.reference is None
+    assert [r.filename for r in state.references] == [
+        nmc_pouch_cell_path.name,
+        other.name,
+    ]
+
+
+def test_remove_reference_unknown_pin_is_a_quiet_noop(
+    valid_spm_path, nmc_pouch_cell_path
+):
+    state = AppState()
+    state.pin_reference(nmc_pouch_cell_path)
+    stale = state.references[0]
+    state.remove_reference(stale)
+
+    state.remove_reference(stale)  # second click on an already-removed row
+
+    assert state.references == []
+
+
+def test_remove_reference_frees_a_cap_slot(valid_spm_path, tmp_path):
+    state = AppState()
+    paths = _copies(valid_spm_path, tmp_path, REFERENCE_PIN_CAP + 1)
+    for path in paths[:REFERENCE_PIN_CAP]:
+        state.pin_reference(path)
+    state.remove_reference(state.references[0])
+
+    assert state.pin_reference(paths[REFERENCE_PIN_CAP]) is PinReferenceOutcome.PINNED
+    assert len(state.references) == REFERENCE_PIN_CAP
+
+
+def test_reload_reference_keeps_the_other_pins_and_the_order(
+    valid_spm_path, nmc_pouch_cell_path, tmp_path
+):
+    """The Source page's Reload re-snapshots the first pin in place --
+    every other pin (and with it every badge identity) must survive."""
+    state = AppState()
+    first = tmp_path / "first.json"
+    shutil.copy(valid_spm_path, first)
+    state.pin_reference(first)
+    state.pin_reference(nmc_pouch_cell_path)
+    before = list(state.references)
+
+    state.reload_reference()
+
+    assert [r.filename for r in state.references] == [
+        first.name,
+        nmc_pouch_cell_path.name,
+    ]
+    assert state.references[0] is not before[0]  # genuinely re-snapshotted
+    assert state.references[1] is before[1]  # untouched

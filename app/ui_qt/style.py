@@ -135,6 +135,16 @@ HEADER_BAND_STRONG = "#eef1f4"
 #: the data; named here so the two charts draw from one source instead of
 #: re-declaring it locally (they once drifted apart doing exactly that).
 CHART_GRID = "#eaeef2"
+#: Pinned-reference badge colours, indexed by current pin order (decision
+#: D1: colour = list index, so removing an earlier pin shifts later
+#: colours). Teal, slate, plum, olive -- the validated four-hue set
+#: (wireframe rev 3, dataviz six-checks method: within-set worst normal
+#: ΔE 15.1, worst CVD ΔE 8.3, white badge text ≥ 4.5:1 on all four).
+#: Deliberately distant from the reserved colours -- ``REFERENCE`` purple,
+#: ``ACCENT`` blue and the severity red/amber/green -- which must never be
+#: badge colours. The badge letters, not colour alone, are the identity of
+#: last resort.
+REFERENCE_BADGE_COLOURS = ("#0c8581", "#5563c9", "#8f3167", "#79670b")
 
 # ---------------------------------------------------------------------------
 # Tooltip vocabulary: the app's four completion/severity
@@ -227,9 +237,10 @@ VALUE_INPUT_MAX_WIDTH = 280
 #: buttons already widen it.
 SPIN_INPUT_MAX_WIDTH = 160
 
-#: The card's role-label column ("Main" / "Reference"), shown only while a
-#: reference is docked. One shared fixed width -- set by both the editor row
-#: and ``ReferenceValueBlock`` -- is what keeps the two value columns aligned.
+#: The card's role column ("Main" beside the ledger rows' badge clusters),
+#: shown only while a reference is pinned. One shared fixed width -- set by
+#: both the editor row and ``ReferenceLedger``'s rows -- is what keeps the
+#: value columns aligned.
 ROLE_LABEL_WIDTH = 72
 
 #: Gap between the role label and its value; must be the same in both rows
@@ -428,31 +439,46 @@ QLabel#ReferenceLibraryDescription {
     border-left: 2px solid #d5cde6; padding-left: 8px;
 }
 QLabel#ReferenceLibraryProvenance { color: #8c959f; font-size: ${meta}px; }
-QPushButton#ReferenceLibraryDockButton {
+QPushButton#ReferenceLibraryPinButton {
     background: #6f42c1; color: #ffffff; font-weight: ${semibold};
     border: none; border-radius: 4px; padding: 5px 14px;
 }
-QPushButton#ReferenceLibraryDockButton:hover { background: #5a3399; }
+QPushButton#ReferenceLibraryPinButton:hover:!disabled { background: #5a3399; }
+QPushButton#ReferenceLibraryPinButton:disabled { background: #d5cde6; }
+/* Workspace References rows (multi-reference, design rule 1): each pin is
+   a white box on the section's purple wash, bordered in the reference
+   family's pale tone. The header row stays quiet -- semibold name, muted
+   model, a flat text Remove -- and the expanded detail sits under a
+   hairline of the same border tone. */
+QFrame#ReferencePinRow { background: #ffffff; border: 1px solid #d5cde6; border-radius: 5px; }
+QLabel#ReferencePinModel { color: #57606a; font-size: ${meta}px; }
+QLabel#ReferencePinChevron { color: #57606a; font-size: ${meta}px; }
+QPushButton#ReferencePinRemove {
+    background: transparent; border: none; color: #57606a;
+    font-size: ${meta}px; padding: 2px 6px;
+}
+QPushButton#ReferencePinRemove:hover { color: #1f2328; background: #f6f8fa; border-radius: 4px; }
+QFrame#ReferencePinDetail { border: none; border-top: 1px solid #d5cde6; }
+QLabel#ReferencePinCapNote { color: #57606a; font-size: ${meta}px; }
 /* Comparison strip: the slim reference-aware band atop the parameter
-   list. Purple identity (style.REFERENCE), muted counts. #f8f5fc below is
+   list, fully quiet (design rule 2): one identity chip per pin -- badge +
+   purple name, counts only in the chip tooltip. #f8f5fc below is
    style.REFERENCE_WASH, spelled as a literal (also reused by
    QWidget#WorkspaceReferenceSection above). */
 QWidget#ComparisonStrip { background: #f8f5fc; }
-QLabel#ComparisonStripIdentity { color: #6f42c1; font-weight: ${semibold}; font-size: ${meta}px; }
-QLabel#ComparisonStripCounts { color: #57606a; font-size: ${meta}px; }
-/* Reference row (aligned-rows card layout): "Main" and "Reference" are the
-   role-label column beside their value, sharing one fixed width
-   (style.ROLE_LABEL_WIDTH) so the two value columns start at the same x.
-   The read-only reference value is a flat neutral wash -- deliberately not
-   bordered like an input, and not purple: purple is spent on the Reference
-   label, differing table cells and the chart's dashed overlay only, so the
-   main file's editor always reads as the card's heaviest element. The
-   top padding optically aligns the 11px caps label with the first text
-   line of the taller value beside it. The "same as main" faint style
-   reuses the app's muted-text tone via a dynamic property, the same
-   pattern QLabel#DiagnosticsChip[chipOff="true"] already uses below. */
+QLabel#ComparisonStripChipName { color: #6f42c1; font-weight: ${semibold}; font-size: ${meta}px; }
+/* Ledger rows (aligned-rows card layout): "Main" and each row's badge
+   cluster share one fixed-width role column (style.ROLE_LABEL_WIDTH) so
+   every value column starts at the same x. The read-only reference value
+   is a flat neutral wash -- deliberately not bordered like an input, and
+   not purple: purple is spent on differing table cells, the Pull action
+   and the chart's dashed overlay only, so the main file's editor always
+   reads as the card's heaviest element. The top padding optically aligns
+   the 11px caps label with the first text line of the taller value beside
+   it. The "same as main" faint style reuses the app's muted-text tone via
+   a dynamic property, the same pattern
+   QLabel#DiagnosticsChip[chipOff="true"] already uses below. */
 QLabel#MainFileHeading { color: #57606a; font-weight: ${semibold}; font-size: ${meta}px; padding-top: 7px; }
-QLabel#ReferenceFileHeading { color: #6f42c1; font-weight: ${semibold}; font-size: ${meta}px; padding-top: 7px; }
 QFrame#ReferenceValueBox { border: none; border-radius: 4px; background: #f6f8fa; }
 QLabel#ReferenceBlockValue[same="true"] { color: #8c959f; }
 /* The read-only reference grid lives inside the washed value box: no frame
@@ -465,16 +491,17 @@ QTableWidget#ReferenceTableGridTable QHeaderView::section {
     background: transparent; border: none; border-bottom: 1px solid #eaeef2;
     color: #8c959f; font-weight: ${semibold}; font-size: ${meta}px; padding: 1px 6px;
 }
-/* "Copy up": a quiet purple text button beside the value -- the pull action
+/* Ledger row actions (design rule 3): the only two words a row adds.
+   "Pull" is a quiet purple text button beside the value -- the pull action
    stays discoverable without outweighing the main editor (the old solid
-   fill was the loudest thing on the card). Hidden for an EQUAL row --
-   nothing to copy -- rather than shown disabled. */
-QPushButton#CopyUpButton {
+   fill was the loudest thing on the card); "same" is muted text where an
+   EQUAL group has nothing to pull. */
+QPushButton#LedgerPullButton {
     background: transparent; color: #6f42c1; font-weight: ${semibold};
     border: none; border-radius: 4px; padding: 4px 8px;
 }
-QPushButton#CopyUpButton:hover:!disabled { color: #5a3399; background: #f3ecfa; }
-QPushButton#CopyUpButton:disabled { color: #8c959f; font-weight: ${regular}; }
+QPushButton#LedgerPullButton:hover:!disabled { color: #5a3399; background: #f3ecfa; }
+QLabel#LedgerSameLabel { color: #57606a; font-size: ${meta}px; padding-top: 7px; }
 QLabel#GhostCardHeading { color: #6f42c1; font-weight: ${semibold}; font-size: ${meta}px; }
 /* Source page toolbar: the fold-all toggle sits left in both modes;
    single-pane also shows the main file's identity + the purple docking

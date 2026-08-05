@@ -5,7 +5,16 @@
 On main, verified against a 1625-green suite (`QT_QPA_PLATFORM=offscreen python -m pytest`):
 `3088779` Phase 0 pluralization · `adddc7b` Pull `source_label` · `85c6560` grouping helper +
 `core/spread.py` (+40 unit tests) · `02fee76` typography token system (separate track).
-**Next action: Phase 1.** Signed wireframes (rev 3, the visual reference for every surface):
+**Phase 1 implemented (2026-08-05, uncommitted working tree): next action is Phase 2.**
+Suite after Phase 1: 1636 passed, 3 environmental failures — the macOS baseline is now 3,
+not 4, because `test_make_main.py` (one of the old 4) was deleted with the feature; see
+`the verify-suite checklist`. On-screen proof against wireframe rev 3 captured
+via real (non-offscreen) `MainWindow.grab()`: Workspace pin rows/expand/cap footer, grouped
+ledger row (stacked badges + Pull), same+differs split, strip chips, gutter bars all match.
+Phase 1 deferrals kept deliberately: Source page/stale band act on the *first* pin
+(`AppState.reference` shim survives for exactly those call sites); the card's chart/table
+overlay still shows the first differing table group only (Phase 2 rule 5).
+Signed wireframes (rev 3, the visual reference for every surface):
 (internal design archive)
 
 Badge palette validation (dataviz six-checks method, OKLab/Machado-2009 CVD): the chosen set

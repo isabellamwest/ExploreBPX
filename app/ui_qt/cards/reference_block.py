@@ -1,33 +1,37 @@
-"""ReferenceValueBlock: the "Reference" role label + read-only value row
-shared by ``ParameterCard`` (its reference section, multi-file track M2/M3;
-see ``ParameterCard.set_reference``) and ``GhostParameterCard`` (which shows
-it unconditionally) -- one widget so the two can never drift apart.
+"""ReferenceLedger: the card's reference section for N pinned references
+(multi-reference track, design rule 3), shared by ``ParameterCard`` (see
+``ParameterCard.set_reference_groups``) and ``GhostParameterCard`` -- one
+widget so the two can never drift apart.
 
-Aligned-rows layout: the label sits in a fixed-width column
-(``style.ROLE_LABEL_WIDTH``, shared with ``ParameterCard``'s own "Main"
-label) so the reference value starts at the same x as the main editor and
-the eye compares the two vertically. The value itself is a flat neutral
-wash, deliberately not styled like an input -- it is not editable -- and
-not purple: purple stays on the label, differing grid cells and the chart
-overlay.
+One row per distinct reference value: references sharing a value group into
+a single row (``core.compare.group_reference_values``), whose badge cluster
+stacks every member's badge in pin order. The cluster sits in the fixed
+role-label column (``style.ROLE_LABEL_WIDTH``, shared with
+``ParameterCard``'s own "Main" label) so every reference value starts at
+the same x as the main editor and the eye compares values vertically. The
+only words a row ever adds are the design's two: a muted "same" when the
+group's value equals the main document's, or a quiet "Pull" button when it
+differs. A reference lacking the key contributes nothing -- no row (and
+the MAIN_ONLY case is filtered before specs are built).
 
-Plain ``QLabel``s and a button only -- deliberately outside any editor's
-draft/commit machinery (known Qt pitfall): populating it can never trip
-``_touched``, since it wires no signal into an editor at all. The block owns
-no identity of its own any more (the comparison strip owns the reference
-filename); it shows only the value and a quiet "Copy up" text action.
+Rows are plain ``QLabel``s and a button, rebuilt wholesale on every
+``set_rows`` -- deliberately outside any editor's draft/commit machinery
+(known Qt pitfall), and wholesale so no Pull connection can outlive the
+pin list that created it. The owning card prepares one
+:class:`LedgerRowSpec` per group (the ledger renders, it never classifies
+values or reads comparisons itself).
 
-For a differing, table-representable reference, the one-line summary gives
-way to :class:`ReferenceTableGrid` -- a small read-only x/y grid in the same
-washed box (:meth:`ReferenceValueBlock.set_table_rows`). For a ``str``
-expression, the box shows the full text rather than the truncated one-line
-preview every other kind uses (:meth:`ReferenceValueBlock.set_content`'s
-*monospace* flag) -- both cases use the app's own monospace convention
-(:func:`typography.mono`, the same one the Source page's raw-JSON panes
-use), not a fresh font choice.
+For a differing, table-representable value the one-line summary gives way
+to :class:`ReferenceTableGrid` -- a small read-only x/y grid in the same
+washed box. For a ``str`` expression, the box shows the full text rather
+than the truncated one-line preview every other kind uses -- both cases in
+the app's monospace convention (:func:`typography.mono`), not a fresh font
+choice.
 """
 
 from __future__ import annotations
+
+from dataclasses import dataclass
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QBrush, QColor
@@ -47,6 +51,7 @@ from PySide6.QtWidgets import (
 from core.values import format_value
 
 from .. import style, typography
+from ..reference_identity import ReferencePin, badge_label
 
 #: "No maximum": Qt's QWIDGETSIZE_MAX, restored when the row is not narrow.
 _NO_MAX_WIDTH = 16777215
@@ -63,8 +68,8 @@ def _monospace_font():
 class ReferenceTableGrid(QWidget):
     """A read-only ``x``/``y`` grid of a differing reference table's rows.
 
-    Shown inside :class:`ReferenceValueBlock`'s washed value box in place of
-    the one-line ``table · N points`` summary, once the reference is
+    Shown inside a ledger row's washed value box in place of the one-line
+    ``table · N points`` summary, once the group's value is
     table-representable and does not equal main (:meth:`set_rows`). A row
     that has no exactly-matching ``(x, y)`` pair in the main draft -- see
     ``core.compare.matching_table_rows`` -- renders both its cells in
@@ -117,134 +122,145 @@ class ReferenceTableGrid(QWidget):
             self._table.setItem(row_index, 1, y_item)
 
 
-class ReferenceValueBlock(QFrame):
-    """The "Reference" role label beside its read-only value row: a flat
-    washed value box, an optional unit label (mirroring the main editor's
-    own, for the kinds that show one), and a quiet "Copy up" text button."""
+@dataclass(frozen=True)
+class LedgerRowSpec:
+    """Everything one ledger row renders, prepared by the owning card.
 
-    #: Emitted when "Copy up" is clicked. Purely informational at this
-    #: milestone -- the owning card re-exposes it verbatim; nothing wires it
-    #: any further yet.
-    copy_up_requested = Signal()
+    ``table`` is ``(rows, matches)`` for a differing table-representable
+    group -- shown as a :class:`ReferenceTableGrid` in place of ``text`` --
+    or ``None`` for the one-line form. ``group`` is the opaque payload
+    (:class:`core.compare.ValueGroup`) handed back verbatim through
+    ``pull_requested``; the ledger never reads it.
+    """
 
-    def __init__(self) -> None:
+    pins: tuple[ReferencePin, ...]
+    text: str
+    monospace: bool
+    same: bool
+    unit: str
+    width: int | None
+    table: tuple[list[list[object]], list[bool]] | None
+    group: object
+
+
+class _LedgerRow(QFrame):
+    """One value group's row: badge cluster, value, and "same" or Pull.
+
+    The built widgets are kept as attributes (``spec``, ``_value``,
+    ``_grid``, ``_unit_label``, ``_same_label``, ``_pull`` -- absent parts
+    ``None``) purely as the headless test driver's read seam; nothing in
+    the app reads them back.
+    """
+
+    pull_requested = Signal()
+
+    def __init__(self, spec: LedgerRowSpec) -> None:
         super().__init__()
-        self.setObjectName("ReferenceBlock")
+        self.setObjectName("ReferenceLedgerRow")
+        self.spec = spec
+        self._value: QLabel | None = None
+        self._grid: ReferenceTableGrid | None = None
+        self._unit_label: QLabel | None = None
+        self._same_label: QLabel | None = None
+        self._pull: QPushButton | None = None
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        # Must equal ParameterCard's editor-row spacing: the two rows share
+        # Must equal ParameterCard's editor-row spacing: the cluster shares
         # the fixed label column, and equal spacing is what lines the value
         # columns up.
         layout.setSpacing(style.ROLE_ROW_SPACING)
 
-        self._heading = QLabel("Reference")
-        self._heading.setObjectName("ReferenceFileHeading")
-        self._heading.setFixedWidth(style.ROLE_LABEL_WIDTH)
-        layout.addWidget(self._heading, 0, Qt.AlignTop)
+        cluster = QWidget()
+        cluster.setObjectName("ReferenceLedgerCluster")
+        cluster_layout = QHBoxLayout(cluster)
+        cluster_layout.setContentsMargins(0, 0, 0, 0)
+        cluster_layout.setSpacing(3)
+        for pin in spec.pins:
+            cluster_layout.addWidget(badge_label(pin, small=True))
+        cluster_layout.addStretch(1)
+        # Auto-width cluster: at least the shared label column, growing only
+        # if four badges genuinely need more.
+        cluster.setMinimumWidth(style.ROLE_LABEL_WIDTH)
+        cluster.setToolTip(", ".join(pin.name for pin in spec.pins))
+        layout.addWidget(cluster, 0, Qt.AlignTop)
 
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(8)
 
-        self._value_box = QFrame()
-        self._value_box.setObjectName("ReferenceValueBox")
-        box_layout = QHBoxLayout(self._value_box)
+        value_box = QFrame()
+        value_box.setObjectName("ReferenceValueBox")
+        box_layout = QHBoxLayout(value_box)
         box_layout.setContentsMargins(8, 4, 8, 4)
-        self._value = QLabel()
-        self._value.setObjectName("ReferenceBlockValue")
-        self._value.setWordWrap(True)
-        #: Captured once, before any monospace switch, so ``set_content``
-        #: can always restore the ordinary (stylesheet-driven) font -- a
-        #: parameter with no full-expression reference must never inherit a
-        #: fixed-pitch look left over from a previous one shown in this same,
-        #: reused widget.
-        self._default_font = self._value.font()
-        box_layout.addWidget(self._value)
+        if spec.table is not None:
+            self._grid = ReferenceTableGrid()
+            self._grid.set_rows(*spec.table)
+            box_layout.addWidget(self._grid, 1)
+        else:
+            self._value = QLabel(spec.text)
+            self._value.setObjectName("ReferenceBlockValue")
+            self._value.setWordWrap(True)
+            if spec.monospace:
+                self._value.setFont(_monospace_font())
+            self._value.setProperty("same", spec.same)
+            box_layout.addWidget(self._value)
+            value_box.setMaximumWidth(spec.width if spec.width is not None else _NO_MAX_WIDTH)
+        row.addWidget(value_box, 1)
 
-        self._table_grid = ReferenceTableGrid()
-        self._table_grid.hide()
-        box_layout.addWidget(self._table_grid, 1)
-        row.addWidget(self._value_box, 1)
+        if spec.table is None and spec.unit:
+            self._unit_label = QLabel(spec.unit)
+            self._unit_label.setObjectName("ReferenceUnitLabel")
+            row.addWidget(self._unit_label)
 
-        #: Hidden by default -- shown only for the kinds whose main editor
-        #: shows a unit label too (see ``set_content``).
-        self._unit_label = QLabel()
-        self._unit_label.setObjectName("ReferenceUnitLabel")
-        self._unit_label.hide()
-        row.addWidget(self._unit_label)
-
-        self._copy_up = QPushButton("Copy up")
-        self._copy_up.setObjectName("CopyUpButton")
-        self._copy_up.setCursor(Qt.PointingHandCursor)
-        self._copy_up.clicked.connect(self.copy_up_requested)
-        row.addWidget(self._copy_up, 0, Qt.AlignTop)
+        if spec.same:
+            self._same_label = QLabel("same")
+            self._same_label.setObjectName("LedgerSameLabel")
+            row.addWidget(self._same_label, 0, Qt.AlignTop)
+        else:
+            self._pull = QPushButton("Pull")
+            self._pull.setObjectName("LedgerPullButton")
+            self._pull.setCursor(Qt.PointingHandCursor)
+            self._pull.clicked.connect(self.pull_requested)
+            row.addWidget(self._pull, 0, Qt.AlignTop)
 
         # Zero-stretch spacer: inert while the (stretch-1) value box may grow,
         # but when the box is capped (*narrow*) it soaks up the slack so the
-        # button sits right after the value instead of at the row's far edge.
+        # action sits right after the value instead of at the row's far edge.
         row.addStretch(0)
 
         layout.addLayout(row, 1)
 
-    def set_content(
-        self,
-        value_text: str,
-        unit: str,
-        same_as_main: bool,
-        *,
-        width: int | None = None,
-        monospace: bool = False,
-    ) -> None:
-        """Show the reference's *value_text* (and *unit*, if any) as the
-        one-line/plain-text row, replacing any table grid the box may have
-        been showing (:meth:`set_table_rows`).
 
-        *same_as_main* (an EQUAL row) appends " · same" and renders the value
-        in the faint "same" style rather than the loud one, and hides
-        "Copy up" -- there is nothing to copy. An empty *unit* hides the unit
-        label entirely, the same as the main editor's own unit label.
+class ReferenceLedger(QFrame):
+    """The rows column -- see the module docstring."""
 
-        *width* mirrors the main editor's input width
-        (:meth:`~.base.EditorCard.reference_value_width`): a capped main
-        input caps this box at the same width, so the two values align
-        exactly; ``None`` (a series, an expression, a table preview) keeps
-        the full row.
+    #: Emitted with the clicked row's ``group`` payload. The owning card
+    #: re-exposes it; ``InspectorPanel`` turns it into a source-named
+    #: ``PullParameter``.
+    pull_requested = Signal(object)
 
-        *monospace* is set for a full function/expression string -- shown in
-        full, word-wrapped and multiline-preserved, in the app's fixed-pitch
-        convention rather than the ordinary proportional one.
-        """
-        self._table_grid.hide()
-        self._value.show()
-        self._value_box.setMaximumWidth(width if width is not None else _NO_MAX_WIDTH)
-        self._value.setText(f"{value_text} · same" if same_as_main else value_text)
-        self._value.setFont(_monospace_font() if monospace else self._default_font)
-        self._value.setProperty("same", same_as_main)
-        self._value.style().unpolish(self._value)
-        self._value.style().polish(self._value)
-        self._unit_label.setText(unit)
-        self._unit_label.setVisible(bool(unit))
-        # Hidden, not disabled: an EQUAL row has nothing to copy, and a
-        # greyed button would still claim visual weight beside the value.
-        # Disabled too, so the guard holds even if something clicks it
-        # programmatically.
-        self._copy_up.setEnabled(not same_as_main)
-        self._copy_up.setVisible(not same_as_main)
+    def __init__(self) -> None:
+        super().__init__()
+        self.setObjectName("ReferenceLedger")
+        self._layout = QVBoxLayout(self)
+        self._layout.setContentsMargins(0, 0, 0, 0)
+        self._layout.setSpacing(4)
+        self._rows: list[_LedgerRow] = []
 
-    def set_table_rows(self, rows: list[list[object]], matches: list[bool]) -> None:
-        """Show a differing, table-representable reference as a read-only
-        grid instead of the one-line summary (:meth:`set_content`).
-
-        Only ever called for a non-EQUAL row -- ``ParameterCard`` keeps the
-        compact one-liner for an EQUAL table -- so "Copy up" always stays
-        shown and enabled here; there is no *narrow*/unit affordance,
-        matching the main table editor's own kind, which shows neither.
-        """
-        self._value.hide()
-        self._value_box.setMaximumWidth(_NO_MAX_WIDTH)
-        self._table_grid.set_rows(rows, matches)
-        self._table_grid.show()
-        self._unit_label.setText("")
-        self._unit_label.hide()
-        self._copy_up.setEnabled(True)
-        self._copy_up.setVisible(True)
+    def set_rows(self, specs: list[LedgerRowSpec]) -> None:
+        """Rebuild the ledger's rows wholesale from *specs* (one per value
+        group, in first-pinned order)."""
+        for row in self._rows:
+            self._layout.removeWidget(row)
+            # Hidden before deleteLater: a removed widget keeps painting at
+            # its old geometry until deferred deletion runs.
+            row.hide()
+            row.deleteLater()
+        self._rows = []
+        for spec in specs:
+            row = _LedgerRow(spec)
+            row.pull_requested.connect(
+                lambda group=spec.group: self.pull_requested.emit(group)
+            )
+            self._layout.addWidget(row)
+            self._rows.append(row)
