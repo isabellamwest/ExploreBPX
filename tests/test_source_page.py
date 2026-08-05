@@ -140,6 +140,108 @@ def test_fold_state_survives_refresh_but_prunes_removed_paths(qtbot):
     assert '"BPX": "0.1.0"' in page._view.line_texts()
 
 
+def _sized(page, width: int, height: int = 320):
+    """Give the view's viewport a real width, so lines wrap against the
+    width a user would see (offscreen, an unshown widget's viewport keeps
+    its default size)."""
+    page._view.viewport().resize(width, height)
+    return page._view
+
+
+def _wrapped_rows(view, index: int, side: str = "main") -> list[str]:
+    """Plain text of each painted row line *index* wrapped onto."""
+    view.line_rows(index)  # lays the view out at its current width
+    block = view._blocks[index]
+    rows = block.main_rows if side == "main" else (block.ref_rows or ())
+    return ["".join(segment.text for segment in row) for row in rows]
+
+
+_LONG_DOC = {
+    "Header": {
+        "Description": " ".join(["sodium"] * 40),
+        "Model": "SPM",
+    },
+}
+
+
+def test_long_value_wraps_within_the_pane(qtbot):
+    page = SourcePage()
+    qtbot.addWidget(page)
+    page.refresh(_LONG_DOC)
+    view = _sized(page, 420)
+
+    index = next(
+        i for i, text in enumerate(view.line_texts())
+        if text.startswith('"Description"')
+    )
+    rows = _wrapped_rows(view, index)
+    assert len(rows) > 1
+    # Nothing is lost to the wrap: only the whitespace at each break point.
+    joined = "".join(rows).replace(" ", "")
+    assert joined == view.line_texts()[index].replace(" ", "")
+    # And every row fits the pane it was wrapped for.
+    metrics = view._metrics(False, False)
+    pane = view._lines[index].main
+    for row, text in enumerate(rows):
+        right = view._wrap_x(pane, row) + metrics.horizontalAdvance(text)
+        assert right <= view._pane_width()
+
+
+def test_wrapped_line_takes_its_own_vertical_space(qtbot):
+    page = SourcePage()
+    qtbot.addWidget(page)
+    page.refresh(_LONG_DOC)
+    view = _sized(page, 420)
+
+    index = next(
+        i for i, text in enumerate(view.line_texts())
+        if text.startswith('"Description"')
+    )
+    rows = view.line_rows(index)
+    assert rows > 1
+    assert (
+        view.line_top(index + 1) == view.line_top(index) + rows * view._line_height()
+    )
+    # Wrapping replaces horizontal scrolling outright.
+    assert view.horizontalScrollBar().maximum() == 0
+
+
+def test_wrap_reflows_when_the_pane_narrows(qtbot):
+    page = SourcePage()
+    qtbot.addWidget(page)
+    page.refresh(_LONG_DOC)
+    view = _sized(page, 900)
+
+    index = next(
+        i for i, text in enumerate(view.line_texts())
+        if text.startswith('"Description"')
+    )
+    wide = view.line_rows(index)
+
+    _sized(page, 400)
+    assert view.line_rows(index) > wide
+
+
+def test_two_panes_share_a_wrapped_line_height(qtbot):
+    page = SourcePage()
+    qtbot.addWidget(page)
+    ref = dict(_LONG_DOC)
+    ref["Header"] = dict(_LONG_DOC["Header"], Description="short")
+    page.refresh(_LONG_DOC, reference=_RefStub(ref))
+    view = _sized(page, 700)
+
+    index = next(
+        i for i, text in enumerate(view.line_texts())
+        if text.startswith('"Description"')
+    )
+    main_rows = _wrapped_rows(view, index)
+    ref_rows = _wrapped_rows(view, index, side="ref")
+    assert len(main_rows) > 1
+    assert len(ref_rows) == 1
+    # The block is as tall as the taller side, so the panes stay aligned.
+    assert view.line_rows(index) == len(main_rows)
+
+
 def test_no_document_renders_nothing(qtbot):
     page = SourcePage()
     qtbot.addWidget(page)
@@ -563,7 +665,7 @@ def test_gutter_click_emits_pull_and_pane_click_does_not(qtbot):
         if entry[1] == ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
     )
     line_height = view._line_height()
-    y = index * line_height + line_height // 2
+    y = view.line_top(index) + line_height // 2
     gutter_x = view._pane_width() + 5
 
     QTest.mouseClick(view.viewport(), Qt.LeftButton, pos=QPoint(gutter_x, y))
@@ -573,7 +675,7 @@ def test_gutter_click_emits_pull_and_pane_click_does_not(qtbot):
     # an equal row does nothing at all.
     QTest.mouseClick(view.viewport(), Qt.LeftButton, pos=QPoint(30, y))
     equal_index = view.line_texts().index('"Reference temperature [K]": 298.15')
-    equal_y = equal_index * line_height + line_height // 2
+    equal_y = view.line_top(equal_index) + line_height // 2
     QTest.mouseClick(view.viewport(), Qt.LeftButton, pos=QPoint(gutter_x, equal_y))
     assert received == [(path, False)]
 
@@ -915,10 +1017,10 @@ def test_pane_click_places_the_selection(qtbot):
     view = page._view
     view.resize(900, 500)
 
-    # Line 2 is '"Title": …' (0 Header, 1 BPX, 2 Title); click its main pane.
     from PySide6.QtCore import QPoint, Qt
 
-    y = 2 * view._line_height() + 2
+    index = view.line_texts().index('"Title": "Test cell"')
+    y = view.line_top(index) + 2
     qtbot.mouseClick(view.viewport(), Qt.LeftButton, pos=QPoint(120, y))
 
     assert view.selected_path() == ("Header", "Title")

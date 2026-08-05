@@ -17,13 +17,14 @@ painted by :class:`SourceView`, a custom scroll area over
 
 from __future__ import annotations
 
+import bisect
 import difflib
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QFontDatabase, QPainter
+from PySide6.QtGui import QColor, QFontDatabase, QFontMetrics, QPainter
 from PySide6.QtWidgets import (
     QAbstractScrollArea,
     QHBoxLayout,
@@ -46,6 +47,14 @@ _LINE_PADDING = 6
 #: The centre column between the two panes; the ← copy affordances land
 #: here in a later step, the width is reserved now so the layout is stable.
 _GUTTER_PX = 40
+#: Breathing room at a pane's right edge, before text wraps.
+_RIGHT_PADDING = 12
+#: Hanging indent for a wrapped line's continuation rows, so a long value
+#: reads as one line's overflow rather than a new key.
+_WRAP_INDENT = _INDENT_PX
+#: A continuation row never narrows past this, however deep the nesting or
+#: however cramped the pane -- below it, wrapping degenerates.
+_MIN_WRAP_WIDTH = 60
 
 _CARET_OPEN = "▾"
 _CARET_CLOSED = "▸"
@@ -76,6 +85,12 @@ class _Segment:
     #: chip. Only values (or the ⋯/"table" stand-ins) ever chip -- keys,
     #: structure and whole rows never do.
     chip: bool = False
+
+
+def _same_style(a: _Segment, b: _Segment) -> bool:
+    """Whether two segments paint identically -- adjacent runs that do are
+    merged back together after wrapping."""
+    return (a.color, a.bold, a.italic, a.chip) == (b.color, b.bold, b.italic, b.chip)
 
 
 @dataclass(frozen=True)
@@ -119,6 +134,22 @@ class _Line:
     #: selection outline anchors to: arrow-key navigation and row clicks
     #: select by path, so the selection survives re-renders and fold changes.
     row_path: tuple[str, ...] | None = None
+
+
+@dataclass(frozen=True)
+class _Block:
+    """One logical :class:`_Line` as laid out for painting: each pane's
+    wrapped rows, and the shared row count both sides occupy.
+
+    A wrapped line still occupies one block, so the panes stay aligned line
+    by line: the block is as tall as the taller side's wrap, and a gap
+    block fills the whole of it.
+    """
+
+    main_rows: tuple[tuple[_Segment, ...], ...]
+    ref_rows: tuple[tuple[_Segment, ...], ...] | None
+    rows: int
+    top: int
 
 
 def _gap(depth: int) -> _PaneLine:
@@ -537,9 +568,24 @@ class SourceView(QAbstractScrollArea):
         self._flash_timer.setSingleShot(True)
         self._flash_timer.timeout.connect(self._clear_flash)
         self._font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
+        #: Font metrics per (bold, italic) variant of the fixed font -- text
+        #: is measured for wrapping far more often than it is painted.
+        self._metrics_cache: dict[tuple[bool, bool], QFontMetrics] = {}
+        #: The painted layout: one block per line, rebuilt whenever the
+        #: lines or the pane width change.
+        self._blocks: list[_Block] = []
+        self._tops: list[int] = []
+        self._content_height = 0
+        #: Pane width the current layout was wrapped for; a mismatch means
+        #: the layout is stale and re-wraps on next use.
+        self._layout_width = -1
         # Focusable for Up/Down row navigation -- still never an input
         # widget: keys move the selection, nothing edits.
         self.setFocusPolicy(Qt.StrongFocus)
+        # Long values wrap at the pane edge instead of running off it: with
+        # two panes there is no width to spare, and nothing here is edited,
+        # so a horizontal scrollbar would only hide content.
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
     # -- content ---------------------------------------------------------
 
@@ -636,10 +682,11 @@ class SourceView(QAbstractScrollArea):
         line_height = self._line_height()
         for index, line in enumerate(self._lines):
             if line.row_path == path:
-                top = index * line_height
+                top = self.line_top(index)
+                height = self.line_rows(index) * line_height
                 bar = self.verticalScrollBar()
                 view_height = self.viewport().height()
-                if not bar.value() <= top <= bar.value() + view_height - line_height:
+                if not bar.value() <= top <= bar.value() + view_height - height:
                     bar.setValue(max(0, top - view_height // 2))
                 break
 
@@ -731,7 +778,21 @@ class SourceView(QAbstractScrollArea):
     # -- geometry --------------------------------------------------------
 
     def _line_height(self) -> int:
-        return self.fontMetrics().height() + _LINE_PADDING
+        # Measured on the fixed font the lines are actually painted with,
+        # not the widget's UI font.
+        return self._metrics(False, False).height() + _LINE_PADDING
+
+    def _metrics(self, bold: bool, italic: bool) -> QFontMetrics:
+        key = (bold, italic)
+        if key not in self._metrics_cache:
+            font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
+            font.setBold(bold)
+            font.setItalic(italic)
+            self._metrics_cache[key] = QFontMetrics(font)
+        return self._metrics_cache[key]
+
+    def _advance(self, text: str, segment: _Segment) -> int:
+        return self._metrics(segment.bold, segment.italic).horizontalAdvance(text)
 
     def _pane_width(self) -> int:
         if not self._two_pane:
@@ -741,70 +802,180 @@ class SourceView(QAbstractScrollArea):
     def _pane_x(self, pane: _PaneLine) -> int:
         return _LEFT_MARGIN + pane.depth * _INDENT_PX + 14
 
+    def _wrap_x(self, pane: _PaneLine, row: int) -> int:
+        """A wrapped row's left offset within its pane: the line's own
+        indent, plus one hanging step on every continuation row."""
+        return self._pane_x(pane) + (_WRAP_INDENT if row else 0)
+
+    def _wrap_pane(self, pane: _PaneLine) -> tuple[tuple[_Segment, ...], ...]:
+        """Break one pane line's segments into rows that fit the pane.
+
+        Wrapping prefers whitespace and falls back to breaking mid-token
+        only when a single token is wider than the row (a long unbroken
+        number or identifier). Styling is preserved, and tokens that land
+        on the same row are merged back into one segment so a chipped run
+        still paints as a single rounded chip per row.
+        """
+        pane_width = self._pane_width()
+        widths = [
+            max(_MIN_WRAP_WIDTH, pane_width - self._wrap_x(pane, row) - _RIGHT_PADDING)
+            for row in (0, 1)
+        ]
+        rows: list[tuple[_Segment, ...]] = []
+        current: list[_Segment] = []
+        used = 0
+        width = widths[0]
+
+        def flush() -> None:
+            nonlocal current, used, width
+            rows.append(tuple(current))
+            current = []
+            used = 0
+            width = widths[1]
+
+        def add(text: str, segment: _Segment) -> None:
+            nonlocal used
+            if current and _same_style(current[-1], segment):
+                current[-1] = replace(current[-1], text=current[-1].text + text)
+            else:
+                current.append(replace(segment, text=text))
+            used += self._advance(text, segment)
+
+        for segment in pane.segments:
+            if not segment.text:
+                continue
+            if used + self._advance(segment.text, segment) <= width:
+                add(segment.text, segment)
+                continue
+            for token in re.split(r"(\s+)", segment.text):
+                if not token:
+                    continue
+                token_width = self._advance(token, segment)
+                if used + token_width > width and current:
+                    flush()
+                    # A row never opens on the whitespace it wrapped at.
+                    if token.isspace():
+                        continue
+                if token_width <= width:
+                    add(token, segment)
+                    continue
+                for char in token:
+                    char_width = self._advance(char, segment)
+                    if used + char_width > width and current:
+                        flush()
+                    add(char, segment)
+        flush()
+        return tuple(rows)
+
     def _rebuild(self) -> None:
         self._lines = _build_lines(self._rows, self._closed, self._two_pane)
-        self._update_scrollbars()
+        self._relayout()
         self.viewport().update()
         self.fold_state_changed.emit()
 
+    def _ensure_layout(self) -> None:
+        """Re-wrap if the pane width has moved since the last layout.
+
+        Laying out lazily rather than on the resize event keeps the wrap
+        honest whatever the widget's state: a viewport that resizes without
+        delivering an event (offscreen, or before the first show) still
+        paints and hit-tests against the width it actually has.
+        """
+        if self._layout_width != self._pane_width():
+            self._relayout()
+
+    def _relayout(self) -> None:
+        """Wrap every line at the current pane width and stack the blocks."""
+        line_height = self._line_height()
+        self._layout_width = self._pane_width()
+        blocks: list[_Block] = []
+        tops: list[int] = []
+        top = 0
+        for line in self._lines:
+            main_rows = () if line.main.gap else self._wrap_pane(line.main)
+            ref_rows = None
+            if line.ref is not None:
+                ref_rows = () if line.ref.gap else self._wrap_pane(line.ref)
+            count = max(1, len(main_rows), len(ref_rows or ()))
+            blocks.append(_Block(main_rows, ref_rows, count, top))
+            tops.append(top)
+            top += count * line_height
+        self._blocks = blocks
+        self._tops = tops
+        self._content_height = top
+        self._update_scrollbars()
+
+    def line_top(self, index: int) -> int:
+        """Content-coordinate top of line *index* -- the wrap-aware
+        replacement for ``index * line_height`` (test/driver read)."""
+        self._ensure_layout()
+        if 0 <= index < len(self._blocks):
+            return self._blocks[index].top
+        return index * self._line_height()
+
+    def line_rows(self, index: int) -> int:
+        """How many painted rows line *index* wrapped onto (test read)."""
+        self._ensure_layout()
+        if 0 <= index < len(self._blocks):
+            return self._blocks[index].rows
+        return 1
+
+    def _line_at(self, y: int) -> int:
+        """Index of the line whose block contains content-coordinate *y*,
+        or -1 above the first line / below the last."""
+        self._ensure_layout()
+        if not self._tops or y < 0 or y >= self._content_height:
+            return -1
+        return bisect.bisect_right(self._tops, y) - 1
+
     def _update_scrollbars(self) -> None:
         line_height = self._line_height()
-        metrics = self.fontMetrics()
-        content_height = len(self._lines) * line_height
-        panes = [line.main for line in self._lines]
-        panes += [line.ref for line in self._lines if line.ref is not None]
-        content_width = max(
-            (
-                self._pane_x(pane) + metrics.horizontalAdvance(pane.text)
-                for pane in panes
-            ),
-            default=0,
-        )
         self.verticalScrollBar().setRange(
-            0, max(0, content_height - self.viewport().height())
+            0, max(0, self._content_height - self.viewport().height())
         )
         self.verticalScrollBar().setSingleStep(line_height)
         self.verticalScrollBar().setPageStep(self.viewport().height())
-        self.horizontalScrollBar().setRange(
-            0, max(0, content_width + 12 - self._pane_width())
-        )
-        self.horizontalScrollBar().setSingleStep(12)
 
     def resizeEvent(self, event) -> None:  # noqa: N802 - Qt override
         super().resizeEvent(event)
+        # A narrower pane moves every wrap point; the height alone only
+        # changes how much of the layout fits on screen.
+        self._ensure_layout()
         self._update_scrollbars()
 
     # -- painting --------------------------------------------------------
 
     def paintEvent(self, event) -> None:  # noqa: N802 - Qt override
+        self._ensure_layout()
         painter = QPainter(self.viewport())
         painter.fillRect(self.viewport().rect(), QColor("#ffffff"))
         line_height = self._line_height()
         v_offset = self.verticalScrollBar().value()
-        h_offset = self.horizontalScrollBar().value()
         pane_width = self._pane_width()
-        first = max(0, v_offset // line_height)
-        last = min(
-            len(self._lines),
-            (v_offset + self.viewport().height()) // line_height + 2,
-        )
-        ascent = (line_height + self.fontMetrics().ascent()) // 2 - 2
-        for index in range(first, last):
+        first = max(0, self._line_at(v_offset))
+        bottom = v_offset + self.viewport().height()
+        ascent = (line_height + self._metrics(False, False).ascent()) // 2 - 2
+        for index in range(first, len(self._lines)):
             line = self._lines[index]
-            top = index * line_height - v_offset
+            block = self._blocks[index]
+            if block.top >= bottom:
+                break
+            top = block.top - v_offset
+            block_height = block.rows * line_height
             self._paint_pane(
-                painter, line.main, 0, pane_width, top, top + ascent, h_offset,
-                line_height,
+                painter, line.main, block.main_rows, 0, pane_width, top, ascent,
+                block_height, line_height,
             )
             if line.ref is not None:
                 self._paint_pane(
                     painter,
                     line.ref,
+                    block.ref_rows or (),
                     pane_width + _GUTTER_PX,
                     pane_width,
                     top,
-                    top + ascent,
-                    h_offset,
+                    ascent,
+                    block_height,
                     line_height,
                 )
             if self._two_pane and line.pull_path is not None:
@@ -823,13 +994,13 @@ class SourceView(QAbstractScrollArea):
                 # gutter between them.
                 painter.setPen(QColor(style.ACCENT))
                 painter.setBrush(Qt.NoBrush)
-                painter.drawRect(0, top, pane_width - 1, line_height - 1)
+                painter.drawRect(0, top, pane_width - 1, block_height - 1)
                 if self._two_pane:
                     painter.drawRect(
                         pane_width + _GUTTER_PX,
                         top,
                         pane_width - 1,
-                        line_height - 1,
+                        block_height - 1,
                     )
         if self._two_pane:
             painter.setPen(QColor(style.NEUTRAL_TINT))
@@ -842,41 +1013,46 @@ class SourceView(QAbstractScrollArea):
         self,
         painter: QPainter,
         pane: _PaneLine,
+        rows: tuple[tuple[_Segment, ...], ...],
         x0: int,
         width: int,
         top: int,
-        baseline: int,
-        h_offset: int,
+        ascent: int,
+        block_height: int,
         line_height: int,
     ) -> None:
         if pane.gap:
-            painter.fillRect(x0, top, width, line_height, QColor(style.NEUTRAL_TINT))
+            # The absent side fills the whole block, however far the other
+            # side's value wrapped.
+            painter.fillRect(x0, top, width, block_height, QColor(style.NEUTRAL_TINT))
             return
         painter.save()
-        painter.setClipRect(x0, top, width, line_height)
+        painter.setClipRect(x0, top, width, block_height)
         if pane.caret is not None:
-            font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
-            painter.setFont(font)
+            painter.setFont(QFontDatabase.systemFont(QFontDatabase.FixedFont))
             painter.setPen(QColor(style.MUTED))
-            caret_x = x0 + _LEFT_MARGIN + pane.depth * _INDENT_PX - h_offset
-            painter.drawText(caret_x, baseline, pane.caret)
-        x = x0 + self._pane_x(pane) - h_offset
-        for segment in pane.segments:
-            font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
-            font.setBold(segment.bold)
-            font.setItalic(segment.italic)
-            painter.setFont(font)
-            advance = painter.fontMetrics().horizontalAdvance(segment.text)
-            if segment.chip:
-                painter.setPen(Qt.NoPen)
-                painter.setBrush(QColor(style.DIFF_TINT))
-                painter.drawRoundedRect(
-                    x - 2, top + 2, advance + 4, line_height - 4, 3, 3
-                )
-                painter.setBrush(Qt.NoBrush)
-            painter.setPen(QColor(segment.color))
-            painter.drawText(x, baseline, segment.text)
-            x += advance
+            caret_x = x0 + _LEFT_MARGIN + pane.depth * _INDENT_PX
+            painter.drawText(caret_x, top + ascent, pane.caret)
+        for row, segments in enumerate(rows):
+            row_top = top + row * line_height
+            baseline = row_top + ascent
+            x = x0 + self._wrap_x(pane, row)
+            for segment in segments:
+                font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
+                font.setBold(segment.bold)
+                font.setItalic(segment.italic)
+                painter.setFont(font)
+                advance = painter.fontMetrics().horizontalAdvance(segment.text)
+                if segment.chip:
+                    painter.setPen(Qt.NoPen)
+                    painter.setBrush(QColor(style.DIFF_TINT))
+                    painter.drawRoundedRect(
+                        x - 2, row_top + 2, advance + 4, line_height - 4, 3, 3
+                    )
+                    painter.setBrush(Qt.NoBrush)
+                painter.setPen(QColor(segment.color))
+                painter.drawText(x, baseline, segment.text)
+                x += advance
         painter.restore()
 
     def _paint_pull_chip(
@@ -924,9 +1100,9 @@ class SourceView(QAbstractScrollArea):
 
     def mousePressEvent(self, event) -> None:  # noqa: N802 - Qt override
         point = event.position().toPoint()
-        index = (point.y() + self.verticalScrollBar().value()) // self._line_height()
-        if 0 <= index < len(self._lines):
-            line = self._lines[int(index)]
+        index = self._line_at(point.y() + self.verticalScrollBar().value())
+        if index >= 0:
+            line = self._lines[index]
             pane_width = self._pane_width()
             in_gutter = (
                 self._two_pane and pane_width <= point.x() < pane_width + _GUTTER_PX
@@ -958,9 +1134,9 @@ class SourceView(QAbstractScrollArea):
         nothing the Editor could reveal, so it stays a Source-page fact.
         """
         point = event.position().toPoint()
-        index = (point.y() + self.verticalScrollBar().value()) // self._line_height()
-        if 0 <= index < len(self._lines):
-            line = self._lines[int(index)]
+        index = self._line_at(point.y() + self.verticalScrollBar().value())
+        if index >= 0:
+            line = self._lines[index]
             pane_width = self._pane_width()
             in_gutter = (
                 self._two_pane and pane_width <= point.x() < pane_width + _GUTTER_PX

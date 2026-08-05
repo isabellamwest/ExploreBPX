@@ -583,7 +583,7 @@ class AppDriver:
         view = self._w._source._view
         for index, line in enumerate(view._lines):
             if line.row_path == tuple(path):
-                y = index * view._line_height() + 2
+                y = view.line_top(index) + 2
                 point = QPoint(30, y - view.verticalScrollBar().value())
                 QTest.mouseDClick(view.viewport(), Qt.LeftButton, pos=point)
                 return self
