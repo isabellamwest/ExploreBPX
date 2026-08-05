@@ -156,6 +156,63 @@ def test_grows_then_caps_at_max_lines():
     assert height_20_lines == height_6_lines  # capped at ~6 lines, then scrolls
 
 
+def test_long_wrapped_line_grows_box():
+    """A single logical line that word-wraps must grow the box by its
+    *visual* line count, not stay at one line (the wrap-blindness bug)."""
+    app = _app()
+    card = TextCard(_param(value=""), None)
+    card.setFixedWidth(300)
+    card.show()
+    app.processEvents()
+    height_1_line = card._edit.height()
+
+    card._edit.setPlainText(
+        "This is one long logical line with no newlines that must wrap "
+        "across several visual lines inside a narrow inspector card"
+    )
+    app.processEvents()
+    assert card._edit.document().blockCount() == 1
+    assert card._edit.height() > height_1_line
+    card.close()
+
+
+def test_wrapped_lines_share_the_max_lines_cap():
+    """Wrapped visual lines hit the same 6-line cap as logical lines."""
+    app = _app()
+    card = TextCard(_param(value=""), None)
+    card.setFixedWidth(300)
+    card.show()
+    app.processEvents()
+
+    card._edit.setPlainText("\n".join(["line"] * 6))
+    app.processEvents()
+    height_capped = card._edit.height()
+
+    card._edit.setPlainText("wrap " * 200)
+    app.processEvents()
+    assert card._edit.height() == height_capped
+    card.close()
+
+
+def test_widening_the_card_refits_wrapped_height():
+    """Re-wrap driven by a width change (no textChanged) still re-fits."""
+    app = _app()
+    card = TextCard(_param(value=""), None)
+    card.setFixedWidth(220)
+    card.show()
+    app.processEvents()
+    card._edit.setPlainText(
+        "a moderately long value that wraps at a narrow width only"
+    )
+    app.processEvents()
+    height_narrow = card._edit.height()
+
+    card.setFixedWidth(800)
+    app.processEvents()
+    assert card._edit.height() < height_narrow
+    card.close()
+
+
 def test_escape_reverts_via_reset():
     _app()
     card = TextCard(_param(value="original"), None)

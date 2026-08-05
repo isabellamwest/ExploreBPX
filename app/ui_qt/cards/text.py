@@ -15,7 +15,7 @@ Keyboard contract (extends :class:`~.base.EditorCard`):
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import QLabel, QPlainTextEdit, QVBoxLayout
 
@@ -26,6 +26,23 @@ from .base import EditorCard
 #: lines -- beyond that the box scrolls instead of growing further.
 _MIN_LINES = 1
 _MAX_LINES = 6
+
+
+class _WrapAwareEdit(QPlainTextEdit):
+    """``QPlainTextEdit`` that announces re-wraps caused by width changes.
+
+    A width change re-wraps the text without any ``textChanged``, and the
+    document layout's ``documentSizeChanged`` does not fire for it either
+    (its size is measured in logical lines). Qt relayouts synchronously
+    inside ``resizeEvent``, so emitting after the ``super()`` call lets the
+    card re-fit its height from fresh per-block line counts.
+    """
+
+    resized = Signal()
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self.resized.emit()
 
 
 class TextCard(EditorCard):
@@ -39,7 +56,7 @@ class TextCard(EditorCard):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(2)
 
-        self._edit = QPlainTextEdit(self._format(self._original))
+        self._edit = _WrapAwareEdit(self._format(self._original))
         # Explicit rather than relying on the QAbstractScrollArea default:
         # a scrollbar only appears once the content actually exceeds
         # _MAX_LINES, never at the 1-line minimum size.
@@ -50,6 +67,9 @@ class TextCard(EditorCard):
         if meta and meta.examples:
             self._edit.setPlaceholderText(str(meta.examples[0]))
         self._edit.textChanged.connect(self._on_text_changed)
+        # A width change re-wraps the same text into a different number of
+        # visual lines with no textChanged to catch it -- see _WrapAwareEdit.
+        self._edit.resized.connect(self._resize_to_content)
         layout.addWidget(self._edit)
 
         if meta and meta.pattern:
@@ -67,10 +87,23 @@ class TextCard(EditorCard):
         self._resize_to_content()
         self.draft_changed.emit()
 
+    def _wrapped_line_count(self) -> int:
+        """Visual lines after word-wrap, not logical blocks -- a long
+        single-line value must still grow the box."""
+        doc = self._edit.document()
+        total = 0
+        block = doc.firstBlock()
+        while block.isValid():
+            # lineCount() is 0 until the layout has run for the block;
+            # count it as one line so the pre-show height stays sane.
+            total += max(block.layout().lineCount(), 1)
+            block = block.next()
+        return total
+
     def _resize_to_content(self) -> None:
         """Fit the box's height to its content, from ``_MIN_LINES`` up to
         ``_MAX_LINES``; beyond that it scrolls instead of growing further."""
-        line_count = max(self._edit.document().blockCount(), _MIN_LINES)
+        line_count = max(self._wrapped_line_count(), _MIN_LINES)
         visible_lines = min(line_count, _MAX_LINES)
         line_height = QFontMetrics(self._edit.font()).lineSpacing()
         doc_margin = self._edit.document().documentMargin()
