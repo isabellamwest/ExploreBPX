@@ -286,3 +286,56 @@ def matching_table_rows(
         any(values_equal(mx, rx) and values_equal(my, ry) for mx, my in main_rows)
         for rx, ry in ref_rows
     ]
+
+
+@dataclass(frozen=True)
+class ValueGroup:
+    """One Card Ledger row (multi-reference track, design rule 3): every
+    pinned reference whose value at a key is identical, grouped together."""
+
+    #: Pin-order indices, into the caller's own reference list, of every
+    #: reference sharing ``value`` at this key.
+    indices: tuple[int, ...]
+    #: The shared raw value (whatever :func:`raw_equal` says every member's
+    #: ``RowDiff.ref_value`` is equal to).
+    value: object
+    #: Whether ``value`` equals the main document's own value at this key --
+    #: read straight off the group's ``RowState`` (see below), never
+    #: recomputed against a separately-supplied main value.
+    equals_main: bool
+
+
+def group_reference_values(rows: list[RowDiff | None]) -> tuple[ValueGroup, ...]:
+    """Group one key's per-reference :class:`RowDiff`\\ s by identical value
+    (Card Ledger, design rule 3), for a caller with N pinned references and
+    one ``compare()`` result per reference.
+
+    *rows* is one entry per pinned reference, in pin order: the row for this
+    key from that reference's own ``ComparisonResult.row()``, or ``None``
+    when the reference has no comparison there at all (its own section is
+    absent). A ``None`` entry and a ``MAIN_ONLY`` row (this particular
+    reference has no value for the key -- the opposite-direction case of
+    ``None``) both contribute nothing: there is no reference value to show or
+    pull. A ``REF_ONLY`` row (the key exists in no reference's main-only
+    sense -- the ghost-card case) groups exactly like any other state, since
+    ``ghost_card.py`` reuses this same helper.
+
+    Grouping uses :func:`raw_equal`, the same rule ``compare()`` itself uses,
+    so identical nested tables/functions group exactly as identical scalars
+    do. Order is preserved twice over: groups appear in the order their
+    first member was pinned, and each group's own ``indices`` stay pin-order
+    too. ``equals_main`` is read straight off the shared ``RowState``
+    (``EQUAL``): identical values were necessarily compared against the same
+    main value, so every member of a group already carries the same outcome.
+    """
+    groups: list[ValueGroup] = []
+    for index, row in enumerate(rows):
+        if row is None or row.state is RowState.MAIN_ONLY:
+            continue
+        for position, group in enumerate(groups):
+            if raw_equal(group.value, row.ref_value):
+                groups[position] = ValueGroup(group.indices + (index,), group.value, group.equals_main)
+                break
+        else:
+            groups.append(ValueGroup((index,), row.ref_value, row.state is RowState.EQUAL))
+    return tuple(groups)

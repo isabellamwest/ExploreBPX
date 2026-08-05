@@ -6,7 +6,16 @@ from __future__ import annotations
 from pathlib import Path
 
 from core import bpx_gateway
-from core.compare import ComparisonResult, RowState, compare, matching_table_rows, raw_equal
+from core.compare import (
+    ComparisonResult,
+    RowDiff,
+    RowState,
+    ValueGroup,
+    compare,
+    group_reference_values,
+    matching_table_rows,
+    raw_equal,
+)
 
 APP_DIR = Path(__file__).resolve().parents[1] / "app"
 _ABOUT_ENERGY = APP_DIR / "data" / "example_documents" / "about_energy"
@@ -272,3 +281,97 @@ def test_matching_table_rows_is_type_aware_at_the_leaves():
 
 def test_matching_table_rows_empty_main_marks_every_ref_row_false():
     assert matching_table_rows([], [[0, 1.0]]) == [False]
+
+
+# ----------------------------------------------------------------------
+# group_reference_values: Card Ledger grouping (multi-reference track)
+# ----------------------------------------------------------------------
+
+
+def test_group_reference_values_groups_identical_values_together():
+    rows = [
+        RowDiff(RowState.DIFFERS, 6.0),
+        RowDiff(RowState.DIFFERS, 7.0),
+        RowDiff(RowState.DIFFERS, 6.0),
+    ]
+    groups = group_reference_values(rows)
+    assert groups == (
+        ValueGroup((0, 2), 6.0, False),
+        ValueGroup((1,), 7.0, False),
+    )
+
+
+def test_group_reference_values_preserves_pin_order_within_and_across_groups():
+    """Groups appear in first-pinned order, and each group's own member
+    indices stay pin-order too, even when a later pin re-joins an earlier
+    group."""
+    rows = [
+        RowDiff(RowState.DIFFERS, "b"),
+        RowDiff(RowState.DIFFERS, "a"),
+        RowDiff(RowState.DIFFERS, "b"),
+        RowDiff(RowState.DIFFERS, "a"),
+    ]
+    groups = group_reference_values(rows)
+    assert [g.indices for g in groups] == [(0, 2), (1, 3)]
+    assert [g.value for g in groups] == ["b", "a"]
+
+
+def test_group_reference_values_none_entries_contribute_nothing():
+    """A ``None`` entry -- that reference has no comparison for this key at
+    all (its section is absent) -- is skipped, not turned into its own
+    group."""
+    rows = [RowDiff(RowState.DIFFERS, 1.0), None, RowDiff(RowState.DIFFERS, 1.0)]
+    groups = group_reference_values(rows)
+    assert len(groups) == 1
+    assert groups[0].indices == (0, 2)
+
+
+def test_group_reference_values_main_only_rows_contribute_nothing():
+    """A MAIN_ONLY row means this particular reference has no value for the
+    key -- same as a ``None`` entry, it forms no group."""
+    rows = [RowDiff(RowState.MAIN_ONLY), RowDiff(RowState.DIFFERS, 5.0)]
+    groups = group_reference_values(rows)
+    assert len(groups) == 1
+    assert groups[0].indices == (1,)
+
+
+def test_group_reference_values_all_absent_returns_no_groups():
+    assert group_reference_values([None, RowDiff(RowState.MAIN_ONLY)]) == ()
+
+
+def test_group_reference_values_equal_state_flags_equals_main_true():
+    rows = [RowDiff(RowState.EQUAL, 298.15), RowDiff(RowState.DIFFERS, 300.0)]
+    groups = group_reference_values(rows)
+    equal_group = next(g for g in groups if g.value == 298.15)
+    differs_group = next(g for g in groups if g.value == 300.0)
+    assert equal_group.equals_main is True
+    assert differs_group.equals_main is False
+
+
+def test_group_reference_values_ref_only_rows_still_group_for_ghost_cards():
+    """The ghost-card case: main lacks the key entirely, so every reference
+    that has it is REF_ONLY -- these group exactly like any other state
+    (ghost_card.py reuses this helper), never excluded the way MAIN_ONLY is."""
+    rows = [RowDiff(RowState.REF_ONLY, 1.0), RowDiff(RowState.REF_ONLY, 1.0)]
+    groups = group_reference_values(rows)
+    assert len(groups) == 1
+    assert groups[0].indices == (0, 1)
+    assert groups[0].equals_main is False
+
+
+def test_group_reference_values_uses_raw_equal_for_nested_tables():
+    """Identical nested table/function shapes group together -- the same
+    structural equality raw_equal gives ``compare()`` itself, not a shallow
+    ``==`` on the dict/list objects."""
+    table_a = {"x": [1, 2], "y": [3, 4]}
+    table_b = {"x": [1, 2], "y": [3, 4]}
+    table_c = {"x": [1, 2], "y": [3, 5]}
+    rows = [
+        RowDiff(RowState.DIFFERS, table_a),
+        RowDiff(RowState.DIFFERS, table_b),
+        RowDiff(RowState.DIFFERS, table_c),
+    ]
+    groups = group_reference_values(rows)
+    assert len(groups) == 2
+    assert groups[0].indices == (0, 1)
+    assert groups[1].indices == (2,)

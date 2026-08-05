@@ -54,7 +54,12 @@ good/bad colouring; never styled as validation; all spec logic stays in `bpx` vi
 
 ## Phases
 
-### Phase 0 — pluralize, zero visual change  ✅ gate: suite green, app identical
+Groundwork already on main ahead of the UI phases: Pull `source_label` (undo wording
+unchanged until real sources are wired), `compare.group_reference_values`, and
+`core/spread.py` — all with unit tests. New UI must use `app/ui_qt/typography.py`
+tokens (the typography track landed before Phase 1 started).
+
+### Phase 0 — pluralize, zero visual change  ✅ done: suite green, app identical
 - `app/state/app_state.py`: `reference: ReferenceSnapshot | None` → `references:
   list[ReferenceSnapshot]`; all mutators keep today's replace-on-open semantics against
   `references[0]`; temporary read-only `reference` property for call sites deferred to
