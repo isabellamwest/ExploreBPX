@@ -352,10 +352,13 @@ def test_expression_body_passes_through_a_real_expression():
 
 
 def test_function_hint_quotes_bpx_function_docstring():
+    """The hint stays bpx's own words, only mechanically collapsed onto one
+    line -- the same transform ExpressionBody applies."""
     card = _fn(3.7)
-    help_text = bpx_gateway.function_syntax_help()
+    lines = bpx_gateway.function_syntax_help().splitlines()
+    expected = " · ".join(line.strip().lstrip("- ") for line in lines if line.strip())
     labels = card._modes[1].body.findChildren(QLabel)
-    assert any(label.text() == help_text for label in labels)
+    assert any(label.text() == expected for label in labels)
 
 
 # ----------------------------------------------------------------------

@@ -109,9 +109,8 @@ def test_description_sits_directly_under_title_without_reference():
 
 def test_description_sits_directly_under_title_with_reference_docked():
     """Docking a reference must not move the description: it stays directly
-    under the title in the header block, and the new "Main file" heading
-    slots in directly above the editor in the content column, not into the
-    header."""
+    under the title in the header block, and the new "Main" role label
+    joins the editor's own row (aligned-rows layout), not the header."""
     card = _series_card_with_description()
     card.set_reference([1, 2, 3], RowState.DIFFERS, ParameterKind.SERIES)
     description = card._description_widgets[0]
@@ -119,15 +118,14 @@ def test_description_sits_directly_under_title_with_reference_docked():
     desc_index = _layout_index(header_box, description)
     expected_desc_index = 2 if card._rename_row is not None else 1
     assert desc_index == expected_desc_index
-    assert desc_index == header_box.count() - 1  # the heading never joined it
-    main_heading_index = _layout_index(card._body_layout, card._main_file_heading)
-    editor_index = _layout_index(card._body_layout, card._value_row)
-    assert editor_index == main_heading_index + 1
+    assert desc_index == header_box.count() - 1  # the label never joined it
+    assert _layout_index(card._value_row, card._main_file_heading) == 0
+    assert _layout_index(card._value_row, card._editor) == 1
 
 
 def test_headings_absent_with_no_reference_docked():
-    """The plain card (no ``set_reference`` call at all) carries no "Main
-    file"/"Reference file" heading -- exactly today's card."""
+    """The plain card (no ``set_reference`` call at all) carries no
+    "Main"/"Reference" role label -- exactly today's card."""
     card = _card(("Parameterisation", "Cell", "Electrode area [m2]"))
     assert card._main_file_heading is None
     assert card._reference_block is None
@@ -210,9 +208,11 @@ def test_differing_table_reference_shows_grid_with_diff_marks_and_overlay():
     assert not block._table_grid.isHidden()
     table = block._table_grid._table
     assert table.rowCount() == 3
-    # Rows (0, 2) and (1, 3) already exist in the main draft: ordinary text.
-    assert table.item(0, 0).foreground().style() == Qt.NoBrush
-    assert table.item(1, 1).foreground().style() == Qt.NoBrush
+    # Rows (0, 2) and (1, 3) already exist in the main draft: quiet muted
+    # text, so purple stays the mark of a genuinely differing row.
+    muted = QColor(style.MUTED).name()
+    assert table.item(0, 0).foreground().color().name() == muted
+    assert table.item(1, 1).foreground().color().name() == muted
     # Row (5, 9) has no equal pair in main: reference purple, both cells.
     purple = QColor(style.REFERENCE).name()
     assert table.item(2, 0).foreground().color().name() == purple

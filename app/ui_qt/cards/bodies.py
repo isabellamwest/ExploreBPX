@@ -80,6 +80,11 @@ class ModeBody(QWidget):
         one (numbers, expressions, JSON)."""
         return None
 
+    def reference_value_width(self) -> int | None:
+        """See :meth:`~.base.EditorCard.reference_value_width`: the width cap
+        of this body's input, or ``None`` for a full-width body."""
+        return None
+
     def set_cell_issues(self, issues) -> None:
         """Render the validator's per-cell diagnostics, if this body has cells.
 
@@ -123,7 +128,9 @@ class NumberBody(ModeBody):
             if unit_tooltip:
                 self._unit_label.setToolTip(unit_tooltip)
             layout.addWidget(self._unit_label)
-        layout.addStretch(1)
+        # Zero-stretch: see ScalarCard -- deterministic input width, so the
+        # reference row's box can match it exactly.
+        layout.addStretch(0)
 
     def value(self) -> object:
         return parse_value(self._edit.text())
@@ -137,6 +144,9 @@ class NumberBody(ModeBody):
 
     def focus_widget(self) -> QWidget:
         return self._edit
+
+    def reference_value_width(self) -> int | None:
+        return VALUE_INPUT_MAX_WIDTH
 
 
 class ExpressionBody(ModeBody):
@@ -153,10 +163,14 @@ class ExpressionBody(ModeBody):
         self._edit.textChanged.connect(lambda *_: self.changed.emit())
         layout.addWidget(self._edit)
 
-        # Quoted from the package so the hint tracks what bpx actually accepts.
-        hint = QLabel(bpx_gateway.function_syntax_help())
+        # Quoted from the package so the hint tracks what bpx actually
+        # accepts -- only mechanically collapsed onto one muted line (the
+        # multi-line docstring read as a slab of raw text under the input);
+        # the words stay bpx's own.
+        lines = bpx_gateway.function_syntax_help().splitlines()
+        hint = QLabel(" · ".join(line.strip().lstrip("- ") for line in lines if line.strip()))
         hint.setWordWrap(True)
-        hint.setStyleSheet(f"color: {MUTED};")
+        hint.setStyleSheet(f"color: {MUTED}; font-size: 12px;")
         layout.addWidget(hint)
 
     def value(self) -> object:

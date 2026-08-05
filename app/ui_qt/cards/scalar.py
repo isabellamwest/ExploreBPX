@@ -32,8 +32,14 @@ class ScalarCard(EditorCard):
             if not structure.can_rename_parameter(parameter.path, parameter.value):
                 self._unit_label.setToolTip(FIXED_UNIT_TOOLTIP)
             layout.addWidget(self._unit_label)
-        layout.addStretch(1)
+        # Zero-stretch: the input grows to its full cap before the spacer
+        # takes anything, so its width is deterministic and the reference
+        # row's read-only box (same cap) aligns with it exactly.
+        layout.addStretch(0)
         self._install_keyboard_handler(self._edit)
+
+    def reference_value_width(self) -> int | None:
+        return VALUE_INPUT_MAX_WIDTH
 
     def value(self) -> object:
         return parse_value(self._edit.text())

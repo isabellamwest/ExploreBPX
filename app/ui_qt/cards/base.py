@@ -169,6 +169,13 @@ class EditorCard(QWidget):
         card currently shows.
         """
 
+    def reference_value_width(self) -> int | None:
+        """The width cap of this editor's value input, so an aligned
+        read-only reference value can match it exactly -- or ``None`` when
+        the editor takes the full row (grids, expressions, dropdowns) and
+        the reference value should too."""
+        return None
+
     @property
     def is_editable(self) -> bool:
         return True

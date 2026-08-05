@@ -10,15 +10,16 @@ Top to bottom, a ``ParameterCard`` holds:
   2. the parameter's summary description, when present -- always directly
      under the title (and the rename row, when open), in both modes below,
      for consistency: it describes the parameter, not either value,
-  3. a "Main file" heading, then the per-kind value editor (:func:`create_card`),
+  3. the per-kind value editor (:func:`create_card`),
   4. a docked reference's value for this parameter (:meth:`set_reference`),
-     when one exists -- a "Reference file" heading
-     over a purple-framed, read-only value row
-     (:class:`~.reference_block.ReferenceValueBlock`, shared with
-     ``GhostParameterCard``), with a "Copy up" action. The "Main file"
-     heading and the whole reference section are absent entirely with no
-     reference docked -- the card is then exactly today's, description move
-     aside.
+     when one exists -- the aligned-rows layout: a "Main" role label joins
+     the editor's own row and a matching "Reference" label sits beside the
+     flat read-only value row (:class:`~.reference_block.ReferenceValueBlock`,
+     shared with ``GhostParameterCard``), both labels in one fixed-width
+     column so the two values start at the same x, with a quiet "Copy up"
+     action after the reference value. The "Main" label and the whole
+     reference section are absent entirely with no reference docked -- the
+     card is then exactly today's, full width.
 
 ``ParameterCard`` is a pure composition container. It forwards the inner
 editor's ``draft_changed`` / ``draft_reset`` / ``commit_requested`` signals
@@ -65,6 +66,7 @@ from ..icons import DOT, PENCIL, hover_icon, html_img
 from ..latex import symbol_label
 from ..parameter_info_popover import ParameterInfoPopover
 from ..parameter_row import value_preview
+from .. import style
 from ..style import ERROR, MUTED
 from .bodies import table_rows
 from .function import table_is_representable
@@ -78,15 +80,6 @@ from .registry import create_card
 #: enum dropdown, a checkbox, a grid, a mode strip -- carries no separate
 #: unit affordance, so the reference row shows none either.
 _UNIT_LABEL_KINDS = (ParameterKind.SCALAR, ParameterKind.INTEGER)
-
-
-def _layout_item_index(layout, item) -> int:
-    """The index of *item* (a widget or a nested layout) within *layout*."""
-    for i in range(layout.count()):
-        entry = layout.itemAt(i)
-        if entry.widget() is item or entry.layout() is item:
-            return i
-    raise ValueError(f"{item!r} is not a direct child of {layout!r}")
 
 
 class ParameterCard(QWidget):
@@ -203,8 +196,10 @@ class ParameterCard(QWidget):
         body, self._body_layout = page_content()
         layout.addWidget(body)
 
-        # "Main file" heading: built lazily alongside the reference block
-        # below, only while a reference is docked.
+        # "Main" role label: built lazily alongside the reference block
+        # below, only while a reference is docked. It joins the editor's own
+        # row (aligned-rows layout) so the editor and the reference value
+        # share one label column and their values start at the same x.
         self._main_file_heading: QLabel | None = None
 
         self._editor = create_card(parameter, meta)
@@ -215,6 +210,9 @@ class ParameterCard(QWidget):
         self._editor.expand_toggled.connect(self._on_expand_toggled)
         self._editor.bulk_commit_requested.connect(self.bulk_commit_requested)
         self._value_row = QHBoxLayout()
+        # Same spacing as ReferenceValueBlock's label/value gap -- with the
+        # shared fixed label width this is what aligns the two value columns.
+        self._value_row.setSpacing(style.ROLE_ROW_SPACING)
         self._value_row.addWidget(self._editor, 1)
         # Stretch 1: inert while the card sits at its natural height (the
         # Inspector top-aligns it), but a grid takeover clears that alignment
@@ -239,8 +237,8 @@ class ParameterCard(QWidget):
 
         *ref_state* is ``None`` when there is nothing to show (no reference
         docked, comparison hidden, or the reference lacks this key --
-        MAIN_ONLY) -- the "Main file" heading and reference block hide in
-        every such case. Populate-only: this never touches ``self._editor``'s
+        MAIN_ONLY) -- the "Main" label and reference block hide in
+        every such case, returning the editor to the full row width. Populate-only: this never touches ``self._editor``'s
         draft/commit signals (known Qt pitfall), so calling it can never
         trip ``_touched``, whatever order it is called relative to
         construction -- it does, however, always tell the editor whether to
@@ -257,10 +255,13 @@ class ParameterCard(QWidget):
             self._editor.set_reference_table(None)
             return
         if self._reference_block is None:
-            self._main_file_heading = QLabel("Main file")
+            self._main_file_heading = QLabel("Main")
             self._main_file_heading.setObjectName("MainFileHeading")
-            insert_at = _layout_item_index(self._body_layout, self._value_row)
-            self._body_layout.insertWidget(insert_at, self._main_file_heading)
+            # Into the editor's own row, not above it: the fixed label width
+            # (matched by ReferenceValueBlock's "Reference" label) is what
+            # aligns the editor with the reference value below.
+            self._main_file_heading.setFixedWidth(style.ROLE_LABEL_WIDTH)
+            self._value_row.insertWidget(0, self._main_file_heading, 0, Qt.AlignTop)
             self._reference_block = ReferenceValueBlock()
             self._reference_block.copy_up_requested.connect(self.copy_up_requested)
             self._body_layout.addWidget(self._reference_block)
@@ -271,7 +272,13 @@ class ParameterCard(QWidget):
         if not same and table_is_representable(ref_value):
             ref_rows = table_rows(ref_value)
             main_rows = table_rows(self.parameter.value)
-            matches = matching_table_rows(main_rows, ref_rows)
+            if main_rows:
+                matches = matching_table_rows(main_rows, ref_rows)
+            else:
+                # A non-table main (e.g. a function expression) cannot diff
+                # row-by-row -- marking every row purple would read as pure
+                # noise, so the whole grid stays quiet instead.
+                matches = [True] * len(ref_rows)
             self._reference_block.set_table_rows(ref_rows, matches)
             self._editor.set_reference_table(ref_rows)
         else:
@@ -284,15 +291,19 @@ class ParameterCard(QWidget):
                 text, monospace = value_preview(ref_value, kind)[0], False
             unit = self.parameter.unit if kind in _UNIT_LABEL_KINDS else ""
             self._reference_block.set_content(
-                text, unit, same, narrow=kind in _UNIT_LABEL_KINDS, monospace=monospace
+                text,
+                unit,
+                same,
+                width=self._editor.reference_value_width(),
+                monospace=monospace,
             )
             self._editor.set_reference_table(None)
         self._main_file_heading.show()
         self._reference_block.show()
 
     def _on_expand_toggled(self, expanded: bool) -> None:
-        """Hide the description and the whole reference section ("Main
-        file" heading + "Reference file" heading/row) while the grid is
+        """Hide the description and the whole reference section (the "Main"
+        role label + the "Reference" label/value row) while the grid is
         expanded, restore on collapse -- but only the reference section's
         own showing state, so collapsing never reveals it when no reference
         is docked."""

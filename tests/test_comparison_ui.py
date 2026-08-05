@@ -534,8 +534,8 @@ def test_reference_block_shows_differing_value(app_driver, main_and_ref, monkeyp
 
     assert app_driver.reference_block_visible()
     assert app_driver.main_file_heading_visible()
-    assert app_driver.main_file_heading_text() == "Main file"
-    assert app_driver.reference_file_heading_text() == "Reference file"
+    assert app_driver.main_file_heading_text() == "Main"
+    assert app_driver.reference_file_heading_text() == "Reference"
     assert app_driver.reference_value_text() == "6.0"
     assert app_driver.reference_unit_text() == "A.h"
     assert not app_driver.reference_block_is_same()
@@ -554,6 +554,7 @@ def test_reference_block_faint_and_copy_up_disabled_for_equal_value(app_driver, 
     assert app_driver.reference_value_text() == "298.15 · same"
     assert app_driver.reference_block_is_same()
     assert not app_driver.copy_up_enabled()
+    assert not app_driver.copy_up_visible()
 
 
 def test_reference_block_copy_up_enabled_for_fillable_value(app_driver, main_and_ref, monkeypatch):
@@ -639,7 +640,7 @@ def test_ghost_row_selection_shows_ghost_card_with_no_input_widget(app_driver, m
     assert app_driver.ghost_card_heading_text() == "Not in the main file"
     assert "Electrode area" in app_driver.ghost_card_title_text()
     assert not app_driver.ghost_card_has_input_widget()
-    assert app_driver.reference_file_heading_text() == "Reference file"
+    assert app_driver.reference_file_heading_text() == "Reference"
     assert app_driver.reference_value_text() == "1.0"
     assert app_driver.reference_unit_text() == "m2"
     assert app_driver.copy_up_visible()

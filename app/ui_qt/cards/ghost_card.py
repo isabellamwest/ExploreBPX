@@ -2,8 +2,8 @@
 row (multi-file track M2) -- a parameter the docked reference has and the
 main document does not.
 
-No draft, no input widget: just the parameter's name and its "Reference
-file" heading + value row (:class:`~.reference_block.ReferenceValueBlock`,
+No draft, no input widget: just the parameter's name and its "Reference"
+label + value row (:class:`~.reference_block.ReferenceValueBlock`,
 shared with ``ParameterCard``'s own reference section so the two can never
 drift), Copy up always enabled -- there is no main-file value to be "the
 same" as. Mirrors ``ValidationEmptyState``'s "never dirty" contract (a
@@ -20,6 +20,7 @@ from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 from core.parameter_types import ParameterKind, split_name_and_unit
 
 from ..parameter_row import value_preview
+from ..style import VALUE_INPUT_MAX_WIDTH
 from .page import page_content, page_header
 from .reference_block import ReferenceValueBlock
 
@@ -82,9 +83,14 @@ class GhostParameterCard(QWidget):
         text, _ghost = value_preview(ref_value, kind)
         row_unit = unit if kind in _UNIT_LABEL_KINDS else ""
         # same_as_main is always False here: a REF_ONLY row has no main-file
-        # value to be "the same" as, so Copy up is always enabled.
+        # value to be "the same" as, so Copy up is always enabled. With no
+        # main editor to mirror, the capped kinds fall back to the standard
+        # input cap.
         self._reference_block.set_content(
-            text, row_unit, same_as_main=False, narrow=kind in _UNIT_LABEL_KINDS
+            text,
+            row_unit,
+            same_as_main=False,
+            width=VALUE_INPUT_MAX_WIDTH if kind in _UNIT_LABEL_KINDS else None,
         )
 
         layout.addStretch(1)

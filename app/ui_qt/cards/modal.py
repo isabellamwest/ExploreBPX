@@ -191,6 +191,12 @@ class ModalCard(EditorCard):
         """The active body's input widget -- what Enter and Escape act on."""
         return self._body.focus_widget()
 
+    def reference_value_width(self) -> int | None:
+        """Mirror the active body's input width -- a FloatInt mode caps the
+        aligned reference value like a scalar card; a full-width body
+        (expression, grid) leaves it uncapped."""
+        return self._body.reference_value_width()
+
     # --- EditorCard contract --------------------------------------------
     def value(self) -> object:
         return self._body.value()

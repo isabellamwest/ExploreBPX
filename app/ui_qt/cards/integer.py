@@ -59,8 +59,13 @@ class IntegerCard(EditorCard):
             if not structure.can_rename_parameter(parameter.path, parameter.value):
                 self._unit_label.setToolTip(FIXED_UNIT_TOOLTIP)
             layout.addWidget(self._unit_label)
-        layout.addStretch(1)
+        # Zero-stretch: see ScalarCard -- deterministic input width, so the
+        # reference row's box can match it exactly.
+        layout.addStretch(0)
         self._install_keyboard_handler(input_widget)
+
+    def reference_value_width(self) -> int | None:
+        return SPIN_INPUT_MAX_WIDTH if self._spin is not None else VALUE_INPUT_MAX_WIDTH
 
     def value(self) -> object:
         if self._spin is not None:
