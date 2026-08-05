@@ -2,6 +2,8 @@
 
 Approved design 2026-08-04 (Bella). Wireframes and the rejected alternatives:
 (internal design archive)
+Refined wireframes 2026-08-05 (D13-D15, amended D10, D6/D7 deferred):
+(internal design archive)
 
 This plan is speculative in the usual sense: the decisions below are settled,
 the phase boundaries are not sacred. If the code says a decision is wrong, say
@@ -34,21 +36,22 @@ work rather than the size of the schema.
 
 One scrolling column. No rail. Only sections that have something in them
 render. Clean sections collapse into a single foldable line at the bottom. A
-`Group by` control switches the stream between grouping by **Section** (default)
-and grouping by **Type**.
+`Group by Type` mode was part of the original approval but is **deferred**
+(see D6/D7): the stream groups by section only until the Phase 1 walk proves a
+cross-section severity view is wanted.
 
 ```
 +--------------------------------------------------------------------------+
-| (o) 1 error   (o) 3 warnings   ( ) 6 outstanding      Group by [Section|Type] |
+| [x 1 error] [! 3 warnings] [o 6 outstanding]           Collapse all       |
 +--------------------------------------------------------------------------+
 | Document   3 warnings                                        <- band       |
-|   * The 'bpx' field now expects the BPX semantic version ...     Go to >   |
-|   * The maximum voltage computed from the STO limits ...         Go to >   |
+|   * The 'bpx' field now expects the BPX semantic version ...               |
+|   * The maximum voltage computed from the STO limits ...                   |
 +--------------------------------------------------------------------------+
 | State   1 error . 2 of 5 remaining                                         |
-|   * Initial conditions -> Blended electrode State values ...     Go to >   |
+|   * Initial conditions -> Blended electrode State values ...               |
 |   o Initial temperature [K]  REQUIRED                            Go to >   |
-|   ( Initial SoC . added, no value yet                            Go to >   |
+|   ( Initial SoC . No Value                                       Go to >   |
 +--------------------------------------------------------------------------+
 | Separator   section absent                                                 |
 |   o Separator  REQUIRED                                      + Add section |
@@ -56,6 +59,12 @@ and grouping by **Type**.
 | > . 7 sections clear                                                       |
 +--------------------------------------------------------------------------+
 ```
+
+Refinements agreed 2026-08-05 (Bella), folded into the decisions below: chips
+restyled as visible toggles (D13), action text on task rows only (D14), the
+hidden-by-filters line deleted outright (amended D10), a Collapse all /
+Expand all affordance in the strip (D15), Type mode deferred (D6/D7), and the
+NULL_FIELD task suffix shortened to `No Value`.
 
 Scope note: **this is a `ui_qt`-only change.** `core.page_buckets` is the
 derivation point and stays untouched, as does `core.completion`, `state/`, and
@@ -90,7 +99,10 @@ Collapsed: `7 sections clear`. Expanded, one quiet row per clear bucket:
   Rows on the clear line are **not** activatable. Nothing to go to.
 
 **D5 -- Section headers carry words, not badges.** Header = bold bucket label,
-plus a muted suffix built from whichever parts are nonzero, joined with " . ":
+plus a muted suffix built from whichever parts are nonzero, joined with " · "
+(U+00B7 middle dot -- this plan's ASCII art writes a plain period only as a
+stand-in; every rendered separator is the middle dot, matching the approved
+wireframe):
   - issue part: `1 error`, `3 warnings`, `1 error . 2 warnings`
   - outstanding part: the existing `_ratio_words(bucket)` verbatim
     (`2 of 5 remaining` / `section absent` / `N sections absent` / Document's
@@ -99,7 +111,12 @@ plus a muted suffix built from whichever parts are nonzero, joined with " . ":
   the row marks are the one per-item signal. This is what kills problem 1, so do
   not reintroduce badges "for scannability".
 
-**D6 -- Group by: `Section` | `Type`.** Not "Severity": `Severity` is a real
+**D6 -- DEFERRED -- Group by: `Section` | `Type`.** Deferred 2026-08-05: the
+chips already isolate a severity, and Type mode's real addition (cross-section
+reading order) costs a segmented control, breadcrumbs, a second grouping path
+and roughly double the test surface. Build it only if the Phase 1 on-screen
+walk shows the need. The design below stands as written for when that happens.
+Not "Severity": `Severity` is a real
 core enum with exactly ERROR and WARNING in it, and Outstanding rows are
 `CompletionTask`s, not diagnostics, so labelling that axis "Severity" would be
 false in the app's own vocabulary. Group headers in Type mode use the same nouns
@@ -109,7 +126,7 @@ as the chips, so the control is self-explanatory:
     keep `PageBuckets` order (document order). No new sorting logic.
   - Empty groups do not render.
 
-**D7 -- In Type mode every row carries a section breadcrumb.** Section is no
+**D7 -- DEFERRED with D6 -- In Type mode every row carries a section breadcrumb.** Section is no
 longer the header, so it moves onto the row as a muted leading crumb: the bucket
 label plus the existing relative location, e.g. `State -> Initial conditions`.
 Factor one helper both modes use, so the two can never spell a location
@@ -138,42 +155,75 @@ pinned, non-activatable all-clear row above the clear line:
   The clear line still renders below it, expandable as usual. No circled tick or
   cross marks anywhere (standing rule); the existing plain check from
   `style.all_clear` is the whole treatment.
+  Amended 2026-08-05, review finding: when `model == "Partial"` **and** the page
+  is clear, line 1 renders unchanged but line 2 is replaced by the Partial
+  notice -- "complete and valid" is a false claim for a model with no
+  completion target, which is the same reason the Partial notice exists at all.
+  This pins the ordering of the two conditions, which the plan previously left
+  unspecified.
 
 **D10 -- Filters stay chips, and a filtered-empty section renders no header.**
 The three chips remain the only filter surface and keep their toggle semantics,
 `chipOff` QSS property, and truthful unfiltered counts. Build each section's
 visible rows first and emit the header only if at least one row survives; a
 header over nothing is the same "chrome announcing absence" bug we are removing.
-One `N hidden by filters` line at the very bottom of the stream, using the
-existing `_hidden_by_filters_text`. Consequence to accept and state in a test:
-a section whose content is entirely filtered out appears nowhere -- not in the
-stream, and not on the clear line either, because clear is computed unfiltered.
-The hidden line accounts for it.
+**Amended 2026-08-05 (Bella): there is no hidden-by-filters line at all.**
+Filtered-out content is simply absent; the off chip itself (a visible outline
+toggle per D13, still carrying its truthful count) is the one signal that
+something is hidden and the one control that brings it back. Delete
+`_hidden_by_filters_text`. Consequence to accept and state in a test: a
+section whose content is entirely filtered out appears nowhere -- not in the
+stream, and not on the clear line either, because clear is computed
+unfiltered. The reconciliation test accounts for suppressed rows from chip
+state directly, not from any rendered line.
 
 **D11 -- View state.** `_selected_key` is gone. The panel keeps: the fold set,
-the clear-line expanded flag, chip filter state, and the group-by mode.
-`reset_view_state` (called only when a *different* document replaces the
-session) resets folds, the clear-line flag and the chips, as today. It does
-**not** reset group-by: that is a session preference rather than document state,
-the same way a sort order is. Reversible if it feels wrong on the walk.
+the clear-line expanded flag, and chip filter state (group-by mode joins this
+list only if D6 lands; it would persist across documents as a session
+preference, the way a sort order does). `reset_view_state` (called only when a
+*different* document replaces the session) resets folds, the clear-line flag
+and the chips, as today.
 
 **D12 -- Full width, no measure cap.** Removing the rail widens message wrap by
 about 17% over today's pane. Validator messages are one to two lines; a cap
 would need a delegate change shared with the Inspector. Check it on the
 on-screen walk instead of engineering for it now.
 
+**D13 -- Chips are restyled as visible toggles.** The plan's own problem 5
+("chips read as readouts, not filters") is fixed here, not deferred: each chip
+gets a bordered pill treatment with a clear on/off state (filled when on,
+outline + muted when off, reusing the existing `chipOff` QSS property), and a
+chip whose unfiltered count is zero renders disabled -- a zero chip filters
+nothing, so it must not look pressable. Counts stay truthful and unfiltered.
+No behaviour change beyond the disabled state; this is QSS/paint work.
+
+**D14 -- Action text on task rows only.** Issue rows carry no trailing action
+text; activation stays Enter/double-click as today. Task rows keep their
+meaningful verbs (`Go to >`, `+ Add section`, `Choose...`) exactly as the
+current pane renders them. A repeated `Go to >` on every issue row is chrome
+announcing the obvious, the same disease as the badges D5 removes.
+
+**D15 -- Collapse all / Expand all.** One text affordance at the right end of
+the strip toggling every section fold at once, labelled `Collapse all` when
+any section is expanded and `Expand all` otherwise. Hidden when fewer than two
+sections render. This is the cheap answer to "a badly broken file is a long
+scroll" that D8 otherwise leaves to per-header clicking; sticky headers stay
+deferred.
+
 ## 4. Copy (pinned)
 
 | Where | String |
 |---|---|
-| Group by control | `Group by`, options `Section`, `Type` |
-| Type-mode headers | `ERRORS`, `WARNINGS`, `OUTSTANDING` (count in suffix) |
+| Group by control (deferred with D6) | `Group by`, options `Section`, `Type` |
+| Type-mode headers (deferred with D6) | `ERRORS`, `WARNINGS`, `OUTSTANDING` (count in suffix) |
+| Collapse affordance | `Collapse all` / `Expand all` |
 | Clear line, collapsed | `{n} sections clear` (`1 section clear` when n == 1) |
-| Clear row, filled | `{label} . {n} of {n} filled` |
-| Clear row, absent | `{label} . section absent` |
+| Clear row, filled | `{label} · {n} of {n} filled` (middle dot; row is one quiet muted line, no accent colour on the digits, same compact height as other rows) |
+| Clear row, absent | `{label} · section absent` |
 | All clear, line 1 | `✓ No issues, nothing outstanding` (via `style.all_clear`) |
 | All clear, line 2 | `{n} of {n} sections complete and valid` |
-| Hidden line | unchanged: `{n} hidden by filters` |
+| Hidden line | removed 2026-08-05: no hidden-by-filters line renders |
+| NULL_FIELD task suffix | `{name} · No Value` (was "added, no value yet"; the style.py tooltip map is a different surface and keeps its wording) |
 | No document | unchanged: `No document open` |
 
 `_MSG_NO_ISSUES`, `_MSG_NOTHING_OUTSTANDING` and `_MSG_PARTIAL_NO_TARGET` lose
@@ -189,24 +239,26 @@ No em dashes in any UI string.
 
 Run them in order; stop after each for review, and do not commit unless asked.
 
-**Phase 1 -- Stream in Section mode.**
+**Phase 1 -- The stream.**
 Replace both views with `_StreamView`; delete the rail and the group boxes;
-implement D3, D4, D5, D8, D9, D10, plus the Partial notice. Group-by control not
-built yet. Update QSS (drop `#DiagnosticsRail`, `#DiagnosticsGroupBox*`,
+implement D3, D4, D5, D8, D9, D10 (no hidden line), D13 (chip toggles),
+D14 (task-row-only actions), D15 (collapse all), the `No Value` task suffix,
+plus the Partial notice.
+Update QSS (drop `#DiagnosticsRail`, `#DiagnosticsGroupBox*`,
 `#DiagnosticsPaneHeader`, `#DiagnosticsSectionScroll`; rename
 `#DiagnosticsAllSectionsList` to `#DiagnosticsStreamList`). Update `AppDriver`
 and the tests per section 6. `python -m pytest` green before handing back.
 
-**Phase 2 -- Group by Type.**
-Add the segmented control to the strip (D6), the Type-mode grouping, and the
-shared `_row_location` breadcrumb (D7). Reconciliation test runs in both modes.
+**Phase 2 -- Prove it.**
+Headless `AppDriver` coverage for every non-deferred state in section 7, then
+drive the real app (`/run`) and screenshot: a mostly clean file, a file with
+errors and outstanding work, a fully clean file, a Partial file, chips
+toggled, collapse-all. Compare against the wireframe and report divergences
+honestly rather than declaring a match.
 
-**Phase 3 -- Prove it.**
-Headless `AppDriver` coverage for every state in section 7, then drive the real
-app (`/run`) and screenshot: a mostly clean file, a file with errors and
-outstanding work, a fully clean file, a Partial file, both group modes, chips
-toggled. Compare against the wireframe and report divergences honestly rather
-than declaring a match.
+**Deferred phase -- Group by Type (D6/D7).**
+Only if the walk shows the need: segmented control, Type-mode grouping, shared
+`_row_location` breadcrumb, reconciliation test in both modes.
 
 ## 6. Test surface
 
@@ -227,8 +279,8 @@ Files that touch this panel today (rewrite, do not delete coverage):
 **Driver seams to add:**
 
 ```python
-diagnostics_group_mode() -> str                 # "section" | "type"
-diagnostics_set_group_mode(mode) -> AppDriver
+diagnostics_group_mode() -> str                 # DEFERRED with D6
+diagnostics_set_group_mode(mode) -> AppDriver   # DEFERRED with D6
 diagnostics_stream_headers() -> list[str]       # header text incl. suffix, in order
 diagnostics_stream_issue_texts() -> list[str]
 diagnostics_stream_task_texts() -> list[str]
@@ -237,8 +289,10 @@ diagnostics_clear_line_text() -> str | None
 diagnostics_toggle_clear_line() -> AppDriver
 diagnostics_clear_section_texts() -> list[str]  # expanded rows
 diagnostics_all_clear_text() -> str | None
-diagnostics_hidden_line_text() -> str | None    # replaces both old accessors
 diagnostics_fold_section(label) -> AppDriver
+diagnostics_chip_is_enabled(kind) -> bool       # D13 zero-count disabled state
+diagnostics_collapse_all_text() -> str | None   # D15 label, None when hidden
+diagnostics_toggle_collapse_all() -> AppDriver
 ```
 
 Keep unchanged: `diagnostics_strip_counts`, `diagnostics_bucket`,
@@ -248,8 +302,10 @@ emitters.
 **The one test that must survive intact in spirit** is the reconciliation test.
 Restate it over the stream, in both group modes: every diagnostic and every task
 in `PageBuckets` is accounted for exactly once by
-`rendered rows + hidden-by-filters count + clear-section rows`, and nothing
-renders that `PageBuckets` does not contain. This is what makes D2 safe.
+`rendered rows + rows suppressed by chip state + clear-section rows`, where
+the suppressed count is computed by the test from the chip filter state (no
+hidden line renders), and nothing renders that `PageBuckets` does not contain.
+This is what makes D2 safe.
 
 ## 7. States to cover
 
@@ -261,15 +317,20 @@ renders that `PageBuckets` does not contain. This is what makes D2 safe.
 | Absent required section | header `Separator . section absent`, row action `+ Add section` |
 | Absent optional section, nothing outstanding | on the clear line, italic, `section absent` |
 | Model is Partial, nothing outstanding | Partial notice row, no ratio anywhere |
+| Model is Partial, page fully clear | all-clear line 1 + Partial notice as line 2; never "complete and valid" |
+| Fold every section individually | strip label reads `Expand all`, and clicking it expands (label never stale after per-header folds) |
 | Model is Partial with NULL_FIELD tasks | tasks render normally, notice absent |
 | DECLARE_MODEL only | header shows no ratio (`_is_declare_model_only`) |
 | Optional tasks present | `OPTIONAL . K UNFILLED` subhead inside the section |
-| Chip toggled off, section emptied | no header for that section, hidden line counts it |
-| All chips off | no sections, hidden line only, clear line still true |
+| Chip toggled off, section emptied | no header for that section, no trace in the stream; reconciliation accounts for it from chip state |
+| All chips off | no sections render, clear line still true |
+| Zero-count chip | renders disabled, click does nothing (D13) |
+| Two or more sections render | `Collapse all` visible; toggling folds/unfolds every section (D15) |
+| One section renders | no collapse affordance |
 | Fold a section, then refresh (commit/undo) | fold survives |
-| Open a different document | folds, clear line, chips reset; group mode persists |
-| Type mode | three group headers max, breadcrumbs on every row |
-| Type mode with zero errors | no ERRORS header |
+| Open a different document | folds, clear line, chips reset |
+| Type mode (deferred with D6) | three group headers max, breadcrumbs on every row |
+| Type mode with zero errors (deferred with D6) | no ERRORS header |
 
 ## 8. Explicitly out of scope
 

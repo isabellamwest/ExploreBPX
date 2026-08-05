@@ -1,5 +1,5 @@
-"""Diagnostics page Outstanding section: absorption, the rail badge, and
-Outstanding row activation dispatch.
+"""Diagnostics page Outstanding section: absorption, the activity-bar badge,
+and Outstanding row activation dispatch.
 
 Walks four document states end to end through the real MainWindow (state 1:
 fresh skeleton; state 2: a working document with one visible error plus
@@ -75,13 +75,13 @@ def test_state1_fresh_skeleton(app_driver, tmp_path):
     assert d.validation_badge_count() == 0
     assert d.validation_badge_severity() is None
 
-    headers = d.validation_group_headers()
-    assert "Cell · 5 of 5 remaining" in headers
-    assert "Negative electrode · 9 of 9 remaining" in headers
-    assert "Positive electrode · 9 of 9 remaining" in headers
+    headers = d.diagnostics_stream_headers()
+    assert "Cell  5 of 5 remaining" in headers
+    assert "Negative electrode  9 of 9 remaining" in headers
+    assert "Positive electrode  9 of 9 remaining" in headers
     # bpx 1.1.1 made `State` schema-optional (Field(None, alias="State")) and
     # deleted the root validator that used to demand it, so `document_factory`
-    # no longer scaffolds it at all -- there is no State group here.
+    # no longer scaffolds it at all -- there is no State header here.
     assert not any(header.startswith("State") for header in headers)
     assert d.validation_outstanding_count() == 5 + 9 + 9
     tasks = d.outstanding_tasks()
@@ -111,8 +111,8 @@ def test_state2_working_document(app_driver, tmp_path, valid_spm_dict):
         t.kind is TaskKind.MISSING_FIELD and t.path == _CAPACITY for t in tasks
     )
     assert any(t.kind is TaskKind.NULL_FIELD and t.path == _LOWER_CUTOFF for t in tasks)
-    headers = d.validation_group_headers()
-    assert "Cell · 2 of 5 remaining" in headers
+    headers = d.diagnostics_stream_headers()
+    assert "Cell  2 of 5 remaining" in headers
 
     # Tree-dot consistency: Cell's missing/null fields are outstanding, so
     # Cell stays calm in the tree as in the badge. The one
@@ -150,11 +150,14 @@ def test_state3_partial_sparse_electrode(app_driver, tmp_path):
     assert d.validation_badge_severity() == "error"
     assert d.outstanding_tasks() == []
 
-    # The Partial notice is section-scoped now (a bucket alone can't tell
+    # The Partial notice is page-scoped now (a bucket alone can't tell
     # "Partial" from "fully complete" -- see diagnostics_panel._MSG_PARTIAL_
-    # NO_TARGET); select the sparse electrode itself and read its box.
-    d.diagnostics_select_rail("Negative electrode")
-    notice = d.diagnostics_section_outstanding_empty_text()
+    # NO_TARGET): one pinned row, rendered once, whenever nothing is
+    # outstanding anywhere on the page under Partial.
+    assert d._w._diagnostics._buckets.outstanding_count == 0
+    messages = d._validation_rows("message")
+    assert len(messages) == 1
+    notice = messages[0].text()
     assert notice == (
         "Model is Partial, so there is no completion target. Expected "
         "fields are still suggested in each section's parameter list."
@@ -169,8 +172,10 @@ def test_state3b_partial_null_is_outstanding_not_error(app_driver, tmp_path, val
     the same calm treatment a concrete model gives it. The motivating
     scenario: a complete document flipped to Partial with one field emptied
     used to go red everywhere (row dot, tree dot, badge) while the identical
-    SPM document stayed calm. The Partial notice remains only in a section
-    with no task rows to show."""
+    SPM document stayed calm. The Partial notice is page-scoped and only
+    renders when NOTHING is outstanding anywhere -- since this document
+    does have one NULL_FIELD task, the notice is absent entirely (a real
+    task row is a strictly more useful answer than the generic notice)."""
     raw = json.loads(json.dumps(valid_spm_dict))
     raw["Header"]["Model"] = "Partial"
     raw["Parameterisation"]["Cell"]["Nominal cell capacity [A.h]"] = None
@@ -185,17 +190,13 @@ def test_state3b_partial_null_is_outstanding_not_error(app_driver, tmp_path, val
     assert [t.kind for t in tasks] == [TaskKind.NULL_FIELD]
     assert tasks[0].path == _CAPACITY
     assert tasks[0].required is False  # nothing is Required under Partial
-    assert "Cell · optional · 1 unfilled" in d.validation_group_headers()
+    assert d.diagnostics_stream_subhead_texts() == ["OPTIONAL . 1 UNFILLED"]
     assert d.tree_error_marked_sections() == []  # calm tree too
 
-    d.diagnostics_select_rail("Cell")
-    assert d.diagnostics_section_outstanding_title() == "Outstanding"  # no ratio
-    assert d.diagnostics_section_outstanding_empty_text() is None
-    assert "capacity" in " ".join(d.diagnostics_section_task_texts()).lower()
-
-    d.diagnostics_select_rail("Header")
-    notice = d.diagnostics_section_outstanding_empty_text()
-    assert notice is not None and notice.startswith("Model is Partial")
+    cell_header = next(h for h in d.diagnostics_stream_headers() if h.startswith("Cell"))
+    assert "of" not in cell_header and "remaining" not in cell_header  # no ratio -- optional-only
+    assert "capacity" in " ".join(d.diagnostics_stream_task_texts()).lower()
+    assert d._validation_rows("message") == []  # the page-wide Partial notice does not render
 
 
 # ---------------------------------------------------------------------------
@@ -205,13 +206,18 @@ def test_state3b_partial_null_is_outstanding_not_error(app_driver, tmp_path, val
 
 
 def test_state4_done(app_driver, valid_spm_path):
+    from ui_qt import style
+
     d = app_driver
     d.open(valid_spm_path)
 
     assert d.diagnostics_strip_counts() == (0, 0, 0)
-    d.diagnostics_select_rail("Header")
-    assert d.diagnostics_section_issues_empty_text() == "✓ No issues"
-    assert d.diagnostics_section_outstanding_empty_text() == "✓ Nothing outstanding"
+    assert d.diagnostics_stream_headers() == []
+    total = len(d._w._diagnostics._buckets.buckets)
+    assert d.diagnostics_all_clear_text() == (
+        style.all_clear("No issues, nothing outstanding")
+        + f"\n{total} of {total} sections complete and valid"
+    )
     assert d.validation_badge_count() == 0
     assert d.validation_badge_severity() is None
 
@@ -407,10 +413,10 @@ def test_optional_null_field_gets_its_own_subgroup(app_driver, tmp_path):
     d = app_driver
     d.open(_write(tmp_path, "optional_null_cell.json", raw))
 
-    headers = d.validation_group_headers()
-    assert "Cell · 5 of 5 remaining" in headers
-    assert "Cell · optional · 1 unfilled" in headers
-    assert d.validation_task_row_count_under_header("Cell · 5 of 5 remaining") == 5
+    headers = d.diagnostics_stream_headers()
+    assert "Cell  5 of 5 remaining" in headers
+    assert d.diagnostics_stream_subhead_texts() == ["OPTIONAL . 1 UNFILLED"]
+    assert d.validation_task_row_count_under_header("Cell  5 of 5 remaining") == 5
 
     optional_task = next(
         t for t in d.outstanding_tasks() if t.path == _CELL + ("Volume [m3]",)
@@ -418,7 +424,7 @@ def test_optional_null_field_gets_its_own_subgroup(app_driver, tmp_path):
     assert optional_task.required is False
     row_text = d.outstanding_task_row_text(optional_task)
     assert "REQUIRED" not in row_text
-    assert "added, no value yet" in row_text
+    assert "No Value" in row_text
 
 
 def test_required_group_ratio_integrity_with_mixed_required_and_optional_tasks(
@@ -433,27 +439,32 @@ def test_required_group_ratio_integrity_with_mixed_required_and_optional_tasks(
     d = app_driver
     d.open(_write(tmp_path, "ratio_integrity.json", raw))
 
-    assert d.validation_task_row_count_under_header("Cell · 5 of 5 remaining") == 5
+    assert d.validation_task_row_count_under_header("Cell  5 of 5 remaining") == 5
 
 
-def test_section_with_only_optional_nulls_shows_no_required_header(
+def test_section_with_only_optional_nulls_shows_a_bare_header(
     app_driver, tmp_path, valid_spm_dict
 ):
+    """A section whose only outstanding work is optional gets no ratio at
+    all in its header (a bare label) -- ``required_tasks`` is empty, so
+    there is no REQUIRED count to report; showing "0 of N remaining" would
+    falsely imply N fields are missing when none are (see
+    diagnostics_panel._section_header_suffix's own docstring)."""
     raw = json.loads(json.dumps(valid_spm_dict))
     raw["Header"]["Description"] = None
     d = app_driver
     d.open(_write(tmp_path, "only_optional_header.json", raw))
 
-    headers = d.validation_group_headers()
-    assert "Header · optional · 1 unfilled" in headers
-    assert not any(h.startswith("Header -") for h in headers)
+    headers = d.diagnostics_stream_headers()
+    assert "Header" in headers  # bare label, no suffix
+    assert not any(h.startswith("Header ") for h in headers)  # no trailing ratio words
+    assert d.diagnostics_stream_subhead_texts() == ["OPTIONAL . 1 UNFILLED"]
 
 
 def test_fold_headers_are_non_activatable(app_driver, tmp_path):
-    """The rail replaced the page-level "Issues"/"Outstanding" headers with
-    one foldable header per bucket in the All-sections view; the same
-    non-activatable contract applies to it -- a single click folds/unfolds
-    (covered elsewhere), Enter/double-click is a structural no-op."""
+    """One foldable header per rendered bucket in the stream; a single
+    click folds/unfolds (covered elsewhere), Enter/double-click is a
+    structural no-op."""
     d = app_driver
     d.open(_skeleton_path(tmp_path))
     assert d.all_sections_fold_headers()  # premise: at least one bucket renders
@@ -468,9 +479,11 @@ def test_fold_headers_are_non_activatable(app_driver, tmp_path):
 
 
 def test_group_subheaders_are_non_activatable(app_driver, tmp_path):
+    raw = document_factory.create("SPM", title="probe")
+    raw["Parameterisation"]["Cell"]["Volume [m3]"] = None
     d = app_driver
-    d.open(_skeleton_path(tmp_path))
-    assert d.validation_group_headers()  # premise: at least one group exists
+    d.open(_write(tmp_path, "subhead_premise.json", raw))
+    assert d.diagnostics_stream_subhead_texts()  # premise: at least one sub-head exists
 
     received = []
     d._w._diagnostics.issue_activated.connect(received.append)

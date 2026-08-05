@@ -1,12 +1,19 @@
 """Diagnostics page filters.
 
-Filters are VIEW-ONLY: rail badges, strip counts, the app badge and
-reconciliation checks always read the same unfiltered ``PageBuckets`` this
-module always has -- filtering only decides which rows the view builders
-(``_SectionDetailView``/``_AllSectionsView``) actually add to their lists.
-Every test here either proves a row disappears/reappears from a VIEW while
-the TRUTH layer (buckets/badges/counts) stays untouched, or proves the pure
-filter predicates (``_issue_visible``/``_task_visible``) directly.
+Filters are VIEW-ONLY: strip counts, the app badge and the reconciliation
+test always read the same unfiltered ``PageBuckets`` this module always
+has -- filtering only decides which rows ``_StreamView``/``_add_section``
+actually add to the list. Every test here either proves a row disappears/
+reappears from the stream while the TRUTH layer (buckets/counts) stays
+untouched, or proves the pure filter predicates (``_issue_visible``/
+``_task_visible``) directly.
+
+Amended D10 (2026-08-05): there is no "N hidden by filters" line any more.
+A section whose content is entirely filtered out renders nowhere at all --
+not in the stream, not on the clear line either (clear is computed
+unfiltered). The reconciliation test at the bottom of this file restates
+that invariant directly from bucket data + chip state, per PLAN-diagnostics-
+stream.md section 6.
 
 The text-filter field was removed (per-section buckets are small and the
 toolbar search already finds anything by name); the three count chips are
@@ -74,22 +81,21 @@ def test_task_visible_respects_the_outstanding_chip():
 
 
 # ---------------------------------------------------------------------------
-# Chip filtering, end to end -- hides exactly the right category, in both
-# the single-section pane and the All-sections view, leaving truth alone.
+# Chip filtering, end to end -- hides exactly the right category from the
+# stream, leaving truth alone.
 # ---------------------------------------------------------------------------
 
 
-def test_error_chip_off_hides_error_rows_but_not_counts_or_badges(app_driver, two_cell_errors_path):
+def test_error_chip_off_hides_error_rows_but_not_counts(app_driver, two_cell_errors_path):
     d = app_driver
     d.open(two_cell_errors_path)
-    d.diagnostics_select_rail("Cell")
-    assert len(d.diagnostics_section_issue_texts()) == 2
+    assert len(d.diagnostics_stream_issue_texts()) == 2
     assert d.diagnostics_chip_is_on("errors") is True
 
     d.diagnostics_toggle_chip("errors")
 
     assert d.diagnostics_chip_is_on("errors") is False
-    assert d.diagnostics_section_issue_texts() == []
+    assert d.diagnostics_stream_issue_texts() == []
     assert d.validation_issue_texts() == []
     assert d.diagnostics_bucket("Cell").error_count == 2
     assert d.diagnostics_strip_counts()[0] == 2
@@ -103,30 +109,37 @@ def test_outstanding_chip_off_hides_required_and_optional_task_rows(app_driver, 
     raw["Parameterisation"]["Cell"]["Volume [m3]"] = None
     d = app_driver
     d.open(_write(tmp_path, "cell_with_optional.json", raw))
-    d.diagnostics_select_rail("Cell")
-    assert len(d.diagnostics_section_task_texts()) == 6  # 5 required + 1 optional, both "task" rows
-    assert len(d.diagnostics_section_optional_subhead_texts()) == 1
+    assert len(d.diagnostics_stream_task_texts()) == 24  # 5+9+9 required + 1 optional, both "task" rows
+    assert d.diagnostics_stream_subhead_texts() == ["OPTIONAL . 1 UNFILLED"]
 
     d.diagnostics_toggle_chip("outstanding")
 
-    assert d.diagnostics_section_task_texts() == []
-    assert d.diagnostics_section_optional_subhead_texts() == []
+    assert d.diagnostics_stream_task_texts() == []
+    assert d.diagnostics_stream_subhead_texts() == []
+    # A filtered-empty section leaves no trace at all (amended D10): Cell/
+    # Negative electrode/Positive electrode are entirely task-only, so all
+    # three headers disappear too, leaving only clean Header on the clear line.
+    assert d.diagnostics_stream_headers() == []
+    assert d.diagnostics_clear_line_text() == "1 section clear"
     bucket = d.diagnostics_bucket("Cell")
     assert bucket.outstanding_count == 6
 
 
-def test_chip_toggle_never_changes_the_rail_badge_or_strip(app_driver, two_cell_errors_path):
+def test_chip_toggle_never_changes_the_strip_or_the_bucket_data(app_driver, two_cell_errors_path):
     d = app_driver
     d.open(two_cell_errors_path)
     before = d.diagnostics_strip_counts()
-    rail_before = {label: d.diagnostics_bucket(label) for label in d.diagnostics_rail_labels()[1:]}
+    buckets_before = {
+        label: d.diagnostics_bucket(label)
+        for label in ("Header", "Cell", "Negative electrode", "Positive electrode", "State")
+    }
 
     d.diagnostics_toggle_chip("errors")
     d.diagnostics_toggle_chip("warnings")
     d.diagnostics_toggle_chip("outstanding")
 
     assert d.diagnostics_strip_counts() == before
-    for label, bucket_before in rail_before.items():
+    for label, bucket_before in buckets_before.items():
         bucket_after = d.diagnostics_bucket(label)
         assert (bucket_after.error_count, bucket_after.warning_count, bucket_after.outstanding_count) == (
             bucket_before.error_count,
@@ -136,67 +149,90 @@ def test_chip_toggle_never_changes_the_rail_badge_or_strip(app_driver, two_cell_
 
 
 # ---------------------------------------------------------------------------
-# "N hidden by filters" -- present with the right N, absent when nothing is
-# hidden, and never mistakable for (or co-rendered with) a pinned check
-# state.
+# D13: a chip whose unfiltered count is zero renders disabled -- it filters
+# nothing, so it must not look pressable, and a click on it must be a
+# structural no-op.
 # ---------------------------------------------------------------------------
 
 
-def test_hidden_line_absent_by_default_and_present_after_a_toggle(app_driver, two_cell_errors_path):
+def test_zero_count_chip_is_disabled_and_a_click_does_nothing(app_driver, many_issues_path):
     d = app_driver
-    d.open(two_cell_errors_path)
-    d.diagnostics_select_rail("Cell")
-    assert d.diagnostics_section_hidden_line_text() is None
-
-    d.diagnostics_toggle_chip("errors")
-    assert d.diagnostics_section_hidden_line_text() == "2 hidden by filters"
-
-    d.diagnostics_toggle_chip("errors")
-    assert d.diagnostics_section_hidden_line_text() is None
-
-
-def test_pinned_empty_state_never_co_renders_with_the_hidden_line(app_driver):
-    d = app_driver
-    d._w._new("SPM")
-    d.diagnostics_select_rail("Cell")
-    assert d.diagnostics_section_issues_empty_text() == "✓ No issues"
-    assert d.diagnostics_section_outstanding_empty_text() is None
+    d.open(many_issues_path)  # errors only -- zero outstanding
+    assert d.diagnostics_strip_counts()[2] == 0
+    assert d.diagnostics_chip_is_enabled("outstanding") is False
+    assert d.diagnostics_chip_is_enabled("errors") is True
 
     d.diagnostics_toggle_chip("outstanding")
 
-    assert d.diagnostics_section_issues_empty_text() == "✓ No issues"
-    assert d.diagnostics_section_outstanding_empty_text() is None
-    assert d.diagnostics_section_hidden_line_text() == "5 hidden by filters"
+    assert d.diagnostics_chip_is_on("outstanding") is True  # click did nothing
 
 
-def test_all_sections_hidden_line_reflects_document_wide_count(app_driver, two_cell_errors_path):
+@pytest.fixture
+def many_issues_path(tmp_path, valid_spm_dict):
+    """Errors spread across three sections, zero outstanding work -- shared
+    with the zero-count-chip and all-chips-off tests below."""
+    raw = json.loads(json.dumps(valid_spm_dict))
+    raw["Parameterisation"]["Cell"]["Nominal cell capacity [A.h]"] = "banana"
+    raw["Parameterisation"]["Cell"]["Lower voltage cut-off [V]"] = "low"
+    raw["Parameterisation"]["Negative electrode"]["Thickness [m]"] = "thin"
+    raw["Parameterisation"]["Positive electrode"]["Diffusivity [m2.s-1]"] = "fast"
+    return _write(tmp_path, "many_issues.json", raw)
+
+
+# ---------------------------------------------------------------------------
+# All chips off: no sections render at all, but the clear line stays true
+# (clean buckets never depended on the filter in the first place).
+# ---------------------------------------------------------------------------
+
+
+def test_all_chips_off_no_sections_render_but_the_clear_line_still_holds(app_driver, many_issues_path):
     d = app_driver
-    d.open(two_cell_errors_path)
-    assert d.diagnostics_all_sections_hidden_line_text() is None
+    d.open(many_issues_path)
 
     d.diagnostics_toggle_chip("errors")
+    d.diagnostics_toggle_chip("warnings")
 
-    assert d.diagnostics_all_sections_hidden_line_text() == "2 hidden by filters"
+    assert d.diagnostics_stream_headers() == []
+    assert d.diagnostics_clear_line_text() == "2 sections clear"  # Header, State -- unaffected by filters
 
 
 # ---------------------------------------------------------------------------
-# Fold state composes independently of filters: a fold-hidden row is
-# never counted in "N hidden by filters".
+# Amended D10: a section entirely filtered out (every one of its rows
+# suppressed) renders no trace at all -- no header, no hidden-count line
+# (there is no such line any more), not on the clear line either.
 # ---------------------------------------------------------------------------
 
 
-def test_fold_hidden_rows_are_excluded_from_the_hidden_count(app_driver):
+def test_filtered_empty_section_renders_no_header_at_all(app_driver, two_cell_errors_path):
+    d = app_driver
+    d.open(two_cell_errors_path)
+    assert "Cell" in " ".join(d.diagnostics_stream_headers())
+
+    d.diagnostics_toggle_chip("errors")
+    assert "Cell" not in " ".join(d.diagnostics_stream_headers())
+    assert "Cell" not in " ".join(d.diagnostics_clear_section_texts())  # not on the clear line either
+
+    d.diagnostics_toggle_chip("errors")
+    assert "Cell" in " ".join(d.diagnostics_stream_headers())
+
+
+# ---------------------------------------------------------------------------
+# Fold state composes independently of filters: a fold-collapsed section's
+# rows stay collapsed regardless of what a chip does -- covered end to end
+# by the reconciliation test at the bottom of this file.
+# ---------------------------------------------------------------------------
+
+
+def test_folded_section_rows_do_not_reappear_because_a_chip_was_toggled(app_driver):
     d = app_driver
     d._w._new("SPM")
+    d.diagnostics_fold_section("Cell")
+    task_texts_before = d.diagnostics_stream_task_texts()
+
     d.diagnostics_toggle_chip("outstanding")
-    # bpx 1.1.1: `State` is schema-optional and no longer scaffolded by a new
-    # document (see core.document_factory), so its two former task rows are
-    # gone -- 23, not 25.
-    assert d.diagnostics_all_sections_hidden_line_text() == "23 hidden by filters"
+    d.diagnostics_toggle_chip("outstanding")
 
-    d.toggle_all_sections_fold("Cell")
-
-    assert d.diagnostics_all_sections_hidden_line_text() == "18 hidden by filters"
+    assert d.diagnostics_stream_task_texts() == task_texts_before  # still folded, not re-shown
 
 
 # ---------------------------------------------------------------------------
@@ -277,6 +313,64 @@ def test_all_chips_off_buckets_and_badges_still_reconcile(app_driver, two_cell_e
     assert d.diagnostics_strip_counts() == (errors, warnings, outstanding)
     assert d.validation_badge_count() == app_badge
     assert d.validation_badge_severity() == app_severity
+
+
+# ---------------------------------------------------------------------------
+# The reconciliation test (D2's safety net, restated for the stream --
+# PLAN-diagnostics-stream.md section 6): every diagnostic and every task in
+# PageBuckets is accounted for exactly once by rendered rows + rows
+# suppressed by chip state + clear-section rows (always zero -- a clear
+# bucket has nothing to suppress by definition). No hidden line renders any
+# more (amended D10), so the suppressed count is computed here directly
+# from the bucket data and the chip state -- never read back from a UI
+# line -- and nothing must render that ``PageBuckets`` does not contain.
+# ---------------------------------------------------------------------------
+
+
+def _reconcile(d, filters):
+    from ui_qt.diagnostics_panel import _issue_visible, _task_visible
+
+    buckets = d._w._diagnostics._buckets
+    total_issues = sum(len(b.issues) for b in buckets.buckets)
+    total_tasks = sum(len(b.required_tasks) + len(b.optional_tasks) for b in buckets.buckets)
+    suppressed_issues = sum(
+        1 for b in buckets.buckets for diagnostic, _nav_path in b.issues if not _issue_visible(diagnostic, filters)
+    )
+    suppressed_tasks = sum(
+        1
+        for b in buckets.buckets
+        for task in (*b.required_tasks, *b.optional_tasks)
+        if not _task_visible(task, filters)
+    )
+    rendered_issues = len(d.diagnostics_stream_issue_texts())
+    rendered_tasks = len(d.diagnostics_stream_task_texts())
+
+    assert rendered_issues + suppressed_issues == total_issues
+    assert rendered_tasks + suppressed_tasks == total_tasks
+    # Nothing renders that PageBuckets does not contain: every rendered
+    # section header names a real, non-clear bucket.
+    bucket_labels = {b.label for b in buckets.buckets}
+    for header in d.diagnostics_stream_headers():
+        assert any(header.startswith(label) for label in bucket_labels)
+
+
+def test_reconciliation_holds_with_one_chip_off(app_driver, many_issues_path):
+    d = app_driver
+    d.open(many_issues_path)
+    d.diagnostics_toggle_chip("errors")
+
+    _reconcile(d, d._w._diagnostics._strip.filter_state())
+
+
+def test_reconciliation_holds_with_every_chip_off(app_driver, many_issues_path):
+    d = app_driver
+    d.open(many_issues_path)
+    d.diagnostics_toggle_chip("errors")
+    d.diagnostics_toggle_chip("warnings")
+    d.diagnostics_toggle_chip("outstanding")
+
+    assert d.diagnostics_stream_headers() == []  # everything suppressed
+    _reconcile(d, d._w._diagnostics._strip.filter_state())
 
 
 def test_chip_toggles_on_left_click_only(qtbot):

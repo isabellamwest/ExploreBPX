@@ -41,6 +41,13 @@ def _find_tree_node(root, path: tuple[str, ...]):
     return node
 
 
+def _strip_chevron(text: str) -> str:
+    """Drop a Diagnostics stream fold/clear-line row's leading "▸ "/"▾ "
+    (the delegate paints straight from the same plain-text item) so
+    assertions on header/clear-line content read clean without it."""
+    return text[2:] if text[:1] in ("▸", "▾") else text
+
+
 class AppDriver:
     """Drives a live :class:`MainWindow` the way a user would."""
 
@@ -111,20 +118,19 @@ class AppDriver:
         self._qtbot.mouseClick(header, Qt.LeftButton)
         return self
 
-    # -- Diagnostics page: strip + rail + detail pane ----------------------
+    # -- Diagnostics page: strip + one scrolling stream ---------------------
     #
-    # The default surface for driver reads that don't care which rail entry
-    # is selected is the "All sections" view (``_all_view``) -- it is both
-    # the default selection on a freshly opened document (matching most
-    # existing call sites, which never touch the rail first) and the
-    # backup view that always contains every issue/task row, so scanning it
-    # preserves single-list driver semantics almost exactly.
-    # ``_validation_rows``/``validation_issue_texts``/``outstanding_tasks``/
-    # etc. below all read it. Rail- and section-pane-specific behaviour gets
-    # its own ``diagnostics_*``-prefixed methods further down.
+    # The default surface for driver reads is the stream (``_stream``) --
+    # the page's only renderer now (the old rail + single-section/"All
+    # sections" pair is gone, PLAN-diagnostics-stream.md). It always
+    # contains every issue/task row that survives the current chip filter,
+    # so ``_validation_rows``/``validation_issue_texts``/``outstanding_
+    # tasks``/etc. below all read it directly. Stream-specific state (fold
+    # headers, the clear line, the all-clear row, collapse-all) gets its
+    # own ``diagnostics_*``-prefixed methods further down.
 
     def activate_first_validation_issue(self) -> "AppDriver":
-        """Activate the first issue row in the All-sections view.
+        """Activate the first issue row in the stream.
 
         Emits ``itemActivated`` -- the signal the panel actually connects
         (fired by a real double-click or Enter/Return) -- rather than
@@ -133,38 +139,38 @@ class AppDriver:
         """
         items = self._validation_rows("issue")
         assert items, "No issue row in the Diagnostics list."
-        self._w._diagnostics._all_view._list.itemActivated.emit(items[0])
+        self._w._diagnostics._stream._list.itemActivated.emit(items[0])
         return self
 
     def activate_validation_row(self, item) -> "AppDriver":
         """Emit ``itemActivated`` for one already-located ``QListWidgetItem``
-        from the All-sections view (e.g. from :meth:`_validation_rows`) --
-        the low-level primitive :meth:`activate_first_validation_issue`/
+        from the stream (e.g. from :meth:`_validation_rows`) -- the
+        low-level primitive :meth:`activate_first_validation_issue`/
         :meth:`activate_outstanding_task` build on."""
-        self._w._diagnostics._all_view._list.itemActivated.emit(item)
+        self._w._diagnostics._stream._list.itemActivated.emit(item)
         return self
 
     def activate_outstanding_task(self, task) -> "AppDriver":
         """Activate the Outstanding row for *task* (a ``CompletionTask``, as
-        returned by :meth:`outstanding_tasks`) in the All-sections view."""
+        returned by :meth:`outstanding_tasks`) in the stream."""
         from ui_qt import diagnostics_panel as dp
 
         for item in self._validation_rows("task"):
             if item.data(dp._TASK_ROLE) == task:
-                self._w._diagnostics._all_view._list.itemActivated.emit(item)
+                self._w._diagnostics._stream._list.itemActivated.emit(item)
                 return self
         raise AssertionError(f"No Outstanding row for {task!r}")
 
     def outstanding_tasks(self) -> list:
-        """Every ``CompletionTask`` currently rendered as an Outstanding row
-        in the All-sections view, in on-screen order."""
+        """Every ``CompletionTask`` currently rendered as a task row in the
+        stream, in on-screen order."""
         from ui_qt import diagnostics_panel as dp
 
         return [item.data(dp._TASK_ROLE) for item in self._validation_rows("task")]
 
     def outstanding_task_row_text(self, task) -> str:
-        """Plain text of the Outstanding row for *task* -- includes any
-        absorbed validator messages appended as secondary text."""
+        """Plain text of the task row for *task* -- includes any absorbed
+        validator messages appended as secondary text."""
         from ui_qt import diagnostics_panel as dp
 
         for item in self._validation_rows("task"):
@@ -173,23 +179,28 @@ class AppDriver:
         raise AssertionError(f"No Outstanding row for {task!r}")
 
     def validation_group_headers(self) -> list[str]:
-        """Text of every All-sections sub-head row, in order (e.g.
-        "Cell · 2 of 5 remaining", "Separator - section absent",
-        "Cell · optional · 1 unfilled")."""
+        """Text of every stream sub-head row, in order -- today only ever
+        "OPTIONAL . K UNFILLED" (the required group's own former ratio
+        sub-head is gone: that ratio now lives in the section's own fold
+        header, D5). See :meth:`diagnostics_stream_subhead_texts` for the
+        same read under its new name."""
         return [item.text() for item in self._validation_rows("subhead")]
 
     def validation_task_row_count_under_header(self, header_text: str) -> int:
         """Number of "task" rows directly beneath the sub-head/fold-header
-        row whose text is *header_text*, up to (not including) the next such
-        row (a required group's stated N must equal this count exactly,
-        never an optional row sitting in between)."""
+        row whose text is *header_text* (chevron already stripped from a
+        fold-header row, matching :meth:`diagnostics_stream_headers`'s own
+        contract), up to (not including) the next such row (a required
+        group's stated N must equal this count exactly, never an optional
+        row sitting in between)."""
         from ui_qt import diagnostics_panel as dp
 
-        lst = self._w._diagnostics._all_view._list
+        lst = self._w._diagnostics._stream._list
         start = None
         for i in range(lst.count()):
             item = lst.item(i)
-            if item.data(dp._KIND_ROLE) in ("subhead", "fold_header") and item.text() == header_text:
+            kind = item.data(dp._KIND_ROLE)
+            if kind in ("subhead", "fold_header") and _strip_chevron(item.text()) == header_text:
                 start = i
                 break
         assert start is not None, f"No header row with text {header_text!r}."
@@ -204,7 +215,7 @@ class AppDriver:
         return count
 
     def validation_issue_texts(self) -> list[str]:
-        """Text of every issue row in the All-sections view, in order."""
+        """Text of every issue row in the stream, in order."""
         return [item.text() for item in self._validation_rows("issue")]
 
     def activate_validation_group_header(self, index: int = 0) -> "AppDriver":
@@ -213,14 +224,14 @@ class AppDriver:
         return self.activate_validation_row(self._validation_rows("subhead")[index])
 
     def activate_fold_header(self, index: int = 0) -> "AppDriver":
-        """Activate (Enter/double-click) an All-sections fold-header row
-        directly -- proves it is a structural no-op; folding is single-click
-        only (:meth:`toggle_all_sections_fold`)."""
+        """Activate (Enter/double-click) a stream fold-header row directly
+        -- proves it is a structural no-op; folding is single-click only
+        (:meth:`diagnostics_fold_section`)."""
         return self.activate_validation_row(self._validation_rows("fold_header")[index])
 
     def all_sections_fold_headers(self) -> list[tuple[str, bool]]:
-        """``(section_label, collapsed)`` for every All-sections fold
-        header, in display order."""
+        """``(section_label, collapsed)`` for every stream fold header, in
+        display order."""
         from ui_qt import diagnostics_panel as dp
 
         return [
@@ -228,25 +239,25 @@ class AppDriver:
             for item in self._validation_rows("fold_header")
         ]
 
-    def toggle_all_sections_fold(self, section_label: str) -> "AppDriver":
-        """Fold/unfold the named bucket in the All-sections view, as a
-        single click on its header does."""
+    def diagnostics_fold_section(self, label: str) -> "AppDriver":
+        """Fold/unfold the named bucket in the stream, as a single click on
+        its header does."""
         from ui_qt import diagnostics_panel as dp
 
         for item in self._validation_rows("fold_header"):
-            if item.data(dp._FOLD_BUCKET_ROLE).label == section_label:
-                self._w._diagnostics._all_view._on_clicked(item)
+            if item.data(dp._FOLD_BUCKET_ROLE).label == label:
+                self._w._diagnostics._stream._on_clicked(item)
                 return self
-        raise AssertionError(f"No All-sections fold header for {section_label!r}.")
+        raise AssertionError(f"No stream fold header for {label!r}.")
 
     def validation_task_texts(self) -> list[str]:
-        """Text of every Outstanding task row in the All-sections view, in order."""
+        """Text of every Outstanding task row in the stream, in order."""
         return [item.text() for item in self._validation_rows("task")]
 
     def validation_issue_html(self) -> list[str]:
-        """The painted HTML of every issue row in the All-sections view, in
-        order -- lets a test assert the two-line location/message split
-        without pixel-reading."""
+        """The painted HTML of every issue row in the stream, in order --
+        lets a test assert the two-line location/message split without
+        pixel-reading."""
         from ui_qt import parameter_row
 
         return [
@@ -256,7 +267,7 @@ class AppDriver:
     def _validation_rows(self, kind: str) -> list:
         from ui_qt import diagnostics_panel as dp
 
-        lst = self._w._diagnostics._all_view._list
+        lst = self._w._diagnostics._stream._list
         return [
             lst.item(i)
             for i in range(lst.count())
@@ -266,144 +277,105 @@ class AppDriver:
     def activate_validation_issue(self, path: tuple[str, ...]) -> "AppDriver":
         """Emit the Diagnostics panel's own activation signal for *path*.
 
-        Drives through the panel's public ``issue_activated`` signal directly
-        (the same entry point a real double-click or Enter/Return uses
-        internally, from either detail-pane view -- the panel forwards both
-        unmodified), bypassing ``QListWidget``'s ``itemDoubleClicked`` --
-        which is a distinct Qt signal from ``itemActivated`` and, unlike a
-        genuine mouse event, does not trigger it when emitted manually.
+        Drives through the panel's public ``issue_activated`` signal
+        directly (the same entry point a real double-click or Enter/Return
+        uses internally, forwarded unmodified), bypassing ``QListWidget``'s
+        ``itemDoubleClicked`` -- which is a distinct Qt signal from
+        ``itemActivated`` and, unlike a genuine mouse event, does not
+        trigger it when emitted manually.
         """
         self._w._diagnostics.issue_activated.emit(tuple(path))
         return self
 
-    # -- Diagnostics rail --------------------------------------------------
+    # -- Diagnostics stream: headers, clear line, all-clear, collapse-all --
 
     def diagnostics_strip_counts(self) -> tuple[int, int, int]:
         """``(errors, warnings, outstanding)`` -- the summary strip's own
-        totals, straight from the ``PageBuckets`` the rail/pane also render
+        totals, straight from the ``PageBuckets`` the stream also renders
         from, so these can never disagree."""
         buckets = self._w._diagnostics._buckets
         if buckets is None:
             return (0, 0, 0)
         return (buckets.error_count, buckets.warning_count, buckets.outstanding_count)
 
-    def diagnostics_rail_labels(self) -> list[str]:
-        """Every rail entry's label, in display order ("All sections" first,
-        then a separator -- omitted here -- then one per bucket)."""
-        from ui_qt import diagnostics_panel as dp
-
-        rail = self._w._diagnostics._rail
-        return [
-            rail.item(i).text()
-            for i in range(rail.count())
-            if rail.item(i).data(dp._RAIL_KIND_ROLE) in ("all", "section")
-        ]
-
-    def diagnostics_rail_absent(self, label: str) -> bool:
-        """True when rail entry *label* renders italic (an absent section)."""
-        from ui_qt import diagnostics_panel as dp
-
-        return bool(self._diagnostics_rail_item(label).data(dp._RAIL_ABSENT_ROLE))
-
-    def diagnostics_rail_has_badge(self, label: str) -> bool:
-        """True when rail entry *label* carries at least one painted count
-        badge -- a clean bucket carries none at all."""
-        from ui_qt import diagnostics_panel as dp
-
-        return bool(self._diagnostics_rail_item(label).data(dp._RAIL_BADGE_ROLE))
-
     def diagnostics_bucket(self, label: str):
-        """The ``SectionBucket`` currently backing rail entry *label* --
-        ``None`` for "All sections" (which has no single bucket) or an
-        unknown label."""
+        """The ``SectionBucket`` with this label, or ``None`` for an
+        unknown one."""
         buckets = self._w._diagnostics._buckets
         if buckets is None or label == "All sections":
             return None
         return next((b for b in buckets.buckets if b.label == label), None)
 
-    def diagnostics_select_rail(self, label: str) -> "AppDriver":
-        """Select rail entry *label*, as a click would -- switches the pane
-        immediately via the rail's own ``selection_changed`` signal."""
-        self._w._diagnostics._rail.setCurrentItem(self._diagnostics_rail_item(label))
+    def diagnostics_stream_headers(self) -> list[str]:
+        """Every rendered section's fold-header text, chevron stripped, in
+        order -- label plus its D5 suffix (e.g. "State  1 error · 2 of 5
+        remaining")."""
+        return [_strip_chevron(item.text()) for item in self._validation_rows("fold_header")]
+
+    def diagnostics_stream_issue_texts(self) -> list[str]:
+        return [item.text() for item in self._validation_rows("issue")]
+
+    def diagnostics_stream_task_texts(self) -> list[str]:
+        return [item.text() for item in self._validation_rows("task")]
+
+    def diagnostics_stream_subhead_texts(self) -> list[str]:
+        return [item.text() for item in self._validation_rows("subhead")]
+
+    def diagnostics_clear_line_text(self) -> str | None:
+        """The clear line's own text, chevron stripped (e.g. "7 sections
+        clear"), or ``None`` while it isn't rendered at all (no clear
+        bucket exists)."""
+        item = self._diagnostics_clear_summary_item()
+        return _strip_chevron(item.text()) if item is not None else None
+
+    def diagnostics_toggle_clear_line(self) -> "AppDriver":
+        """Click the clear line, as a single click on it does."""
+        item = self._diagnostics_clear_summary_item()
+        if item is None:
+            raise AssertionError("No clear line is currently shown.")
+        self._w._diagnostics._stream._on_clicked(item)
         return self
 
-    def diagnostics_selected_rail_label(self) -> str | None:
-        item = self._w._diagnostics._rail.currentItem()
-        return item.text() if item is not None else None
+    def _diagnostics_clear_summary_item(self):
+        from ui_qt import diagnostics_panel as dp
 
-    def diagnostics_rail_press_down(self) -> "AppDriver":
-        """Give the rail keyboard focus and press Down -- proves arrow keys
-        move rail selection (and so switch the pane) without a click."""
-        rail = self._w._diagnostics._rail
-        rail.setFocus()
-        self._qtbot.keyClick(rail, Qt.Key_Down)
-        return self
-
-    def _diagnostics_rail_item(self, label: str):
-        rail = self._w._diagnostics._rail
-        for i in range(rail.count()):
-            item = rail.item(i)
-            if item.text() == label:
+        lst = self._w._diagnostics._stream._list
+        for i in range(lst.count()):
+            item = lst.item(i)
+            if item.data(dp._KIND_ROLE) == "clear_summary":
                 return item
-        raise AssertionError(f"No rail entry named {label!r}.")
+        return None
 
-    # -- Diagnostics detail pane ------------------------------------------
+    def diagnostics_clear_section_texts(self) -> list[str]:
+        """Text of every expanded clear-line row, in order -- empty unless
+        the clear line is currently expanded."""
+        from ui_qt import diagnostics_panel as dp
 
-    def diagnostics_pane_mode(self) -> str:
-        """"section" or "all" -- which detail-pane view is currently showing."""
-        panel = self._w._diagnostics
-        return "section" if panel._pane_stack.currentWidget() is panel._section_view else "all"
+        lst = self._w._diagnostics._stream._list
+        return [lst.item(i).text() for i in range(lst.count()) if lst.item(i).data(dp._KIND_ROLE) == "clear_row"]
 
-    def diagnostics_section_header_text(self) -> str:
-        """The selected section pane's own header label (rich text; callers
-        match on substrings)."""
-        return self._w._diagnostics._section_view._header.text()
+    def diagnostics_all_clear_text(self) -> str | None:
+        """The D9 pinned all-clear row's plain text (both lines, "\\n"
+        joined), or ``None`` while it isn't rendered."""
+        from ui_qt import diagnostics_panel as dp
 
-    def diagnostics_section_issue_texts(self) -> list[str]:
-        return [
-            item.text()
-            for item in self._diagnostics_kind_rows(
-                self._w._diagnostics._section_view._issues_box.list, "issue"
-            )
-        ]
+        lst = self._w._diagnostics._stream._list
+        for i in range(lst.count()):
+            item = lst.item(i)
+            if item.data(dp._KIND_ROLE) == "all_clear":
+                return item.text()
+        return None
 
-    def diagnostics_section_issues_badge_texts(self) -> list[str]:
-        """Text of every badge currently shown in the selected section's
-        Issues box header, left to right (0, 1 or 2: red error / amber
-        warning -- :func:`ui_qt.diagnostics_panel._issue_badge_specs`)."""
-        layout = self._w._diagnostics._section_view._issues_box._badge_layout
-        return [layout.itemAt(i).widget().text() for i in range(layout.count())]
+    def diagnostics_collapse_all_text(self) -> str | None:
+        """The strip's D15 affordance label ("Collapse all"/"Expand all"),
+        or ``None`` while it is hidden."""
+        label = self._w._diagnostics._strip._collapse_all
+        return None if label.isHidden() else label.text()
 
-    def diagnostics_section_outstanding_title(self) -> str:
-        # title_text is the verbatim domain string; the visible label renders
-        # it in the caps panel-title tier (presentation only).
-        return self._w._diagnostics._section_view._outstanding_box.title_text
-
-    def diagnostics_section_task_texts(self) -> list[str]:
-        return [
-            item.text()
-            for item in self._diagnostics_kind_rows(
-                self._w._diagnostics._section_view._outstanding_box.list, "task"
-            )
-        ]
-
-    def diagnostics_section_optional_subhead_texts(self) -> list[str]:
-        return [
-            item.text()
-            for item in self._diagnostics_kind_rows(
-                self._w._diagnostics._section_view._outstanding_box.list, "subhead"
-            )
-        ]
-
-    def diagnostics_section_issues_empty_text(self) -> str | None:
-        """Pinned empty-state text of the selected section's Issues box
-        (e.g. "✓ No issues"), or None if it holds real rows."""
-        return self._first_message_text(self._w._diagnostics._section_view._issues_box.list)
-
-    def diagnostics_section_outstanding_empty_text(self) -> str | None:
-        """Pinned empty-state text of the selected section's Outstanding box
-        (e.g. "✓ Nothing outstanding"), or None if it holds real rows."""
-        return self._first_message_text(self._w._diagnostics._section_view._outstanding_box.list)
+    def diagnostics_toggle_collapse_all(self) -> "AppDriver":
+        """Click the strip's Collapse all/Expand all affordance."""
+        self._qtbot.mouseClick(self._w._diagnostics._strip._collapse_all, Qt.LeftButton)
+        return self
 
     # -- Diagnostics filters ------------------------------------------------
 
@@ -416,47 +388,14 @@ class AppDriver:
         self._qtbot.mouseClick(self._diagnostics_chip(name), Qt.LeftButton)
         return self
 
+    def diagnostics_chip_is_enabled(self, name: str) -> bool:
+        """False for a zero-count chip (D13) -- disabled, so a click does
+        nothing (Qt withholds the mouse event entirely)."""
+        return self._diagnostics_chip(name).isEnabled()
+
     def _diagnostics_chip(self, name: str):
         strip = self._w._diagnostics._strip
         return {"errors": strip._errors, "warnings": strip._warnings, "outstanding": strip._outstanding}[name]
-
-    def diagnostics_section_hidden_line_text(self) -> str | None:
-        """The selected section pane's own "N hidden by filters" line, or
-        None if nothing is hidden there. Reads ``isHidden()`` rather than
-        ``isVisible()`` -- the latter also depends on the top-level window
-        actually being shown (which headless tests never do), while
-        ``isHidden()`` reflects only this label's own ``setVisible`` call."""
-        label = self._w._diagnostics._section_view._hidden_label
-        return label.text() if not label.isHidden() else None
-
-    def diagnostics_all_sections_hidden_line_text(self) -> str | None:
-        """The All-sections view's own "N hidden by filters" line (its last
-        row, when present), or None if nothing is hidden there."""
-        from ui_qt import diagnostics_panel as dp
-
-        lst = self._w._diagnostics._all_view._list
-        if lst.count() == 0:
-            return None
-        last = lst.item(lst.count() - 1)
-        if last.data(dp._KIND_ROLE) == "message" and "hidden by filters" in last.text():
-            return last.text()
-        return None
-
-    def _first_message_text(self, list_widget) -> str | None:
-        from ui_qt import diagnostics_panel as dp
-
-        if list_widget.count() == 1 and list_widget.item(0).data(dp._KIND_ROLE) == "message":
-            return list_widget.item(0).text()
-        return None
-
-    def _diagnostics_kind_rows(self, list_widget, kind: str) -> list:
-        from ui_qt import diagnostics_panel as dp
-
-        return [
-            list_widget.item(i)
-            for i in range(list_widget.count())
-            if list_widget.item(i).data(dp._KIND_ROLE) == kind
-        ]
 
     def fields_to_add_current_alias(self) -> str | None:
         """The alias of the parameter list's currently-selected "fields to
@@ -468,27 +407,6 @@ class AppDriver:
         if item is None or item.data(panel._GROUP_ROW_KIND_ROLE) != "suggestion":
             return None
         return item.data(panel._GROUP_ROW_ALIAS_ROLE)
-
-    def validation_issues_empty_text(self) -> str | None:
-        """Pinned empty-state text of the currently selected SECTION pane's
-        Issues box (e.g. "✓ No issues"), or None if it holds real rows, or
-        the All-sections view is showing -- that view is the quiet backup
-        (no pinned empty-state copy of its own; see
-        :meth:`diagnostics_section_issues_empty_text` for the direct form of
-        this same read)."""
-        panel = self._w._diagnostics
-        if panel._pane_stack.currentWidget() is not panel._section_view:
-            return None
-        return self.diagnostics_section_issues_empty_text()
-
-    def validation_outstanding_empty_text(self) -> str | None:
-        """Pinned empty-state text of the currently selected SECTION pane's
-        Outstanding box (e.g. "✓ Nothing outstanding"), or None if it holds
-        real rows or the All-sections view is showing."""
-        panel = self._w._diagnostics
-        if panel._pane_stack.currentWidget() is not panel._section_view:
-            return None
-        return self.diagnostics_section_outstanding_empty_text()
 
     def activate_first_parameter_issue(self) -> "AppDriver":
         """Activate the first issue in the Inspector's Issues section.
@@ -1070,33 +988,42 @@ class AppDriver:
     def activate_selected_add_parameter_row(self) -> "AppDriver":
         """Activate whichever row is currently highlighted in the
         add-parameter popup -- a BPX-alias suggestion (creates immediately)
-        or the "Create custom parameter" footer, which instead expands the
-        inline custom-parameter form in place (see
-        :meth:`submit_custom_parameter_form`)."""
+        or the "Create custom parameter" footer, which instead switches the
+        popup to its Custom tab (see :meth:`submit_custom_parameter_form`)."""
         self._w._params._popup._activate()
         return self
 
     def add_parameter_custom_form_visible(self) -> bool:
-        """True once the "Create custom parameter" footer has expanded into
-        its inline Name/Unit/type form."""
-        return self._w._params._popup._form_visible
+        """True once the popup has switched to its Custom tab."""
+        from ui_qt.add_parameter_popup import _TAB_LABELS
+
+        return self._w._params._popup._active_tab == _TAB_LABELS[1]
+
+    def select_add_parameter_tab(self, label: str) -> "AppDriver":
+        """Click one of the popup's own "Standard"/"Custom" tab buttons."""
+        from ui_qt.add_parameter_popup import _TAB_LABELS
+
+        popup = self._w._params._popup
+        button = popup._tab_strip._buttons[_TAB_LABELS.index(label)]
+        self._qtbot.mouseClick(button, Qt.LeftButton)
+        return self
 
     def type_custom_parameter_name(self, text: str) -> "AppDriver":
-        """Replace the inline custom-parameter form's Name field."""
+        """Replace the Custom tab's Name field."""
         popup = self._w._params._popup
         popup._form_name.clear()
         self._qtbot.keyClicks(popup._form_name, text)
         return self
 
     def type_custom_parameter_unit(self, text: str) -> "AppDriver":
-        """Replace the inline custom-parameter form's (optional) Unit field."""
+        """Replace the Custom tab's (optional) Unit field."""
         popup = self._w._params._popup
         popup._form_unit.clear()
         self._qtbot.keyClicks(popup._form_unit, text)
         return self
 
     def select_custom_parameter_type(self, label: str) -> "AppDriver":
-        """Click one of the inline form's five type buttons (e.g. "Scalar",
+        """Click one of the Custom tab's five type buttons (e.g. "Scalar",
         "Table")."""
         from ui_qt.add_parameter_popup import _CUSTOM_TYPE_LABELS
 
@@ -1112,14 +1039,14 @@ class AppDriver:
         return self._w._params._popup._form_warning.isVisible()
 
     def submit_custom_parameter_form(self) -> "AppDriver":
-        """Click "Add" on the inline custom-parameter form, committing the
-        composed key and the selected type's seed value."""
+        """Click "Add" on the Custom tab's form, committing the composed key
+        and the selected type's seed value."""
         self._qtbot.mouseClick(self._w._params._popup._form_add, Qt.LeftButton)
         return self
 
     def cancel_custom_parameter_form(self) -> "AppDriver":
-        """Click "Cancel" on the inline custom-parameter form, collapsing it
-        back to the plain pinned footer without creating anything."""
+        """Click "Cancel" on the Custom tab's form, switching back to
+        Standard without creating anything."""
         self._qtbot.mouseClick(self._w._params._popup._form_cancel, Qt.LeftButton)
         return self
 
@@ -1275,7 +1202,7 @@ class AppDriver:
         Reads ``isHidden()``, not ``isVisible()`` -- the window is never
         shown in this suite, so ``isVisible()`` would read False regardless
         of the row's own hidden flag (the same reasoning as
-        ``diagnostics_section_hidden_line_text``)."""
+        :meth:`diagnostics_collapse_all_text`)."""
         card = self._w._inspector._card
         row = getattr(card, "_rename_row", None) if card is not None else None
         return row is not None and not row.isHidden()
@@ -1645,18 +1572,19 @@ class AppDriver:
         return self._w._inspector._docs_section.is_collapsed
 
     def validation_issue_count(self) -> int:
-        """Count of Issues-section rows only (the page also always renders
-        two section headers plus the Outstanding section)."""
+        """Count of issue rows in the stream only (task/header/clear-line/
+        message rows excluded)."""
         return len(self._validation_rows("issue"))
 
     def validation_outstanding_count(self) -> int:
-        """Count of Outstanding-section task rows only."""
+        """Count of task rows in the stream only."""
         return len(self._validation_rows("task"))
 
     def validation_message(self) -> str | None:
         """Visible full-page placeholder text ("No document open"), or None
-        once a document is open -- the page then always shows its list (the
-        two sections carry their own inline empty-state rows instead)."""
+        once a document is open -- the page then always shows the stream
+        (a clean or Partial document gets its own pinned row inside it
+        instead, see :meth:`diagnostics_all_clear_text`)."""
         panel = self._w._diagnostics
         if panel._stack.currentWidget() is panel._placeholder:
             return panel._placeholder.text()

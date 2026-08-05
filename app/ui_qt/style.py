@@ -38,14 +38,13 @@ ERROR = "#c62828"
 WARNING = "#ef6c00"
 ACCENT = "#1f6feb"
 #: Pale accent tint shared by every "selected row"/"hovered chip" wash that
-#: isn't a severity or reference colour: list-selection backgrounds, the
-#: Diagnostics rail's selected entry, and the add-parameter popup's pinned
-#: Create action -- one blue instead of three near-identical ones (#ddeeff,
-#: #e3edfd, #eaf2ff) that had drifted apart. ``RAIL_SELECTED_BG`` reads this
-#: constant directly; the raw stylesheet below still spells the same hex
-#: literal at each QSS selector (as every other named colour already does in
-#: that string, e.g. ``BORDER_STRONG``/``HEADER_BAND_STRONG``) rather than
-#: turning ``STYLESHEET`` into an f-string, which would need every literal
+#: isn't a severity or reference colour: list-selection backgrounds and the
+#: add-parameter popup's pinned Create action -- one blue instead of three
+#: near-identical ones (#ddeeff, #e3edfd, #eaf2ff) that had drifted apart.
+#: The raw stylesheet below still spells the same hex literal at each QSS
+#: selector (as every other named colour already does in that string, e.g.
+#: ``BORDER_STRONG``/``HEADER_BAND_STRONG``) rather than turning
+#: ``STYLESHEET`` into an f-string, which would need every literal
 #: ``{``/``}`` in the QSS escaped.
 ACCENT_TINT = "#ddeeff"
 #: The reference-file feature's own accent: purple, by explicit user
@@ -117,11 +116,10 @@ DEFAULT_TEXT = "#1f2328"
 #: the stylesheet below): quieter than ``MUTED`` so a placeholder reads as
 #: "nothing here", not as a value.
 GHOST_TEXT = "#8c959f"
-#: Diagnostics page rail: background distinct from the white detail
-#: pane, and the selected entry's accent-tinted background/hover wash.
+#: Diagnostics stream band fill (fold headers and the clear line): a grey
+#: band distinct from the white rows. The name survives the rail it was
+#: born on.
 RAIL_BG = "#f3f4f6"
-RAIL_SELECTED_BG = ACCENT_TINT
-RAIL_HOVER_BG = "#e8eaed"
 #: One step darker than the app's usual ``#d0d7de`` border tone, used only
 #: on the Diagnostics page's own chrome (group-box border, rail's right
 #: edge, strip's bottom edge, chip borders) so those regions read a touch
@@ -499,13 +497,14 @@ QListWidget#SearchPopupList {
 }
 QListWidget#SearchPopupList::item { padding: 6px 8px; border-radius: 4px; }
 QListWidget#SearchPopupList::item:selected { background: #ddeeff; color: #1f2328; }
-/* The Diagnostics page: a summary strip over a fixed-width rail beside a
-   detail pane. The rail's own background is distinct from the white pane
-   so the two read as separate surfaces, like the activity bar beside the
-   editor. The strip/rail/group-box/chip border lines use BORDER_STRONG
+/* The Diagnostics page: a summary strip (chips + the D15 Collapse all/
+   Expand all affordance) over one scrolling stream list -- the "one
+   stream" redesign (PLAN-diagnostics-stream.md), no rail, no separate
+   detail pane. Fold-header/clear-line bands paint on RAIL_BG (the name
+   predates this redesign; the constant itself just means "a band one
+   shade off white"). The strip/chip border lines use BORDER_STRONG
    (#c4cdd5), one step darker than the app's usual #d0d7de, so this page's
-   own regions read a touch more defined -- flat colour only, no shadows,
-   and nothing outside this page's chrome changed. */
+   own regions read a touch more defined -- flat colour only, no shadows. */
 QWidget#DiagnosticsSummaryStrip { background: #f9fafb; border-bottom: 1px solid #c4cdd5; }
 /* One strip chip: a small bordered, rounded card on the shaded strip
    band, distinct from the flat text it replaced. Each chip is a
@@ -518,38 +517,32 @@ QLabel#DiagnosticsChip {
     background: #ffffff; border: 1px solid #c4cdd5; border-radius: 6px; padding: 4px 10px;
 }
 QLabel#DiagnosticsChip[chipOff="true"] { background: #eef0f2; border: 1px solid #d0d7de; }
-QListWidget#DiagnosticsRail { background: #f3f4f6; border: none; border-right: 1px solid #c4cdd5; outline: none; }
-QListWidget#DiagnosticsRail::item { padding: 0; border: none; }
-QLabel#DiagnosticsPaneHeader { font-size: 14px; padding-bottom: 2px; }
-/* The "N hidden by filters" line -- quiet, muted, never mistakable for a
-   pinned empty-state (those use the shared muted-message row colour too,
-   but this one only ever appears alongside real, still-counted rows). */
-QLabel#DiagnosticsHiddenLine { color: #57606a; font-size: 12px; padding: 2px 2px; }
-/* The bordered, rounded card and banded header itself are the shared
-   #GroupBox/#GroupBoxHeader rules above (same "IDE panel" language as
-   QFrame#Card elsewhere); only this box's own title/suffix/list bits
-   follow. */
-QLabel#DiagnosticsGroupBoxTitle { color: #57606a; font-weight: 600; font-size: 11px; }
-/* The ratio/count tail ("· 3 of 6 added") stays sentence-case beside the
-   caps title -- counts are information, not chrome. */
-QLabel#DiagnosticsGroupBoxTitleSuffix { color: #57606a; font-size: 11px; }
-QListWidget#DiagnosticsGroupBoxList { border: none; background: transparent; }
-QListWidget#DiagnosticsGroupBoxList::item { padding: 6px 8px; border-radius: 4px; }
-QListWidget#DiagnosticsGroupBoxList::item:hover { background: #f0f2f4; }
-QListWidget#DiagnosticsGroupBoxList::item:selected { background: #ddeeff; color: #1f2328; }
-/* "All sections", the backup view: one continuous list, same row rhythm
-   as everywhere else in the app. */
-QListWidget#DiagnosticsAllSectionsList { border: none; }
-QListWidget#DiagnosticsAllSectionsList::item { padding: 6px 8px; border-radius: 4px; }
-QListWidget#DiagnosticsAllSectionsList::item:hover { background: #f0f2f4; }
-QListWidget#DiagnosticsAllSectionsList::item:selected { background: #ddeeff; color: #1f2328; }
+/* D13: a chip whose unfiltered count is zero is also actually disabled
+   (Qt withholds mouse events from a disabled widget, so the cursor/click
+   both go away) -- it must not look pressable, since it filters nothing. */
+QLabel#DiagnosticsChip:disabled { background: #f3f4f6; border: 1px solid #e1e4e8; }
+/* D15's plain-text fold-everything affordance -- link-styled, not a chip
+   (there is no count for it to toggle). */
+QLabel#DiagnosticsCollapseAll { color: #1f6feb; font-size: 12px; }
+/* The one stream list: same row rhythm as everywhere else in the app.
+   Fold headers/the clear line are delegate-painted bands
+   (_DiagnosticsRowDelegate) that ignore this hover/selected styling --
+   only issue/task rows are genuinely selectable. */
+QListWidget#DiagnosticsStreamList { border: none; }
+QListWidget#DiagnosticsStreamList::item { padding: 6px 8px; border-radius: 4px; }
+QListWidget#DiagnosticsStreamList::item:hover { background: #f0f2f4; }
+QListWidget#DiagnosticsStreamList::item:selected { background: #ddeeff; color: #1f2328; }
 /* The Documentation section's quiet "no description" line -- in-flow body
    text on the section wash, not a centred empty state. */
 QLabel#DocumentationPlaceholder { color: #57606a; font-size: 12px; }
 QLabel#Hint { color: #57606a; font-size: 11px; }
 
-/* Mode strip: segmented buttons naming each legal representation of a
-   union-typed field, in verbatim bpx.schema vocabulary. */
+/* Mode strip: segmented, mutually-exclusive buttons. Originally a card's
+   type picker naming each legal representation of a union-typed field (in
+   verbatim bpx.schema vocabulary); also reused as a plain content-switching
+   tab strip (e.g. the database-examples Chart/Table toggle, the add-parameter
+   popup's Standard/Custom tabs) where the segmented look reads fine as tabs
+   too. */
 QToolButton#ModeButton {
     border: 1px solid #d0d7de; border-left-width: 0;
     padding: 3px 10px; background: #f6f8fa; color: #57606a; font-size: 11px;

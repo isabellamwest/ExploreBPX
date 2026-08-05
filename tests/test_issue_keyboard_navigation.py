@@ -31,9 +31,9 @@ def invalid_document(invalid_bpx_path) -> BPXDocument:
 
 
 def _issue_rows(panel: DiagnosticsPanel):
-    """Issue rows in the All-sections view -- the backup view that always
-    contains every issue, so it is the right default surface here."""
-    lst = panel._all_view._list
+    """Issue rows in the stream -- the page's one renderer, so it always
+    contains every issue and is the right default surface here."""
+    lst = panel._stream._list
     return [lst.item(i) for i in range(lst.count()) if lst.item(i).data(vp._KIND_ROLE) == "issue"]
 
 
@@ -79,9 +79,9 @@ def test_validation_panel_enter_activates_selected_row(qtbot, validation_panel):
     validation_panel.issue_activated.connect(received.append)
 
     first_issue = _issue_rows(validation_panel)[0]
-    validation_panel._all_view._list.setCurrentItem(first_issue)
+    validation_panel._stream._list.setCurrentItem(first_issue)
     expected_path = first_issue.data(256)
-    _press_return(qtbot, validation_panel._all_view._list)
+    _press_return(qtbot, validation_panel._stream._list)
 
     assert received == [expected_path]
 
@@ -90,7 +90,7 @@ def test_validation_panel_selection_change_alone_does_not_activate(qtbot, valida
     received = []
     validation_panel.issue_activated.connect(received.append)
 
-    validation_panel._all_view._list.setCurrentItem(_issue_rows(validation_panel)[0])
+    validation_panel._stream._list.setCurrentItem(_issue_rows(validation_panel)[0])
 
     assert received == []
 

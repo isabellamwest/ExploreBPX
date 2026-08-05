@@ -49,11 +49,10 @@ def test_validation_page_shows_no_document_message(app_driver):
 def test_validation_page_shows_no_issues_message_for_a_clean_document(
     app_driver, valid_spm_path
 ):
-    """The full-page placeholder is gone (Phase 5); the rail redesign (Stage
-    B) moved the pinned "no issues" empty state from one page-wide banner to
-    each section's own Issues box -- proved here by selecting a section --
-    while the document-wide claim itself (nothing anywhere) shows in the
-    summary strip's totals."""
+    """The full-page placeholder is gone; the stream redesign renders no
+    header at all for a clean bucket (D3) -- proved here directly on the
+    bucket data -- while the document-wide claim itself (nothing anywhere)
+    shows in the summary strip's totals."""
     d = app_driver
     d.open(valid_spm_path)
 
@@ -61,8 +60,9 @@ def test_validation_page_shows_no_issues_message_for_a_clean_document(
     assert d.validation_issue_count() == 0
     assert d.diagnostics_strip_counts() == (0, 0, 0)
 
-    d.diagnostics_select_rail("Header")
-    assert d.diagnostics_section_issues_empty_text() == "✓ No issues"
+    header = d.diagnostics_bucket("Header")
+    assert header.error_count == 0 and header.warning_count == 0
+    assert d.diagnostics_stream_headers() == []
 
 
 def test_validation_page_shows_the_list_once_an_issue_exists(app_driver, spm_workfile):
