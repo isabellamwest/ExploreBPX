@@ -41,14 +41,6 @@ the BPX specification itself: parsing, schema and validation all come from
 
 Requires **Python 3.12+**.
 
-> **Clone outside a synced folder.** Don't put the checkout inside iCloud
-> Drive, OneDrive or Dropbox. Those file providers set the macOS `hidden`
-> flag (and the Windows equivalent) on dot-directories and everything beneath
-> them, including `.venv`. Qt's plugin loader skips hidden directory entries,
-> so the app dies at startup with *"Could not find the Qt platform plugin
-> cocoa"* even though the plugin is present and loadable. A `.git` directory
-> under a sync client is also a known source of repository corruption.
-
 With [uv](https://docs.astral.sh/uv/) (recommended, installs the exact
 locked dependencies):
 
