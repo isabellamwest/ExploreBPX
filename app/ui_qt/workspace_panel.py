@@ -45,7 +45,7 @@ from state.reference_snapshot import ReferenceSnapshot
 from . import icons
 from .group_box import TintedSection
 from .style import ERROR, OK, WARNING
-from .titles import panel_title
+from .typography import panel_title
 
 _INFO_PANEL_EMPTY_STATE_TEXT = "No document open"
 
@@ -447,7 +447,7 @@ class WorkspacePanel(QWidget):
         dirty: bool,
         error_count: int = 0,
         warning_count: int = 0,
-        reference: ReferenceSnapshot | None = None,
+        references: list[ReferenceSnapshot] | None = None,
     ) -> None:
         """Update the main-document and reference sections from current state.
 
@@ -460,11 +460,13 @@ class WorkspacePanel(QWidget):
         ``document.error_count``/``warning_count``, so the badge can never
         disagree with the Diagnostics rail badge over an absorbed diagnostic.
 
-        ``reference`` is independent of ``document``: a reference may be
+        ``references`` is independent of ``document``: a reference may be
         docked with no main document open, so its section is updated
-        regardless of which branch below runs.
+        regardless of which branch below runs. Phase 0 of the multi-reference
+        track: the list holds at most one entry today, and the section below
+        still renders only the first.
         """
-        self._set_reference(reference)
+        self._set_reference(references[0] if references else None)
 
         if document is None:
             self._info_title.setText(_INFO_PANEL_EMPTY_STATE_TEXT)

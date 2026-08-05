@@ -148,8 +148,8 @@ def test_click_flow_clones_docks_and_stays_on_workspace(app_driver, origin_path,
     assert not d.undo_enabled()
     assert d._w._state.active.document.filename == "main (copy).json"
     # Equal clone and origin: the comparison exists and reports no differences.
-    assert d._w._comparison is not None
-    assert d._w._comparison.differ_count == 0
+    assert d._w._comparisons != []
+    assert d._w._comparisons[0].differ_count == 0
 
 
 def test_picker_cancel_asks_no_guard_and_changes_nothing(app_driver, monkeypatch):

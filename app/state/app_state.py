@@ -26,18 +26,29 @@ class OpenReferenceOutcome(Enum):
 
 class AppState:
     """Application-level container for the active document session and the
-    docked reference snapshot.
+    docked reference snapshot(s).
 
     In the current design, AppState holds one optional DocumentSession (the
-    main, editable document) and at most one optional ReferenceSnapshot (a
-    frozen, read-only file docked beside it). Future multi-document support
-    can extend this class further without changing how the UI interacts with
-    individual sessions.
+    main, editable document) and a list of docked ReferenceSnapshots (frozen,
+    read-only files docked beside it). Phase 0 of the multi-reference track
+    keeps every mutator's replace-on-open behaviour: ``references`` holds at
+    most one entry today, and the ``reference`` property below is a
+    compatibility shim for call sites not yet converted to the list. Later
+    phases grow the list to a pinned, ordered set (see
+    ``PLAN-multi-reference.md``).
     """
 
     def __init__(self) -> None:
         self.active: DocumentSession | None = None
-        self.reference: ReferenceSnapshot | None = None
+        self.references: list[ReferenceSnapshot] = []
+
+    @property
+    def reference(self) -> ReferenceSnapshot | None:
+        """The first docked reference, or ``None`` -- a Phase 0 compatibility
+        shim for call sites not yet converted to ``references``. Read-only:
+        mutators below assign ``self.references`` directly.
+        """
+        return self.references[0] if self.references else None
 
     @property
     def has_document(self) -> bool:
@@ -92,18 +103,15 @@ class AppState:
         """
         clone_name = f"{path.stem} (copy){path.suffix}"
         document = BPXDocument.from_bytes(path.read_bytes(), clone_name)
-        if (
-            self.reference is not None
-            and self.reference.path is not None
-            and self.reference.path.resolve() == path.resolve()
-        ):
-            reference = self.reference
+        existing = self.reference
+        if existing is not None and existing.path is not None and existing.path.resolve() == path.resolve():
+            reference = existing
         else:
             reference = ReferenceSnapshot.load(path)
         session = DocumentSession(document)
         session.dirty = True
         self.active = session
-        self.reference = reference
+        self.references = [reference]
 
     def close(self) -> None:
         """Close the active session.
@@ -127,11 +135,8 @@ class AppState:
         load failure.
         """
         resolved = path.resolve()
-        if (
-            self.reference is not None
-            and self.reference.path is not None
-            and self.reference.path.resolve() == resolved
-        ):
+        existing = self.reference
+        if existing is not None and existing.path is not None and existing.path.resolve() == resolved:
             return OpenReferenceOutcome.ALREADY_REFERENCE
         if (
             self.active is not None
@@ -139,7 +144,7 @@ class AppState:
             and self.active.backing_file.resolve() == resolved
         ):
             return OpenReferenceOutcome.IS_MAIN
-        self.reference = ReferenceSnapshot.load(path)
+        self.references = [ReferenceSnapshot.load(path)]
         return OpenReferenceOutcome.ADDED
 
     def open_reference_set(self, set_id: str) -> OpenReferenceOutcome:
@@ -157,14 +162,15 @@ class AppState:
         ``ReferenceSnapshot.from_library`` does; the caller decides how to
         surface it.
         """
-        if self.reference is not None and self.reference.set_id == set_id:
+        existing = self.reference
+        if existing is not None and existing.set_id == set_id:
             return OpenReferenceOutcome.ALREADY_REFERENCE
-        self.reference = ReferenceSnapshot.from_library(set_id)
+        self.references = [ReferenceSnapshot.from_library(set_id)]
         return OpenReferenceOutcome.ADDED
 
     def remove_reference(self) -> None:
         """Undock the reference, if any."""
-        self.reference = None
+        self.references = []
 
     def reload_reference(self) -> None:
         """Re-snapshot the docked reference from its own path on disk (the
@@ -177,9 +183,10 @@ class AppState:
         A library-set reference (``path`` is None) is a quiet no-op: a
         bundled set is immutable, so there is nothing on disk to reload.
         """
-        if self.reference is None or self.reference.path is None:
+        existing = self.reference
+        if existing is None or existing.path is None:
             return
-        self.reference = ReferenceSnapshot.load(self.reference.path)
+        self.references = [ReferenceSnapshot.load(existing.path)]
 
     def swap_roles(self, promoted_path: Path, demoted_path: Path) -> None:
         """The "Make main" swap: promote *promoted_path* (today's reference)
@@ -198,4 +205,4 @@ class AppState:
         session.backing_file = promoted_path
         reference = ReferenceSnapshot.load(demoted_path)
         self.active = session
-        self.reference = reference
+        self.references = [reference]

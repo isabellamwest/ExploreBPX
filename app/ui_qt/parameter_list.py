@@ -174,6 +174,8 @@ class ParameterListPanel(QWidget):
         self._visible_issue_severities: dict[tuple[str, ...], str] = {}
         #: Comparison state, set only by ``MainWindow.set_comparison`` --
         #: ``None`` whenever no reference is docked or no document is open.
+        #: Phase 0 of the multi-reference track: internals still read only
+        #: the first pinned reference's comparison (see ``set_comparison``).
         self._comparison: ComparisonResult | None = None
         self._reference: ReferenceSnapshot | None = None
 
@@ -246,20 +248,21 @@ class ParameterListPanel(QWidget):
 
     def set_comparison(
         self,
-        comparison: ComparisonResult | None,
-        reference: ReferenceSnapshot | None,
+        comparisons: list[ComparisonResult],
+        references: list[ReferenceSnapshot],
     ) -> None:
         """Set the reference comparison state and re-render whatever
         section is currently shown.
 
         Called by ``MainWindow`` -- the single place computing this state --
-        on every document change and every reference dock/undock.
-        *comparison* is ``None`` with no reference docked or no document
-        open.
+        on every document change and every reference dock/undock. Phase 0 of
+        the multi-reference track: both lists hold at most one entry today,
+        and every render below still reads only the first (*comparisons*/
+        *references* empty with no reference docked or no document open).
         """
-        self._comparison = comparison
-        self._reference = reference
-        self._strip.set_state(reference, comparison)
+        self._comparison = comparisons[0] if comparisons else None
+        self._reference = references[0] if references else None
+        self._strip.set_state(references, comparisons)
         if self._node is not None:
             self.show_node(self._node, self._model)
 

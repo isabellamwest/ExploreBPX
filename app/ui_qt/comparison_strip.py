@@ -58,11 +58,17 @@ class ComparisonStrip(QWidget):
 
     def set_state(
         self,
-        reference: ReferenceSnapshot | None,
-        comparison: ComparisonResult | None,
+        references: list[ReferenceSnapshot],
+        comparisons: list[ComparisonResult],
     ) -> None:
         """Render for the current reference/comparison state, or hide the
-        strip entirely when no reference is docked."""
+        strip entirely when no reference is docked.
+
+        Phase 0 of the multi-reference track: both lists hold at most one
+        entry today, and the strip still renders only the first (*references*
+        empty means no reference is docked)."""
+        reference = references[0] if references else None
+        comparison = comparisons[0] if comparisons else None
         if reference is None:
             self.hide()
             return

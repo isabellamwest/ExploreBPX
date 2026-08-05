@@ -134,12 +134,13 @@ class MainWindow(QMainWindow):
         # Cached by _refresh_all, read by _update_workspace_info -- see there.
         self._workspace_error_count = 0
         self._workspace_warning_count = 0
-        #: Reference comparison state: the whole-
-        #: document diff -- ``None`` with no reference docked or no document
-        #: open. UI-session state, not persisted, recomputed whenever a
-        #: reference docks or undocks (see ``_open_reference_path``/
-        #: ``_on_remove_reference_requested``).
-        self._comparison: ComparisonResult | None = None
+        #: Reference comparison state: one whole-document diff per pinned
+        #: reference -- empty with no reference docked or no document open.
+        #: UI-session state, not persisted, recomputed whenever a reference
+        #: docks or undocks (see ``_open_reference_path``/
+        #: ``_on_remove_reference_requested``). Phase 0 of the multi-reference
+        #: track: holds at most one entry today.
+        self._comparisons: list[ComparisonResult] = []
         #: Where a never-saved document's Save As dialog starts: the folder of
         #: the last Save As this run, else the user's Documents folder -- never
         #: a bundled template/example directory. Session-scoped on purpose; not
@@ -1067,29 +1068,30 @@ class MainWindow(QMainWindow):
     # --- comparison ----------------------------------------------------------
 
     def _recompute_comparison(self) -> None:
-        """Recompute the reference comparison from the current document +
-        docked reference and push it to every view.
+        """Recompute the reference comparisons from the current document +
+        docked references and push them to every view.
 
         Called once per document change (via ``_refresh_all``) and once
-        whenever the reference docks/undocks/replaces -- never
-        incrementally (``core.compare.compare`` re-walks both raw dicts).
+        whenever a reference docks/undocks/replaces -- never incrementally
+        (``core.compare.compare`` re-walks both raw dicts). Phase 0 of the
+        multi-reference track: one ``compare()`` call per snapshot in
+        ``self._state.references`` (at most one today; no caching).
         """
         document = self._state.active.document if self._state.active else None
-        reference = self._state.reference
-        self._comparison = (
-            compare(document.raw, reference.raw)
-            if document is not None and reference is not None
-            else None
+        self._comparisons = (
+            [compare(document.raw, reference.raw) for reference in self._state.references]
+            if document is not None
+            else []
         )
         self._apply_comparison()
 
     def _apply_comparison(self) -> None:
-        """Push the current comparison to the tree/list/inspector -- the
+        """Push the current comparisons to the tree/list/inspector -- the
         single fan-out point every comparison-state change goes through."""
         reference = self._state.reference
-        self._tree.set_comparison(self._comparison)
-        self._params.set_comparison(self._comparison, reference)
-        self._inspector.set_comparison(self._comparison, reference)
+        self._tree.set_comparison(self._comparisons)
+        self._params.set_comparison(self._comparisons, self._state.references)
+        self._inspector.set_comparison(self._comparisons, self._state.references)
         # The Source page re-renders here too: every route that changes what
         # it must show (edit, undo/redo, open/new, reference dock/undock)
         # already funnels through this method.
@@ -1420,7 +1422,7 @@ class MainWindow(QMainWindow):
             dirty,
             self._workspace_error_count,
             self._workspace_warning_count,
-            reference=self._state.reference,
+            references=self._state.references,
         )
 
     def _update_actions_enabled(self) -> None:

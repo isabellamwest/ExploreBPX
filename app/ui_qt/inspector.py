@@ -276,7 +276,7 @@ class InspectorPanel(QWidget):
         self._docs_section.set_collapsed(True)
 
     def set_comparison(
-        self, comparison: ComparisonResult | None, reference: ReferenceSnapshot | None
+        self, comparisons: list[ComparisonResult], references: list[ReferenceSnapshot]
     ) -> None:
         """Set the reference comparison state.
 
@@ -286,11 +286,15 @@ class InspectorPanel(QWidget):
         rebuilding it: a ``ParameterCard`` gets its reference block
         refreshed (never touching its own draft/commit machinery); a
         ``GhostParameterCard`` -- which exists only because a comparison was
-        showing -- falls back to the placeholder once *comparison* goes
-        ``None`` (hidden, undocked, or no document).
+        showing -- falls back to the placeholder once the comparison goes
+        empty (hidden, undocked, or no document).
+
+        Phase 0 of the multi-reference track: both lists hold at most one
+        entry today, and every render below still reads only the first.
         """
+        comparison = comparisons[0] if comparisons else None
         self._comparison = comparison
-        self._reference = reference
+        self._reference = references[0] if references else None
         if isinstance(self._card, ParameterCard):
             self._apply_reference_block(self._card.parameter)
         elif isinstance(self._card, GhostParameterCard) and comparison is None:

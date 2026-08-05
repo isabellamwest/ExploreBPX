@@ -144,7 +144,7 @@ def test_row_bar_variant_per_row_state(panel):
     are distinguishable at a glance."""
     node = _cell_node(MAIN_RAW)
     panel.show_node(node, "SPM")
-    panel.set_comparison(compare(MAIN_RAW, REF_RAW), _reference_snapshot(REF_RAW))
+    panel.set_comparison([compare(MAIN_RAW, REF_RAW)], [_reference_snapshot(REF_RAW)])
 
     assert _real_item(panel, "Nominal cell capacity").data(parameter_row.REF_BAR_ROLE) == "differs"
     assert _real_item(panel, "Lower voltage cut-off").data(parameter_row.REF_BAR_ROLE) == "differs"
@@ -155,7 +155,7 @@ def test_row_bar_variant_per_row_state(panel):
 def test_differs_row_tooltip_carries_the_reference_value(panel):
     node = _cell_node(MAIN_RAW)
     panel.show_node(node, "SPM")
-    panel.set_comparison(compare(MAIN_RAW, REF_RAW), _reference_snapshot(REF_RAW))
+    panel.set_comparison([compare(MAIN_RAW, REF_RAW)], [_reference_snapshot(REF_RAW)])
 
     differs_tip = _real_item(panel, "Nominal cell capacity").toolTip()
     assert differs_tip.endswith("Reference: 6.0")
@@ -169,7 +169,7 @@ def test_differs_row_tooltip_carries_the_reference_value(panel):
 def test_ghost_row_rendered_read_only_and_selectable(panel):
     node = _cell_node(MAIN_RAW)
     panel.show_node(node, "SPM")
-    panel.set_comparison(compare(MAIN_RAW, REF_RAW), _reference_snapshot(REF_RAW))
+    panel.set_comparison([compare(MAIN_RAW, REF_RAW)], [_reference_snapshot(REF_RAW)])
 
     ghosts = _ghost_items(panel)
     assert len(ghosts) == 1
@@ -203,7 +203,7 @@ def test_ghost_row_rendered_read_only_and_selectable(panel):
 
 def test_merge_rule_ghost_key_excluded_from_fields_to_add(panel):
     node = _cell_node(MAIN_RAW)
-    panel.set_comparison(compare(MAIN_RAW, REF_RAW), _reference_snapshot(REF_RAW))
+    panel.set_comparison([compare(MAIN_RAW, REF_RAW)], [_reference_snapshot(REF_RAW)])
     panel._expanded[node.path] = True
     panel.show_node(node, "SPM")
 
@@ -233,7 +233,7 @@ def test_merge_rule_with_no_reference_docked_matches_todays_behaviour(panel):
 def test_strip_counts_text_variations(panel):
     reference = _reference_snapshot(REF_RAW)
 
-    panel.set_comparison(compare(MAIN_RAW, REF_RAW), reference)
+    panel.set_comparison([compare(MAIN_RAW, REF_RAW)], [reference])
     assert panel._strip._counts.text() == "2 differ · 1 ref only"
 
     one_differ = ComparisonResult(
@@ -246,16 +246,16 @@ def test_strip_counts_text_variations(panel):
             )
         }
     )
-    panel.set_comparison(one_differ, reference)
+    panel.set_comparison([one_differ], [reference])
     assert panel._strip._counts.text() == "1 differs"
 
     no_diff = ComparisonResult(sections={_CELL_PATH: SectionDiff(_CELL_PATH, True, True, {})})
-    panel.set_comparison(no_diff, reference)
+    panel.set_comparison([no_diff], [reference])
     assert panel._strip._counts.text() == "no differences"
 
 
 def test_strip_invisible_with_no_reference_docked(panel):
-    panel.set_comparison(None, None)
+    panel.set_comparison([], [])
     assert panel._strip.isHidden()
 
 
@@ -285,7 +285,7 @@ def test_tree_display_text_carries_no_differ_suffix():
     """The old text-appended "≠ N" label suffix is gone -- the mark is now
     the gutter bar + REF_COUNT_ROLE, painted, not text."""
     root, _header, _parameterisation, cell = _tree_with_cell()
-    model = BpxTreeModel(root, comparison=_comparison_with_differ_count(_CELL_PATH, 3))
+    model = BpxTreeModel(root, comparisons=[_comparison_with_differ_count(_CELL_PATH, 3)])
     cell_index = model.index(0, 0, model.index(1, 0))
 
     assert model.data(cell_index, Qt.DisplayRole) == "Cell"
@@ -296,7 +296,7 @@ def test_tree_ref_bar_and_count_for_differing_section():
     model = BpxTreeModel(
         root,
         is_expanded=lambda _index: True,
-        comparison=_comparison_with_differ_count(_CELL_PATH, 3),
+        comparisons=[_comparison_with_differ_count(_CELL_PATH, 3)],
     )
     cell_index = model.index(0, 0, model.index(1, 0))
 
@@ -308,7 +308,7 @@ def test_tree_ref_bar_for_all_equal_section():
     root, _header, _parameterisation, _cell = _tree_with_cell()
     equal_rows = {"k": RowDiff(RowState.EQUAL, 1)}
     comparison = ComparisonResult(sections={_CELL_PATH: SectionDiff(_CELL_PATH, True, True, equal_rows)})
-    model = BpxTreeModel(root, is_expanded=lambda _index: True, comparison=comparison)
+    model = BpxTreeModel(root, is_expanded=lambda _index: True, comparisons=[comparison])
     cell_index = model.index(0, 0, model.index(1, 0))
 
     assert model.data(cell_index, parameter_row.REF_BAR_ROLE) == "equal"
@@ -323,7 +323,7 @@ def test_tree_ref_bar_absent_for_main_only_section():
     comparison = ComparisonResult(
         sections={_CELL_PATH: SectionDiff(_CELL_PATH, in_main=True, in_reference=False, rows=main_only_rows)}
     )
-    model = BpxTreeModel(root, is_expanded=lambda _index: True, comparison=comparison)
+    model = BpxTreeModel(root, is_expanded=lambda _index: True, comparisons=[comparison])
     cell_index = model.index(0, 0, model.index(1, 0))
 
     assert model.data(cell_index, parameter_row.REF_BAR_ROLE) is None
@@ -340,7 +340,7 @@ def test_tree_ref_bar_absent_for_pure_container_with_no_rows_of_its_own():
             _CELL_PATH: SectionDiff(_CELL_PATH, True, True, {"k": RowDiff(RowState.DIFFERS, 1)}),
         }
     )
-    model = BpxTreeModel(root, is_expanded=lambda _index: True, comparison=comparison)
+    model = BpxTreeModel(root, is_expanded=lambda _index: True, comparisons=[comparison])
     parameterisation_index = model.index(1, 0)
 
     assert model.data(parameterisation_index, parameter_row.REF_BAR_ROLE) is None
@@ -355,7 +355,7 @@ def test_tree_collapsed_parent_rolls_up_differing_descendant():
             _CELL_PATH: SectionDiff(_CELL_PATH, True, True, {"k": RowDiff(RowState.DIFFERS, 1)}),
         }
     )
-    model = BpxTreeModel(root, is_expanded=lambda _index: False, comparison=comparison)
+    model = BpxTreeModel(root, is_expanded=lambda _index: False, comparisons=[comparison])
     parameterisation_index = model.index(1, 0)
 
     assert model.data(parameterisation_index, parameter_row.REF_BAR_ROLE) == "differs"
@@ -373,7 +373,7 @@ def test_tree_expanded_parent_shows_no_bar_for_its_own_empty_section():
             _CELL_PATH: SectionDiff(_CELL_PATH, True, True, {"k": RowDiff(RowState.DIFFERS, 1)}),
         }
     )
-    model = BpxTreeModel(root, is_expanded=lambda _index: True, comparison=comparison)
+    model = BpxTreeModel(root, is_expanded=lambda _index: True, comparisons=[comparison])
     parameterisation_index = model.index(1, 0)
 
     assert model.data(parameterisation_index, parameter_row.REF_BAR_ROLE) is None
@@ -392,12 +392,12 @@ def test_tree_ref_bar_and_count_absent_with_no_comparison_docked():
 def test_tree_ref_bar_updates_live_and_clears():
     root, _header, _parameterisation, _cell = _tree_with_cell()
     model = BpxTreeModel(
-        root, is_expanded=lambda _index: True, comparison=_comparison_with_differ_count(_CELL_PATH, 2)
+        root, is_expanded=lambda _index: True, comparisons=[_comparison_with_differ_count(_CELL_PATH, 2)]
     )
     cell_index = model.index(0, 0, model.index(1, 0))
 
     assert model.data(cell_index, parameter_row.REF_BAR_ROLE) == "differs"
-    model.set_comparison(None)
+    model.set_comparison([])
     assert model.data(cell_index, parameter_row.REF_BAR_ROLE) is None
 
 

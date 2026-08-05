@@ -210,11 +210,11 @@ class TreePanel(QWidget):
         layout.addWidget(self._view)
 
         self._root: TreeNode | None = None
-        #: Reference comparison (multi-file track M2), remembered across a
+        #: Reference comparisons (multi-reference track), remembered across a
         #: ``set_root`` rebuild so a freshly-opened document immediately
-        #: shows the still-docked reference's gutter bars/differ counts. See
+        #: shows the still-docked references' gutter bars/differ counts. See
         #: ``set_comparison``.
-        self._comparison: ComparisonResult | None = None
+        self._comparisons: list[ComparisonResult] = []
         self._popup = NamePopup(self)
         self._popup.name_chosen.connect(self._on_name_chosen)
         #: What the open popup will do with its name: ("add", container_path)
@@ -233,22 +233,22 @@ class TreePanel(QWidget):
         model = BpxTreeModel(
             root,
             is_expanded=self._view.isExpanded,
-            comparison=self._comparison,
+            comparisons=self._comparisons,
             visible_error_paths=visible_error_paths,
         )
         self._view.setModel(model)
         self._view.expandToDepth(1)
         model.refresh_warning_markers()
 
-    def set_comparison(self, comparison: ComparisonResult | None) -> None:
-        """Set the reference comparison (multi-file track M2) and repaint
+    def set_comparison(self, comparisons: list[ComparisonResult]) -> None:
+        """Set the reference comparisons (multi-reference track) and repaint
         every section's gutter bar/differ count -- called by ``MainWindow``
         on every document change and every reference dock/undock/hide
         toggle."""
-        self._comparison = comparison
+        self._comparisons = comparisons
         model = self._view.model()
         if isinstance(model, BpxTreeModel):
-            model.set_comparison(comparison)
+            model.set_comparison(comparisons)
 
     def reveal(self, path: tuple[str, ...]) -> None:
         """Expand ancestors of, select, and scroll to the node at *path*.

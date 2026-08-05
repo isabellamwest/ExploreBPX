@@ -47,15 +47,16 @@ class BpxTreeModel(QAbstractItemModel):
         self,
         root: TreeNode,
         is_expanded: Callable[[QModelIndex], bool] | None = None,
-        comparison: ComparisonResult | None = None,
+        comparisons: list[ComparisonResult] | None = None,
         visible_error_paths: frozenset[tuple[str, ...]] = frozenset(),
     ) -> None:
         super().__init__()
         self._root = root
         self._is_expanded = is_expanded or (lambda _index: False)
-        #: Reference comparison (multi-file track M2), or ``None`` with no
-        #: reference docked (or its decoration hidden). See ``set_comparison``.
-        self._comparison = comparison
+        #: Reference comparisons (multi-reference track), one per pinned
+        #: reference, or empty with none docked (or decoration hidden). See
+        #: ``set_comparison``.
+        self._comparisons: list[ComparisonResult] = list(comparisons) if comparisons else []
         #: Section paths whose dot should show: page-visible errors only
         #: (``core.completion.visible_error_section_paths``, decisions P/G).
         #: The marker deliberately does NOT read ``node.has_direct_errors``/
@@ -65,9 +66,16 @@ class BpxTreeModel(QAbstractItemModel):
         #: badge call the same state calm.
         self._visible_error_paths = frozenset(visible_error_paths)
 
-    def set_comparison(self, comparison: ComparisonResult | None) -> None:
-        """Update the comparison result and repaint every node's label."""
-        self._comparison = comparison
+    @property
+    def _comparison(self) -> ComparisonResult | None:
+        """Phase 0 shim: the tree still paints against the first pinned
+        reference's comparison only. A later phase folds in every pinned
+        reference (design rule 6: differs from *any* reference)."""
+        return self._comparisons[0] if self._comparisons else None
+
+    def set_comparison(self, comparisons: list[ComparisonResult]) -> None:
+        """Update the comparison results and repaint every node's label."""
+        self._comparisons = list(comparisons)
         self._emit_data_changed(QModelIndex())
 
     def node_at(self, index: QModelIndex) -> TreeNode | None:
