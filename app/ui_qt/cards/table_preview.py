@@ -36,6 +36,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPen
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
+from .. import typography
 from ..style import ACCENT, MUTED, REFERENCE
 from .chart_axes import (
     as_plot_number,
@@ -122,7 +123,7 @@ class TablePreview(QWidget):
         self._axis_x = QValueAxis()
         self._axis_y = QValueAxis()
         for axis in (self._axis_x, self._axis_y):
-            style_axis(axis)
+            style_axis(axis, self.font())
         self._chart.addAxis(self._axis_x, Qt.AlignBottom)
         self._chart.addAxis(self._axis_y, Qt.AlignLeft)
         for series in (self._line, self._dots, self._ref_line):
@@ -251,5 +252,5 @@ def _legend_swatch(color: str, *, dashed: bool) -> QLabel:
 
 def _legend_label(text: str) -> QLabel:
     label = QLabel(text)
-    label.setStyleSheet(f"color: {MUTED}; font-size: 11px;")
+    label.setStyleSheet(f"color: {MUTED}; {typography.size_qss(typography.META)}")
     return label

@@ -14,7 +14,7 @@ from typing import Callable
 from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtWidgets import QLabel, QWidget
 
-from . import style
+from . import style, typography
 
 #: How long a message stays visible before auto-dismissing.
 DISMISS_DELAY_MS = 4000
@@ -74,7 +74,7 @@ class Toast(QLabel):
             self.setText(
                 f"{html.escape(text)}&nbsp;&nbsp;"
                 f'<a href="action" style="color: {style.TOAST_ACTION};'
-                f' font-weight: 600;">{html.escape(action_text)}</a>'
+                f' {typography.semibold_qss()}">{html.escape(action_text)}</a>'
             )
         else:
             self.setTextFormat(Qt.PlainText)

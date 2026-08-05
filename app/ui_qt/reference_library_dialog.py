@@ -48,7 +48,8 @@ from core.reference_library import (
 
 from .group_box import GroupBox
 from .style import BORDER, MUTED, REFERENCE
-from .titles import panel_title
+from . import typography
+from .typography import panel_title
 
 #: The picker column's fixed width -- the run-comparison dialog's rail width.
 _PICKER_WIDTH = 250
@@ -79,11 +80,11 @@ class _SetRow(QFrame):
         layout.addWidget(name, 1)
 
         model = QLabel(ref_set.model)
-        model.setStyleSheet(f"color: {MUTED}; font-size: 11px;")
+        model.setStyleSheet(f"color: {MUTED}; {typography.size_qss(typography.META)}")
         layout.addWidget(model)
 
         self._tick = QLabel("✓")
-        self._tick.setStyleSheet(f"color: {REFERENCE}; font-weight: 600;")
+        self._tick.setStyleSheet(f"color: {REFERENCE}; {typography.semibold_qss()}")
         self._tick.hide()
         layout.addWidget(self._tick)
 

@@ -66,7 +66,7 @@ from ..icons import DOT, PENCIL, hover_icon, html_img
 from ..latex import symbol_label
 from ..parameter_info_popover import ParameterInfoPopover
 from ..parameter_row import value_preview
-from .. import style
+from .. import style, typography
 from ..style import ERROR, MUTED
 from .bodies import table_rows
 from .function import table_is_representable
@@ -126,7 +126,8 @@ class ParameterCard(QWidget):
         # for parameters the technical-descriptions dataset documents; every
         # other parameter simply shows no symbol (see resolve_parameter_metadata).
         if self._metadata.symbol:
-            symbol = symbol_label(self._metadata.symbol, point_size=13.0, color=MUTED)
+            # The symbol belongs to the title beside it, so it shares its rung.
+            symbol = symbol_label(self._metadata.symbol, size=typography.TITLE, color=MUTED)
             symbol.setObjectName("CardSymbol")
             header.addWidget(symbol)
         if self._renamable:
@@ -162,7 +163,7 @@ class ParameterCard(QWidget):
         self._info_button.setToolTip("Parameter information")
         self._info_button.setFixedSize(20, 20)
         self._info_button.setStyleSheet(
-            "border-radius: 10px; font-style: italic; font-weight: 600;"
+            f"border-radius: 10px; font-style: italic; {typography.semibold_qss()}"
         )
         self._info_button.clicked.connect(self._toggle_info_popover)
         header.addWidget(self._info_button)

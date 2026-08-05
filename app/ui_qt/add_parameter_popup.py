@@ -83,7 +83,7 @@ from PySide6.QtWidgets import (
 
 from core.bpx_gateway import ExpectedField, FieldMeta, expected_fields, searchable_parameters
 from core.parameter_types import extract_unit
-from ui_qt import parameter_row, style
+from ui_qt import parameter_row, style, typography
 from ui_qt.cards.modal import ModeStrip
 from ui_qt.dismissal import OutsideDismissFilter
 from ui_qt.floating_card import SHADOW_MARGIN as _SHADOW_MARGIN
@@ -534,8 +534,7 @@ class AddParameterPopup(QWidget):
         item.setData(self._REQUIRED_ROLE, required)
         if tier == "suggested":
             item.setForeground(QColor(style.ACCENT))
-            font = QFont(self._list.font())
-            font.setBold(True)
+            font = typography.semibold(self._list.font())
             item.setFont(font)
         item.setData(parameter_row.HTML_ROLE, suggestion_row_html(alias, meta, tier, required))
         return item
@@ -546,13 +545,9 @@ class AddParameterPopup(QWidget):
         item.setFlags(Qt.ItemIsEnabled)  # visible, but never selected/activated
         item.setData(self._TIER_ROLE, "header")
         item.setForeground(QColor(style.MUTED))
-        font = QFont(self._list.font())
-        size = font.pointSizeF()
-        if size > 0:
-            font.setPointSizeF(size * 0.82)
-        font.setBold(True)
+        font = typography.semibold(typography.sized(self._list.font(), typography.META))
         font.setCapitalization(QFont.AllUppercase)
-        font.setLetterSpacing(QFont.PercentageSpacing, 108)
+        typography.apply_caps_spacing(font)
         item.setFont(font)
         if divider:
             item.setData(self._TIER_TOP_ROLE, True)

@@ -69,6 +69,7 @@ from core.csv_import import positional_map, read_csv_file
 from core.paste import parse_clipboard
 from core.values import format_value, parse_value, values_equal
 
+from .. import icons, typography
 from ..style import ACCENT, BORDER, ERROR_TINT, MUTED, NEUTRAL_TINT
 from .csv_dialog import CsvImportDialog
 from .paste_dialog import PastePreviewDialog, PastePreviewResult
@@ -370,11 +371,14 @@ class _PendingBar(QWidget):
         layout.setContentsMargins(8, 2, 6, 2)
         layout.setSpacing(6)
 
-        # The unified dot language's small (8px) mark, in the accent colour:
-        # "edited, not yet written" is a document state, never a severity, so
-        # it must not read as a validator warning.
-        dot = QLabel("●")
-        dot.setStyleSheet(f"color: {ACCENT}; font-size: 8px;")
+        # The unified dot language's mark, in the accent colour: "edited, not
+        # yet written" is a document state, never a severity, so it must not
+        # read as a validator warning. Drawn as the shared ``icons.DOT`` glyph
+        # rather than a shrunk "●" character, so it is the same mark, at the
+        # same 8px-in-a-13px-box, as every other dot in the app.
+        dot = QLabel()
+        dot.setTextFormat(Qt.RichText)
+        dot.setText(icons.html_img(icons.DOT, color=ACCENT))
         layout.addWidget(dot)
         label = QLabel("Unsaved edits")
         label.setStyleSheet(f"color: {MUTED};")
@@ -386,7 +390,7 @@ class _PendingBar(QWidget):
         self.apply_button.setToolTip("Write these edits to the file")
         self.apply_button.setAccessibleName("Apply edits")
         self.apply_button.setAutoRaise(True)
-        self.apply_button.setStyleSheet(f"color: {ACCENT}; font-weight: 600;")
+        self.apply_button.setStyleSheet(f"color: {ACCENT}; {typography.semibold_qss()}")
         layout.addWidget(self.apply_button)
 
         self.discard_button = QToolButton()

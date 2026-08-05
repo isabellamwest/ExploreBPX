@@ -7,25 +7,24 @@ use is reserved for validity status only.
 
 from __future__ import annotations
 
+from string import Template
+
 from core.completion import TaskKind
 from core.validation import Severity
 
+from . import typography
+
 # ---------------------------------------------------------------------------
-# Spacing/type scale: shared step values so new layout code picks a rung on
-# the app's existing rhythm instead of inventing its own margin/font-size
-# literal. Not a migration -- existing hardcoded numbers stay put until a
-# later pass moves them onto these names; these constants only need to exist
-# so new code has somewhere to reach for.
+# Spacing scale: shared step values so new layout code picks a rung on the
+# app's existing rhythm instead of inventing its own margin literal.
+#
+# Type is not here: sizes, weights and the caps tier all live in
+# ``ui_qt.typography``, which the stylesheet below substitutes into.
 # ---------------------------------------------------------------------------
 SPACING_XS = 4
 SPACING_SM = 8
 SPACING_MD = 12
 SPACING_LG = 16
-
-FONT_SIZE_SM = 11
-FONT_SIZE_BASE = 12
-FONT_SIZE_MD = 13
-FONT_SIZE_LG = 15
 
 #: A readable-measure cap for a content column inside an otherwise full-bleed
 #: section (e.g. the Inspector's ``cards/page.py`` content body) -- long
@@ -43,9 +42,8 @@ ACCENT = "#1f6feb"
 #: near-identical ones (#ddeeff, #e3edfd, #eaf2ff) that had drifted apart.
 #: The raw stylesheet below still spells the same hex literal at each QSS
 #: selector (as every other named colour already does in that string, e.g.
-#: ``BORDER_STRONG``/``HEADER_BAND_STRONG``) rather than turning
-#: ``STYLESHEET`` into an f-string, which would need every literal
-#: ``{``/``}`` in the QSS escaped.
+#: ``BORDER_STRONG``/``HEADER_BAND_STRONG``); only type is substituted, via
+#: the ``string.Template`` placeholders at the foot of this module.
 ACCENT_TINT = "#ddeeff"
 #: The reference-file feature's own accent: purple, by explicit user
 #: decision -- everything reference-specific carries this one hue so it is
@@ -259,12 +257,17 @@ def toast_qss() -> str:
     floating surfaces (rounded corners) rather than a flat banner."""
     return (
         f"background: {DEFAULT_TEXT}; color: #ffffff; "
-        "padding: 8px 18px; border-radius: 14px; font-size: 12px;"
+        f"padding: 8px 18px; border-radius: 14px;"
     )
 
 
-STYLESHEET = """
-QWidget { font-size: 13px; color: #1f2328; }
+#: The global stylesheet, as a ``string.Template``: every font size and weight
+#: is a ``${name}`` placeholder filled from :func:`typography.qss_tokens`, so
+#: the type scale has exactly one definition. A ``Template`` rather than an
+#: f-string because QSS is full of literal braces an f-string would need
+#: escaped at every rule.
+_STYLESHEET_TEMPLATE = """
+QWidget { font-size: ${body}px; color: #1f2328; }
 QMainWindow, QWidget#Panel { background: #ffffff; }
 QToolBar { background: #f6f8fa; border-bottom: 1px solid #d0d7de; padding: 4px; spacing: 8px; }
 /* Toolbar buttons (Save/Export/Undo/Redo), styled as one family. The
@@ -314,15 +317,15 @@ QListWidget#ParameterListView::item { padding: 6px 8px; border-radius: 4px; }
    per seam. Scoped by objectName so it does not affect the Inspector's own
    internal (top/bottom) splitter, whose handle stays at its default width. */
 QSplitter#EditorSplitter::handle { background: #d0d7de; }
-QLabel#CardTitle { font-size: 15px; font-weight: 600; }
+QLabel#CardTitle { font-size: ${title}px; font-weight: ${semibold}; }
 QLabel#CardSymbol { margin-left: 8px; }
 /* Heading tiers. Fixed panel/section labels the app authors are one caps
    tier -- 11px MUTED
-   caps, letter-spaced in code via titles.panel_title (QSS has no
+   caps, letter-spaced in code via typography.panel_title (QSS has no
    text-transform). Data-derived headings (document names, parse summaries)
    stay sentence-case ink as QLabel#Heading, the content tier. */
-QLabel#PanelTitle { color: #57606a; font-weight: 600; font-size: 11px; }
-QLabel#Heading { color: #1f2328; font-weight: 600; }
+QLabel#PanelTitle { color: #57606a; font-weight: ${semibold}; font-size: ${meta}px; }
+QLabel#Heading { color: #1f2328; font-weight: ${semibold}; }
 QLabel#CardDescription { color: #57606a; }
 /* Structured-page inspector: the editing pane is a white page -- frameless
    scroll area, white content surface -- opened by each card's full-bleed
@@ -335,8 +338,8 @@ QScrollArea#InspectorScroll { border: none; background: #ffffff; }
 QWidget#InspectorContent { background: #ffffff; }
 QFrame#CardPageHeader { border: none; background: #f6f8fa; }
 QWidget#InspectorIssuesSection, QWidget#InspectorDocsSection { background: #f6f8fa; }
-QLabel#InspectorIssuesCount { color: #57606a; font-size: 12px; }
-QLabel#CardValidityText { color: #57606a; font-size: 12px; }
+QLabel#InspectorIssuesCount { color: #57606a; font-size: ${meta}px; }
+QLabel#CardValidityText { color: #57606a; font-size: ${meta}px; }
 QLabel#InspectorPlaceholder { color: #57606a; }
 /* Unit labels sit directly beside their input (never at the pane edge) and
    stay quiet: they annotate the value, they are not part of it. */
@@ -367,7 +370,7 @@ QFrame#WorkspaceRailDivider { background: #d0d7de; border: none; }
    tile-button treatment below. */
 QPushButton#WorkspaceOpen {
     background: #ffffff; border: 1px solid #c4cdd5; border-radius: 6px;
-    padding: 5px 10px; font-size: 12px; text-align: left;
+    padding: 5px 10px; text-align: left;
 }
 QPushButton#WorkspaceOpen:hover { background: #eef1f4; }
 /* One New-chooser model row: flat bold name button over a muted descriptor
@@ -376,10 +379,10 @@ QPushButton#WorkspaceOpen:hover { background: #eef1f4; }
    which QSS cannot prefix-match. */
 QPushButton[modelOption="true"] {
     background: transparent; border: none; border-radius: 4px;
-    padding: 3px 6px; font-weight: 600; text-align: left;
+    padding: 3px 6px; font-weight: ${semibold}; text-align: left;
 }
 QPushButton[modelOption="true"]:hover { background: #e8eaed; }
-QLabel#NewChooserDescriptor { color: #57606a; font-size: 12px; padding: 0 6px 2px 6px; }
+QLabel#NewChooserDescriptor { color: #57606a; font-size: ${meta}px; padding: 0 6px 2px 6px; }
 /* The shared banded group-box chrome (``ui_qt.group_box.GroupBox``):
    bordered rounded card, shaded banded header -- the Diagnostics Issues/
    Outstanding boxes and the reference-library dialog's detail card alike.
@@ -395,38 +398,38 @@ QWidget#ReferenceGroupBoxHeader {
     background: #f6f2fb; border-bottom: 1px solid #d5cde6;
     border-top-left-radius: 6px; border-top-right-radius: 6px;
 }
-QLabel#WorkspaceCardTitle { font-size: 15px; font-weight: 600; }
-QLabel#WorkspaceCardTitle:disabled { color: #8c959f; font-weight: 400; }
+QLabel#WorkspaceCardTitle { font-size: ${title}px; font-weight: ${semibold}; }
+QLabel#WorkspaceCardTitle:disabled { color: #8c959f; font-weight: ${regular}; }
 QLabel#WorkspaceCardKey { color: #57606a; }
 /* The reference box's panel title keeps its purple identity while joining
    the caps tier -- colour is identity, caps is hierarchy. */
-QLabel#ReferenceHeading { color: #6f42c1; font-weight: 600; font-size: 11px; }
+QLabel#ReferenceHeading { color: #6f42c1; font-weight: ${semibold}; font-size: ${meta}px; }
 /* Quieter than the heading beside it (explicit user call): a light, small
    annotation, not a badge. */
-QLabel#ReferenceReadOnlyTag { color: #7a63ad; font-size: 10px; }
+QLabel#ReferenceReadOnlyTag { color: #7a63ad; font-size: ${micro}px; }
 QPushButton#ReferenceTileMakeMain, QPushButton#ReferenceTileRemove,
 QPushButton#ReferenceFromLibrary, QPushButton#WorkspaceOpenReference {
     background: #ffffff; border: 1px solid #d0d7de; border-radius: 4px;
-    padding: 3px 10px; font-size: 12px;
+    padding: 3px 10px;
 }
 QPushButton#ReferenceTileMakeMain:hover, QPushButton#ReferenceTileRemove:hover,
 QPushButton#ReferenceFromLibrary:hover, QPushButton#WorkspaceOpenReference:hover { background: #f6f8fa; }
 /* The reference card's empty state: the teaching line over the two dock
    buttons -- muted text, never a badge. */
-QLabel#ReferenceEmptyStateText { color: #57606a; font-size: 12px; }
+QLabel#ReferenceEmptyStateText { color: #57606a; font-size: ${meta}px; }
 /* Reference library dialog: detail card reuses the ReferenceGroupBox
    chrome above; these are its own bits.
    The dock button is the dialog's one loud action -- a solid
    style.REFERENCE fill. */
-QLabel#ReferenceLibraryMeta { color: #57606a; font-size: 12px; }
-QLabel#ReferenceLibraryCitation { color: #454c54; font-size: 12px; }
+QLabel#ReferenceLibraryMeta { color: #57606a; font-size: ${meta}px; }
+QLabel#ReferenceLibraryCitation { color: #454c54; font-size: ${meta}px; }
 QLabel#ReferenceLibraryDescription {
-    color: #454c54; font-size: 12px;
+    color: #454c54; font-size: ${meta}px;
     border-left: 2px solid #d5cde6; padding-left: 8px;
 }
-QLabel#ReferenceLibraryProvenance { color: #8c959f; font-size: 11px; }
+QLabel#ReferenceLibraryProvenance { color: #8c959f; font-size: ${meta}px; }
 QPushButton#ReferenceLibraryDockButton {
-    background: #6f42c1; color: #ffffff; font-weight: 600;
+    background: #6f42c1; color: #ffffff; font-weight: ${semibold};
     border: none; border-radius: 4px; padding: 5px 14px;
 }
 QPushButton#ReferenceLibraryDockButton:hover { background: #5a3399; }
@@ -435,8 +438,8 @@ QPushButton#ReferenceLibraryDockButton:hover { background: #5a3399; }
    style.REFERENCE_WASH, spelled as a literal (also reused by
    QWidget#WorkspaceReferenceSection above). */
 QWidget#ComparisonStrip { background: #f8f5fc; }
-QLabel#ComparisonStripIdentity { color: #6f42c1; font-weight: 600; font-size: 12px; }
-QLabel#ComparisonStripCounts { color: #57606a; font-size: 12px; }
+QLabel#ComparisonStripIdentity { color: #6f42c1; font-weight: ${semibold}; font-size: ${meta}px; }
+QLabel#ComparisonStripCounts { color: #57606a; font-size: ${meta}px; }
 /* Reference row (aligned-rows card layout): "Main" and "Reference" are the
    role-label column beside their value, sharing one fixed width
    (style.ROLE_LABEL_WIDTH) so the two value columns start at the same x.
@@ -448,60 +451,60 @@ QLabel#ComparisonStripCounts { color: #57606a; font-size: 12px; }
    line of the taller value beside it. The "same as main" faint style
    reuses the app's muted-text tone via a dynamic property, the same
    pattern QLabel#DiagnosticsChip[chipOff="true"] already uses below. */
-QLabel#MainFileHeading { color: #57606a; font-weight: 600; font-size: 11px; padding-top: 7px; }
-QLabel#ReferenceFileHeading { color: #6f42c1; font-weight: 600; font-size: 11px; padding-top: 7px; }
+QLabel#MainFileHeading { color: #57606a; font-weight: ${semibold}; font-size: ${meta}px; padding-top: 7px; }
+QLabel#ReferenceFileHeading { color: #6f42c1; font-weight: ${semibold}; font-size: ${meta}px; padding-top: 7px; }
 QFrame#ReferenceValueBox { border: none; border-radius: 4px; background: #f6f8fa; }
 QLabel#ReferenceBlockValue[same="true"] { color: #8c959f; }
 /* The read-only reference grid lives inside the washed value box: no frame
    of its own, transparent so the box's wash shows through, quiet 11px
    header over dense rows. */
 QTableWidget#ReferenceTableGridTable {
-    background: transparent; border: none; font-size: 12px;
+    background: transparent; border: none;
 }
 QTableWidget#ReferenceTableGridTable QHeaderView::section {
     background: transparent; border: none; border-bottom: 1px solid #eaeef2;
-    color: #8c959f; font-weight: 600; font-size: 11px; padding: 1px 6px;
+    color: #8c959f; font-weight: ${semibold}; font-size: ${meta}px; padding: 1px 6px;
 }
 /* "Copy up": a quiet purple text button beside the value -- the pull action
    stays discoverable without outweighing the main editor (the old solid
    fill was the loudest thing on the card). Hidden for an EQUAL row --
    nothing to copy -- rather than shown disabled. */
 QPushButton#CopyUpButton {
-    background: transparent; color: #6f42c1; font-weight: 600; font-size: 12px;
+    background: transparent; color: #6f42c1; font-weight: ${semibold};
     border: none; border-radius: 4px; padding: 4px 8px;
 }
 QPushButton#CopyUpButton:hover:!disabled { color: #5a3399; background: #f3ecfa; }
-QPushButton#CopyUpButton:disabled { color: #8c959f; font-weight: 400; }
-QLabel#GhostCardHeading { color: #6f42c1; font-weight: 600; font-size: 11px; }
+QPushButton#CopyUpButton:disabled { color: #8c959f; font-weight: ${regular}; }
+QLabel#GhostCardHeading { color: #6f42c1; font-weight: ${semibold}; font-size: ${meta}px; }
 /* Source page toolbar: the fold-all toggle sits left in both modes;
    single-pane also shows the main file's identity + the purple docking
    hint. The bordered button reuses the reference tile's flat treatment. */
-QLabel#SourceFileLabel { color: #57606a; font-size: 12px; }
-QLabel#SourceHint { color: #6f42c1; font-size: 12px; }
+QLabel#SourceFileLabel { color: #57606a; font-size: ${meta}px; }
+QLabel#SourceHint { color: #6f42c1; font-size: ${meta}px; }
 QPushButton#SourceFoldButton {
     background: #ffffff; border: 1px solid #d0d7de; border-radius: 4px;
-    padding: 2px 10px; font-size: 12px; color: #57606a;
+    padding: 2px 10px; color: #57606a;
 }
 QPushButton#SourceFoldButton:hover { background: #f6f8fa; }
 /* Stale-reference band: slim, neutral, under the pane headers; the
    Reload link is the page's only blue. */
 QWidget#SourceStaleBand { background: #eef0f2; }
-QLabel#SourceStaleText { color: #57606a; font-size: 12px; }
+QLabel#SourceStaleText { color: #57606a; font-size: ${meta}px; }
 QPushButton#SourceReloadLink {
     background: transparent; border: none; color: #1f6feb;
-    font-size: 12px; padding: 0;
+    font-size: ${meta}px; padding: 0;
 }
 QPushButton#SourceReloadLink:hover { color: #1a5fd0; }
-QStatusBar { background: #f6f8fa; border-top: 1px solid #d0d7de; font-size: 12px; color: #57606a; }
+QStatusBar { background: #f6f8fa; border-top: 1px solid #d0d7de; font-size: ${meta}px; color: #57606a; }
 QWidget#ActivityBar { background: #f6f8fa; border-right: 1px solid #d0d7de; }
 QToolButton#ActivityButton { background: transparent; border: none; border-left: 2px solid transparent; }
 QToolButton#ActivityButton:hover:!checked { background: #e8eaed; }
 QToolButton#ActivityButton:checked { border-left: 2px solid #1f2328; background: transparent; }
 QWidget#PageHeader { background: #ffffff; border-bottom: 1px solid #d0d7de; }
-QLabel#PageHeaderTitle { color: #57606a; font-size: 11px; font-weight: 600; }
+QLabel#PageHeaderTitle { color: #57606a; font-size: ${meta}px; font-weight: ${semibold}; }
 /* The Inspector's Issues list sits directly on its section's wash: no
    frame, no ground of its own -- rows read on the tint. */
-QListWidget#IssuesList { border: none; background: transparent; font-size: 12px; }
+QListWidget#IssuesList { border: none; background: transparent; }
 /* The toolbar search's floating results card: identical treatment to
    QFrame#AddParameterCard (translucent top-level, rounded shadowed card),
    so the app's two floating palettes read as one family. */
@@ -543,7 +546,7 @@ QLabel#DiagnosticsChip[chipOff="true"] { background: #eef0f2; border: 1px solid 
 QLabel#DiagnosticsChip:disabled { background: #f3f4f6; border: 1px solid #e1e4e8; }
 /* D15's plain-text fold-everything affordance -- link-styled, not a chip
    (there is no count for it to toggle). */
-QLabel#DiagnosticsCollapseAll { color: #1f6feb; font-size: 12px; }
+QLabel#DiagnosticsCollapseAll { color: #1f6feb; font-size: ${meta}px; }
 /* The one stream list: same row rhythm as everywhere else in the app.
    Fold headers/the clear line are delegate-painted bands
    (_DiagnosticsRowDelegate) that ignore this hover/selected styling --
@@ -554,8 +557,8 @@ QListWidget#DiagnosticsStreamList::item:hover { background: #f0f2f4; }
 QListWidget#DiagnosticsStreamList::item:selected { background: #ddeeff; color: #1f2328; }
 /* The Documentation section's quiet "no description" line -- in-flow body
    text on the section wash, not a centred empty state. */
-QLabel#DocumentationPlaceholder { color: #57606a; font-size: 12px; }
-QLabel#Hint { color: #57606a; font-size: 11px; }
+QLabel#DocumentationPlaceholder { color: #57606a; }
+QLabel#Hint { color: #57606a; font-size: ${meta}px; }
 
 /* Mode strip: segmented, mutually-exclusive buttons. Originally a card's
    type picker naming each legal representation of a union-typed field (in
@@ -565,12 +568,12 @@ QLabel#Hint { color: #57606a; font-size: 11px; }
    too. */
 QToolButton#ModeButton {
     border: 1px solid #d0d7de; border-left-width: 0;
-    padding: 3px 10px; background: #f6f8fa; color: #57606a; font-size: 11px;
+    padding: 3px 10px; background: #f6f8fa; color: #57606a; font-size: ${meta}px;
 }
 QToolButton#ModeButton:first-child { border-left-width: 1px; border-top-left-radius: 4px; border-bottom-left-radius: 4px; }
 QToolButton#ModeButton:last-child { border-top-right-radius: 4px; border-bottom-right-radius: 4px; }
 QToolButton#ModeButton:hover { background: #eef1f4; }
-QToolButton#ModeButton:checked { background: #ffffff; color: #1f2328; font-weight: 600; border-bottom: 2px solid #1f6feb; }
+QToolButton#ModeButton:checked { background: #ffffff; color: #1f2328; font-weight: ${semibold}; border-bottom: 2px solid #1f6feb; }
 
 /* Parameter-list pane's section header: style.NEUTRAL_WASH, spelled as a
    literal (see the constant's own comment), the same full-width tinted-wash
@@ -581,10 +584,10 @@ QToolButton#ModeButton:checked { background: #ffffff; color: #1f2328; font-weigh
    and honestly greys out (not error-red) while disabled (no section
    selected). */
 QWidget#ParameterListHeader { background: #f6f8fa; }
-QLabel#ParameterListHeaderCount { color: #57606a; font-size: 12px; }
+QLabel#ParameterListHeaderCount { color: #57606a; font-size: ${meta}px; }
 QPushButton#AddParameterButton {
     background: transparent; border: none; color: #1f6feb;
-    font-size: 12px; font-weight: 600; padding: 0;
+    font-size: ${meta}px; font-weight: ${semibold}; padding: 0;
 }
 QPushButton#AddParameterButton:hover:!disabled { color: #0757d0; }
 QPushButton#AddParameterButton:disabled { color: #8c959f; }
@@ -602,7 +605,6 @@ QLineEdit#AddParameterInput {
     border-radius: 4px;
     padding: 6px 8px;
     background: #ffffff;
-    font-size: 12px;
     selection-background-color: #ddeeff;
 }
 QLineEdit#AddParameterInput:focus { border: 1px solid #1f6feb; }
@@ -611,7 +613,6 @@ QListWidget#AddParameterList {
     border: none;
     background: transparent;
     outline: none;
-    font-size: 12px;
 }
 QListWidget#AddParameterList::item { padding: 8px; border-radius: 4px; }
 QListWidget#AddParameterList::item:selected { background: #ddeeff; color: #1f2328; }
@@ -625,10 +626,13 @@ QPushButton#AddParameterCreate {
     border-radius: 4px;
     background: transparent;
     color: #1f6feb;
-    font-weight: 500;
+    font-weight: ${semibold};
 }
 /* Same wash as the row-selected states above (style.ACCENT_TINT) -- this
    used to be its own near-identical #eaf2ff blue. */
 QPushButton#AddParameterCreate:hover { background: #ddeeff; }
 QPushButton#AddParameterCreate[selected="true"] { background: #ddeeff; }
 """
+
+#: The stylesheet the app actually applies (``MainWindow`` sets it once).
+STYLESHEET = Template(_STYLESHEET_TEMPLATE).substitute(typography.qss_tokens())

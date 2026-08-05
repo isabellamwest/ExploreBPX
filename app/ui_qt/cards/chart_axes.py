@@ -15,6 +15,7 @@ from PySide6.QtCore import QMargins
 from PySide6.QtGui import QBrush, QColor, QFont, QPainter
 from PySide6.QtWidgets import QFrame
 
+from .. import typography
 from ..style import CHART_GRID, MUTED
 
 
@@ -53,7 +54,7 @@ def setup_chart_view(view, height: int) -> None:
     view.setFixedHeight(height)
 
 
-def style_axis(axis) -> None:
+def style_axis(axis, widget_font: QFont) -> None:
     """Apply the app's axis look to a ``QValueAxis``.
 
     Tick labels and titles use the app's small-label vocabulary (11px, muted
@@ -61,15 +62,16 @@ def style_axis(axis) -> None:
     labels) instead of QtCharts' own defaults, so chart text reads as part of
     the surrounding card. ``%g`` keeps tick labels compact for both the tiny
     magnitudes BPX tables hold (diffusivities near 1e-14) and plain ranges.
+
+    *widget_font* is the owning widget's font -- a bare ``QFont()`` takes the
+    *application* default rather than the widget's, so axis fonts built from
+    it could silently drift from the rest of the UI.
     """
     axis.setGridLineColor(QColor(CHART_GRID))
     axis.setLabelsColor(QColor(MUTED))
-    labels_font = QFont()
-    labels_font.setPixelSize(11)
+    labels_font = typography.sized(widget_font, typography.META)
     axis.setLabelsFont(labels_font)
-    title_font = QFont()
-    title_font.setPixelSize(11)
-    title_font.setWeight(QFont.DemiBold)
+    title_font = typography.semibold(typography.sized(widget_font, typography.META))
     axis.setTitleFont(title_font)
     axis.setTitleBrush(QBrush(QColor(MUTED)))
     axis.setLabelFormat("%g")

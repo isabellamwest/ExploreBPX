@@ -39,6 +39,7 @@ from PySide6.QtWidgets import (
 from core import bpx_gateway
 from core.values import format_value, parse_value
 
+from .. import typography
 from ..style import ERROR, MUTED, VALUE_INPUT_MAX_WIDTH
 from .cell_issues import table_cells
 from .grid import NumericGrid
@@ -167,7 +168,9 @@ class ExpressionBody(ModeBody):
         lines = bpx_gateway.function_syntax_help().splitlines()
         hint = QLabel(" · ".join(line.strip().lstrip("- ") for line in lines if line.strip()))
         hint.setWordWrap(True)
-        hint.setStyleSheet(f"color: {MUTED}; font-size: 12px;")
+        hint.setStyleSheet(
+            f"color: {MUTED}; {typography.size_qss(typography.META)}"
+        )
         layout.addWidget(hint)
 
     def value(self) -> object:

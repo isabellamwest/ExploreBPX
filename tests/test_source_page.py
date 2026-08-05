@@ -226,7 +226,9 @@ def test_two_panes_share_a_wrapped_line_height(qtbot):
     page = SourcePage()
     qtbot.addWidget(page)
     ref = dict(_LONG_DOC)
-    ref["Header"] = dict(_LONG_DOC["Header"], Description="short")
+    # Short enough that it cannot wrap at any plausible font metric -- the
+    # old "short" fit the pane by a single character under Courier New.
+    ref["Header"] = dict(_LONG_DOC["Header"], Description="s")
     page.refresh(_LONG_DOC, reference=_RefStub(ref))
     view = _sized(page, 700)
 

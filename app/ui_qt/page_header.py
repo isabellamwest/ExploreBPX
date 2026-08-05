@@ -11,7 +11,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget
 
-from .titles import apply_caps_spacing
+from .typography import apply_caps_spacing
 
 
 class PageHeader(QWidget):

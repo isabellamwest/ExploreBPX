@@ -24,7 +24,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from . import style
-from .titles import panel_title
+from .typography import panel_title
 
 #: The two visual variants, keyed to their QSS selectors in style.py: a
 #: neutral grey band (Diagnostics' Issues/Outstanding boxes) or the

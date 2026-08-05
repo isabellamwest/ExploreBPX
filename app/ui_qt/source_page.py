@@ -24,7 +24,7 @@ import re
 from dataclasses import dataclass, replace
 
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QFontDatabase, QFontMetrics, QPainter
+from PySide6.QtGui import QColor, QFontMetrics, QPainter
 from PySide6.QtWidgets import (
     QAbstractScrollArea,
     QHBoxLayout,
@@ -36,7 +36,7 @@ from PySide6.QtWidgets import (
 
 from core.compare import RowState
 from core.source_rows import RowKind, SourceRow, build_rows, format_value
-from ui_qt import style
+from ui_qt import style, typography
 
 #: One indent step, in pixels, per nesting depth.
 _INDENT_PX = 18
@@ -567,7 +567,7 @@ class SourceView(QAbstractScrollArea):
         self._flash_timer = QTimer(self)
         self._flash_timer.setSingleShot(True)
         self._flash_timer.timeout.connect(self._clear_flash)
-        self._font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
+        self._font = typography.mono(typography.BODY)
         #: Font metrics per (bold, italic) variant of the fixed font -- text
         #: is measured for wrapping far more often than it is painted.
         self._metrics_cache: dict[tuple[bool, bool], QFontMetrics] = {}
@@ -785,9 +785,8 @@ class SourceView(QAbstractScrollArea):
     def _metrics(self, bold: bool, italic: bool) -> QFontMetrics:
         key = (bold, italic)
         if key not in self._metrics_cache:
-            font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
-            font.setBold(bold)
-            font.setItalic(italic)
+            weight = typography.SEMIBOLD if bold else typography.REGULAR
+            font = typography.mono(typography.BODY, weight=weight, slanted=italic)
             self._metrics_cache[key] = QFontMetrics(font)
         return self._metrics_cache[key]
 
@@ -1029,7 +1028,7 @@ class SourceView(QAbstractScrollArea):
         painter.save()
         painter.setClipRect(x0, top, width, block_height)
         if pane.caret is not None:
-            painter.setFont(QFontDatabase.systemFont(QFontDatabase.FixedFont))
+            painter.setFont(typography.mono(typography.BODY))
             painter.setPen(QColor(style.MUTED))
             caret_x = x0 + _LEFT_MARGIN + pane.depth * _INDENT_PX
             painter.drawText(caret_x, top + ascent, pane.caret)
@@ -1038,9 +1037,8 @@ class SourceView(QAbstractScrollArea):
             baseline = row_top + ascent
             x = x0 + self._wrap_x(pane, row)
             for segment in segments:
-                font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
-                font.setBold(segment.bold)
-                font.setItalic(segment.italic)
+                weight = typography.SEMIBOLD if segment.bold else typography.REGULAR
+                font = typography.mono(typography.BODY, weight=weight, slanted=segment.italic)
                 painter.setFont(font)
                 advance = painter.fontMetrics().horizontalAdvance(segment.text)
                 if segment.chip:
@@ -1066,7 +1064,7 @@ class SourceView(QAbstractScrollArea):
         painter.setBrush(QColor(style.REFERENCE_TINT))
         painter.drawRoundedRect(x, y, _PULL_W, _PULL_H, 4, 4)
         painter.setBrush(Qt.NoBrush)
-        painter.setFont(QFontDatabase.systemFont(QFontDatabase.FixedFont))
+        painter.setFont(typography.mono(typography.BODY))
         painter.setPen(QColor(style.REFERENCE))
         painter.drawText(
             x,
@@ -1089,9 +1087,7 @@ class SourceView(QAbstractScrollArea):
         painter.setBrush(QColor(style.REFERENCE_TINT))
         painter.drawRoundedRect(x, y, width, _PULL_H, 4, 4)
         painter.setBrush(Qt.NoBrush)
-        font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
-        font.setPixelSize(9)
-        font.setBold(True)
+        font = typography.mono(typography.MICRO, weight=typography.SEMIBOLD)
         painter.setFont(font)
         painter.setPen(QColor(style.REFERENCE))
         painter.drawText(x, y, width, _PULL_H, Qt.AlignCenter, "Pulled")
@@ -1210,11 +1206,13 @@ class SourcePage(QWidget):
 
         self._main_head = QLabel()
         self._main_head.setStyleSheet(
-            f"color: {style.MUTED}; font-size: 11px; font-weight: 600;"
+            f"color: {style.MUTED}; {typography.size_qss(typography.META)} "
+            f"{typography.semibold_qss()}"
         )
         self._ref_head = QLabel()
         self._ref_head.setStyleSheet(
-            f"color: {style.REFERENCE}; font-size: 11px; font-weight: 600;"
+            f"color: {style.REFERENCE}; {typography.size_qss(typography.META)} "
+            f"{typography.semibold_qss()}"
         )
         self._pane_head = QWidget()
         head_layout = QHBoxLayout(self._pane_head)

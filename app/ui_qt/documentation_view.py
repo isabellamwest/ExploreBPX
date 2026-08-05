@@ -32,6 +32,7 @@ from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
 from core.parameter_metadata import ParameterMetadata
 
+from . import typography
 from .latex import latex_pixmap
 
 _MSG_NO_DOCS = "No technical description is available for this parameter."
@@ -73,7 +74,7 @@ class DocumentationView(QWidget):
         # raise-on-malformed policy exists to prevent.
         if metadata.symbol:
             row = QLabel()
-            pixmap = latex_pixmap(metadata.symbol, point_size=13.0)
+            pixmap = latex_pixmap(metadata.symbol, size=typography.BODY)
             if pixmap is not None:
                 row.setPixmap(pixmap)
             else:

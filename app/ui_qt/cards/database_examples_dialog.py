@@ -51,8 +51,9 @@ from core.example_library import (
 )
 from core.values import format_value
 
+from .. import typography
 from ..style import ACCENT, BORDER, ERROR, MUTED
-from ..titles import panel_title
+from ..typography import panel_title
 from .chart_axes import as_plot_number
 from .modal import ModeStrip
 from .multi_series_chart import MultiSeriesChart
@@ -191,7 +192,7 @@ class _PickerRow(QFrame):
         layout.addWidget(name, 1)
 
         points = QLabel(f"{run.point_count} pts")
-        points.setStyleSheet(f"color: {MUTED}; font-size: 11px;")
+        points.setStyleSheet(f"color: {MUTED}; {typography.size_qss(typography.META)}")
         layout.addWidget(points)
 
         self._tick = QLabel("✓")
@@ -220,7 +221,7 @@ class _PickerRow(QFrame):
         self.setToolTip("Add to the comparison")
 
     def set_added(self, color: str) -> None:
-        self._tick.setStyleSheet(f"color: {color}; font-weight: 600;")
+        self._tick.setStyleSheet(f"color: {color}; {typography.semibold_qss()}")
         self._tick.show()
         self.setStyleSheet(
             f"QFrame#ReferencePickerRow {{ border: 2px solid {color}; "
@@ -440,7 +441,9 @@ class DatabaseExamplesDialog(QDialog):
         # bottom, beside the "Open BPX file…" button, where it read as a
         # file-loading error.
         self._cap_message = QLabel("")
-        self._cap_message.setStyleSheet(f"color: {MUTED}; font-size: 11px;")
+        self._cap_message.setStyleSheet(
+            f"color: {MUTED}; {typography.size_qss(typography.META)}"
+        )
         self._cap_message.setWordWrap(True)
         self._cap_message.hide()
         layout.addWidget(self._cap_message)
@@ -460,7 +463,9 @@ class DatabaseExamplesDialog(QDialog):
         layout.addWidget(open_button)
 
         self._file_message = QLabel("")
-        self._file_message.setStyleSheet(f"color: {ERROR}; font-size: 11px;")
+        self._file_message.setStyleSheet(
+            f"color: {ERROR}; {typography.size_qss(typography.META)}"
+        )
         self._file_message.setWordWrap(True)
         self._file_message.hide()
         layout.addWidget(self._file_message)

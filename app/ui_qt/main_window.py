@@ -58,6 +58,7 @@ from .parameter_list import ParameterListPanel
 from .reference_library_dialog import ReferenceLibraryDialog
 from .search import SearchBar
 from .source_page import SourcePage
+from . import typography
 from .style import STYLESHEET
 from .toast import Toast
 from .tree_panel import TreePanel
@@ -127,6 +128,9 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("ExploreBPX")
+        # Type comes from ui_qt.typography: the family on the application
+        # (so a bare QFont() inherits it too), the sizes through the sheet.
+        typography.apply_application_font()
         self.setStyleSheet(STYLESHEET)
         self.resize(1200, 760)
         self._state = AppState()

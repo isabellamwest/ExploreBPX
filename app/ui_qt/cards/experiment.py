@@ -53,6 +53,7 @@ from core.parameter_types import ParameterKind
 from core.tree_model import ParameterItem, TreeNode
 from core.values import values_equal
 
+from .. import typography
 from ..style import ERROR, MUTED
 from .cell_issues import experiment_cells
 from .csv_dialog import CsvImportDialog
@@ -286,7 +287,9 @@ class ExperimentCard(QWidget):
             # anyway.
             self._import_message = QLabel("")
             self._import_message.setObjectName("CsvImportMessage")
-            self._import_message.setStyleSheet(f"color: {ERROR}; font-size: 11px;")
+            self._import_message.setStyleSheet(
+                f"color: {ERROR}; {typography.size_qss(typography.META)}"
+            )
             self._import_message.setWordWrap(True)
             self._import_message.hide()
             body_layout.addWidget(self._import_message)

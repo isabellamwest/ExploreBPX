@@ -20,16 +20,22 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QLabel
 
+from . import typography
 from .style import DEFAULT_TEXT
 
 
-def latex_pixmap(latex: str, point_size: float = 11.0, color: str = DEFAULT_TEXT) -> QPixmap | None:
+def latex_pixmap(latex: str, size: int = typography.BODY, color: str = DEFAULT_TEXT) -> QPixmap | None:
     """Render *latex* (without surrounding ``$``) to a transparent pixmap.
+
+    *size* is a type rung in pixels, like every other size in the app --
+    :func:`typography.points` converts to the points matplotlib wants, so a
+    symbol matches the text it sits beside instead of rendering a third
+    larger.
 
     Returns ``None`` when matplotlib is unavailable or the expression does not
     parse - callers fall back to showing the raw LaTeX source as plain text.
     """
-    png = _render_png(latex, point_size, color)
+    png = _render_png(latex, typography.points(size), color)
     if png is None:
         return None
     pixmap = QPixmap()
@@ -40,7 +46,7 @@ def latex_pixmap(latex: str, point_size: float = 11.0, color: str = DEFAULT_TEXT
     return pixmap
 
 
-def symbol_label(latex: str, point_size: float = 11.0, color: str = DEFAULT_TEXT) -> QLabel:
+def symbol_label(latex: str, size: int = typography.BODY, color: str = DEFAULT_TEXT) -> QLabel:
     """A ``QLabel`` showing *latex* as rendered maths, or its source text if the
     renderer is unavailable -- the symbol is never silently dropped.
 
@@ -50,7 +56,7 @@ def symbol_label(latex: str, point_size: float = 11.0, color: str = DEFAULT_TEXT
     nothing, and returns an empty-but-valid label only when handed empty text.
     """
     label = QLabel()
-    pixmap = latex_pixmap(latex, point_size=point_size, color=color) if latex else None
+    pixmap = latex_pixmap(latex, size=size, color=color) if latex else None
     if pixmap is not None:
         label.setPixmap(pixmap)
     else:

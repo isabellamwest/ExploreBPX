@@ -53,7 +53,7 @@ class MultiSeriesChart(QWidget):
         self._axis_x = QValueAxis()
         self._axis_y = QValueAxis()
         for axis in (self._axis_x, self._axis_y):
-            style_axis(axis)
+            style_axis(axis, self.font())
         self._chart.addAxis(self._axis_x, Qt.AlignBottom)
         self._chart.addAxis(self._axis_y, Qt.AlignLeft)
 

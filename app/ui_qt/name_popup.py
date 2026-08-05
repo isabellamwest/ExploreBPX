@@ -28,6 +28,7 @@ from .dismissal import OutsideDismissFilter
 from .floating_card import SHADOW_MARGIN as _SHADOW_MARGIN
 from .floating_card import floating_card
 from .style import ERROR, MUTED
+from . import typography
 
 _CARD_WIDTH = 300
 
@@ -80,13 +81,17 @@ class NamePopup(QWidget):
         # error-coloured: unlike ``_reason`` it never blocks Enter.
         self._note = QLabel("")
         self._note.setObjectName("NamePopupNote")
-        self._note.setStyleSheet(f"color: {MUTED}; padding: 2px 4px 4px 4px; font-size: 11px;")
+        self._note.setStyleSheet(
+            f"color: {MUTED}; padding: 2px 4px 4px 4px; {typography.size_qss(typography.META)}"
+        )
         self._note.setWordWrap(True)
         self._note.hide()
 
         self._reason = QLabel("")
         self._reason.setObjectName("NamePopupReason")
-        self._reason.setStyleSheet(f"color: {ERROR}; padding: 2px 4px 4px 4px; font-size: 11px;")
+        self._reason.setStyleSheet(
+            f"color: {ERROR}; padding: 2px 4px 4px 4px; {typography.size_qss(typography.META)}"
+        )
         self._reason.setWordWrap(True)
         self._reason.hide()
 

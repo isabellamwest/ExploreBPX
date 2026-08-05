@@ -22,15 +22,15 @@ way to :class:`ReferenceTableGrid` -- a small read-only x/y grid in the same
 washed box (:meth:`ReferenceValueBlock.set_table_rows`). For a ``str``
 expression, the box shows the full text rather than the truncated one-line
 preview every other kind uses (:meth:`ReferenceValueBlock.set_content`'s
-*monospace* flag) -- both cases use the app's own fixed-pitch convention
-(``QFontDatabase.systemFont(QFontDatabase.FixedFont)``, the same one the
-Source page's raw-JSON panes use), not a fresh font choice.
+*monospace* flag) -- both cases use the app's own monospace convention
+(:func:`typography.mono`, the same one the Source page's raw-JSON panes
+use), not a fresh font choice.
 """
 
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QBrush, QColor, QFontDatabase
+from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QFrame,
@@ -46,7 +46,7 @@ from PySide6.QtWidgets import (
 
 from core.values import format_value
 
-from .. import style
+from .. import style, typography
 
 #: "No maximum": Qt's QWIDGETSIZE_MAX, restored when the row is not narrow.
 _NO_MAX_WIDTH = 16777215
@@ -57,7 +57,7 @@ _VISIBLE_ROWS = 6
 
 
 def _monospace_font():
-    return QFontDatabase.systemFont(QFontDatabase.FixedFont)
+    return typography.mono()
 
 
 class ReferenceTableGrid(QWidget):

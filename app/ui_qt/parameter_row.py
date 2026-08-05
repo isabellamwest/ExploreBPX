@@ -20,7 +20,7 @@ import html as _html
 import json
 
 from PySide6.QtCore import QPointF, QRect, QRectF, QSize, Qt
-from PySide6.QtGui import QColor, QFont, QFontDatabase, QFontMetrics, QPainter, QPen, QTextDocument
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPen, QTextDocument
 from PySide6.QtWidgets import (
     QApplication,
     QStyle,
@@ -33,7 +33,7 @@ from core.parameter_types import ParameterKind, looks_like_table
 # e.g. core.editing); re-exported here so existing ``parameter_row.``
 # call sites (this module's own rows, the add-parameter popup) are unchanged.
 from core.parameter_types import split_name_and_unit
-from ui_qt import icons, style
+from ui_qt import icons, style, typography
 
 #: Item-data role carrying the HTML fragment :class:`ParameterRowDelegate`
 #: paints. A row without it (e.g. a group header) falls back to the base
@@ -92,7 +92,7 @@ _VALUE_GAP = 12
 #: 13px box. ``MARK_BOX`` is the box a caller sizes its own paint rect to;
 #: ``MARK_DOT`` is the fixed dot diameter :func:`paint_severity_dot`
 #: centres inside whatever box it is given.
-MARK_BOX = 13
+MARK_BOX = typography.BODY
 MARK_DOT = 8
 
 #: Reference gutter bar: width, vertical inset from the row's edges, and
@@ -187,7 +187,7 @@ def value_preview(value: object, kind: ParameterKind) -> tuple[str, bool]:
 
 
 def _span(text: str, *, color: str, bold: bool = False) -> str:
-    weight = 600 if bold else 400
+    weight = typography.SEMIBOLD if bold else typography.REGULAR
     return f'<span style="font-weight:{weight}; color:{color};">{_html.escape(text)}</span>'
 
 
@@ -238,7 +238,7 @@ def compose_issue_row_html(location: str, message: str) -> str:
     section is the group header/rail entry above the row), and its trailing
     unit is muted like every other parameter label."""
     detail = (
-        f'<span style="color:{style.MUTED}; font-size:92%;">'
+        f'<span style="color:{style.MUTED}; {typography.size_qss(typography.META)}">'
         f"{_html.escape(message)}</span>"
     )
     if not location:
@@ -344,17 +344,12 @@ class ParameterRowDelegate(QStyledItemDelegate):
         return doc
 
     def _value_font(self, option: QStyleOptionViewItem) -> QFont:
-        """The value preview's font: the system fixed-pitch face, one step
-        smaller than the row -- digits align across rows and a long mantissa
-        reads as data rather than prose. The app stylesheet sizes fonts in
-        pixels (``font-size: 13px``), which leaves ``pointSizeF()`` at -1,
-        so size must follow whichever unit the row font actually carries."""
-        font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
-        if option.font.pointSizeF() > 0:
-            font.setPointSizeF(max(option.font.pointSizeF() - 1.0, 9.0))
-        else:
-            font.setPixelSize(max(option.font.pixelSize() - 1, 11))
-        return font
+        """The value preview's font: the app's monospace face, at the same
+        rung as the row -- digits align across rows and a long mantissa
+        reads as data rather than prose. Unlike the old system fixed-pitch
+        face (Courier New), Cascadia Mono's cap height at 13px (9.0) matches
+        Segoe UI's (9.1), so no "one step smaller" fudge is needed."""
+        return typography.mono(typography.BODY)
 
     def _value_reserved(self, option: QStyleOptionViewItem, index, row_width: float) -> int:
         """Row width the value preview claims (including its gap), 0 when the

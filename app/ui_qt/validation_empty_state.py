@@ -55,6 +55,7 @@ from .cards.experiment import KNOWN_ALIASES
 from .cards.page import GUTTER
 from .name_popup import NamePopup
 from .style import ERROR, MUTED
+from . import typography
 
 _HEADING = "No experiments yet"
 _COPY = (
@@ -125,7 +126,9 @@ class ValidationEmptyState(QWidget):
         self._import_message.setObjectName("CsvImportMessage")
         self._import_message.setWordWrap(True)
         self._import_message.setAlignment(Qt.AlignCenter)
-        self._import_message.setStyleSheet(f"color: {ERROR}; font-size: 11px;")
+        self._import_message.setStyleSheet(
+            f"color: {ERROR}; {typography.size_qss(typography.META)}"
+        )
         self._import_message.hide()
         layout.addWidget(self._import_message)
 

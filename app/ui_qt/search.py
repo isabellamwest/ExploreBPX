@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 from core.document import BPXDocument
 from core.tree_model import ParameterItem, TreeNode
 
-from . import icons, parameter_row, style
+from . import icons, parameter_row, style, typography
 from .dismissal import OutsideDismissFilter
 from .floating_card import SHADOW_MARGIN as _SHADOW_MARGIN
 from .floating_card import floating_card
@@ -44,11 +44,11 @@ def _entry_html(entry: "_Entry") -> str:
         icons.SECTION if entry.kind == "object" else icons.PARAMETER
     )
     name = (
-        f'<span style="font-weight:600; color:{style.DEFAULT_TEXT};">'
+        f'<span style="{typography.semibold_qss()} color:{style.DEFAULT_TEXT};">'
         f"{_html.escape(entry.name)}</span>"
     )
     path = (
-        f'<span style="color:{style.MUTED}; font-size:90%;">'
+        f'<span style="color:{style.MUTED}; {typography.size_qss(typography.META)}">'
         f"{_html.escape(entry.path_text)}</span>"
     )
     return f"{glyph}&nbsp;&nbsp;{name}<br>{path}"

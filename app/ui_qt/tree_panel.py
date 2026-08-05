@@ -48,7 +48,7 @@ from core import structure
 from core.compare import ComparisonResult
 from core.tree_model import TreeNode
 
-from . import style
+from . import style, typography
 from .name_popup import NamePopup
 from .parameter_row import MARK_BOX, REF_BAR_ROLE, SEVERITY_ROLE, paint_ref_bar, paint_severity_dot
 from .tree_model import BpxTreeModel, REF_COUNT_ROLE
@@ -79,7 +79,7 @@ class _TreeItemDelegate(QStyledItemDelegate):
     #: The differ count's own font size (px) -- one step down from the row's
     #: default text, reference purple, plain numerals: a quiet number, not
     #: a badge.
-    _COUNT_FONT_SIZE = 12
+    _COUNT_FONT_SIZE = typography.META
     #: Gap between the count's right edge and the viewport's right edge.
     _COUNT_RIGHT_PAD = 8
 
@@ -88,9 +88,7 @@ class _TreeItemDelegate(QStyledItemDelegate):
         return str(count) if count else ""
 
     def _count_font(self, option: QStyleOptionViewItem) -> QFont:
-        font = QFont(option.font)
-        font.setPixelSize(self._COUNT_FONT_SIZE)
-        return font
+        return typography.sized(option.font, self._COUNT_FONT_SIZE)
 
     def _count_reserved(self, option: QStyleOptionViewItem, index) -> int:
         """Row width the differ count claims (including its right padding),

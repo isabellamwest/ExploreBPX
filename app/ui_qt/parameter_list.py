@@ -28,7 +28,7 @@ not two independently-drifting ones.
 from __future__ import annotations
 
 from PySide6.QtCore import QPoint, Qt, Signal
-from PySide6.QtGui import QAction, QColor, QFont
+from PySide6.QtGui import QAction, QColor
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -48,7 +48,7 @@ from core.parameter_types import classify
 from core.tree_model import TreeNode
 from state.reference_snapshot import ReferenceSnapshot
 
-from . import parameter_row, style
+from . import parameter_row, style, typography
 from .add_parameter_popup import AddParameterPopup, suggestion_row_html, suggestion_row_text
 from .cards.experiment import is_validation_run_path
 from .comparison_strip import ComparisonStrip
@@ -83,7 +83,7 @@ def _missing_field_html(field: MissingField) -> str:
     rendering (:func:`suggestion_row_html`, "suggested" tier) -- reused
     verbatim, REQUIRED tag included, so the popup and this group speak one
     visual language rather than two independently drifting ones."""
-    plus = f'<span style="font-weight:600; color:{style.ACCENT};">+</span>&nbsp;'
+    plus = f'<span style="{typography.semibold_qss()} color:{style.ACCENT};">+</span>&nbsp;'
     return plus + suggestion_row_html(field.alias, field.meta, "suggested", field.required)
 
 
@@ -400,8 +400,7 @@ class ParameterListPanel(QWidget):
         item.setData(256, None)
         item.setData(self._GROUP_ROW_KIND_ROLE, "header")
         item.setForeground(QColor(style.MUTED))
-        font = QFont(self._list.font())
-        font.setBold(True)
+        font = typography.semibold(self._list.font())
         item.setFont(font)
         return item
 

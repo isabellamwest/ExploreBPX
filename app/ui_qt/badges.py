@@ -27,12 +27,12 @@ from PySide6.QtCore import QRect, Qt
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter
 from PySide6.QtWidgets import QLabel
 
-from . import style
+from . import style, typography
 
 #: Pill geometry -- one shape for every count badge in the app.
 HEIGHT = 15
 RADIUS = HEIGHT // 2
-FONT_PIXEL_SIZE = 10
+FONT_PIXEL_SIZE = typography.MICRO
 MIN_WIDTH = HEIGHT
 H_PADDING = 5
 
@@ -62,10 +62,14 @@ def badge_colors(severity: str | None, *, solid: bool = False) -> tuple[str, str
 
 
 def badge_font() -> QFont:
-    font = QFont()
-    font.setPixelSize(FONT_PIXEL_SIZE)
-    font.setBold(True)
-    return font
+    """The pill's font: the UI face at :data:`FONT_PIXEL_SIZE`, semibold.
+
+    Built from :func:`typography.ui_font` rather than a bare ``QFont()`` so a
+    painted badge carries the same family as the label variant beside it --
+    this module used to disagree with itself, painting at Qt's bold (700)
+    while its QLabel variant asked the stylesheet for 600.
+    """
+    return typography.ui_font(FONT_PIXEL_SIZE, weight=typography.SEMIBOLD)
 
 
 def badge_width(text: str) -> int:
@@ -100,6 +104,7 @@ def make_badge_label(text: str, bg: str, fg: str) -> QLabel:
     label.setMinimumWidth(MIN_WIDTH)
     label.setStyleSheet(
         f"background:{bg}; color:{fg}; border-radius:{RADIUS}px; "
-        f"padding:0 {H_PADDING}px; font-size:{FONT_PIXEL_SIZE}px; font-weight:600;"
+        f"padding:0 {H_PADDING}px; {typography.size_qss(FONT_PIXEL_SIZE)} "
+        f"{typography.semibold_qss()}"
     )
     return label

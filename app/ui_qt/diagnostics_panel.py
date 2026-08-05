@@ -89,7 +89,7 @@ from core.page_buckets import (
 )
 from core.validation import Severity, merge_union_pair
 
-from . import icons, parameter_row, style
+from . import icons, parameter_row, style, typography
 from .parameter_row import ParameterRowDelegate
 
 _MSG_NO_DOCUMENT = "No document open"
@@ -326,7 +326,7 @@ def _task_row_html(task: CompletionTask, absorbed_messages: tuple[str, ...]) -> 
     fragment = f"{glyph_img}  {name_fragment}"
     if absorbed_messages:
         secondary = "<br>".join(
-            f'<span style="color:{style.MUTED}; font-size:90%;">{_html.escape(message)}</span>'
+            f'<span style="color:{style.MUTED}; {typography.size_qss(typography.META)}">{_html.escape(message)}</span>'
             for message in absorbed_messages
         )
         fragment += "<br>" + secondary
@@ -506,7 +506,7 @@ def _add_all_clear_row(list_widget: QListWidget, total_buckets: int, *, model: s
     line2 = _MSG_PARTIAL_NO_TARGET if model == "Partial" else f"{total_buckets} of {total_buckets} sections complete and valid"
     html = (
         f'<span style="color:{style.DEFAULT_TEXT};">{_html.escape(line1)}</span><br>'
-        f'<span style="color:{style.MUTED}; font-size:90%;">{_html.escape(line2)}</span>'
+        f'<span style="color:{style.MUTED}; {typography.size_qss(typography.META)}">{_html.escape(line2)}</span>'
     )
     item = QListWidgetItem(f"{line1}\n{line2}")
     item.setFlags(Qt.ItemIsEnabled)  # visible, never selectable/activatable
@@ -625,8 +625,7 @@ class _DiagnosticsRowDelegate(ParameterRowDelegate):
         painter.restore()
 
         painter.save()
-        font = QFont(option.font)
-        font.setBold(True)
+        font = typography.semibold(option.font)
         painter.setFont(font)
         metrics = QFontMetrics(font)
         painter.setPen(QColor(style.DEFAULT_TEXT))
