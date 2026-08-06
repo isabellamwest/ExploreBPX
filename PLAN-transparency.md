@@ -23,7 +23,10 @@ read-only mode proposed in rev 2, because Word-style compatibility mode needs th
 to work natively in the old format and the installed `bpx` has only the v1.x schema. D3
 below records the prompt; if Bella prefers read-only after all, only D3 changes.
 
-Next action: **Phase 1**, inventory and verification. No code changes in that phase.
+Phase 1 is **complete** (2026-08-06, outcome recorded under the phase below); the
+wording glossary (D7/D8/D9) is implemented and the H2 badge violation it uncovered is
+fixed. Next action: **Phase 3**, `LoadRecord` in `core` — Phases 4 and 5 still need
+their wireframe passes before any UI is built.
 
 ## Governing principle — the honesty charter
 
@@ -146,6 +149,29 @@ the wording sweep is complete rather than anecdotal.
 an unchecked section as clean; whether any surface says "Valid" without consulting
 `validation_completed`; and what a real v0.x file does end to end.
 - Report honestly, including anything that contradicts the findings above.
+
+**Outcome (2026-08-06, run empirically against the real app):**
+1. *"Valid" without consulting `validation_completed`* — **confirmed and fixed**
+(fd6b70f). The workspace badge read counts from `PartitionedIssues`, where an
+abort's absence-shaped errors are absorbed into the incomplete count; deleting one
+required field produced "Valid · 1 incomplete" over a `State` bpx never judged.
+Worse than the plan feared: **every fresh SPM/SPMe/DFN skeleton is an aborted run**
+("passes the schema with three parameters" in the badge's old docstring was false —
+bpx aborts at Parameterisation), so New documents wore green "Valid" from birth.
+The badge now says *Not checked · N incomplete* (muted dot) whenever
+`validation_completed` is False. Reference rows are H2-safe by accident — they count
+raw `document.error_count`, which an abort always leaves ≥ 1 — but still name no
+"checking stopped" fact; that stays with Phase 4's Checked row.
+2. *Tree dot on an unchecked section* — **confirmed**: an aborted run's unjudged
+sections carry no mark and read exactly like clean ones. No quick fix exists inside
+the dot language (absence of a mark is the dot language's "clean"); the honest
+document-level statement is Phase 4's pinned "checking stopped at X" stream line.
+3. *v0.x end to end* — **confirmed as finding 1**: the tree renders the raw v0.x
+structure (no `State`), `bpx` validates its own converted copy
+(`validation_completed` True, `is_valid` True), and the only trace is one anonymous
+amber warning with no loc. Handled by D3/Phase 5, no interim change.
+- Also closed en route: finding 5 (format decided twice) — one
+`format_for_filename` rule in the gateway, used by loader and save (e706192).
 
 ### Phase 2 — charter and glossary signed
 The gate. Nothing after it starts until the words are fixed.
