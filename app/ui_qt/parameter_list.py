@@ -42,16 +42,22 @@ from PySide6.QtWidgets import (
 
 from core import completion, structure
 from core.bpx_gateway import field_meta
-from core.compare import ComparisonResult, RowState
+from core.compare import (
+    RowDiff,
+    RowState,
+    group_reference_values,
+    merged_ghost_keys,
+    merged_row_state,
+)
 from core.completion import MissingField
 from core.parameter_types import classify
 from core.tree_model import TreeNode
-from state.reference_snapshot import ReferenceSnapshot
 
 from . import parameter_row, style, typography
 from .add_parameter_popup import AddParameterPopup, suggestion_row_html, suggestion_row_text
 from .cards.experiment import is_validation_run_path
 from .comparison_strip import ComparisonStrip
+from .reference_identity import ReferencePin
 from .group_box import TintedSectionHeader
 from .parameter_row import ParameterRowDelegate
 
@@ -172,12 +178,12 @@ class ParameterListPanel(QWidget):
         #: (grey, no dot) here even though the card badge/Issues tab still
         #: report it verbatim.
         self._visible_issue_severities: dict[tuple[str, ...], str] = {}
-        #: Comparison state, set only by ``MainWindow.set_comparison`` --
-        #: ``None`` whenever no reference is docked or no document is open.
-        #: Phase 0 of the multi-reference track: internals still read only
-        #: the first pinned reference's comparison (see ``set_comparison``).
-        self._comparison: ComparisonResult | None = None
-        self._reference: ReferenceSnapshot | None = None
+        #: The pinned references with their comparisons and badge identity,
+        #: set only by ``MainWindow._apply_comparison`` -- empty whenever
+        #: nothing is pinned or no document is open. Every mark below is an
+        #: aggregate across all of them (``core.compare.merged_row_state`` /
+        #: ``merged_ghost_keys``), never the first pin's opinion alone.
+        self._pins: list[ReferencePin] = []
 
         self._count_label = QLabel()
         self._count_label.setObjectName("ParameterListHeaderCount")
@@ -246,25 +252,48 @@ class ParameterListPanel(QWidget):
         """
         self._visible_issue_severities = severities
 
-    def set_comparison(
-        self,
-        comparisons: list[ComparisonResult],
-        references: list[ReferenceSnapshot],
-    ) -> None:
-        """Set the reference comparison state and re-render whatever
-        section is currently shown.
+    def set_comparison(self, pins: list[ReferencePin]) -> None:
+        """Set the pinned-reference state and re-render whatever section is
+        currently shown.
 
         Called by ``MainWindow`` -- the single place computing this state --
-        on every document change and every reference dock/undock. Phase 0 of
-        the multi-reference track: both lists hold at most one entry today,
-        and every render below still reads only the first (*comparisons*/
-        *references* empty with no reference docked or no document open).
+        on every document change and every pin/remove. Empty with nothing
+        pinned or no document open.
         """
-        self._comparison = comparisons[0] if comparisons else None
-        self._reference = references[0] if references else None
-        self._strip.set_state(references, comparisons)
+        self._pins = list(pins)
+        self._strip.set_state(pins)
         if self._node is not None:
             self.show_node(self._node, self._model)
+
+    def _rows_for(self, section_path: tuple[str, ...], key: str) -> list[RowDiff | None]:
+        """One entry per pinned reference, in pin order: that reference's
+        comparison for *key*, or ``None`` where it has nothing to say."""
+        return [
+            pin.comparison.row(section_path, key) if pin.comparison is not None else None
+            for pin in self._pins
+        ]
+
+    def _sections_for(self, section_path: tuple[str, ...]) -> list:
+        """One entry per pinned reference, in pin order: that reference's
+        ``SectionDiff`` at *section_path*, or ``None``."""
+        return [
+            pin.comparison.section(section_path) if pin.comparison is not None else None
+            for pin in self._pins
+        ]
+
+    def _reference_tooltip_lines(self, rows: list[RowDiff | None]) -> list[str]:
+        """One "<names>: <value>" line per distinct reference value, in the
+        order the values were first pinned.
+
+        Names, not badge letters: a tooltip is plain text with no colour to
+        carry, so the file's own name is the only identity that survives
+        there.
+        """
+        lines = []
+        for group in group_reference_values(rows):
+            names = ", ".join(self._pins[index].name for index in group.indices)
+            lines.append(f"{names}: {parameter_row.value_tooltip(group.value)}")
+        return lines
 
     def show_node(self, node: TreeNode | None, model: str | None = None) -> None:
         self._node = node
@@ -302,17 +331,19 @@ class ParameterListPanel(QWidget):
             item.setData(parameter_row.VALUE_GHOST_ROLE, ghost)
             if not is_empty:
                 item.setToolTip(parameter_row.value_tooltip(parameter.value))
-            row_diff = self._comparison.row(node.path, parameter.path[-1]) if self._comparison else None
-            if row_diff is not None:
-                variant = _ROW_BAR_VARIANTS.get(row_diff.state)
+            if self._pins:
+                rows = self._rows_for(node.path, parameter.path[-1])
+                state = merged_row_state(rows)
+                variant = _ROW_BAR_VARIANTS.get(state) if state is not None else None
                 if variant is not None:
                     item.setData(parameter_row.REF_BAR_ROLE, variant)
                 if variant == "differs":
-                    # The list says "differs"; the hover says from what. The
-                    # main value's own tooltip line (set above) stays first.
-                    ref_line = "Reference: " + parameter_row.value_tooltip(row_diff.ref_value)
+                    # The list says "differs"; the hover says from what, and
+                    # with several pinned, which references say what. The main
+                    # value's own tooltip line (set above) stays first.
                     existing = item.toolTip()
-                    item.setToolTip(existing + "\n" + ref_line if existing else ref_line)
+                    lines = ([existing] if existing else []) + self._reference_tooltip_lines(rows)
+                    item.setToolTip("\n".join(lines))
             self._list.addItem(item)
         self._append_ghost_rows(node)
         self._append_missing_fields_group(node, model)
@@ -323,18 +354,22 @@ class ParameterListPanel(QWidget):
         document does not. Rendered via the same
         synthetic-row precedent as the "fields to add" group -- role 256
         stays ``None`` so removal/context-menu/Enter-to-activate all treat
-        them as non-existent parameters (see :meth:`_activate_item`)."""
-        if self._comparison is None:
-            return
-        section = self._comparison.section(node.path)
-        if section is None:
-            return
-        for key in section.ghost_keys:
-            self._list.addItem(self._make_ghost_item(node.path, key, section.rows[key].ref_value))
+        them as non-existent parameters (see :meth:`_activate_item`).
 
-    def _make_ghost_item(
-        self, section_path: tuple[str, ...], key: str, ref_value: object
-    ) -> QListWidgetItem:
+        The keys are the *union* across pinned references: a key only one
+        reference carries is still something the main document lacks."""
+        if not self._pins:
+            return
+        for key in merged_ghost_keys(self._sections_for(node.path)):
+            self._list.addItem(self._make_ghost_item(node.path, key))
+
+    def _make_ghost_item(self, section_path: tuple[str, ...], key: str) -> QListWidgetItem:
+        rows = self._rows_for(section_path, key)
+        groups = group_reference_values(rows)
+        # The preview shows the first-pinned reference's value; the tooltip
+        # spells out every distinct one, so a row summarising several
+        # references never silently picks a winner without saying so.
+        ref_value = groups[0].value if groups else None
         meta = field_meta(section_path + (key,))
         kind = classify(ref_value, meta)
         preview, _ghost = parameter_row.value_preview(ref_value, kind)
@@ -349,7 +384,7 @@ class ParameterListPanel(QWidget):
         # ghosts a null/derived-summary value.
         item.setData(parameter_row.VALUE_GHOST_ROLE, True)
         item.setData(parameter_row.REF_BAR_ROLE, "ref_only")
-        item.setToolTip("Reference: " + parameter_row.value_tooltip(ref_value))
+        item.setToolTip("\n".join(self._reference_tooltip_lines(rows)))
         return item
 
     def _append_missing_fields_group(self, node: TreeNode, model: str | None) -> None:
@@ -381,9 +416,8 @@ class ParameterListPanel(QWidget):
         if is_validation_run_path(node.path):
             return
         missing = completion.completion_for(node.path, node.value, model).missing_fields
-        if self._comparison is not None:
-            section = self._comparison.section(node.path)
-            ghost_keys = frozenset(section.ghost_keys) if section is not None else frozenset()
+        if self._pins:
+            ghost_keys = frozenset(merged_ghost_keys(self._sections_for(node.path)))
             missing = tuple(field for field in missing if field.alias not in ghost_keys)
         if not missing:
             return

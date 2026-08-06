@@ -1,12 +1,35 @@
 # PLAN — multi-reference comparison
 
-## Status / handoff (2026-08-05, self-contained — session memory does not follow the repo)
+## Status / handoff (2026-08-06, self-contained — session memory does not follow the repo)
 
-On main, verified against a 1625-green suite (`QT_QPA_PLATFORM=offscreen python -m pytest`):
-`3088779` Phase 0 pluralization · `adddc7b` Pull `source_label` · `85c6560` grouping helper +
-`core/spread.py` (+40 unit tests) · `02fee76` typography token system (separate track).
-**Next action: Phase 1.** Signed wireframes (rev 3, the visual reference for every surface):
+**Phase 1 is built and green (1650) but NOT committed.** Signed wireframes (rev 3, the visual
+reference for every surface): (internal design archive)
+The Phase 1 build spec, showing what actually shipped and what rev 3 draws that is Phase 2/3:
 (internal design archive)
+**Next action: Phase 2.**
+
+Earlier commits on main: `3088779` Phase 0 pluralization · `adddc7b` Pull `source_label` ·
+`85c6560` grouping helper + `core/spread.py` (+40 unit tests) · `02fee76` typography tokens
+(separate track).
+
+### Phase 1 departures from the signed design, all agreed 2026-08-06
+
+- **Badge letters are mechanical.** First two alphanumerics, first capitalised, source case
+  otherwise preserved: Chen2020→Ch, OKane2022→OK, AE-LFP→AE, Marquis2019→**Ma** (rev 3 drew
+  "Mq", which no rule produces). On a collision **both** pins take first-letter-plus-ordinal
+  (C1 / C3) — never one keeping "Ch".
+- **Table values keep their grid in Phase 1**, showing the first pin that has the key,
+  badge-labelled. Phase 2 turns that badge into rule 5's selector.
+- **No per-row units in the ledger.** The main editor above shows one and the title carries it.
+- **One badge size (18px) everywhere**, not rev 3's two.
+- **Strip name elision is measured, not a breakpoint.** The strip lives in the parameter list's
+  ~315px column, where a fixed threshold hid names even when one reference fitted.
+- **Source page honesty pass** (Bella's call — the selector itself stays Phase 2): the reference
+  pane header carries the shown pin's badge and reads "Reference 1 of N"; the stale band checks
+  **every** pin and names the ones that changed; the Source pull now carries `source_label`.
+  The last two were bugs the moment pinning began appending, not deferrals.
+- **Open dialog**: "Replace reference"/"Add as reference" became one stable **"Pin as
+  reference"**, disabled with the cap message at 4.
 
 Badge palette validation (dataviz six-checks method, OKLab/Machado-2009 CVD): the chosen set
 passes within-set — worst normal-vision ΔE 15.1 (floor 15), worst CVD ΔE 8.3 (target 8), white
@@ -96,7 +119,7 @@ tokens (the typography track landed before Phase 1 started).
 - No new tests; existing suite unchanged and green is the acceptance gate. After the
   rename, grep `state.reference`-singular reads — only intentional deferrals may remain.
 
-### Phase 1 — Surface B: pin-append, identity, Workspace, strip, Ledger, gutter
+### Phase 1 — Surface B: pin-append, identity, Workspace, strip, Ledger, gutter  ✅ done (uncommitted)
 - State: `open_reference`/`open_reference_set` → `pin_reference`/`pin_reference_set`
   (append + cap outcome `AT_CAP`); `remove_reference(pin)` takes an argument; delete
   `swap_roles`; `new_from_file` routes through the pin path (D2).

@@ -25,7 +25,6 @@ from .parameter_row import REF_BAR_ROLE, SEVERITY_ROLE
 #: with no comparison docked or a zero count -- the old text-appended
 #: "≠ N" label suffix moved here so the mark paints like the parameter
 #: list's, not as row text.
-REF_COUNT_ROLE = Qt.UserRole + 106
 
 
 def _is_user_defined_content(node: TreeNode) -> bool:
@@ -65,13 +64,6 @@ class BpxTreeModel(QAbstractItemModel):
         #: section would read as broken while the parameter list and rail
         #: badge call the same state calm.
         self._visible_error_paths = frozenset(visible_error_paths)
-
-    @property
-    def _comparison(self) -> ComparisonResult | None:
-        """Phase 0 shim: the tree still paints against the first pinned
-        reference's comparison only. A later phase folds in every pinned
-        reference (design rule 6: differs from *any* reference)."""
-        return self._comparisons[0] if self._comparisons else None
 
     def set_comparison(self, comparisons: list[ComparisonResult]) -> None:
         """Update the comparison results and repaint every node's label."""
@@ -141,9 +133,6 @@ class BpxTreeModel(QAbstractItemModel):
             return "error" if self._shows_error_marker(index, node) else None
         if role == REF_BAR_ROLE:
             return self._ref_bar(index, node)
-        if role == REF_COUNT_ROLE:
-            count = self._ref_count(index, node)
-            return count or None
         if role == Qt.ToolTipRole:
             return node.description or node.label
         return None
@@ -171,63 +160,51 @@ class BpxTreeModel(QAbstractItemModel):
         return False
 
     def _ref_bar(self, index: QModelIndex, node: TreeNode) -> str | None:
-        """This node's reference gutter-bar variant (multi-file track M2
-        reference comparison): an expanded row reads its own section only;
-        a collapsed row rolls up self plus every descendant section (same
-        prefix-match idiom as :meth:`_shows_error_marker`), so a purple rail
-        on a collapsed parent means "something differs underneath", not just
-        here. ``None`` with no comparison docked."""
-        if self._comparison is None:
+        """This node's reference gutter-bar variant (design rule 6): an
+        expanded row reads its own section only; a collapsed row rolls up
+        self plus every descendant section (same prefix-match idiom as
+        :meth:`_shows_error_marker`), so a purple rail on a collapsed parent
+        means "something differs underneath", not just here. ``None`` with
+        nothing pinned.
+
+        The rule across several pinned references is **differs from any**:
+        one reference disagreeing is enough for the solid bar. There is
+        deliberately no count beside it -- a single number cannot say which
+        of four references it counts, and "2" against four files reads as a
+        fact it is not.
+        """
+        if not self._comparisons:
             return None
         if not self._is_expanded(index):
             depth = len(node.path)
             variants = [
                 self._section_bar(path)
-                for path in self._comparison.sections
+                for comparison in self._comparisons
+                for path in comparison.sections
                 if path[:depth] == node.path
             ]
-            if "differs" in variants:
-                return "differs"
-            if "equal" in variants:
-                return "equal"
-            return None
-        return self._section_bar(node.path)
-
-    def _ref_count(self, index: QModelIndex, node: TreeNode) -> int:
-        """This node's differ count: this section's own DIFFERS+FILLABLE
-        rows when expanded, summed over self plus every descendant section
-        when collapsed -- the numeric companion to :meth:`_ref_bar`, 0 with
-        no comparison docked."""
-        if self._comparison is None:
-            return 0
-        if not self._is_expanded(index):
-            depth = len(node.path)
-            return sum(
-                self._section_differ_count(path)
-                for path in self._comparison.sections
-                if path[:depth] == node.path
-            )
-        return self._section_differ_count(node.path)
+        else:
+            variants = [self._section_bar(node.path)]
+        if "differs" in variants:
+            return "differs"
+        if "equal" in variants:
+            return "equal"
+        return None
 
     def _section_bar(self, path: tuple[str, ...]) -> str | None:
-        """One section's own bar variant: "differs" if it has any
-        differing/fillable row, "equal" if it has no differences but at
-        least one row that matches the reference exactly, else ``None`` --
-        a main-only section (absent from the reference entirely) or a pure
-        container with no rows of its own (e.g. Parameterisation) never
+        """One section's own bar variant across every pinned reference:
+        "differs" if any reference has a differing/fillable row there,
+        "equal" if none does but at least one reference matches it exactly,
+        else ``None`` -- a section absent from every reference, or a pure
+        container with no rows of its own (e.g. Parameterisation), never
         shows a bar."""
-        section = self._comparison.section(path) if self._comparison else None
-        if section is None or section.is_main_only:
+        sections = [comparison.section(path) for comparison in self._comparisons]
+        live = [section for section in sections if section is not None and not section.is_main_only]
+        if not live:
             return None
-        if section.differ_count > 0:
+        if any(section.differ_count > 0 for section in live):
             return "differs"
-        return "equal" if section.has_equal_row else None
-
-    def _section_differ_count(self, path: tuple[str, ...]) -> int:
-        section = self._comparison.section(path) if self._comparison else None
-        if section is None or section.is_main_only:
-            return 0
-        return section.differ_count
+        return "equal" if any(section.has_equal_row for section in live) else None
 
     def _emit_data_changed(self, parent: QModelIndex) -> None:
         for row in range(self.rowCount(parent)):

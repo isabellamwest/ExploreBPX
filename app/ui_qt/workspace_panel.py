@@ -27,7 +27,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import QMimeData, Qt, Signal
-from PySide6.QtGui import QDragEnterEvent, QDropEvent
+from PySide6.QtGui import QDragEnterEvent, QDropEvent, QFontMetrics
 from PySide6.QtWidgets import (
     QFormLayout,
     QFrame,
@@ -40,14 +40,21 @@ from PySide6.QtWidgets import (
 
 from core.document import BPXDocument
 from core.document_factory import SUPPORTED_MODELS
+from state.app_state import MAX_PINNED_REFERENCES
 from state.reference_snapshot import ReferenceSnapshot
 
-from . import icons
+from . import badges, icons
 from .group_box import TintedSection
+from .reference_identity import badge_colour, badge_letters
 from .style import ERROR, OK, WARNING
 from .typography import panel_title
 
 _INFO_PANEL_EMPTY_STATE_TEXT = "No document open"
+
+#: Why a pin was refused. One sentence for every surface that has to explain
+#: it: the grey entry buttons' tooltip here, MainWindow's toast on a refused
+#: pin, and the Open dialog's disabled "Pin as reference".
+AT_CAP_MESSAGE = f"{MAX_PINNED_REFERENCES} already pinned · remove one first"
 
 # Kept in sync with the Open/Export dialog filter ("BPX (*.json *.yaml *.yml)")
 # in main_window.py; both describe the same supported set of file extensions.
@@ -115,6 +122,189 @@ def _validity_dot_label() -> QLabel:
     return label
 
 
+class ReferenceRow(QFrame):
+    """One pinned reference's Workspace row: a collapsed identity line that
+    expands to the full record.
+
+    Collapsed carries only what tells this reference apart from the other
+    three -- badge, name, model -- plus Remove. Deliberately **no validity
+    dot**: at a glance, a coloured dot on a row in a section full of
+    comparison marks reads as a verdict on the comparison, so validity is
+    spelled out in words inside the expanded detail instead, where it can
+    say what it means.
+    """
+
+    #: Emitted with this row's ``ReferenceSnapshot`` when Remove is clicked.
+    remove_requested = Signal(object)
+
+    def __init__(self, snapshot: ReferenceSnapshot, letters: str, colour: str) -> None:
+        super().__init__()
+        self.setObjectName("ReferenceRow")
+        self._snapshot = snapshot
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        head = QWidget()
+        head.setObjectName("ReferenceRowHead")
+        head_layout = QHBoxLayout(head)
+        head_layout.setContentsMargins(8, 5, 8, 5)
+        head_layout.setSpacing(8)
+        head_layout.addWidget(
+            badges.make_reference_badge(letters, colour, snapshot.filename)
+        )
+
+        name = QLabel(snapshot.filename)
+        name.setObjectName("ReferenceRowName")
+        head_layout.addWidget(name)
+
+        model = QLabel(snapshot.model or "-")
+        model.setObjectName("ReferenceRowModel")
+        head_layout.addWidget(model)
+        head_layout.addStretch(1)
+
+        self._remove = QPushButton("Remove")
+        self._remove.setObjectName("ReferenceTileRemove")
+        self._remove.setCursor(Qt.PointingHandCursor)
+        self._remove.clicked.connect(self._emit_remove)
+        head_layout.addWidget(self._remove)
+
+        self._chevron = QLabel("▸")
+        self._chevron.setObjectName("ReferenceRowChevron")
+        head_layout.addWidget(self._chevron)
+        layout.addWidget(head)
+
+        self._detail = self._build_detail(snapshot)
+        self._detail.hide()
+        layout.addWidget(self._detail)
+
+    def _build_detail(self, snapshot: ReferenceSnapshot) -> QWidget:
+        """The expanded record: everything the old single-reference section
+        showed, per reference. Origin and the last row differ by where the
+        reference came from -- a bundled set cites its paper, a file names
+        its path."""
+        detail = QWidget()
+        detail.setObjectName("ReferenceRowDetail")
+        form = QFormLayout(detail)
+        form.setContentsMargins(34, 6, 8, 8)
+        form.setHorizontalSpacing(12)
+        form.setVerticalSpacing(5)
+        form.setFormAlignment(Qt.AlignLeft | Qt.AlignTop)
+        form.setLabelAlignment(Qt.AlignLeft)
+        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+
+        from_library = snapshot.set_id is not None
+        rows: list[tuple[str, QWidget]] = [
+            ("Origin", _detail_value("Reference library" if from_library else "File on disk")),
+            ("Validity", self._build_validity_value(snapshot)),
+            (
+                "Model",
+                _detail_value(
+                    " · ".join(
+                        part
+                        for part in (
+                            snapshot.model or "-",
+                            f"BPX {snapshot.bpx_version}" if snapshot.bpx_version else "",
+                        )
+                        if part
+                    )
+                ),
+            ),
+            (
+                "Contents",
+                _detail_value(
+                    f"{snapshot.section_count} sections · {snapshot.parameter_count} parameters"
+                ),
+            ),
+        ]
+        if from_library:
+            rows.append(("Citation", _detail_value(snapshot.citation or "-")))
+        else:
+            rows.append(("File", _PathLabel(str(snapshot.path)) if snapshot.path else _detail_value("-")))
+
+        for key, widget in rows:
+            label = QLabel(f"{key}:")
+            label.setObjectName("WorkspaceCardKey")
+            form.addRow(label, widget)
+        return detail
+
+    def _build_validity_value(self, snapshot: ReferenceSnapshot) -> QWidget:
+        """Validity as dot *and* words -- the dot alone lives nowhere on
+        this page, so it can never be misread as a comparison mark."""
+        text, colour = _reference_validity_text(snapshot.error_count, snapshot.warning_count)
+        widget = QWidget()
+        row = QHBoxLayout(widget)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(6)
+        dot = _validity_dot_label()
+        dot.setText(icons.html_img(icons.DOT, color=colour))
+        row.addWidget(dot, 0, Qt.AlignVCenter)
+        self._validity_label = QLabel(text)
+        self._validity_label.setObjectName("DocInfoBadge")
+        row.addWidget(self._validity_label, 0, Qt.AlignVCenter)
+        row.addStretch(1)
+        return widget
+
+    @property
+    def snapshot(self) -> ReferenceSnapshot:
+        return self._snapshot
+
+    def is_expanded(self) -> bool:
+        return not self._detail.isHidden()
+
+    def set_expanded(self, expanded: bool) -> None:
+        self._detail.setVisible(expanded)
+        self._chevron.setText("▾" if expanded else "▸")
+
+    def _emit_remove(self) -> None:
+        self.remove_requested.emit(self._snapshot)
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802 - Qt naming
+        """Clicking the row toggles its detail. Remove is a child button and
+        eats its own click, so it can never expand the row on the way to
+        removing it."""
+        if event.button() == Qt.LeftButton:
+            self.set_expanded(not self.is_expanded())
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+
+def _detail_value(text: str) -> QLabel:
+    label = QLabel(text)
+    label.setObjectName("WorkspaceCardValue")
+    label.setWordWrap(True)
+    return label
+
+
+class _PathLabel(QLabel):
+    """A file path elided from the *left*, keeping the file name visible.
+
+    Word wrap cannot help here: a Windows path has no spaces to break at, so
+    a long one simply ran off the row and lost exactly the end that
+    identifies it. Elides head-first (the sibling of ``main_window``'s
+    ``_IdentityLabel``, which elides the other way for a title), with the
+    full path always one hover away.
+    """
+
+    def __init__(self, path: str) -> None:
+        super().__init__()
+        self.setObjectName("WorkspaceCardValue")
+        self._full_text = path
+        self.setToolTip(path)
+        self.setMinimumWidth(0)
+        self._apply_elision()
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 - Qt naming
+        super().resizeEvent(event)
+        self._apply_elision()
+
+    def _apply_elision(self) -> None:
+        metrics = QFontMetrics(self.font())
+        self.setText(metrics.elidedText(self._full_text, Qt.ElideLeft, max(self.width(), 1)))
+
+
 class WorkspacePanel(QWidget):
     """Workspace-level actions (Open, New) plus current-document identity/state."""
 
@@ -124,8 +314,9 @@ class WorkspacePanel(QWidget):
     open_reference_requested = Signal()
     open_library_requested = Signal()
     new_from_file_requested = Signal()
-    remove_reference_requested = Signal()
-    make_main_requested = Signal()
+    #: Carries the ``ReferenceSnapshot`` its row points at -- with several
+    #: references pinned, "Remove" has to say *which*.
+    remove_reference_requested = Signal(object)
 
     def __init__(self) -> None:
         super().__init__()
@@ -135,6 +326,9 @@ class WorkspacePanel(QWidget):
         self.setObjectName("WorkspacePage")
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setAcceptDrops(True)
+
+        #: One row per pinned reference, rebuilt on every refresh.
+        self._reference_rows: list[ReferenceRow] = []
 
         # Rail beside pane, edge to edge -- the Diagnostics page's structure.
         # The rail is a full-height surface, so the page has no floating card
@@ -290,57 +484,33 @@ class WorkspacePanel(QWidget):
         return section
 
     def _build_reference_section(self) -> QWidget:
-        """The reference tinted section: the same anatomy as the main
-        section -- caps title, identity, validity line, key/value rows --
-        so the two read as the same component. Its title mirrors the
-        primary section's format ("Reference document"); the reference-
-        specific marks are that title's purple and the small light
-        Read-only tag as its suffix -- the section must never read louder
-        than the document's own."""
+        """The References tinted section: a collapsed row per pinned
+        reference over the two entry buttons and the pin count.
+
+        Plural in name and shape -- the title mirrors the main section's
+        format, and the reference-specific marks are that title's purple and
+        the small light Read-only tag as its suffix. The section must never
+        read louder than the main document's own."""
         self._reference_tag = QLabel("Read-only")
         self._reference_tag.setObjectName("ReferenceReadOnlyTag")
         section = TintedSection(
-            "Reference document",
+            "References",
             object_name="WorkspaceReferenceSection",
             title_object_name="ReferenceHeading",
             suffix=self._reference_tag,
         )
         body = section.body_layout
 
-        self._reference_filename = QLabel()
-        self._reference_filename.setObjectName("WorkspaceCardTitle")
-        self._reference_filename.setWordWrap(True)
-        body.addWidget(self._reference_filename)
+        self._reference_rows_layout = QVBoxLayout()
+        self._reference_rows_layout.setContentsMargins(0, 4, 0, 0)
+        self._reference_rows_layout.setSpacing(4)
+        body.addLayout(self._reference_rows_layout)
 
-        badge_row, self._reference_dot, self._reference_badge = self._build_validity_row()
-        body.addLayout(badge_row)
-
-        self._reference_form, self._reference_fields = self._build_kv_form(("Model", "Contents"))
-        body.addLayout(self._reference_form)
-
-        # Make main comes first, at the same plain weight as Remove --
-        # neither is styled as a loud action, so the section still never
-        # reads louder than the document section above it.
-        action_row = QHBoxLayout()
-        action_row.setSpacing(8)
-        self._reference_make_main_button = QPushButton("Make main")
-        self._reference_make_main_button.setObjectName("ReferenceTileMakeMain")
-        self._reference_make_main_button.clicked.connect(self.make_main_requested)
-        action_row.addWidget(self._reference_make_main_button)
-        self._reference_remove_button = QPushButton("Remove")
-        self._reference_remove_button.setObjectName("ReferenceTileRemove")
-        self._reference_remove_button.clicked.connect(self.remove_reference_requested)
-        action_row.addWidget(self._reference_remove_button)
-        action_row.addStretch(1)
-        body.addLayout(action_row)
-
-        # The dock affordances: with no reference docked the section is the
-        # reference library's front door --
-        # the teaching line over these two buttons. Both buttons stay while
-        # a reference is docked: docking over one replaces it silently (a
-        # snapshot is disposable), the flow the reference-open tests pin.
+        # With nothing pinned the section is the reference library's front
+        # door -- the teaching line over the two entry buttons, both of which
+        # stay in either state.
         self._reference_empty_text = QLabel(
-            "No reference docked. Compare the main document against a "
+            "No references pinned. Compare the main document against a "
             "published set or a file."
         )
         self._reference_empty_text.setObjectName("ReferenceEmptyStateText")
@@ -358,6 +528,9 @@ class WorkspacePanel(QWidget):
         self._open_reference_button.clicked.connect(self.open_reference_requested)
         dock_row.addWidget(self._open_reference_button)
         dock_row.addStretch(1)
+        self._reference_cap_label = QLabel()
+        self._reference_cap_label.setObjectName("ReferenceCapCount")
+        dock_row.addWidget(self._reference_cap_label)
         body.addLayout(dock_row)
 
         return section
@@ -432,7 +605,7 @@ class WorkspacePanel(QWidget):
         row_layout.addWidget(self._new_from_file_button)
 
         self._new_from_file_descriptor = QLabel(
-            "Start from a copy · the file docks as reference"
+            "Start from a copy · the file is pinned as a reference"
         )
         self._new_from_file_descriptor.setObjectName("NewChooserDescriptor")
         self._new_from_file_descriptor.setWordWrap(True)
@@ -460,13 +633,11 @@ class WorkspacePanel(QWidget):
         ``document.error_count``/``warning_count``, so the badge can never
         disagree with the Diagnostics rail badge over an absorbed diagnostic.
 
-        ``references`` is independent of ``document``: a reference may be
-        docked with no main document open, so its section is updated
-        regardless of which branch below runs. Phase 0 of the multi-reference
-        track: the list holds at most one entry today, and the section below
-        still renders only the first.
+        ``references`` is independent of ``document``: references may be
+        pinned with no main document open, so the References section is
+        updated regardless of which branch below runs.
         """
-        self._set_reference(references[0] if references else None)
+        self._set_references(list(references or []))
 
         if document is None:
             self._info_title.setText(_INFO_PANEL_EMPTY_STATE_TEXT)
@@ -491,36 +662,44 @@ class WorkspacePanel(QWidget):
         )
         self._set_validity_badge(error_count, warning_count)
 
-    def _set_reference(self, reference: ReferenceSnapshot | None) -> None:
-        """Populate the reference section for the docked or empty state.
+    def _set_references(self, references: list[ReferenceSnapshot]) -> None:
+        """Rebuild the References section's rows for the current pins.
 
-        The section is always visible, even with no reference docked, since
-        it is then the reference library's front door -- the teaching line
-        over the two dock buttons. The dock buttons stay in both states --
-        see ``_build_reference_section``."""
-        docked = reference is not None
-        self._reference_empty_text.setVisible(not docked)
-        self._reference_filename.setVisible(docked)
-        self._reference_dot.setVisible(docked)
-        self._reference_badge.setVisible(docked)
-        self._set_form_rows_visible(self._reference_form, docked)
-        self._reference_remove_button.setVisible(docked)
-        # "Make main" promotes a file on disk; a bundled library set has no
-        # path to promote, so the button disappears rather than sit as a
-        # disabled placeholder (the standing no-dead-controls rule).
-        self._reference_make_main_button.setVisible(
-            docked and reference.path is not None
+        Rebuilt wholesale, never patched in place: pin order is what decides
+        every badge's letters and colour, so a removal has to re-derive the
+        rows below it or a row would keep wearing an identity that has moved
+        on. Which rows were expanded is carried across by snapshot identity,
+        so removing one reference does not collapse the record someone was
+        reading on another.
+
+        The section itself is always visible -- with nothing pinned it is the
+        reference library's front door.
+        """
+        expanded = {
+            id(row.snapshot) for row in self._reference_rows if row.is_expanded()
+        }
+        for row in self._reference_rows:
+            self._reference_rows_layout.removeWidget(row)
+            row.setParent(None)
+            row.deleteLater()
+        self._reference_rows = []
+
+        letters = badge_letters([reference.filename for reference in references])
+        for index, reference in enumerate(references):
+            row = ReferenceRow(reference, letters[index], badge_colour(index))
+            row.remove_requested.connect(self.remove_reference_requested)
+            row.set_expanded(id(reference) in expanded)
+            self._reference_rows.append(row)
+            self._reference_rows_layout.addWidget(row)
+
+        self._reference_empty_text.setVisible(not references)
+        at_cap = len(references) >= MAX_PINNED_REFERENCES
+        self._reference_cap_label.setText(
+            f"{len(references)} of {MAX_PINNED_REFERENCES} pinned"
         )
-        if reference is None:
-            return
-        self._reference_filename.setText(reference.filename)
-        self._reference_fields["Model"].setText(reference.model or "-")
-        self._reference_fields["Contents"].setText(
-            f"{reference.section_count} sections · {reference.parameter_count} parameters"
-        )
-        text, colour = _reference_validity_text(reference.error_count, reference.warning_count)
-        self._reference_badge.setText(text)
-        self._reference_dot.setText(icons.html_img(icons.DOT, color=colour))
+        for button in (self._reference_library_button, self._open_reference_button):
+            button.setEnabled(not at_cap)
+            button.setToolTip(AT_CAP_MESSAGE if at_cap else "")
 
     def _set_validity_badge(self, errors: int, warnings: int) -> None:
         if not errors and not warnings:

@@ -16,16 +16,20 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QApplication, QLabel
+from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QWidget
+
+from pathlib import Path
 
 from core import bpx_gateway
-from core.compare import RowState
+from core.compare import ValueGroup
 from core.parameter_types import ParameterKind
 from core.tree_model import ParameterItem
+from state.reference_snapshot import ReferenceSnapshot
 from ui_qt import style
 from ui_qt.cards.parameter_card import ParameterCard
 from ui_qt.cards.reference_block import _monospace_font
 from ui_qt.cards.table_preview import charts_available
+from ui_qt.reference_identity import ReferencePin
 
 
 @pytest.fixture(autouse=True)
@@ -36,6 +40,38 @@ def _qapp():
 def _card(path, kind=ParameterKind.SCALAR, value=1.0, unit="") -> ParameterCard:
     param = ParameterItem(label=path[-1], path=tuple(path), kind=kind, value=value, unit=unit)
     return ParameterCard(param, bpx_gateway.field_meta(tuple(path)))
+
+
+def _pin(index: int = 0, name: str = "reference.json") -> ReferencePin:
+    snapshot = ReferenceSnapshot(
+        raw={},
+        path=Path(name),
+        filename=name,
+        model="SPM",
+        error_count=0,
+        warning_count=0,
+        section_count=0,
+        parameter_count=0,
+        mtime=0.0,
+    )
+    return ReferencePin(
+        index=index,
+        snapshot=snapshot,
+        comparison=None,
+        letters=name[:2].capitalize(),
+        colour=style.REFERENCE_BADGES[index],
+    )
+
+
+def _one_reference(value, *, equals_main: bool = False):
+    """The ``(groups, pins)`` pair ``set_reference`` takes for a single
+    pinned reference sitting at *value*."""
+    return (ValueGroup((0,), value, equals_main),), [_pin()]
+
+
+def _row_badges(row) -> list[str]:
+    cluster = row.findChild(QWidget, "LedgerBadgeCluster")
+    return [child.text() for child in cluster.findChildren(QLabel)]
 
 
 def test_documented_parameter_shows_its_symbol():
@@ -119,7 +155,7 @@ def test_description_sits_directly_under_title_with_reference_docked():
     under the title in the header block, and the new "Main" role label
     joins the editor's own row (aligned-rows layout), not the header."""
     card = _series_card_with_description()
-    card.set_reference([1, 2, 3], RowState.DIFFERS, ParameterKind.SERIES)
+    card.set_reference(*_one_reference([1, 2, 3]), ParameterKind.SERIES)
     description = card.findChild(QLabel, "CardDescription")
     header_box = description.parentWidget().layout()
     desc_index = _layout_index(header_box, description)
@@ -131,48 +167,58 @@ def test_description_sits_directly_under_title_with_reference_docked():
 
 
 def test_headings_absent_with_no_reference_docked():
-    """The plain card (no ``set_reference`` call at all) carries no
-    "Main"/"Reference" role label -- exactly today's card."""
+    """The plain card (no ``set_reference`` call at all) carries no "Main"
+    role label and no ledger -- exactly today's card."""
     card = _card(("Parameterisation", "Cell", "Electrode area [m2]"))
     assert card._main_file_heading is None
-    assert card._reference_block is None
+    assert card._ledger is None
 
 
-def test_headings_present_only_while_reference_docked():
+def test_headings_present_only_while_a_reference_is_pinned():
     card = _card(("Parameterisation", "Cell", "Electrode area [m2]"))
-    card.set_reference(2.0, RowState.DIFFERS, ParameterKind.SCALAR)
+    card.set_reference(*_one_reference(2.0), ParameterKind.SCALAR)
     assert card._main_file_heading is not None and not card._main_file_heading.isHidden()
-    assert card._reference_block is not None and not card._reference_block.isHidden()
+    assert card._ledger is not None and not card._ledger.isHidden()
 
-    card.set_reference(None, None, None)
+    card.set_reference((), [], None)
     assert card._main_file_heading.isHidden()
-    assert card._reference_block.isHidden()
+    assert card._ledger.isHidden()
 
 
-def test_reference_row_shows_unit_for_scalar_kind():
-    card = _card(("Parameterisation", "Cell", "Electrode area [m2]"), unit="m2")
-    card.set_reference(2.0, RowState.DIFFERS, ParameterKind.SCALAR)
-    assert not card._reference_block._unit_label.isHidden()
-    assert card._reference_block._unit_label.text() == "m2"
-
-
-def test_reference_row_hides_unit_for_kinds_without_one():
-    """SERIES (like TABLE/FUNCTION/BOOLEAN) has no unit label on its main
-    editor, so the reference row shows none either."""
-    card = _series_card_with_description()
-    card.set_reference([1, 2, 3], RowState.DIFFERS, ParameterKind.SERIES)
-    assert card._reference_block._unit_label.isHidden()
-
-
-def test_clicking_copy_up_emits_signal_without_dirtying_the_card():
+def test_ledger_groups_identical_values_into_one_row():
+    """Three pinned references, two agreeing: two rows, and the agreeing
+    pair's badges cluster on the row they share."""
     card = _card(("Parameterisation", "Cell", "Electrode area [m2]"))
-    card.set_reference(2.0, RowState.DIFFERS, ParameterKind.SCALAR)
+    pins = [_pin(0, "chen.json"), _pin(1, "marquis.json"), _pin(2, "okane.json")]
+    groups = (ValueGroup((0, 2), 2.0, False), ValueGroup((1,), 3.0, False))
+
+    card.set_reference(groups, pins, ParameterKind.SCALAR)
+
+    assert len(card._ledger._rows) == 2
+    assert _row_badges(card._ledger._rows[0]) == ["Ch", "Ok"]
+    assert _row_badges(card._ledger._rows[1]) == ["Ma"]
+
+
+def test_a_row_equal_to_main_says_same_and_offers_no_pull():
+    card = _card(("Parameterisation", "Cell", "Electrode area [m2]"))
+    card.set_reference(*_one_reference(1.0, equals_main=True), ParameterKind.SCALAR)
+
+    row = card._ledger._rows[0]
+    assert row.findChild(QPushButton, "PullButton") is None
+    assert [label.text() for label in row.findChildren(QLabel) if label.objectName() == "LedgerSameLabel"] == ["same"]
+
+
+def test_clicking_pull_names_the_first_pinned_source_and_does_not_dirty_the_card():
+    card = _card(("Parameterisation", "Cell", "Electrode area [m2]"))
+    pins = [_pin(0, "chen.json"), _pin(1, "marquis.json")]
+    card.set_reference((ValueGroup((1, 0), 2.0, False),), pins, ParameterKind.SCALAR)
     received: list = []
-    card.copy_up_requested.connect(lambda: received.append(True))
+    card.pull_requested.connect(received.append)
 
-    card._reference_block._copy_up.click()
+    card._ledger._rows[0].findChild(QPushButton, "PullButton").click()
 
-    assert received == [True]
+    # The group's *first-pinned* member, not the first index listed.
+    assert received == [1]
     assert not card.is_dirty
 
 
@@ -208,12 +254,16 @@ def _function_card(value) -> ParameterCard:
 def test_differing_table_reference_shows_grid_with_diff_marks_and_overlay():
     card = _table_card({"x": [0, 1], "y": [2, 3]})
     ref_value = {"x": [0, 1, 5], "y": [2, 3, 9]}
-    card.set_reference(ref_value, RowState.DIFFERS, ParameterKind.TABLE)
+    card.set_reference(*_one_reference(ref_value), ParameterKind.TABLE)
 
-    block = card._reference_block
-    assert block._value.isHidden()
-    assert not block._table_grid.isHidden()
-    table = block._table_grid._table
+    ledger = card._ledger
+    # The ledger row keeps the one-line summary; the numbers live in the
+    # grid beneath it, badge-labelled with the pin they came from.
+    assert ledger._rows[0]._value.text() == "table · 3 points"
+    assert ledger._rows[0].findChild(QPushButton, "PullButton").isEnabled()
+    assert not ledger._table_grid.isHidden()
+    assert not ledger._grid_caption.isHidden()
+    table = ledger._table_grid._table
     assert table.rowCount() == 3
     # Rows (0, 2) and (1, 3) already exist in the main draft: quiet muted
     # text, so purple stays the mark of a genuinely differing row.
@@ -224,7 +274,6 @@ def test_differing_table_reference_shows_grid_with_diff_marks_and_overlay():
     purple = QColor(style.REFERENCE).name()
     assert table.item(2, 0).foreground().color().name() == purple
     assert table.item(2, 1).foreground().color().name() == purple
-    assert block._copy_up.isEnabled()
 
     if charts_available():
         preview = card._editor._table_body._preview
@@ -235,13 +284,13 @@ def test_differing_table_reference_shows_grid_with_diff_marks_and_overlay():
 def test_equal_table_reference_keeps_the_compact_one_liner():
     value = {"x": [0, 1], "y": [2, 3]}
     card = _table_card(value)
-    card.set_reference(dict(value), RowState.EQUAL, ParameterKind.TABLE)
+    card.set_reference(*_one_reference(dict(value), equals_main=True), ParameterKind.TABLE)
 
-    block = card._reference_block
-    assert not block._value.isHidden()
-    assert block._table_grid.isHidden()
-    assert block._value.text() == "table · 2 points · same"
-    assert not block._copy_up.isEnabled()
+    ledger = card._ledger
+    assert ledger._table_grid.isHidden()
+    assert ledger._grid_caption.isHidden()
+    assert ledger._rows[0]._value.text() == "table · 2 points"
+    assert ledger._rows[0].findChild(QPushButton, "PullButton") is None
 
     if charts_available():
         preview = card._editor._table_body._preview
@@ -252,11 +301,11 @@ def test_equal_table_reference_keeps_the_compact_one_liner():
 @requires_charts
 def test_undocking_the_reference_clears_the_table_overlay():
     card = _table_card({"x": [0, 1], "y": [2, 3]})
-    card.set_reference({"x": [0, 5], "y": [2, 9]}, RowState.DIFFERS, ParameterKind.TABLE)
+    card.set_reference(*_one_reference({"x": [0, 5], "y": [2, 9]}), ParameterKind.TABLE)
     preview = card._editor._table_body._preview
     assert preview._ref_points
 
-    card.set_reference(None, None, None)
+    card.set_reference((), [], None)
 
     assert preview._ref_points == []
     assert preview._legend.isHidden()
@@ -268,13 +317,13 @@ def test_growing_the_grid_keeps_the_reference_section_and_its_overlay():
     takeover: the reference section stays, and so does the chart overlay
     inside the editor that carries the comparison."""
     card = _table_card({"x": [0, 1], "y": [2, 3]})
-    card.set_reference({"x": [0, 5], "y": [2, 9]}, RowState.DIFFERS, ParameterKind.TABLE)
+    card.set_reference(*_one_reference({"x": [0, 5], "y": [2, 9]}), ParameterKind.TABLE)
     preview = card._editor._table_body._preview
     assert preview._ref_points
 
     card.growable_grid().set_fill_available(True)
 
-    assert card._reference_block.isVisibleTo(card)
+    assert card._ledger.isVisibleTo(card)
     assert preview._ref_points
     assert preview.isVisibleTo(card._editor)
 
@@ -282,17 +331,17 @@ def test_growing_the_grid_keeps_the_reference_section_and_its_overlay():
 def test_full_multiline_expression_reference_renders_in_full():
     card = _function_card("x + 1")
     long_expression = "1*x +\n2*x**2 +\n3*x**3"
-    card.set_reference(long_expression, RowState.DIFFERS, ParameterKind.FUNCTION)
+    card.set_reference(*_one_reference(long_expression), ParameterKind.FUNCTION)
 
-    block = card._reference_block
-    assert block._value.text() == long_expression  # no "…" truncation
-    assert block._value.font().family() == _monospace_font().family()
+    value = card._ledger._rows[0]._value
+    assert value.text() == long_expression  # no "…" truncation
+    assert value.font().family() == _monospace_font().family()
 
 
 def test_non_expression_reference_never_gets_the_monospace_font():
     card = _card(("Parameterisation", "Cell", "Electrode area [m2]"))
-    card.set_reference(2.0, RowState.DIFFERS, ParameterKind.SCALAR)
-    assert card._reference_block._value.font().family() != _monospace_font().family()
+    card.set_reference(*_one_reference(2.0), ParameterKind.SCALAR)
+    assert card._ledger._rows[0]._value.font().family() != _monospace_font().family()
 
 
 @requires_charts
@@ -301,7 +350,7 @@ def test_function_cards_table_overlay_survives_switching_mode_away_and_back():
     entries -- the overlay lives on that mode's own (always-alive) body, so
     switching the strip away and back must neither lose nor duplicate it."""
     card = _function_card({"x": [0, 1], "y": [2, 3]})  # opens on InterpolatedTable
-    card.set_reference({"x": [0, 1, 9], "y": [2, 3, 50]}, RowState.DIFFERS, ParameterKind.FUNCTION)
+    card.set_reference(*_one_reference({"x": [0, 1, 9], "y": [2, 3, 50]}), ParameterKind.FUNCTION)
     table_body = card._editor._table_body
     assert table_body._preview._ref_points == [(0.0, 2.0), (1.0, 3.0), (9.0, 50.0)]
 

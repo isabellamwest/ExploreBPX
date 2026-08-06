@@ -288,6 +288,55 @@ def matching_table_rows(
     ]
 
 
+def merged_row_state(rows: list[RowDiff | None]) -> RowState | None:
+    """The single state one key wears against **all** pinned references.
+
+    Every surface that shows one mark per key against several references --
+    the parameter-list row bar, the tree gutter (design rule 6) -- needs the
+    same rule, so it lives here once rather than being re-derived per widget.
+
+    Disagreement resolves toward the louder fact, because a mark that stays
+    quiet while some reference disagrees would be a lie:
+
+    * any reference differing (``DIFFERS``/``FILLABLE``) wins outright;
+    * failing that, any reference agreeing gives ``EQUAL``;
+    * ``REF_ONLY`` next (the key exists in some reference and not in main);
+    * ``MAIN_ONLY`` last (some reference was compared and simply lacks it);
+    * ``None`` when no reference has anything to say about this key at all.
+
+    ``DIFFERS`` and ``FILLABLE`` cannot genuinely conflict -- they are told
+    apart by whether the *main* value is empty, and every reference is
+    compared against the same main -- so the first differing state found is
+    returned as-is rather than being flattened to one of the two.
+    """
+    seen = [row.state for row in rows if row is not None]
+    for state in seen:
+        if state in _DIFFER_STATES:
+            return state
+    for candidate in (RowState.EQUAL, RowState.REF_ONLY, RowState.MAIN_ONLY):
+        if candidate in seen:
+            return candidate
+    return None
+
+
+def merged_ghost_keys(sections: list[SectionDiff | None]) -> tuple[str, ...]:
+    """The union of one section's ghost keys across every pinned reference,
+    ordered by the pin that first contributed each key.
+
+    A key only some references carry is still a ghost row -- it exists
+    somewhere the main document does not have it -- so the union, not the
+    intersection, is what the parameter list renders.
+    """
+    keys: list[str] = []
+    for section in sections:
+        if section is None:
+            continue
+        for key in section.ghost_keys:
+            if key not in keys:
+                keys.append(key)
+    return tuple(keys)
+
+
 @dataclass(frozen=True)
 class ValueGroup:
     """One Card Ledger row (multi-reference track, design rule 3): every

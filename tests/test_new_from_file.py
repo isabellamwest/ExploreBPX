@@ -14,7 +14,7 @@ import pytest
 
 from core import export
 from core.bpx_gateway import LoadError
-from state.app_state import AppState
+from state.app_state import MAX_PINNED_REFERENCES, AppState, PinReferenceOutcome
 
 pytest.importorskip("PySide6")
 
@@ -89,25 +89,45 @@ def test_new_from_file_unparseable_leaves_state_untouched(origin_path, bad_path)
     assert state.reference is None
 
 
-def test_new_from_file_keeps_snapshot_when_origin_is_the_docked_reference(origin_path):
+def test_new_from_file_keeps_snapshot_when_origin_is_already_pinned(origin_path):
     state = AppState()
-    state.open_reference(origin_path)
+    state.pin_reference(origin_path)
     snapshot = state.reference
 
-    state.new_from_file(origin_path)
+    assert state.new_from_file(origin_path) is PinReferenceOutcome.ALREADY_REFERENCE
 
-    assert state.reference is snapshot
+    assert state.references == [snapshot]
 
 
-def test_new_from_file_replaces_a_different_reference(origin_path, valid_spm_path, tmp_path):
+def test_new_from_file_appends_beside_other_references(origin_path, valid_spm_path, tmp_path):
     other = tmp_path / "other.json"
     shutil.copy(valid_spm_path, other)
     state = AppState()
-    state.open_reference(other)
+    state.pin_reference(other)
 
-    state.new_from_file(origin_path)
+    assert state.new_from_file(origin_path) is PinReferenceOutcome.ADDED
 
-    assert state.reference.path == origin_path
+    assert [reference.path for reference in state.references] == [other, origin_path]
+
+
+def test_new_from_file_at_the_cap_still_creates_the_document(
+    origin_path, valid_spm_path, tmp_path
+):
+    """D2: the clone is always made; only the pin is refused, and the
+    outcome says so."""
+    state = AppState()
+    for index in range(MAX_PINNED_REFERENCES):
+        copy = tmp_path / f"ref{index}.json"
+        shutil.copy(valid_spm_path, copy)
+        state.pin_reference(copy)
+    pinned_before = list(state.references)
+
+    assert state.new_from_file(origin_path) is PinReferenceOutcome.AT_CAP
+
+    assert state.active is not None
+    assert state.active.document.filename == "main (copy).json"
+    assert state.active.dirty is True
+    assert state.references == pinned_before
 
 
 def test_new_from_file_origin_may_be_the_current_main(origin_path):
@@ -130,10 +150,10 @@ def test_new_from_file_origin_may_be_the_current_main(origin_path):
 def test_rail_row_label_and_descriptor(app_driver):
     label, descriptor = app_driver.workspace_new_from_file_texts()
     assert label == "From existing file…"
-    assert descriptor == "Start from a copy · the file docks as reference"
+    assert descriptor == "Start from a copy · the file is pinned as a reference"
 
 
-def test_click_flow_clones_docks_and_stays_on_workspace(app_driver, origin_path, monkeypatch):
+def test_click_flow_clones_pins_and_stays_on_workspace(app_driver, origin_path, monkeypatch):
     d = app_driver
     page_before = d.current_view_index()
     _stub_open_dialog(monkeypatch, origin_path)
@@ -141,7 +161,7 @@ def test_click_flow_clones_docks_and_stays_on_workspace(app_driver, origin_path,
     d.click_workspace_new_from_file()
 
     assert d.current_view_index() == page_before
-    assert d.toast_text() == "New document from main.json · docked as reference"
+    assert d.toast_text() == "New document from main.json · pinned as reference"
     assert d.reference_tile_visible()
     assert "main.json" in d.reference_tile_text()
     assert "State: Modified" in d.workspace_info_text()

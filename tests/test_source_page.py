@@ -30,7 +30,7 @@ _DOC = {
 }
 
 
-class _RefStub:
+class _SnapshotStub:
     """The slice of ``ReferenceSnapshot`` the Source page consumes."""
 
     def __init__(self, raw, filename="reference.json", model="SPM", path=Path("reference.json")):
@@ -40,6 +40,22 @@ class _RefStub:
         # A file-backed reference by default; pass ``path=None`` to stand in
         # for a bundled library set.
         self.path = path
+
+
+class _RefStub:
+    """The slice of ``ui_qt.reference_identity.ReferencePin`` the Source page
+    consumes: a snapshot plus the badge identity its pin order gives it."""
+
+    def __init__(self, raw, filename="reference.json", model="SPM", path=Path("reference.json")):
+        self.snapshot = _SnapshotStub(raw, filename=filename, model=model, path=path)
+        self.index = 0
+        self.comparison = None
+        self.letters = "Re"
+        self.colour = "#0c8581"
+
+    @property
+    def name(self):
+        return self.snapshot.filename
 
 
 def _write(tmp_path: Path, name: str, raw: dict) -> Path:
@@ -229,7 +245,7 @@ def test_two_panes_share_a_wrapped_line_height(qtbot):
     # Short enough that it cannot wrap at any plausible font metric -- the
     # old "short" fit the pane by a single character under Courier New.
     ref["Header"] = dict(_LONG_DOC["Header"], Description="s")
-    page.refresh(_LONG_DOC, reference=_RefStub(ref))
+    page.refresh(_LONG_DOC, pin=_RefStub(ref))
     view = _sized(page, 700)
 
     index = next(
@@ -259,10 +275,10 @@ def test_hint_visible_only_with_document_and_no_reference(qtbot):
     page = SourcePage()
     qtbot.addWidget(page)
 
-    page.refresh(_DOC, reference=None)
+    page.refresh(_DOC, pin=None)
     assert not page._hint.isHidden()
 
-    page.refresh(_DOC, reference=_RefStub(_DOC))
+    page.refresh(_DOC, pin=_RefStub(_DOC))
     assert page._hint.isHidden()
 
 
@@ -316,7 +332,7 @@ _DOC_MAIN_ONLY = {
 def _two_pane(qtbot, main_raw, ref_raw):
     page = SourcePage()
     qtbot.addWidget(page)
-    page.refresh(main_raw, reference=_RefStub(ref_raw))
+    page.refresh(main_raw, pin=_RefStub(ref_raw))
     return page
 
 
@@ -432,12 +448,12 @@ def test_pane_headers_show_roles_names_and_models(qtbot):
     page = SourcePage()
     qtbot.addWidget(page)
 
-    page.refresh(_DOC, reference=None)
+    page.refresh(_DOC, pin=None)
     assert page._pane_head.isHidden()
 
     page.refresh(
         _DOC,
-        reference=_RefStub(_REF, filename="lfp.json", model="SPMe"),
+        pin=_RefStub(_REF, filename="lfp.json", model="SPMe"),
         main_name="nmc.json",
         main_model="DFN",
     )
@@ -1037,7 +1053,7 @@ def test_selection_prunes_when_its_row_vanishes(qtbot):
         "Header": {"BPX": "0.1.0", "Model": "SPM"},
         "Parameterisation": _DOC_MAIN_ONLY["Parameterisation"],
     }
-    page.refresh(without_title, reference=_RefStub(without_title))
+    page.refresh(without_title, pin=_RefStub(without_title))
 
     assert page._view.selected_path() is None
 
@@ -1059,7 +1075,7 @@ def test_set_stale_needs_a_docked_reference(qtbot):
     page.set_stale(True)
     assert page._stale_band.isHidden()
 
-    page.refresh(_DOC, reference=_RefStub(_REF))
+    page.refresh(_DOC, pin=_RefStub(_REF))
     page.set_stale(True)
     assert not page._stale_band.isHidden()
 

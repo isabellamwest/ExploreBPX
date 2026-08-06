@@ -16,26 +16,33 @@ from state.document_session import DocumentSession
 from state.reference_snapshot import ReferenceSnapshot
 
 
-class OpenReferenceOutcome(Enum):
-    """Result of :meth:`AppState.open_reference`, for toast feedback."""
+#: The hard cap on pinned references. Four is what the comparison surfaces
+#: were designed to carry -- four badge colours that stay tellable apart, four
+#: chips in the strip at a ~700px window, four curves on one chart. Pinning a
+#: fifth is refused outright rather than silently dropping an earlier pin.
+MAX_PINNED_REFERENCES = 4
+
+
+class PinReferenceOutcome(Enum):
+    """Result of :meth:`AppState.pin_reference`/:meth:`pin_reference_set`,
+    for toast feedback."""
 
     ADDED = "added"
     ALREADY_REFERENCE = "already_reference"
     IS_MAIN = "is_main"
+    AT_CAP = "at_cap"
 
 
 class AppState:
     """Application-level container for the active document session and the
-    docked reference snapshot(s).
+    pinned reference snapshots.
 
-    In the current design, AppState holds one optional DocumentSession (the
-    main, editable document) and a list of docked ReferenceSnapshots (frozen,
-    read-only files docked beside it). Phase 0 of the multi-reference track
-    keeps every mutator's replace-on-open behaviour: ``references`` holds at
-    most one entry today, and the ``reference`` property below is a
-    compatibility shim for call sites not yet converted to the list. Later
-    phases grow the list to a pinned, ordered set (see
-    ``PLAN-multi-reference.md``).
+    AppState holds one optional DocumentSession (the main, editable document)
+    and an ordered list of pinned ReferenceSnapshots (frozen, read-only files
+    compared against it). Pinning **appends**: up to
+    ``MAX_PINNED_REFERENCES`` references coexist, ordered by pin time, and
+    the order is the identity the UI layer colours and letters them by (see
+    ``PLAN-multi-reference.md``). Nothing here knows about badges.
     """
 
     def __init__(self) -> None:
@@ -44,11 +51,27 @@ class AppState:
 
     @property
     def reference(self) -> ReferenceSnapshot | None:
-        """The first docked reference, or ``None`` -- a Phase 0 compatibility
-        shim for call sites not yet converted to ``references``. Read-only:
-        mutators below assign ``self.references`` directly.
+        """The first pinned reference, or ``None`` -- a compatibility shim
+        for call sites not yet converted to ``references`` (the Source page,
+        Phase 2). Read-only: mutators below assign ``self.references``
+        directly.
         """
         return self.references[0] if self.references else None
+
+    @property
+    def at_reference_cap(self) -> bool:
+        """True when no further reference can be pinned -- the seam the
+        Workspace's two entry buttons disable themselves from."""
+        return len(self.references) >= MAX_PINNED_REFERENCES
+
+    def _pinned_at(self, path: Path) -> ReferenceSnapshot | None:
+        """The pinned reference loaded from *path*, if any (resolved-path
+        match, so two spellings of one file are one pin)."""
+        resolved = path.resolve()
+        for reference in self.references:
+            if reference.path is not None and reference.path.resolve() == resolved:
+                return reference
+        return None
 
     @property
     def has_document(self) -> bool:
@@ -85,9 +108,9 @@ class AppState:
         session.dirty = True
         self.active = session
 
-    def new_from_file(self, path: Path) -> None:
-        """Clone *path* into a fresh unsaved session and dock *path* itself
-        as the read-only reference ("New from source").
+    def new_from_file(self, path: Path) -> PinReferenceOutcome:
+        """Clone *path* into a fresh unsaved session and pin *path* itself
+        as a read-only reference ("New from source").
 
         The clone is built from the file's on-disk bytes under a derived
         "{stem} (copy)" filename (the Export naming convention), keeping the
@@ -97,21 +120,32 @@ class AppState:
 
         Loads the clone and the snapshot before touching either field: a
         failure (``core.bpx_gateway.LoadError``/``OSError``) leaves the
-        state completely unchanged. A reference already docked at *path*
-        is kept as-is (dedupe by path); any other reference is replaced --
-        the one-reference rule.
+        state completely unchanged. Already-pinned references survive: the
+        source is *appended* to them, so a comparison set built up before
+        the clone is not thrown away by it.
+
+        The returned outcome describes the pin only -- the new document is
+        always created (decision D2). At the cap the source is not pinned
+        and ``AT_CAP`` says so; a source already pinned returns
+        ``ALREADY_REFERENCE`` and is left as-is.
         """
         clone_name = f"{path.stem} (copy){path.suffix}"
         document = BPXDocument.from_bytes(path.read_bytes(), clone_name)
-        existing = self.reference
-        if existing is not None and existing.path is not None and existing.path.resolve() == path.resolve():
-            reference = existing
+        existing = self._pinned_at(path)
+        outcome = PinReferenceOutcome.ADDED
+        reference: ReferenceSnapshot | None = None
+        if existing is not None:
+            outcome = PinReferenceOutcome.ALREADY_REFERENCE
+        elif self.at_reference_cap:
+            outcome = PinReferenceOutcome.AT_CAP
         else:
             reference = ReferenceSnapshot.load(path)
         session = DocumentSession(document)
         session.dirty = True
         self.active = session
-        self.references = [reference]
+        if reference is not None:
+            self.references.append(reference)
+        return outcome
 
     def close(self) -> None:
         """Close the active session.
@@ -121,40 +155,38 @@ class AppState:
         """
         self.active = None
 
-    def open_reference(self, path: Path) -> OpenReferenceOutcome:
-        """Dock *path* as the reference, replacing any reference already docked.
+    def pin_reference(self, path: Path) -> PinReferenceOutcome:
+        """Pin *path* as a reference, appending it after those already pinned.
 
-        Dedupes by resolved path against both the docked reference (returns
-        ``ALREADY_REFERENCE``, quiet no-op) and the active session's backing
-        file (returns ``IS_MAIN``, quiet no-op) before loading. At most one
-        reference exists at a time -- opening a second reference replaces the
-        first, since it is a disposable snapshot with nothing to lose.
+        Every no-op outcome is decided before loading: *path* already pinned
+        (``ALREADY_REFERENCE``), *path* being the active session's backing
+        file (``IS_MAIN``), or the cap already reached (``AT_CAP``). The
+        already-pinned check comes first, so re-pinning at the cap reads as
+        the harmless duplicate it is rather than as a refusal.
 
         Raises ``core.bpx_gateway.LoadError``/``OSError`` exactly as
         ``ReferenceSnapshot.load`` does; the caller decides how to surface a
         load failure.
         """
-        resolved = path.resolve()
-        existing = self.reference
-        if existing is not None and existing.path is not None and existing.path.resolve() == resolved:
-            return OpenReferenceOutcome.ALREADY_REFERENCE
+        if self._pinned_at(path) is not None:
+            return PinReferenceOutcome.ALREADY_REFERENCE
         if (
             self.active is not None
             and self.active.backing_file is not None
-            and self.active.backing_file.resolve() == resolved
+            and self.active.backing_file.resolve() == path.resolve()
         ):
-            return OpenReferenceOutcome.IS_MAIN
-        self.references = [ReferenceSnapshot.load(path)]
-        return OpenReferenceOutcome.ADDED
+            return PinReferenceOutcome.IS_MAIN
+        if self.at_reference_cap:
+            return PinReferenceOutcome.AT_CAP
+        self.references.append(ReferenceSnapshot.load(path))
+        return PinReferenceOutcome.ADDED
 
-    def open_reference_set(self, set_id: str) -> OpenReferenceOutcome:
-        """Dock bundled reference-library set *set_id* as the reference,
-        replacing any reference already docked (silent replace: a snapshot
-        is disposable, immutable state, and re-docking the old one is one
-        click).
+    def pin_reference_set(self, set_id: str) -> PinReferenceOutcome:
+        """Pin bundled reference-library set *set_id*, appending it after
+        those already pinned.
 
-        Dedupes by set id against the docked reference (returns
-        ``ALREADY_REFERENCE``, quiet no-op). ``IS_MAIN`` can never apply: a
+        Dedupes by set id (returns ``ALREADY_REFERENCE``, quiet no-op) and
+        refuses at the cap (``AT_CAP``). ``IS_MAIN`` can never apply: a
         bundled set is not a file on disk, so it can never be the active
         session's backing file.
 
@@ -162,47 +194,40 @@ class AppState:
         ``ReferenceSnapshot.from_library`` does; the caller decides how to
         surface it.
         """
-        existing = self.reference
-        if existing is not None and existing.set_id == set_id:
-            return OpenReferenceOutcome.ALREADY_REFERENCE
-        self.references = [ReferenceSnapshot.from_library(set_id)]
-        return OpenReferenceOutcome.ADDED
+        if any(reference.set_id == set_id for reference in self.references):
+            return PinReferenceOutcome.ALREADY_REFERENCE
+        if self.at_reference_cap:
+            return PinReferenceOutcome.AT_CAP
+        self.references.append(ReferenceSnapshot.from_library(set_id))
+        return PinReferenceOutcome.ADDED
 
-    def remove_reference(self) -> None:
-        """Undock the reference, if any."""
-        self.references = []
+    def remove_reference(self, reference: ReferenceSnapshot) -> None:
+        """Unpin *reference*, leaving the rest of the pins in their order.
+
+        Matched by identity, not equality: two pins can hold equal snapshot
+        contents (the same file pinned under two names is prevented, but a
+        library set and a file copy of it are not), and only the one the
+        caller pointed at should go. Unknown references are a quiet no-op.
+        """
+        for index, pinned in enumerate(self.references):
+            if pinned is reference:
+                del self.references[index]
+                return
 
     def reload_reference(self) -> None:
-        """Re-snapshot the docked reference from its own path on disk (the
-        Source page's stale-band Reload).
+        """Re-snapshot the first pinned reference from its own path on disk
+        (the Source page's stale-band Reload).
 
         Raises ``core.bpx_gateway.LoadError``/``OSError`` exactly as
-        ``ReferenceSnapshot.load`` does; on failure the docked snapshot is
+        ``ReferenceSnapshot.load`` does; on failure the pinned snapshot is
         left untouched (the caller surfaces the error -- C3).
 
         A library-set reference (``path`` is None) is a quiet no-op: a
         bundled set is immutable, so there is nothing on disk to reload.
+        Still singular: the Source page it serves grows its own reference
+        selector in Phase 2, and reloads whichever pin that selects.
         """
         existing = self.reference
         if existing is None or existing.path is None:
             return
-        self.references = [ReferenceSnapshot.load(existing.path)]
-
-    def swap_roles(self, promoted_path: Path, demoted_path: Path) -> None:
-        """The "Make main" swap: promote *promoted_path* (today's reference)
-        to the active session, demoting *demoted_path* (today's main) to a
-        fresh reference snapshot -- both loaded from disk.
-
-        Loads both files before touching either field: if either raises
-        (``core.bpx_gateway.LoadError``/``OSError``, exactly as ``open`` and
-        ``ReferenceSnapshot.load`` do), ``self.active`` and ``self.reference``
-        are left completely unchanged. The demoted snapshot always reflects
-        what is on disk, so a discarded edit on the old main can never appear
-        in it.
-        """
-        document = BPXDocument.from_bytes(promoted_path.read_bytes(), promoted_path.name)
-        session = DocumentSession(document)
-        session.backing_file = promoted_path
-        reference = ReferenceSnapshot.load(demoted_path)
-        self.active = session
-        self.references = [reference]
+        self.references[0] = ReferenceSnapshot.load(existing.path)

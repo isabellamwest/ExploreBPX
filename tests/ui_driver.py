@@ -551,8 +551,26 @@ class AppDriver:
         return self
 
     def source_stale_band_visible(self) -> bool:
-        """Whether the "The reference changed on disk" band is shown."""
+        """Whether the "<name> changed on disk" band is shown."""
         return not self._w._source._stale_band.isHidden()
+
+    def source_stale_band_text(self) -> str:
+        """The stale band's sentence -- it names the pinned references whose
+        files changed, since any pin can go stale, not just the one shown."""
+        return self._w._source._stale_text.text()
+
+    def source_reference_header_text(self) -> str:
+        """The reference pane's header ("Reference 1 of 3  ·  chen.json  ·
+        SPM")."""
+        return self._w._source._ref_head.text()
+
+    def source_reference_badge_letters(self) -> str | None:
+        """The badge letters beside the reference pane's header, or ``None``
+        with no reference shown."""
+        slot = self._w._source._ref_badge_slot
+        if slot.count() == 0:
+            return None
+        return slot.itemAt(0).widget().text()
 
     def source_reload(self) -> "AppDriver":
         """Click the stale band's Reload link."""
@@ -620,47 +638,110 @@ class AppDriver:
         self._w._dock_reference_set(set_id)
         return self
 
-    def click_reference_remove(self) -> "AppDriver":
-        """Click the docked reference tile's Remove button."""
-        self._qtbot.mouseClick(self._w._workspace._reference_remove_button, Qt.LeftButton)
+    # --- Workspace References section (multi-reference) ------------------
+
+    def _reference_rows(self) -> list:
+        return self._w._workspace._reference_rows
+
+    def _reference_row(self, index: int = 0):
+        rows = self._reference_rows()
+        if index >= len(rows):
+            raise AssertionError(f"No pinned reference row at index {index} (have {len(rows)})")
+        return rows[index]
+
+    def click_reference_remove(self, index: int = 0) -> "AppDriver":
+        """Click the Remove button on the pinned reference row at *index*."""
+        self._qtbot.mouseClick(self._reference_row(index)._remove, Qt.LeftButton)
         return self
 
-    def click_reference_make_main(self) -> "AppDriver":
-        """Click the docked reference tile's "Make main" button."""
-        self._qtbot.mouseClick(self._w._workspace._reference_make_main_button, Qt.LeftButton)
+    def click_reference_row(self, index: int = 0) -> "AppDriver":
+        """Click the pinned reference row at *index*, toggling its detail."""
+        row = self._reference_row(index)
+        self._qtbot.mouseClick(row, Qt.LeftButton)
         return self
 
-    def reference_make_main_button_visible(self) -> bool:
-        """Whether the reference card's "Make main" button is reachable --
-        a docked reference is showing *and* the button itself is shown (it
-        hides individually for a library-set reference, which has no file
-        on disk to promote)."""
-        return self.reference_tile_visible() and not self._w._workspace._reference_make_main_button.isHidden()
+    def reference_row_expanded(self, index: int = 0) -> bool:
+        return self._reference_row(index).is_expanded()
+
+    def reference_row_badges(self) -> list[str]:
+        """Badge letters of the Workspace rows, in pin order."""
+        from ui_qt.reference_identity import badge_letters
+
+        return badge_letters(self.pinned_reference_names())
+
+    def reference_row_detail_text(self, index: int = 0) -> str:
+        """The expanded record's key/value lines for the row at *index*, one
+        per line -- whether or not it is currently expanded."""
+        from PySide6.QtWidgets import QFormLayout, QLabel
+
+        row = self._reference_row(index)
+        form = row._detail.layout()
+        lines = []
+        for position in range(form.rowCount()):
+            label = form.itemAt(position, QFormLayout.LabelRole).widget()
+            field = form.itemAt(position, QFormLayout.FieldRole).widget()
+            if isinstance(field, QLabel):
+                text = field.text()
+            else:
+                text = " ".join(
+                    child.text()
+                    for child in field.findChildren(QLabel)
+                    if child.objectName() != "ValidityDot"
+                )
+            lines.append(f"{label.text()} {text}".strip())
+        return "\n".join(lines)
+
+    def reference_cap_text(self) -> str:
+        """The References footer's pin count ("3 of 4 pinned")."""
+        return self._w._workspace._reference_cap_label.text()
+
+    def reference_entry_buttons_enabled(self) -> bool:
+        """Whether the two entry buttons can still pin something."""
+        ws = self._w._workspace
+        return ws._reference_library_button.isEnabled() and ws._open_reference_button.isEnabled()
+
+    def unpin_all_references(self) -> "AppDriver":
+        """Unpin every pinned reference, through the same handler the
+        Workspace's Remove goes through.
+
+        Pinning appends, so a test that means "this reference *instead of*
+        that one" has to say so explicitly -- this is that step."""
+        while self._w._state.references:
+            self._w._on_remove_reference_requested(self._w._state.references[0])
+        return self
+
+    def pinned_reference_names(self) -> list[str]:
+        """Display names of the pinned references, in pin order."""
+        return [reference.filename for reference in self._w._state.references]
 
     def reference_tile_visible(self) -> bool:
-        """Whether the reference card is showing a *docked* reference.
+        """Whether the References section is showing at least one pinned
+        reference.
 
-        The card widget itself is always on screen (its empty state is the
-        reference library's front door), so docked-ness is carried by the
-        card's content -- the filename line is the docked state's anchor
-        widget."""
-        return not self._w._workspace._reference_filename.isHidden()
+        The section widget itself is always on screen (its empty state is the
+        reference library's front door), so pinned-ness is carried by the
+        rows."""
+        return bool(self._reference_rows())
 
     def reference_empty_state_visible(self) -> bool:
-        """Whether the reference card is showing its empty-state front door
-        (the teaching line; the dock buttons are visible in both states)."""
+        """Whether the References section is showing its empty-state front
+        door (the teaching line; the entry buttons are visible in both
+        states)."""
         return not self._w._workspace._reference_empty_text.isHidden()
 
-    def reference_tile_text(self) -> str:
-        """Text of the reference card, flattened -- tag/filename/validity
-        pill/key-value lines, one per line (mirrors :meth:`workspace_info_text`)."""
-        ws = self._w._workspace
+    def reference_tile_text(self, index: int = 0) -> str:
+        """Text of the pinned reference row at *index*, flattened -- the
+        section's Read-only tag, the row's own name and model, then the
+        expanded record's lines (mirrors :meth:`workspace_info_text`)."""
+        row = self._reference_row(index)
         lines = [
-            ws._reference_tag.text(),
-            ws._reference_filename.text(),
-            f"Validity: {ws._reference_badge.text()}",
+            self._w._workspace._reference_tag.text(),
+            row.snapshot.filename,
+            f"Model: {row.snapshot.model or '-'}",
+            f"Contents: {row.snapshot.section_count} sections · "
+            f"{row.snapshot.parameter_count} parameters",
+            f"Validity: {row._validity_label.text()}",
         ]
-        lines.extend(f"{key}: {ws._reference_fields[key].text()}" for key in ws._reference_fields)
         return "\n".join(lines)
 
     def toast_text(self) -> str | None:
@@ -692,11 +773,14 @@ class AppDriver:
     def comparison_strip_visible(self) -> bool:
         return not self._w._params._strip.isHidden()
 
-    def comparison_strip_identity_text(self) -> str:
-        return self._w._params._strip._identity.text()
+    def comparison_strip_chip_names(self) -> list[str]:
+        """The strip's chip names, in pin order."""
+        return [chip._name.text() for chip in self._w._params._strip._chips]
 
-    def comparison_strip_counts_text(self) -> str:
-        return self._w._params._strip._counts.text()
+    def comparison_strip_chip_tooltips(self) -> list[str]:
+        """The strip's chip tooltips -- where the per-reference counts live,
+        since the chips themselves stay quiet."""
+        return [chip.toolTip() for chip in self._w._params._strip._chips]
 
     def parameter_row_ref_bar(self, label: str) -> str | None:
         """The real parameter row starting with *label*'s own
@@ -714,6 +798,17 @@ class AppDriver:
             item = lst.item(i)
             if item.data(256) is not None and item.text().startswith(label):
                 return item.data(parameter_row.REF_BAR_ROLE)
+        raise AssertionError(f"No real parameter row starting with {label!r}.")
+
+    def parameter_row_tooltip(self, label: str) -> str:
+        """The real parameter row starting with *label*'s tooltip -- the main
+        value line, then one line per distinct reference value naming the
+        references that hold it."""
+        lst = self._w._params._list
+        for i in range(lst.count()):
+            item = lst.item(i)
+            if item.data(256) is not None and item.text().startswith(label):
+                return item.toolTip()
         raise AssertionError(f"No real parameter row starting with {label!r}.")
 
     def ghost_row_keys(self) -> list[str]:
@@ -799,18 +894,6 @@ class AppDriver:
         assert index.isValid(), f"No tree node at {path!r}"
         return model.data(index, REF_BAR_ROLE)
 
-    def tree_node_ref_count(self, path: tuple[str, ...]) -> int | None:
-        """The tree node at *path*'s :data:`~ui_qt.tree_model.REF_COUNT_ROLE`
-        value -- the data the tree delegate's right-aligned differ count
-        actually paints from."""
-        from ui_qt.tree_model import REF_COUNT_ROLE
-
-        view = self._w._tree._view
-        model = view.model()
-        index = model.index_for_path(tuple(path))
-        assert index.isValid(), f"No tree node at {path!r}"
-        return model.data(index, REF_COUNT_ROLE)
-
     def tree_row_painted_colour(self, path: tuple[str, ...], dx: int = 1, dy: int = 12) -> str:
         """The actual rendered pixel colour at *dx* from the tree
         **viewport's** left edge (x=0) on the row at *path*, real
@@ -887,18 +970,44 @@ class AppDriver:
         walk(QModelIndex())
         return marked
 
-    def reference_block_visible(self) -> bool:
-        """Whether the current card's reference row is currently shown --
-        works for both ``ParameterCard`` and ``GhostParameterCard``, which
-        share the same ``_reference_block`` attribute (the shared
-        ``ReferenceValueBlock`` widget)."""
+    # --- Card ledger (multi-reference) -----------------------------------
+
+    def _ledger(self):
+        """The current card's ledger -- ``ParameterCard`` and
+        ``GhostParameterCard`` share the attribute name deliberately."""
         card = self._w._inspector._card
-        block = getattr(card, "_reference_block", None) if card is not None else None
-        return block is not None and not block.isHidden()
+        return getattr(card, "_ledger", None) if card is not None else None
+
+    def _ledger_row(self, index: int = 0):
+        ledger = self._ledger()
+        assert ledger is not None, "The current card has no ledger"
+        assert index < len(ledger._rows), (
+            f"No ledger row at index {index} (have {len(ledger._rows)})"
+        )
+        return ledger._rows[index]
+
+    def reference_block_visible(self) -> bool:
+        """Whether the current card's reference ledger is currently shown --
+        works for both ``ParameterCard`` and ``GhostParameterCard``."""
+        ledger = self._ledger()
+        return ledger is not None and not ledger.isHidden()
+
+    def ledger_row_count(self) -> int:
+        """How many distinct reference values the current card shows."""
+        ledger = self._ledger()
+        return len(ledger._rows) if ledger is not None else 0
+
+    def ledger_row_badges(self, index: int = 0) -> list[str]:
+        """The badge letters clustered on the ledger row at *index*."""
+        from PySide6.QtWidgets import QLabel, QWidget
+
+        row = self._ledger_row(index)
+        cluster = row.findChild(QWidget, "LedgerBadgeCluster")
+        return [child.text() for child in cluster.findChildren(QLabel)]
 
     def main_file_heading_visible(self) -> bool:
-        """Whether the current ``ParameterCard``'s "Main file" heading is
-        shown -- only ever true while a reference is docked and its section
+        """Whether the current ``ParameterCard``'s "Main" role label is
+        shown -- only ever true while something is pinned and its section
         is not collapsed by an expanded grid."""
         card = self._w._inspector._card
         heading = getattr(card, "_main_file_heading", None) if card is not None else None
@@ -907,34 +1016,40 @@ class AppDriver:
     def main_file_heading_text(self) -> str:
         return self._w._inspector._card._main_file_heading.text()
 
-    def reference_file_heading_text(self) -> str:
-        return self._w._inspector._card._reference_block._heading.text()
+    def reference_value_text(self, index: int = 0) -> str:
+        return self._ledger_row(index)._value.text()
 
-    def reference_value_text(self) -> str:
-        return self._w._inspector._card._reference_block._value.text()
+    def reference_block_is_same(self, index: int = 0) -> bool:
+        return bool(self._ledger_row(index)._value.property("same"))
 
-    def reference_unit_text(self) -> str | None:
-        """The reference row's unit label text, or ``None`` when this kind
-        shows no unit (mirroring whether the main editable row shows one).
-        ``isHidden()``, not ``isVisible()`` -- the latter also requires every
-        ancestor up to a shown top-level window (known Qt pitfall)."""
-        label = self._w._inspector._card._reference_block._unit_label
-        return label.text() if not label.isHidden() else None
+    def pull_visible(self, index: int = 0) -> bool:
+        """Whether the ledger row at *index* offers a Pull button. A row that
+        equals main says "same" and offers none -- Pull's presence is the
+        differs signal."""
+        from PySide6.QtWidgets import QPushButton
 
-    def reference_block_is_same(self) -> bool:
-        return bool(self._w._inspector._card._reference_block._value.property("same"))
+        return self._ledger_row(index).findChild(QPushButton, "PullButton") is not None
 
-    def copy_up_visible(self) -> bool:
-        return not self._w._inspector._card._reference_block._copy_up.isHidden()
+    def pull_enabled(self, index: int = 0) -> bool:
+        from PySide6.QtWidgets import QPushButton
 
-    def copy_up_enabled(self) -> bool:
-        return self._w._inspector._card._reference_block._copy_up.isEnabled()
+        button = self._ledger_row(index).findChild(QPushButton, "PullButton")
+        return button is not None and button.isEnabled()
 
-    def click_copy_up(self) -> "AppDriver":
-        """Click the current card's "Copy up" button -- works for both
+    def click_pull(self, index: int = 0) -> "AppDriver":
+        """Click the ledger row at *index*'s Pull button -- works for both
         ``ParameterCard`` and ``GhostParameterCard``."""
-        self._w._inspector._card._reference_block._copy_up.click()
+        from PySide6.QtWidgets import QPushButton
+
+        button = self._ledger_row(index).findChild(QPushButton, "PullButton")
+        assert button is not None, f"Ledger row {index} offers no Pull"
+        button.click()
         return self
+
+    def reference_grid_visible(self) -> bool:
+        """Whether the ledger's read-only x/y grid is showing."""
+        ledger = self._ledger()
+        return ledger is not None and not ledger._table_grid.isHidden()
 
     def ghost_card_shown(self) -> bool:
         from ui_qt.cards.ghost_card import GhostParameterCard

@@ -23,6 +23,7 @@ from core.tree_model import build_path_map, build_tree
 from state.reference_snapshot import ReferenceSnapshot
 from ui_qt import parameter_row, style, tree_model
 from ui_qt.parameter_list import ParameterListPanel
+from ui_qt.reference_identity import ReferencePin, badge_colour, badge_letters
 from ui_qt.tree_model import BpxTreeModel
 
 APP_DIR = Path(__file__).resolve().parents[1] / "app"
@@ -80,6 +81,13 @@ def _dock_reference(app_driver, ref_path, monkeypatch) -> None:
     app_driver.click_workspace_open_reference()
 
 
+def _replace_reference(app_driver, ref_path, monkeypatch) -> None:
+    """Pin *ref_path* **instead of** whatever is pinned. Pinning appends, so
+    a test that means a swap has to unpin first."""
+    app_driver.unpin_all_references()
+    _dock_reference(app_driver, ref_path, monkeypatch)
+
+
 # ---------------------------------------------------------------------------
 # Panel-level unit tests (no MainWindow): strip counts, row tint, ghost rows,
 # the merge rule, the "no comparison" baseline.
@@ -102,6 +110,27 @@ def _reference_snapshot(raw: dict, filename: str = "reference.json", model: str 
         parameter_count=0,
         mtime=0.0,
     )
+
+
+def _pins(*pairs) -> list[ReferencePin]:
+    """Build pins from ``(comparison, snapshot)`` pairs in pin order, giving
+    each the badge identity its position earns."""
+    snapshots = [snapshot for _comparison, snapshot in pairs]
+    letters = badge_letters([snapshot.filename for snapshot in snapshots])
+    return [
+        ReferencePin(
+            index=index,
+            snapshot=snapshot,
+            comparison=comparison,
+            letters=letters[index],
+            colour=badge_colour(index),
+        )
+        for index, (comparison, snapshot) in enumerate(pairs)
+    ]
+
+
+def _one_pin(main_raw: dict, ref_raw: dict, filename: str = "reference.json") -> list[ReferencePin]:
+    return _pins((compare(main_raw, ref_raw), _reference_snapshot(ref_raw, filename)))
 
 
 @pytest.fixture
@@ -144,7 +173,7 @@ def test_row_bar_variant_per_row_state(panel):
     are distinguishable at a glance."""
     node = _cell_node(MAIN_RAW)
     panel.show_node(node, "SPM")
-    panel.set_comparison([compare(MAIN_RAW, REF_RAW)], [_reference_snapshot(REF_RAW)])
+    panel.set_comparison(_one_pin(MAIN_RAW, REF_RAW))
 
     assert _real_item(panel, "Nominal cell capacity").data(parameter_row.REF_BAR_ROLE) == "differs"
     assert _real_item(panel, "Lower voltage cut-off").data(parameter_row.REF_BAR_ROLE) == "differs"
@@ -155,13 +184,15 @@ def test_row_bar_variant_per_row_state(panel):
 def test_differs_row_tooltip_carries_the_reference_value(panel):
     node = _cell_node(MAIN_RAW)
     panel.show_node(node, "SPM")
-    panel.set_comparison([compare(MAIN_RAW, REF_RAW)], [_reference_snapshot(REF_RAW)])
+    panel.set_comparison(_one_pin(MAIN_RAW, REF_RAW))
 
     differs_tip = _real_item(panel, "Nominal cell capacity").toolTip()
-    assert differs_tip.endswith("Reference: 6.0")
+    # The reference is named, not called "Reference": with several pinned,
+    # a tooltip has no colour to carry identity, so the file's name does.
+    assert differs_tip.endswith("reference.json: 6.0")
     assert differs_tip.startswith("5.0")  # main value line stays first
     # FILLABLE: no main value line, the reference line alone.
-    assert _real_item(panel, "Lower voltage cut-off").toolTip() == "Reference: 3.0"
+    assert _real_item(panel, "Lower voltage cut-off").toolTip() == "reference.json: 3.0"
     # EQUAL: no reference line, the main value tooltip exactly as today.
     assert _real_item(panel, "Reference temperature").toolTip() == "298.15"
 
@@ -169,7 +200,7 @@ def test_differs_row_tooltip_carries_the_reference_value(panel):
 def test_ghost_row_rendered_read_only_and_selectable(panel):
     node = _cell_node(MAIN_RAW)
     panel.show_node(node, "SPM")
-    panel.set_comparison([compare(MAIN_RAW, REF_RAW)], [_reference_snapshot(REF_RAW)])
+    panel.set_comparison(_one_pin(MAIN_RAW, REF_RAW))
 
     ghosts = _ghost_items(panel)
     assert len(ghosts) == 1
@@ -203,7 +234,7 @@ def test_ghost_row_rendered_read_only_and_selectable(panel):
 
 def test_merge_rule_ghost_key_excluded_from_fields_to_add(panel):
     node = _cell_node(MAIN_RAW)
-    panel.set_comparison([compare(MAIN_RAW, REF_RAW)], [_reference_snapshot(REF_RAW)])
+    panel.set_comparison(_one_pin(MAIN_RAW, REF_RAW))
     panel._expanded[node.path] = True
     panel.show_node(node, "SPM")
 
@@ -230,11 +261,14 @@ def test_merge_rule_with_no_reference_docked_matches_todays_behaviour(panel):
     assert _ghost_items(panel) == []
 
 
-def test_strip_counts_text_variations(panel):
+def test_strip_counts_live_in_the_chip_tooltip(panel):
+    """The chip itself stays quiet -- name and badge only. The counts are one
+    hover away, per reference."""
     reference = _reference_snapshot(REF_RAW)
 
-    panel.set_comparison([compare(MAIN_RAW, REF_RAW)], [reference])
-    assert panel._strip._counts.text() == "2 differ · 1 ref only"
+    panel.set_comparison(_one_pin(MAIN_RAW, REF_RAW))
+    assert panel._strip._chips[0]._name.text() == "reference.json"
+    assert panel._strip._chips[0].toolTip() == "reference.json · SPM · 2 differ · 1 ref only"
 
     one_differ = ComparisonResult(
         sections={
@@ -246,16 +280,35 @@ def test_strip_counts_text_variations(panel):
             )
         }
     )
-    panel.set_comparison([one_differ], [reference])
-    assert panel._strip._counts.text() == "1 differs"
+    panel.set_comparison(_pins((one_differ, reference)))
+    assert panel._strip._chips[0].toolTip().endswith("1 differs")
 
     no_diff = ComparisonResult(sections={_CELL_PATH: SectionDiff(_CELL_PATH, True, True, {})})
-    panel.set_comparison([no_diff], [reference])
-    assert panel._strip._counts.text() == "no differences"
+    panel.set_comparison(_pins((no_diff, reference)))
+    assert panel._strip._chips[0].toolTip().endswith("no differences")
 
 
-def test_strip_invisible_with_no_reference_docked(panel):
-    panel.set_comparison([], [])
+def test_strip_shows_one_chip_per_pinned_reference(panel):
+    """Four pinned, four chips, each with its own badge letters."""
+    pins = _pins(
+        (compare(MAIN_RAW, REF_RAW), _reference_snapshot(REF_RAW, "chen.json")),
+        (compare(MAIN_RAW, REF_RAW), _reference_snapshot(REF_RAW, "marquis.json")),
+        (compare(MAIN_RAW, MAIN_RAW), _reference_snapshot(MAIN_RAW, "okane.json")),
+    )
+    panel.set_comparison(pins)
+
+    assert [chip._name.text() for chip in panel._strip._chips] == [
+        "chen.json",
+        "marquis.json",
+        "okane.json",
+    ]
+    assert [pin.letters for pin in pins] == ["Ch", "Ma", "Ok"]
+    # Counts differ per reference: okane matches main exactly.
+    assert panel._strip._chips[2].toolTip().endswith("no differences")
+
+
+def test_strip_invisible_with_nothing_pinned(panel):
+    panel.set_comparison([])
     assert panel._strip.isHidden()
 
 
@@ -282,8 +335,9 @@ def _tree_with_cell():
 
 
 def test_tree_display_text_carries_no_differ_suffix():
-    """The old text-appended "≠ N" label suffix is gone -- the mark is now
-    the gutter bar + REF_COUNT_ROLE, painted, not text."""
+    """The old text-appended "≠ N" label suffix is gone, and so is the
+    numeric count that replaced it -- the mark is the painted gutter bar and
+    nothing else (design rule 6)."""
     root, _header, _parameterisation, cell = _tree_with_cell()
     model = BpxTreeModel(root, comparisons=[_comparison_with_differ_count(_CELL_PATH, 3)])
     cell_index = model.index(0, 0, model.index(1, 0))
@@ -291,7 +345,7 @@ def test_tree_display_text_carries_no_differ_suffix():
     assert model.data(cell_index, Qt.DisplayRole) == "Cell"
 
 
-def test_tree_ref_bar_and_count_for_differing_section():
+def test_tree_ref_bar_for_differing_section():
     root, _header, _parameterisation, _cell = _tree_with_cell()
     model = BpxTreeModel(
         root,
@@ -301,7 +355,6 @@ def test_tree_ref_bar_and_count_for_differing_section():
     cell_index = model.index(0, 0, model.index(1, 0))
 
     assert model.data(cell_index, parameter_row.REF_BAR_ROLE) == "differs"
-    assert model.data(cell_index, tree_model.REF_COUNT_ROLE) == 3
 
 
 def test_tree_ref_bar_for_all_equal_section():
@@ -312,7 +365,6 @@ def test_tree_ref_bar_for_all_equal_section():
     cell_index = model.index(0, 0, model.index(1, 0))
 
     assert model.data(cell_index, parameter_row.REF_BAR_ROLE) == "equal"
-    assert model.data(cell_index, tree_model.REF_COUNT_ROLE) is None
 
 
 def test_tree_ref_bar_absent_for_main_only_section():
@@ -327,7 +379,6 @@ def test_tree_ref_bar_absent_for_main_only_section():
     cell_index = model.index(0, 0, model.index(1, 0))
 
     assert model.data(cell_index, parameter_row.REF_BAR_ROLE) is None
-    assert model.data(cell_index, tree_model.REF_COUNT_ROLE) is None
 
 
 def test_tree_ref_bar_absent_for_pure_container_with_no_rows_of_its_own():
@@ -344,7 +395,6 @@ def test_tree_ref_bar_absent_for_pure_container_with_no_rows_of_its_own():
     parameterisation_index = model.index(1, 0)
 
     assert model.data(parameterisation_index, parameter_row.REF_BAR_ROLE) is None
-    assert model.data(parameterisation_index, tree_model.REF_COUNT_ROLE) is None
 
 
 def test_tree_collapsed_parent_rolls_up_differing_descendant():
@@ -359,7 +409,6 @@ def test_tree_collapsed_parent_rolls_up_differing_descendant():
     parameterisation_index = model.index(1, 0)
 
     assert model.data(parameterisation_index, parameter_row.REF_BAR_ROLE) == "differs"
-    assert model.data(parameterisation_index, tree_model.REF_COUNT_ROLE) == 1
 
 
 def test_tree_expanded_parent_shows_no_bar_for_its_own_empty_section():
@@ -377,16 +426,14 @@ def test_tree_expanded_parent_shows_no_bar_for_its_own_empty_section():
     parameterisation_index = model.index(1, 0)
 
     assert model.data(parameterisation_index, parameter_row.REF_BAR_ROLE) is None
-    assert model.data(parameterisation_index, tree_model.REF_COUNT_ROLE) is None
 
 
-def test_tree_ref_bar_and_count_absent_with_no_comparison_docked():
+def test_tree_ref_bar_absent_with_nothing_pinned():
     root, _header, _parameterisation, _cell = _tree_with_cell()
     model = BpxTreeModel(root)
     cell_index = model.index(0, 0, model.index(1, 0))
 
     assert model.data(cell_index, parameter_row.REF_BAR_ROLE) is None
-    assert model.data(cell_index, tree_model.REF_COUNT_ROLE) is None
 
 
 def test_tree_ref_bar_updates_live_and_clears():
@@ -414,8 +461,10 @@ def test_strip_appears_with_correct_counts_after_docking(app_driver, main_and_re
     _dock_reference(app_driver, ref_path, monkeypatch)
 
     assert app_driver.comparison_strip_visible()
-    assert app_driver.comparison_strip_identity_text() == f"Reference · {ref_path.name} · SPM"
-    assert app_driver.comparison_strip_counts_text() == "2 differ · 1 ref only"
+    assert app_driver.comparison_strip_chip_names() == [ref_path.name]
+    assert app_driver.comparison_strip_chip_tooltips() == [
+        f"{ref_path.name} · SPM · 2 differ · 1 ref only"
+    ]
 
 
 def test_row_bar_end_to_end(app_driver, main_and_ref, monkeypatch):
@@ -467,7 +516,7 @@ def test_tree_bar_actually_renders_real_pixels(app_driver, main_and_ref, monkeyp
 
     matching_ref_path = tmp_path / "matches_main.json"
     matching_ref_path.write_text(json.dumps(MATCHING_REF_RAW), encoding="utf-8")
-    _dock_reference(app_driver, matching_ref_path, monkeypatch)
+    _replace_reference(app_driver, matching_ref_path, monkeypatch)
 
     assert app_driver.tree_row_painted_colour(_CELL_PATH, dx=1, dy=12) == style.REFERENCE_BORDER
 
@@ -480,8 +529,6 @@ def test_tree_differ_count_actually_paints(app_driver, main_and_ref, monkeypatch
     app_driver.open(main_path)
     _dock_reference(app_driver, ref_path, monkeypatch)
 
-    assert app_driver.tree_node_ref_count(_CELL_PATH) == 2
-    assert app_driver.tree_row_right_band_shows_reference_colour(_CELL_PATH)
 
 
 def test_merge_rule_end_to_end_both_ways(app_driver, main_and_ref, monkeypatch):
@@ -515,14 +562,12 @@ def test_tree_ref_bar_switches_from_differs_to_equal_when_reference_matches(
     _dock_reference(app_driver, ref_path, monkeypatch)
 
     assert app_driver.tree_node_ref_bar(_CELL_PATH) == "differs"
-    assert app_driver.tree_node_ref_count(_CELL_PATH) == 2
 
     matching_ref_path = tmp_path / "matches_main.json"
     matching_ref_path.write_text(json.dumps(MATCHING_REF_RAW), encoding="utf-8")
-    _dock_reference(app_driver, matching_ref_path, monkeypatch)
+    _replace_reference(app_driver, matching_ref_path, monkeypatch)
 
     assert app_driver.tree_node_ref_bar(_CELL_PATH) == "equal"
-    assert app_driver.tree_node_ref_count(_CELL_PATH) is None
 
 
 def test_reference_block_shows_differing_value(app_driver, main_and_ref, monkeypatch):
@@ -535,15 +580,13 @@ def test_reference_block_shows_differing_value(app_driver, main_and_ref, monkeyp
     assert app_driver.reference_block_visible()
     assert app_driver.main_file_heading_visible()
     assert app_driver.main_file_heading_text() == "Main"
-    assert app_driver.reference_file_heading_text() == "Reference"
     assert app_driver.reference_value_text() == "6.0"
-    assert app_driver.reference_unit_text() == "A.h"
     assert not app_driver.reference_block_is_same()
-    assert app_driver.copy_up_visible()
-    assert app_driver.copy_up_enabled()
+    assert app_driver.pull_visible()
+    assert app_driver.pull_enabled()
 
 
-def test_reference_block_faint_and_copy_up_disabled_for_equal_value(app_driver, main_and_ref, monkeypatch):
+def test_ledger_row_faint_and_offers_no_pull_for_an_equal_value(app_driver, main_and_ref, monkeypatch):
     main_path, ref_path = main_and_ref
     app_driver.open(main_path)
     _dock_reference(app_driver, ref_path, monkeypatch)
@@ -551,13 +594,15 @@ def test_reference_block_faint_and_copy_up_disabled_for_equal_value(app_driver, 
     app_driver.go_to(("Parameterisation", "Cell", "Reference temperature [K]"))
 
     assert app_driver.reference_block_visible()
-    assert app_driver.reference_value_text() == "298.15 · same"
+    # The value alone: "same" is its own quiet word beside it, never a
+    # suffix on the value, so the value column reads as the value.
+    assert app_driver.reference_value_text() == "298.15"
     assert app_driver.reference_block_is_same()
-    assert not app_driver.copy_up_enabled()
-    assert not app_driver.copy_up_visible()
+    assert not app_driver.pull_enabled()
+    assert not app_driver.pull_visible()
 
 
-def test_reference_block_copy_up_enabled_for_fillable_value(app_driver, main_and_ref, monkeypatch):
+def test_ledger_row_offers_pull_for_a_fillable_value(app_driver, main_and_ref, monkeypatch):
     main_path, ref_path = main_and_ref
     app_driver.open(main_path)
     _dock_reference(app_driver, ref_path, monkeypatch)
@@ -566,7 +611,7 @@ def test_reference_block_copy_up_enabled_for_fillable_value(app_driver, main_and
 
     assert app_driver.reference_block_visible()
     assert not app_driver.reference_block_is_same()
-    assert app_driver.copy_up_enabled()
+    assert app_driver.pull_enabled()
 
 
 def test_reference_block_absent_for_main_only_parameter(app_driver, main_and_ref, monkeypatch):
@@ -590,7 +635,7 @@ def test_no_reference_docked_shows_no_main_file_heading(app_driver, main_and_ref
     assert not app_driver.reference_block_visible()
 
 
-def test_clicking_copy_up_emits_signal_and_does_not_dirty_the_card(app_driver, main_and_ref, monkeypatch):
+def test_clicking_pull_emits_its_source_index_and_does_not_dirty_the_card(app_driver, main_and_ref, monkeypatch):
     """Multi-file track M3: Copy up is now wired (see the "Copy up" section
     below for full coverage) -- this pins the signal itself still fires and
     the card the pull rebuilds is never left holding a draft."""
@@ -600,11 +645,11 @@ def test_clicking_copy_up_emits_signal_and_does_not_dirty_the_card(app_driver, m
     app_driver.go_to(("Parameterisation", "Cell", "Nominal cell capacity [A.h]"))
 
     received: list = []
-    app_driver._w._inspector._card.copy_up_requested.connect(lambda: received.append(True))
+    app_driver._w._inspector._card.pull_requested.connect(lambda index: received.append(index))
 
-    app_driver.click_copy_up()
+    app_driver.click_pull()
 
-    assert received == [True]
+    assert received == [0]  # the first (only) pinned reference
     assert not app_driver.card_is_dirty()
     assert app_driver.field_value() == 6.0  # the reference value, now pulled in
 
@@ -640,17 +685,15 @@ def test_ghost_row_selection_shows_ghost_card_with_no_input_widget(app_driver, m
     assert app_driver.ghost_card_heading_text() == "Not in the main file"
     assert "Electrode area" in app_driver.ghost_card_title_text()
     assert not app_driver.ghost_card_has_input_widget()
-    assert app_driver.reference_file_heading_text() == "Reference"
     assert app_driver.reference_value_text() == "1.0"
-    assert app_driver.reference_unit_text() == "m2"
-    assert app_driver.copy_up_visible()
-    assert app_driver.copy_up_enabled()
+    assert app_driver.pull_visible()
+    assert app_driver.pull_enabled()
 
     app_driver.press_delete_in_parameter_list()
     assert "Electrode area [m2]" in app_driver.ghost_row_keys()
 
 
-def test_ghost_card_copy_up_emits_signal(app_driver, main_and_ref, monkeypatch):
+def test_ghost_card_pull_emits_its_source_index(app_driver, main_and_ref, monkeypatch):
     main_path, ref_path = main_and_ref
     app_driver.open(main_path)
     _dock_reference(app_driver, ref_path, monkeypatch)
@@ -658,11 +701,11 @@ def test_ghost_card_copy_up_emits_signal(app_driver, main_and_ref, monkeypatch):
     app_driver.select_ghost_row("Electrode area [m2]")
 
     received: list = []
-    app_driver._w._inspector._card.copy_up_requested.connect(lambda: received.append(True))
+    app_driver._w._inspector._card.pull_requested.connect(lambda index: received.append(index))
 
-    app_driver.click_copy_up()
+    app_driver.click_pull()
 
-    assert received == [True]
+    assert received == [0]  # the first (only) pinned reference
 
 
 def test_removing_reference_clears_everything_immediately(app_driver, main_and_ref, monkeypatch):
@@ -680,7 +723,6 @@ def test_removing_reference_clears_everything_immediately(app_driver, main_and_r
     assert app_driver.parameter_row_ref_bar("Nominal cell capacity") is None
     assert not app_driver.reference_block_visible()
     assert app_driver.tree_node_ref_bar(_CELL_PATH) is None
-    assert app_driver.tree_node_ref_count(_CELL_PATH) is None
 
 
 def test_replacing_the_main_document_with_reference_docked_refreshes(
@@ -689,7 +731,7 @@ def test_replacing_the_main_document_with_reference_docked_refreshes(
     main_path, ref_path = main_and_ref
     app_driver.open(main_path)
     _dock_reference(app_driver, ref_path, monkeypatch)
-    assert app_driver.comparison_strip_counts_text() == "2 differ · 1 ref only"
+    assert app_driver.comparison_strip_chip_tooltips()[0].endswith("2 differ · 1 ref only")
 
     matching_main_path = tmp_path / "matches_reference.json"
     matching_main_path.write_text(json.dumps(MATCHING_MAIN_RAW), encoding="utf-8")
@@ -699,7 +741,7 @@ def test_replacing_the_main_document_with_reference_docked_refreshes(
     _stub_open_dialog(monkeypatch, matching_main_path)
     app_driver.click_workspace_open()
 
-    assert app_driver.comparison_strip_counts_text() == "no differences"
+    assert app_driver.comparison_strip_chip_tooltips()[0].endswith("no differences")
     app_driver.go_to(("Parameterisation", "Cell"))
     assert app_driver.ghost_row_keys() == []
 
@@ -714,7 +756,6 @@ def test_no_reference_docked_is_structurally_todays_editor(app_driver, main_and_
     for label in ("Reference temperature", "Nominal cell capacity", "Lower voltage cut-off", "Density"):
         assert app_driver.parameter_row_ref_bar(label) is None
     assert app_driver.tree_node_ref_bar(_CELL_PATH) is None
-    assert app_driver.tree_node_ref_count(_CELL_PATH) is None
 
     app_driver.go_to(("Parameterisation", "Cell", "Nominal cell capacity [A.h]"))
     assert not app_driver.reference_block_visible()
@@ -736,18 +777,18 @@ def test_copy_up_on_differs_row_pulls_value_retints_and_disables(app_driver, mai
     app_driver.go_to(("Parameterisation", "Cell", "Nominal cell capacity [A.h]"))
     assert app_driver.parameter_row_ref_bar("Nominal cell capacity") == "differs"
 
-    app_driver.click_copy_up()
+    app_driver.click_pull()
 
     assert app_driver.field_value() == 6.0
     assert app_driver.reference_block_is_same()
-    assert not app_driver.copy_up_enabled()
+    assert not app_driver.pull_enabled()
     assert app_driver.parameter_row_ref_bar("Nominal cell capacity") == "equal"
 
     app_driver.undo()
 
     assert app_driver.field_value() == 5.0
     assert not app_driver.reference_block_is_same()
-    assert app_driver.copy_up_enabled()
+    assert app_driver.pull_enabled()
     assert app_driver.parameter_row_ref_bar("Nominal cell capacity") == "differs"
 
 
@@ -756,9 +797,9 @@ def test_copy_up_on_fillable_row_pulls_the_reference_value(app_driver, main_and_
     app_driver.open(main_path)
     _dock_reference(app_driver, ref_path, monkeypatch)
     app_driver.go_to(("Parameterisation", "Cell", "Lower voltage cut-off [V]"))
-    assert app_driver.copy_up_enabled()
+    assert app_driver.pull_enabled()
 
-    app_driver.click_copy_up()
+    app_driver.click_pull()
 
     assert app_driver.field_value() == 3.0
     assert app_driver.reference_block_is_same()
@@ -772,7 +813,7 @@ def test_ghost_row_copy_up_adds_and_selects_the_real_parameter(app_driver, main_
     app_driver.select_ghost_row("Electrode area [m2]")
     assert app_driver.ghost_card_shown()
 
-    app_driver.click_copy_up()
+    app_driver.click_pull()
 
     assert not app_driver.ghost_card_shown()
     assert app_driver.shown_parameter_path() == ("Parameterisation", "Cell", "Electrode area [m2]")
@@ -791,7 +832,7 @@ def test_copy_up_supersedes_a_dirty_draft_and_undo_restores_the_prior_value(
     app_driver.edit_field(7.0)
     assert app_driver.card_is_dirty()
 
-    app_driver.click_copy_up()
+    app_driver.click_pull()
 
     assert app_driver.field_value() == 6.0  # the reference value, not the discarded draft
     assert not app_driver.card_is_dirty()
@@ -811,7 +852,7 @@ def test_bare_enter_after_a_pull_commits_nothing(app_driver, main_and_ref, monke
     _dock_reference(app_driver, ref_path, monkeypatch)
     app_driver.go_to(("Parameterisation", "Cell", "Nominal cell capacity [A.h]"))
 
-    app_driver.click_copy_up()
+    app_driver.click_pull()
     assert app_driver.field_value() == 6.0
     assert not app_driver.card_is_dirty()
 
@@ -860,7 +901,7 @@ def test_copy_up_shape_change_scalar_to_table_reclassifies_the_card(
     app_driver.go_to(("Header", "Custom Note"))
     assert type(app_driver._w._inspector._card._editor).__name__ == "ScalarCard"
 
-    app_driver.click_copy_up()
+    app_driver.click_pull()
 
     assert app_driver.field_value() == {"x": [0, 1], "y": [2, 3]}
     assert type(app_driver._w._inspector._card._editor).__name__ == "TableCard"
@@ -876,5 +917,5 @@ def test_end_to_end_with_bundled_about_energy_examples(app_driver, monkeypatch):
     _dock_reference(app_driver, ref_path, monkeypatch)
 
     assert app_driver.comparison_strip_visible()
-    assert app_driver.comparison_strip_identity_text().startswith(f"Reference · {ref_path.name}")
-    assert app_driver.comparison_strip_counts_text() != "no differences"
+    assert app_driver.comparison_strip_chip_names() == [ref_path.name]
+    assert not app_driver.comparison_strip_chip_tooltips()[0].endswith("no differences")

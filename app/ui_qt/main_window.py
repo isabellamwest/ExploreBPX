@@ -45,8 +45,9 @@ from core.commands import (
 )
 from core.compare import ComparisonResult, compare
 from core.completion import TaskKind
-from state.app_state import AppState, OpenReferenceOutcome
+from state.app_state import AppState, PinReferenceOutcome
 from state.document_session import DocumentSession
+from state.reference_snapshot import ReferenceSnapshot
 
 from . import icons
 from .activity_bar import ActivityBar
@@ -55,6 +56,7 @@ from .inspector import InspectorPanel
 from .navigation import NavigationService, NavigationTarget
 from .page_header import PageHeader
 from .parameter_list import ParameterListPanel
+from .reference_identity import ReferencePin, build_pins
 from .reference_library_dialog import ReferenceLibraryDialog
 from .search import SearchBar
 from .source_page import SourcePage
@@ -63,7 +65,7 @@ from .style import STYLESHEET
 from .toast import Toast
 from .tree_panel import TreePanel
 from .diagnostics_panel import DiagnosticsPanel
-from .workspace_panel import WorkspacePanel
+from .workspace_panel import AT_CAP_MESSAGE, WorkspacePanel
 
 _NO_DOCUMENT_TEXT = "No document"
 _EDITOR_PAGE_INDEX = 0  # QStackedWidget page hosting the tree/params/inspector
@@ -78,14 +80,6 @@ class OpenIntent(Enum):
 
     REPLACE_MAIN = "replace_main"
     ADD_REFERENCE = "add_reference"
-    CANCEL = "cancel"
-
-
-class SwitchIntent(Enum):
-    """How to handle a dirty main before "Make main" swaps roles."""
-
-    SAVE_AND_SWITCH = "save_and_switch"
-    DISCARD_AND_SWITCH = "discard_and_switch"
     CANCEL = "cancel"
 
 
@@ -139,11 +133,10 @@ class MainWindow(QMainWindow):
         self._workspace_error_count = 0
         self._workspace_warning_count = 0
         #: Reference comparison state: one whole-document diff per pinned
-        #: reference -- empty with no reference docked or no document open.
-        #: UI-session state, not persisted, recomputed whenever a reference
-        #: docks or undocks (see ``_open_reference_path``/
-        #: ``_on_remove_reference_requested``). Phase 0 of the multi-reference
-        #: track: holds at most one entry today.
+        #: reference, in pin order -- empty with nothing pinned or no document
+        #: open. UI-session state, not persisted, recomputed whenever a
+        #: reference is pinned or removed (see ``_open_reference_path``/
+        #: ``_on_remove_reference_requested``).
         self._comparisons: list[ComparisonResult] = []
         #: Where a never-saved document's Save As dialog starts: the folder of
         #: the last Save As this run, else the user's Documents folder -- never
@@ -382,7 +375,6 @@ class MainWindow(QMainWindow):
         self._workspace.open_library_requested.connect(self._open_reference_library)
         self._workspace.new_from_file_requested.connect(self._new_from_file)
         self._workspace.remove_reference_requested.connect(self._on_remove_reference_requested)
-        self._workspace.make_main_requested.connect(self._on_make_main_requested)
 
     # --- navigation -----------------------------------------------------
     def _on_view_changed(self, page_index: int) -> None:
@@ -894,11 +886,14 @@ class MainWindow(QMainWindow):
         box = QMessageBox(self)
         box.setWindowTitle(f"Open {filename}")
         box.setText("A document is already open. Open this file as:")
-        replace_reference_label = (
-            "Replace reference" if self._state.reference is not None else "Add as reference"
-        )
         replace_main = box.addButton("Replace main", QMessageBox.AcceptRole)
-        replace_reference = box.addButton(replace_reference_label, QMessageBox.ActionRole)
+        # One stable label: pinning appends, so this choice never replaces
+        # anything. At the cap it is the one control that cannot act, so it
+        # goes grey and says why rather than silently refusing after the click.
+        replace_reference = box.addButton("Pin as reference", QMessageBox.ActionRole)
+        if self._state.at_reference_cap:
+            replace_reference.setEnabled(False)
+            replace_reference.setToolTip(AT_CAP_MESSAGE)
         box.addButton("Cancel", QMessageBox.RejectRole)
         box.setDefaultButton(replace_main)
         box.exec()
@@ -922,25 +917,26 @@ class MainWindow(QMainWindow):
         self._open_reference_path(Path(name))
 
     def _open_reference_path(self, path: Path) -> None:
-        """Dock *path* as the reference, showing a toast for the outcome.
+        """Pin *path* as a reference, showing a toast for the outcome.
 
         Load failure surfaces through the same error-dialog pattern as the
-        main Open flow. A genuine dock/replace (``ADDED``) recomputes the
-        comparison -- a no-op outcome (already
-        docked/is-main) changes nothing to recompute.
+        main Open flow. Only a genuine pin (``ADDED``) recomputes the
+        comparison -- every no-op outcome (already pinned, is-main, at the
+        cap) changes nothing to recompute.
         """
         try:
-            outcome = self._state.open_reference(path)
+            outcome = self._state.pin_reference(path)
         except (LoadError, OSError) as exc:
             QMessageBox.critical(self, "Cannot open file", str(exc))
             return
         message = {
-            OpenReferenceOutcome.ADDED: f"Added {path.name} as reference",
-            OpenReferenceOutcome.ALREADY_REFERENCE: "Already open as reference",
-            OpenReferenceOutcome.IS_MAIN: "Already open as the main file",
+            PinReferenceOutcome.ADDED: f"Pinned {path.name} as reference",
+            PinReferenceOutcome.ALREADY_REFERENCE: "Already pinned as reference",
+            PinReferenceOutcome.IS_MAIN: "Already open as the main file",
+            PinReferenceOutcome.AT_CAP: AT_CAP_MESSAGE,
         }[outcome]
         self._toast.show_message(message)
-        if outcome is OpenReferenceOutcome.ADDED:
+        if outcome is PinReferenceOutcome.ADDED:
             self._recompute_comparison()
             # A fresh dock/replace re-truths the stale band (a leftover
             # band from the previous reference must not survive it).
@@ -963,123 +959,49 @@ class MainWindow(QMainWindow):
             self._dock_reference_set(set_id)
 
     def _dock_reference_set(self, set_id: str) -> None:
-        """Dock library set *set_id*, mirroring ``_open_reference_path``:
-        toast the outcome, and only a genuine dock/replace (``ADDED``)
-        recomputes the comparison. ``IS_MAIN`` cannot occur for a bundled
-        set. The stale re-check matters here too: a band left over from a
-        replaced file reference must not survive the swap (the path-less
-        snapshot itself can never go stale).
+        """Pin library set *set_id*, mirroring ``_open_reference_path``:
+        toast the outcome, and only a genuine pin (``ADDED``) recomputes the
+        comparison. ``IS_MAIN`` cannot occur for a bundled set. The stale
+        re-check matters here too: a band left over from a removed file
+        reference must not survive the pin (the path-less snapshot itself
+        can never go stale).
         """
         try:
-            outcome = self._state.open_reference_set(set_id)
+            outcome = self._state.pin_reference_set(set_id)
         except (KeyError, LoadError, OSError) as exc:
             QMessageBox.critical(self, "Cannot open file", str(exc))
             return
         message = {
-            OpenReferenceOutcome.ADDED: (
-                f"{self._state.reference.filename} · docked as reference"
+            PinReferenceOutcome.ADDED: (
+                f"{self._state.references[-1].filename} · pinned as reference"
             ),
-            OpenReferenceOutcome.ALREADY_REFERENCE: "Already docked as reference",
+            PinReferenceOutcome.ALREADY_REFERENCE: "Already pinned as reference",
+            PinReferenceOutcome.AT_CAP: AT_CAP_MESSAGE,
         }[outcome]
         self._toast.show_message(message)
-        if outcome is OpenReferenceOutcome.ADDED:
+        if outcome is PinReferenceOutcome.ADDED:
             self._recompute_comparison()
             self._check_reference_stale()
         self._update_workspace_info()
 
-    def _on_remove_reference_requested(self) -> None:
-        self._state.remove_reference()
+    def _on_remove_reference_requested(self, reference: ReferenceSnapshot) -> None:
+        """Unpin the reference the Workspace row's Remove points at, leaving
+        every other pin in place."""
+        self._state.remove_reference(reference)
         self._recompute_comparison()
         self._update_workspace_info()
-
-    # --- Make main ---------------------------------------------------------
-
-    def _on_make_main_requested(self) -> None:
-        """Handle the reference card's "Make main" button: promote the docked
-        reference to main, demoting today's main to reference -- both loaded
-        fresh from disk. Role assignment is a Workspace action, never a
-        command: it never touches the undo stack.
-
-        With no main document open, or a never-saved main that gets
-        discarded, there is nothing on disk to demote -- the reference
-        simply becomes the main and is undocked.
-        """
-        reference = self._state.reference
-        if reference is None:
-            return
-        if reference.path is None:
-            # A bundled library set has no file on disk to promote; the
-            # card hides its "Make main" button, so this is belt-and-braces.
-            return
-        session = self._state.active
-        if session is not None and self._has_unsaved_work():
-            intent = self._ask_switch_intent(
-                self._fallback_filename(session), reference.filename
-            )
-            if intent is SwitchIntent.CANCEL:
-                return
-            if intent is SwitchIntent.SAVE_AND_SWITCH and not self._save():
-                return
-        # A never-saved main that is then discarded has no file to demote to
-        # a reference snapshot -- same as no main being open at all.
-        demoted_path = session.backing_file if session is not None else None
-        promoted_path = reference.path
-        try:
-            if demoted_path is not None:
-                self._state.swap_roles(promoted_path, demoted_path)
-            else:
-                self._state.open(promoted_path)
-                self._state.remove_reference()
-        except (LoadError, OSError) as exc:
-            QMessageBox.critical(self, "Cannot open file", str(exc))
-            return
-        self._params.reset_expansion_state()
-        self._diagnostics.reset_view_state()
-        self._refresh_all()
-        # Both roles were just (re)loaded from disk: re-truth the band.
-        self._check_reference_stale()
-        self._toast.show_message(f"{promoted_path.name} is now the main file")
-
-    def _ask_switch_intent(self, main_name: str, ref_name: str) -> SwitchIntent:
-        """Ask how to handle *main_name*'s unsaved changes before "Make
-        main" swaps roles with *ref_name*.
-
-        Overridable seam (mirrors ``_ask_open_intent``): headless tests
-        monkeypatch this method directly to bypass the real (blocking)
-        dialog; one test exercises the actual ``QMessageBox`` via the
-        zero-delay popup-close idiom instead.
-        """
-        box = QMessageBox(self)
-        box.setWindowTitle("Unsaved changes")
-        box.setText(f"{main_name} has unsaved changes. Save before switching?")
-        box.setInformativeText(
-            f"{ref_name} becomes the main file; {main_name} becomes the read-only reference."
-        )
-        # "&&" because a lone "&" is a mnemonic marker: the native style
-        # would swallow it and render "Save  switch" on screen.
-        save_and_switch = box.addButton("Save && switch", QMessageBox.AcceptRole)
-        discard_and_switch = box.addButton("Discard && switch", QMessageBox.DestructiveRole)
-        box.addButton("Cancel", QMessageBox.RejectRole)
-        box.setDefaultButton(save_and_switch)
-        box.exec()
-        clicked = box.clickedButton()
-        if clicked is save_and_switch:
-            return SwitchIntent.SAVE_AND_SWITCH
-        if clicked is discard_and_switch:
-            return SwitchIntent.DISCARD_AND_SWITCH
-        return SwitchIntent.CANCEL
 
     # --- comparison ----------------------------------------------------------
 
     def _recompute_comparison(self) -> None:
         """Recompute the reference comparisons from the current document +
-        docked references and push them to every view.
+        pinned references and push them to every view.
 
         Called once per document change (via ``_refresh_all``) and once
-        whenever a reference docks/undocks/replaces -- never incrementally
-        (``core.compare.compare`` re-walks both raw dicts). Phase 0 of the
-        multi-reference track: one ``compare()`` call per snapshot in
-        ``self._state.references`` (at most one today; no caching).
+        whenever a reference is pinned/removed -- never incrementally
+        (``core.compare.compare`` re-walks both raw dicts). One ``compare()``
+        call per pinned snapshot, up to the cap of four; no caching in this
+        track, by explicit decision.
         """
         document = self._state.active.document if self._state.active else None
         self._comparisons = (
@@ -1089,15 +1011,21 @@ class MainWindow(QMainWindow):
         )
         self._apply_comparison()
 
+    def _pins(self) -> list[ReferencePin]:
+        """The pinned references paired with their comparisons and badge
+        identity -- built here, once, and threaded outward, so no widget can
+        disagree with another about which reference "Ch" is."""
+        return build_pins(self._state.references, self._comparisons)
+
     def _apply_comparison(self) -> None:
         """Push the current comparisons to the tree/list/inspector -- the
         single fan-out point every comparison-state change goes through."""
-        reference = self._state.reference
+        pins = self._pins()
         self._tree.set_comparison(self._comparisons)
-        self._params.set_comparison(self._comparisons, self._state.references)
-        self._inspector.set_comparison(self._comparisons, self._state.references)
+        self._params.set_comparison(pins)
+        self._inspector.set_comparison(pins)
         # The Source page re-renders here too: every route that changes what
-        # it must show (edit, undo/redo, open/new, reference dock/undock)
+        # it must show (edit, undo/redo, open/new, reference pin/remove)
         # already funnels through this method.
         session = self._state.active
         document = session.document if session is not None else None
@@ -1105,9 +1033,10 @@ class MainWindow(QMainWindow):
         # backing file once one exists, the document's own filename before.
         self._source.refresh(
             document.raw if document is not None else None,
-            reference,
+            pins[0] if pins else None,
             main_name=self._fallback_filename(session) if session is not None else "",
             main_model=document.identity.model if document is not None else None,
+            pin_count=len(pins),
         )
 
     def _check_reference_stale(self) -> None:
@@ -1120,26 +1049,28 @@ class MainWindow(QMainWindow):
         the panes is still exactly what the user is reading, and Reload's
         own error path is where an unreadable file gets surfaced.
         """
-        reference = self._state.reference
-        if reference is None:
-            return
-        if reference.path is None:
-            # A bundled library set has no file to go stale against; clear
-            # any band left over from a just-replaced file reference.
-            self._source.set_stale(False)
-            return
-        try:
-            on_disk = reference.path.stat().st_mtime
-        except OSError:
-            return
-        self._source.set_stale(on_disk != reference.mtime)
+        stale = []
+        for reference in self._state.references:
+            # A bundled library set has no file to go stale against.
+            if reference.path is None:
+                continue
+            try:
+                on_disk = reference.path.stat().st_mtime
+            except OSError:
+                continue
+            if on_disk != reference.mtime:
+                stale.append(reference.filename)
+        # Every pin is checked, not just the one the Source page shows: a
+        # reference going stale off screen is exactly the case a band that
+        # only watched the first pin would miss in silence.
+        self._source.set_stale_names(stale)
 
     def _on_reload_reference(self) -> None:
         """The stale band's Reload: re-snapshot the reference from disk and
         recompute -- never silently (the band's click is the consent).
 
         An unreadable file gets the standard "Cannot open file" error;
-        the docked snapshot and the band stay exactly as they were.
+        the pinned snapshot and the band stay exactly as they were.
         """
         try:
             self._state.reload_reference()
@@ -1192,7 +1123,14 @@ class MainWindow(QMainWindow):
                 return  # stale click: the reference no longer has this path
             value = value[key]
         path = tuple(path)
-        command = PullSection(path, value) if is_section else PullParameter(path, value)
+        # Named, like every other write: the undo entry says which file the
+        # value came from, so the Source page's pull is not the one write
+        # path whose history is anonymous.
+        command = (
+            PullSection(path, value, source_label=reference.filename)
+            if is_section
+            else PullParameter(path, value, source_label=reference.filename)
+        )
         session.execute_command(command)
         # Commands do not self-propagate: fan the commit out to every page
         # (recomputing the comparison, so this page re-renders the row as
@@ -1256,14 +1194,22 @@ class MainWindow(QMainWindow):
             return
         path = Path(name)
         try:
-            self._state.new_from_file(path)
+            outcome = self._state.new_from_file(path)
         except (LoadError, OSError) as exc:
             QMessageBox.critical(self, "Cannot open file", str(exc))
             return
         self._params.reset_expansion_state()
         self._diagnostics.reset_view_state()
         self._refresh_all()
-        self._toast.show_message(f"New document from {path.name} · docked as reference")
+        # D2: the new document is created either way; only the pin can fail,
+        # and the toast says which of the two happened rather than claiming a
+        # pin that was refused.
+        if outcome is PinReferenceOutcome.AT_CAP:
+            self._toast.show_message(
+                f"New document from {path.name} · not pinned ({AT_CAP_MESSAGE})"
+            )
+        else:
+            self._toast.show_message(f"New document from {path.name} · pinned as reference")
 
     def _save(self) -> bool:
         """Write the document to its backing file.

@@ -10,10 +10,13 @@ from core.compare import (
     ComparisonResult,
     RowDiff,
     RowState,
+    SectionDiff,
     ValueGroup,
     compare,
     group_reference_values,
     matching_table_rows,
+    merged_ghost_keys,
+    merged_row_state,
     raw_equal,
 )
 
@@ -375,3 +378,67 @@ def test_group_reference_values_uses_raw_equal_for_nested_tables():
     assert len(groups) == 2
     assert groups[0].indices == (0, 1)
     assert groups[1].indices == (2,)
+
+
+# ---------------------------------------------------------------------------
+# merged_row_state / merged_ghost_keys: one mark against N pinned references
+# ---------------------------------------------------------------------------
+
+
+def test_merged_row_state_is_differs_when_any_reference_differs():
+    """Design rule 6: one dissenting reference is enough, whatever the
+    others say and whichever order they were pinned in."""
+    rows = [RowDiff(RowState.EQUAL, 1.0), RowDiff(RowState.DIFFERS, 2.0)]
+    assert merged_row_state(rows) is RowState.DIFFERS
+    assert merged_row_state(list(reversed(rows))) is RowState.DIFFERS
+
+
+def test_merged_row_state_keeps_fillable_distinct_from_differs():
+    """FILLABLE and DIFFERS are told apart by whether *main* is empty, and
+    every reference is compared against the same main -- so the two can
+    never genuinely conflict, and the state survives unflattened."""
+    rows = [RowDiff(RowState.FILLABLE, 1.0), RowDiff(RowState.FILLABLE, 2.0)]
+    assert merged_row_state(rows) is RowState.FILLABLE
+
+
+def test_merged_row_state_falls_through_equal_then_ref_only_then_main_only():
+    assert merged_row_state([RowDiff(RowState.EQUAL, 1.0), RowDiff(RowState.MAIN_ONLY)]) is RowState.EQUAL
+    assert (
+        merged_row_state([RowDiff(RowState.REF_ONLY, 1.0), RowDiff(RowState.MAIN_ONLY)])
+        is RowState.REF_ONLY
+    )
+    assert merged_row_state([RowDiff(RowState.MAIN_ONLY)]) is RowState.MAIN_ONLY
+
+
+def test_merged_row_state_is_none_when_no_reference_has_an_opinion():
+    assert merged_row_state([]) is None
+    assert merged_row_state([None, None]) is None
+
+
+def test_merged_ghost_keys_is_the_union_in_first_contributing_pin_order():
+    """A key only one reference carries is still something the main document
+    lacks, so the union -- not the intersection -- is what renders."""
+    first = SectionDiff(
+        ("Parameterisation", "Cell"),
+        in_main=True,
+        in_reference=True,
+        rows={"A": RowDiff(RowState.REF_ONLY, 1), "B": RowDiff(RowState.REF_ONLY, 2)},
+    )
+    second = SectionDiff(
+        ("Parameterisation", "Cell"),
+        in_main=True,
+        in_reference=True,
+        rows={"B": RowDiff(RowState.REF_ONLY, 2), "C": RowDiff(RowState.REF_ONLY, 3)},
+    )
+    assert merged_ghost_keys([first, second]) == ("A", "B", "C")
+
+
+def test_merged_ghost_keys_skips_references_with_no_such_section():
+    section = SectionDiff(
+        ("Parameterisation", "Cell"),
+        in_main=True,
+        in_reference=True,
+        rows={"A": RowDiff(RowState.REF_ONLY, 1)},
+    )
+    assert merged_ghost_keys([None, section, None]) == ("A",)
+    assert merged_ghost_keys([None]) == ()

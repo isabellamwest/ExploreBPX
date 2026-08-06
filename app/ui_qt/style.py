@@ -51,6 +51,15 @@ ACCENT_TINT = "#ddeeff"
 #: app's general blue) or any severity colour. Used by the Workspace
 #: reference card's tag; ghost rows/sections are expected to reuse it.
 REFERENCE = "#6f42c1"
+#: Per-pin badge colours, indexed by pin order (see
+#: ``ui_qt.reference_identity``). Teal, slate, plum, olive: four hue regions
+#: the app has not reserved, validated together for within-set separation
+#: under normal and colour-blind vision and for white badge text contrast
+#: (>= 4.5:1 on all four). Never a severity or state colour -- a badge names
+#: *which* reference, never whether anything is good or bad. ``REFERENCE``,
+#: ``ACCENT`` and the three severity colours are reserved against this set
+#: and must never be added to it.
+REFERENCE_BADGES = ("#0c8581", "#5563c9", "#8f3167", "#79670b")
 #: A required-but-absent/required-parameter tint -- distinct from both
 #: ``ERROR`` (invalid) and ``ACCENT`` (a merely-suggested field), so a
 #: schema-required parameter reads as its own, readable, amber category in
@@ -407,14 +416,34 @@ QLabel#ReferenceHeading { color: #6f42c1; font-weight: ${semibold}; font-size: $
 /* Quieter than the heading beside it (explicit user call): a light, small
    annotation, not a badge. */
 QLabel#ReferenceReadOnlyTag { color: #7a63ad; font-size: ${micro}px; }
-QPushButton#ReferenceTileMakeMain, QPushButton#ReferenceTileRemove,
+QPushButton#ReferenceTileRemove,
 QPushButton#ReferenceFromLibrary, QPushButton#WorkspaceOpenReference {
     background: #ffffff; border: 1px solid #d0d7de; border-radius: 4px;
     padding: 3px 10px;
 }
-QPushButton#ReferenceTileMakeMain:hover, QPushButton#ReferenceTileRemove:hover,
+QPushButton#ReferenceTileRemove:hover,
 QPushButton#ReferenceFromLibrary:hover, QPushButton#WorkspaceOpenReference:hover { background: #f6f8fa; }
-/* The reference card's empty state: the teaching line over the two dock
+QPushButton#ReferenceFromLibrary:disabled, QPushButton#WorkspaceOpenReference:disabled {
+    background: #fafbfc; color: #8c959f; border-color: #eaecef;
+}
+/* One pinned reference's Workspace row: a white card on the section's purple
+   wash, its own border the same pale reference tint the inspector's reference
+   chrome uses. Row Remove is quieter than the two entry buttons below it --
+   flat text, no box -- so a destructive action never outweighs the additive
+   ones. */
+QFrame#ReferenceRow { background: #ffffff; border: 1px solid #d5cde6; border-radius: 6px; }
+QFrame#ReferenceRow QPushButton#ReferenceTileRemove {
+    background: transparent; border: none; padding: 1px 4px; color: #57606a;
+}
+QFrame#ReferenceRow QPushButton#ReferenceTileRemove:hover { color: #1f2328; text-decoration: underline; }
+QLabel#ReferenceRowName { font-weight: ${semibold}; }
+QLabel#ReferenceRowModel { color: #57606a; font-size: ${meta}px; }
+QLabel#ReferenceRowChevron { color: #8c959f; font-size: ${micro}px; }
+QWidget#ReferenceRowDetail { border-top: 1px solid #d5cde6; }
+/* The pin count sits at the footer's far right, the quietest thing on the
+   row -- bookkeeping, not an instruction. */
+QLabel#ReferenceCapCount { color: #8c959f; font-size: ${micro}px; }
+/* The References section's empty state: the teaching line over the two entry
    buttons -- muted text, never a badge. */
 QLabel#ReferenceEmptyStateText { color: #57606a; font-size: ${meta}px; }
 /* Reference library dialog: detail card reuses the ReferenceGroupBox
@@ -439,7 +468,6 @@ QPushButton#ReferenceLibraryDockButton:hover { background: #5a3399; }
    QWidget#WorkspaceReferenceSection above). */
 QWidget#ComparisonStrip { background: #f8f5fc; }
 QLabel#ComparisonStripIdentity { color: #6f42c1; font-weight: ${semibold}; font-size: ${meta}px; }
-QLabel#ComparisonStripCounts { color: #57606a; font-size: ${meta}px; }
 /* Reference row (aligned-rows card layout): "Main" and "Reference" are the
    role-label column beside their value, sharing one fixed width
    (style.ROLE_LABEL_WIDTH) so the two value columns start at the same x.

@@ -61,7 +61,7 @@ def test_library_button_docks_the_accepted_set(app_driver, monkeypatch):
     assert "Read-only" in text
     assert f"Model: {entry.model}" in text
     assert "Validity: Valid" in text
-    assert d.toast_text() == f"{entry.short_title} · docked as reference"
+    assert d.toast_text() == f"{entry.short_title} · pinned as reference"
 
 
 def test_cancelling_the_dialog_docks_nothing(app_driver, monkeypatch):
@@ -75,49 +75,41 @@ def test_cancelling_the_dialog_docks_nothing(app_driver, monkeypatch):
     assert d._w._state.reference is None
 
 
-def test_docked_library_set_hides_make_main_but_keeps_remove(app_driver):
+def test_a_pinned_library_set_can_be_removed(app_driver):
     d = app_driver
     d.dock_library_reference(_CHEN)
 
     assert d.reference_tile_visible()
-    # No file on disk to promote: the button hides, never sits disabled.
-    assert not d.reference_make_main_button_visible()
 
     d.click_reference_remove()
 
     assert not d.reference_tile_visible()
     assert d.reference_empty_state_visible()
-    assert d._w._state.reference is None
+    assert d._w._state.references == []
 
 
-def test_docking_the_same_set_again_is_a_quiet_noop(app_driver):
+def test_pinning_the_same_set_again_is_a_quiet_noop(app_driver):
     d = app_driver
     d.dock_library_reference(_CHEN)
 
     d.dock_library_reference(_CHEN)
 
-    assert d.toast_text() == "Already docked as reference"
-    assert d._w._state.reference.set_id == _CHEN
+    assert d.toast_text() == "Already pinned as reference"
+    assert [reference.set_id for reference in d._w._state.references] == [_CHEN]
 
 
-def test_silent_replace_in_both_directions(app_driver, valid_spm_path, monkeypatch):
-    """Library set over file reference and back -- no confirm step either
-    way (a snapshot is disposable, immutable state)."""
+def test_library_sets_and_file_references_pin_side_by_side(
+    app_driver, valid_spm_path, monkeypatch
+):
+    """A file reference and a library set coexist -- pinning appends, so
+    neither evicts the other."""
     d = app_driver
     _stub_open_dialog(monkeypatch, valid_spm_path)
     d.click_workspace_open_reference()
-    assert d.reference_make_main_button_visible()
 
     d.dock_library_reference(_PRADA)
 
-    entry = _entry(_PRADA)
-    assert entry.short_title in d.reference_tile_text()
-    assert not d.reference_make_main_button_visible()
-
-    d.click_workspace_open_reference()
-
-    assert valid_spm_path.name in d.reference_tile_text()
-    assert d.reference_make_main_button_visible()
+    assert d.pinned_reference_names() == [valid_spm_path.name, _entry(_PRADA).short_title]
 
 
 def test_library_reference_powers_the_source_page_comparison(

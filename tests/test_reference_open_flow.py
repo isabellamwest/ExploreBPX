@@ -106,13 +106,13 @@ def test_reference_tile_can_be_docked_with_no_main_document_open(
     assert d._w._state.active is None
 
 
-def test_toast_shows_added_message_after_docking(app_driver, valid_spm_path, monkeypatch):
+def test_toast_shows_pinned_message_after_pinning(app_driver, valid_spm_path, monkeypatch):
     d = app_driver
     _stub_open_dialog(monkeypatch, valid_spm_path)
 
     d.click_workspace_open_reference()
 
-    assert d.toast_text() == f"Added {valid_spm_path.name} as reference"
+    assert d.toast_text() == f"Pinned {valid_spm_path.name} as reference"
 
 
 def test_toast_shows_already_reference_on_the_same_path_again(
@@ -124,7 +124,7 @@ def test_toast_shows_already_reference_on_the_same_path_again(
 
     d.click_workspace_open_reference()
 
-    assert d.toast_text() == "Already open as reference"
+    assert d.toast_text() == "Already pinned as reference"
 
 
 def test_toast_shows_is_main_when_referencing_the_open_main_file(
@@ -176,7 +176,7 @@ def test_choice_add_as_reference_docks_without_touching_the_session(
     assert d._w._state.active is original_session  # untouched
     assert d._w._state.reference is not None
     assert d._w._state.reference.filename == nmc_pouch_cell_path.name
-    assert d.toast_text() == f"Added {nmc_pouch_cell_path.name} as reference"
+    assert d.toast_text() == f"Pinned {nmc_pouch_cell_path.name} as reference"
 
 
 def test_choice_cancel_does_nothing(app_driver, valid_spm_path, nmc_pouch_cell_path, monkeypatch):
@@ -196,15 +196,16 @@ def test_choice_cancel_does_nothing(app_driver, valid_spm_path, nmc_pouch_cell_p
     assert d._w._state.reference is None
 
 
-def test_choice_dialog_offers_replace_reference_label_when_one_is_already_docked(
+def test_choice_dialog_pin_label_is_stable_with_a_reference_already_pinned(
     app_driver, valid_spm_path, nmc_pouch_cell_path, monkeypatch
 ):
-    """Second-button label switches from "Add as reference" to "Replace
-    reference" once a reference is already docked -- exercised directly
-    against the real (overridden-nowhere) ``_ask_open_intent``."""
+    """The second button reads "Pin as reference" whether or not one is
+    already pinned -- pinning appends, so it never replaces anything --
+    exercised directly against the real (overridden-nowhere)
+    ``_ask_open_intent``."""
     d = app_driver
     d.open(valid_spm_path)
-    d._w._state.open_reference(nmc_pouch_cell_path)
+    d._w._state.pin_reference(nmc_pouch_cell_path)
 
     captured: dict = {}
 
@@ -212,8 +213,9 @@ def test_choice_dialog_offers_replace_reference_label_when_one_is_already_docked
         box = QApplication.instance().activeModalWidget()
         if box is not None:
             captured["labels"] = [b.text() for b in box.buttons()]
+            captured["enabled"] = {b.text(): b.isEnabled() for b in box.buttons()}
             for button in box.buttons():
-                if button.text() == "Replace reference":
+                if button.text() == "Pin as reference":
                     button.click()
                     return
 
@@ -222,8 +224,37 @@ def test_choice_dialog_offers_replace_reference_label_when_one_is_already_docked
 
     # Qt's own QDialogButtonBox role layout decides on-screen order (platform
     # convention), so this checks membership, not position.
-    assert set(captured["labels"]) == {"Replace main", "Replace reference", "Cancel"}
+    assert set(captured["labels"]) == {"Replace main", "Pin as reference", "Cancel"}
+    assert captured["enabled"]["Pin as reference"]
     assert intent is main_window_module.OpenIntent.ADD_REFERENCE
+
+
+def test_choice_dialog_disables_pin_at_the_cap(app_driver, valid_spm_path, tmp_path):
+    """At the cap the pin choice greys out rather than accepting a click it
+    would then have to refuse."""
+    d = app_driver
+    d.open(valid_spm_path)
+    for index in range(4):
+        copy = tmp_path / f"ref{index}.json"
+        shutil.copy(valid_spm_path, copy)
+        d._w._state.pin_reference(copy)
+
+    captured: dict = {}
+
+    def _close():
+        box = QApplication.instance().activeModalWidget()
+        if box is not None:
+            captured["enabled"] = {b.text(): b.isEnabled() for b in box.buttons()}
+            for button in box.buttons():
+                if button.text() == "Cancel":
+                    button.click()
+                    return
+
+    QTimer.singleShot(0, _close)
+    d._w._ask_open_intent("other.json")
+
+    assert captured["enabled"]["Pin as reference"] is False
+    assert captured["enabled"]["Replace main"] is True
 
 
 def test_ask_open_intent_real_dialog_replace_main(app_driver, valid_spm_path):

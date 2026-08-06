@@ -108,3 +108,35 @@ def make_badge_label(text: str, bg: str, fg: str) -> QLabel:
         f"{typography.semibold_qss()}"
     )
     return label
+
+
+#: A reference badge's diameter. Deliberately one size everywhere -- the
+#: Workspace row, the strip chip, the card ledger cluster -- so a reference's
+#: mark is the same object wherever it appears rather than a family of
+#: near-identical discs the eye has to reconcile. Wider than
+#: :data:`HEIGHT` because it carries two letters, not a count.
+REFERENCE_BADGE_SIZE = 18
+
+
+def make_reference_badge(letters: str, colour: str, tooltip: str = "") -> QLabel:
+    """A pinned reference's identity disc: its two letters in white on its
+    pin-order *colour* (see :mod:`ui_qt.reference_identity`).
+
+    A circle, not a pill: the letters are fixed at two, so a padded
+    variable-width shape would only make four badges in a row ragged. The
+    letters are the identity of last resort -- colour alone must never be the
+    only thing telling two references apart -- so they are never elided, and
+    *tooltip* (normally the full display name) is what a badge shown without
+    its name relies on.
+    """
+    label = QLabel(letters)
+    label.setAlignment(Qt.AlignCenter)
+    label.setFixedSize(REFERENCE_BADGE_SIZE, REFERENCE_BADGE_SIZE)
+    label.setStyleSheet(
+        f"background:{colour}; color:#ffffff; "
+        f"border-radius:{REFERENCE_BADGE_SIZE // 2}px; "
+        f"{typography.size_qss(FONT_PIXEL_SIZE)} {typography.semibold_qss()}"
+    )
+    if tooltip:
+        label.setToolTip(tooltip)
+    return label

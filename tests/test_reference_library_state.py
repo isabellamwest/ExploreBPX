@@ -1,5 +1,5 @@
 """State-layer contract for library-set references: ``ReferenceSnapshot.
-from_library`` and ``AppState.open_reference_set``.
+from_library`` and ``AppState.pin_reference_set``.
 
 A library snapshot is judged identically to a file snapshot (same
 ``BPXDocument`` derivation -- expectations below are read back from the
@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 from core.reference_library import list_reference_sets
-from state.app_state import AppState, OpenReferenceOutcome
+from state.app_state import AppState, PinReferenceOutcome
 from state.reference_snapshot import ReferenceSnapshot
 
 _CHEN = "pybamm/chen2020"
@@ -54,58 +54,56 @@ def test_from_library_rejects_an_unknown_id():
         ReferenceSnapshot.from_library("liiondb/chen2020")
 
 
-def test_open_reference_set_docks_and_dedupes_by_set_id():
+def test_pin_reference_set_pins_and_dedupes_by_set_id():
     state = AppState()
 
-    assert state.open_reference_set(_CHEN) is OpenReferenceOutcome.ADDED
-    docked = state.reference
-    assert docked is not None and docked.set_id == _CHEN
+    assert state.pin_reference_set(_CHEN) is PinReferenceOutcome.ADDED
+    pinned = state.reference
+    assert pinned is not None and pinned.set_id == _CHEN
 
-    # Same set again: quiet no-op, the docked snapshot is kept as-is.
-    assert state.open_reference_set(_CHEN) is OpenReferenceOutcome.ALREADY_REFERENCE
-    assert state.reference is docked
+    # Same set again: quiet no-op, the pinned snapshot is kept as-is.
+    assert state.pin_reference_set(_CHEN) is PinReferenceOutcome.ALREADY_REFERENCE
+    assert state.references == [pinned]
 
 
-def test_open_reference_set_replaces_another_set_silently():
+def test_pin_reference_set_appends_another_set():
     state = AppState()
-    state.open_reference_set(_CHEN)
+    state.pin_reference_set(_CHEN)
 
-    assert state.open_reference_set(_PRADA) is OpenReferenceOutcome.ADDED
-    assert state.reference.set_id == _PRADA
+    assert state.pin_reference_set(_PRADA) is PinReferenceOutcome.ADDED
+    assert [reference.set_id for reference in state.references] == [_CHEN, _PRADA]
 
 
-def test_open_reference_set_replaces_a_file_reference_and_vice_versa():
+def test_library_sets_and_file_references_pin_side_by_side():
     state = AppState()
-    assert state.open_reference(_SPM) is OpenReferenceOutcome.ADDED
+    assert state.pin_reference(_SPM) is PinReferenceOutcome.ADDED
 
-    # Library set over file reference: silent replace.
-    assert state.open_reference_set(_CHEN) is OpenReferenceOutcome.ADDED
-    assert state.reference.path is None
+    assert state.pin_reference_set(_CHEN) is PinReferenceOutcome.ADDED
 
-    # File over library set: the path dedupe must not trip over the
-    # path-less snapshot -- this is the guard, not a new behaviour.
-    assert state.open_reference(_SPM) is OpenReferenceOutcome.ADDED
-    assert state.reference.path == _SPM
+    # The path dedupe must not trip over the path-less snapshot -- this is
+    # the guard, not a new behaviour.
+    assert state.pin_reference(_SPM) is PinReferenceOutcome.ALREADY_REFERENCE
+    assert [reference.path for reference in state.references] == [_SPM, None]
 
 
 def test_reload_is_a_quiet_noop_for_a_library_set():
     state = AppState()
-    state.open_reference_set(_CHEN)
-    docked = state.reference
+    state.pin_reference_set(_CHEN)
+    pinned = state.reference
 
     state.reload_reference()
 
-    assert state.reference is docked
+    assert state.reference is pinned
 
 
-def test_new_from_file_replaces_a_docked_library_set():
+def test_new_from_file_appends_beside_a_pinned_library_set():
     state = AppState()
-    state.open_reference_set(_CHEN)
+    state.pin_reference_set(_CHEN)
 
-    state.new_from_file(_SPM)
+    assert state.new_from_file(_SPM) is PinReferenceOutcome.ADDED
 
-    # The origin file docks as the reference (one-reference rule), evicting
-    # the library set; the guard means the path dedupe never crashed.
-    assert state.reference.path == _SPM
-    assert state.reference.set_id is None
+    # The origin file is pinned after the library set, which survives; the
+    # guard means the path dedupe never crashed on the path-less snapshot.
+    assert [reference.set_id for reference in state.references] == [_CHEN, None]
+    assert state.references[1].path == _SPM
     assert state.active is not None and state.active.dirty

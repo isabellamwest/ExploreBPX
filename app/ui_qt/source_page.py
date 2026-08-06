@@ -36,7 +36,7 @@ from PySide6.QtWidgets import (
 
 from core.compare import RowState
 from core.source_rows import RowKind, SourceRow, build_rows, format_value
-from ui_qt import style, typography
+from ui_qt import badges, style, typography
 
 #: One indent step, in pixels, per nesting depth.
 _INDENT_PX = 18
@@ -1221,7 +1221,19 @@ class SourcePage(QWidget):
         gutter_spacer = QWidget()
         gutter_spacer.setFixedWidth(_GUTTER_PX)
         head_layout.addWidget(gutter_spacer)
-        head_layout.addWidget(self._ref_head, 1)
+        # The reference pane's header carries the shown pin's badge, so the
+        # page speaks the same identity language as every other comparison
+        # surface. The badge is rebuilt per refresh (pin order owns it), so
+        # it lives in a slot rather than being a fixed child.
+        self._ref_badge_slot = QHBoxLayout()
+        self._ref_badge_slot.setContentsMargins(0, 0, 0, 0)
+        self._ref_badge_slot.setSpacing(0)
+        ref_side = QHBoxLayout()
+        ref_side.setContentsMargins(0, 0, 0, 0)
+        ref_side.setSpacing(6)
+        ref_side.addLayout(self._ref_badge_slot)
+        ref_side.addWidget(self._ref_head, 1)
+        head_layout.addLayout(ref_side, 1)
         self._pane_head.setVisible(False)
 
         # Stale-reference band: a slim neutral notice directly under the
@@ -1233,9 +1245,9 @@ class SourcePage(QWidget):
         stale_layout = QHBoxLayout(self._stale_band)
         stale_layout.setContentsMargins(12, 3, 12, 3)
         stale_layout.setSpacing(8)
-        stale_text = QLabel("The reference changed on disk")
-        stale_text.setObjectName("SourceStaleText")
-        stale_layout.addWidget(stale_text)
+        self._stale_text = QLabel()
+        self._stale_text.setObjectName("SourceStaleText")
+        stale_layout.addWidget(self._stale_text)
         self._reload_button = QPushButton("Reload")
         self._reload_button.setObjectName("SourceReloadLink")
         self._reload_button.setCursor(Qt.PointingHandCursor)
@@ -1255,18 +1267,25 @@ class SourcePage(QWidget):
     def refresh(
         self,
         main_raw: dict | None,
-        reference=None,
+        pin=None,
         main_name: str = "",
         main_model: str | None = None,
+        pin_count: int = 0,
     ) -> None:
-        """Re-render from the current document and reference snapshot.
+        """Re-render from the current document and the shown reference pin.
 
         Called from ``MainWindow._apply_comparison`` -- the same fan-out
         every comparison-state change already goes through -- so edits,
-        undo/redo, open/new and reference dock/undock all land here. With
-        a reference docked the page renders the aligned two-pane
-        comparison; *main_name*/*main_model* label the main pane's header.
+        undo/redo, open/new and pin/remove all land here. With a reference
+        pinned the page renders the aligned two-pane comparison;
+        *main_name*/*main_model* label the main pane's header.
+
+        *pin* is the first pinned reference and *pin_count* how many there
+        are. The page shows one at a time, so the header says **which** of
+        how many rather than implying it is the only one -- Phase 2 of the
+        multi-reference track adds the selector that changes it.
         """
+        reference = pin.snapshot if pin is not None else None
         two_pane = main_raw is not None and reference is not None
         single_pane = main_raw is not None and reference is None
         self._hint.setVisible(single_pane)
@@ -1282,17 +1301,36 @@ class SourcePage(QWidget):
             # The band is a two-pane notice; an undocked/replaced reference
             # takes it with it (a fresh dock re-checks from MainWindow).
             self._stale_band.setVisible(False)
+        self._set_reference_badge(pin if two_pane else None)
         if two_pane:
             self._main_head.setText(
                 _pane_header_text("Main", main_name, main_model)
             )
+            # "Reference 1 of 3" only when there is more than one: with a
+            # single pin the ordinal would be noise, and with several its
+            # absence would be a lie.
+            role = "Reference" if pin_count <= 1 else f"Reference 1 of {pin_count}"
             self._ref_head.setText(
-                _pane_header_text("Reference", reference.filename, reference.model)
+                _pane_header_text(role, reference.filename, reference.model)
             )
             rows = build_rows(main_raw, reference.raw)
         else:
             rows = build_rows(main_raw) if main_raw is not None else []
         self._view.set_rows(rows, two_pane=two_pane)
+
+    def _set_reference_badge(self, pin) -> None:
+        """Put the shown pin's badge beside the reference pane's header, or
+        clear the slot when no pin is shown."""
+        for index in reversed(range(self._ref_badge_slot.count())):
+            item = self._ref_badge_slot.takeAt(index)
+            widget = item.widget()
+            if widget is not None:
+                widget.setParent(None)
+                widget.deleteLater()
+        if pin is not None:
+            self._ref_badge_slot.addWidget(
+                badges.make_reference_badge(pin.letters, pin.colour, pin.name)
+            )
 
     def _on_fold_toggle(self) -> None:
         self._view.set_tables_folded(self._view.all_tables_expanded())
@@ -1313,6 +1351,17 @@ class SourcePage(QWidget):
         by MainWindow after the pull command commits and the page has
         re-rendered)."""
         self._view.flash_pulled(path)
+
+    def set_stale_names(self, names: list[str]) -> None:
+        """Name the pinned references whose files changed on disk.
+
+        Any pin can go stale, not just the one on screen, so the band names
+        them rather than saying "the reference" and leaving the reader to
+        guess which. An empty list hides the band.
+        """
+        if names:
+            self._stale_text.setText(f"{', '.join(names)} changed on disk")
+        self.set_stale(bool(names))
 
     def set_stale(self, stale: bool) -> None:
         """Show/hide the stale-reference band (MainWindow's on-notice mtime

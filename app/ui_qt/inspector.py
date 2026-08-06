@@ -54,13 +54,12 @@ from PySide6.QtWidgets import (
 from core import bpx_gateway
 from core.command_service import CommandError
 from core.commands import PullParameter, RenameKey
-from core.compare import ComparisonResult, RowState
+from core.compare import RowState, group_reference_values
 from core.parameter_metadata import resolve_parameter_metadata
 from core.parameter_types import ParameterKind, classify
 from core.tree_model import ParameterItem
 from core.validation import Severity
 from state.app_state import AppState
-from state.reference_snapshot import ReferenceSnapshot
 
 from .cards.experiment import ExperimentCard, is_validation_run_path
 from .cards.ghost_card import GhostParameterCard
@@ -68,6 +67,7 @@ from .cards.parameter_card import ParameterCard
 from .documentation_view import DocumentationView
 from .group_box import TintedSection
 from .issues_view import IssuesView
+from .reference_identity import ReferencePin
 from .style import ERROR, MUTED, OK, WARNING
 from .validation_empty_state import ValidationEmptyState
 
@@ -85,8 +85,10 @@ class InspectorPanel(QWidget):
         #: Reference comparison state, set only by
         #: ``set_comparison`` -- ``None`` whenever no reference is docked or
         #: its decoration is hidden.
-        self._comparison: ComparisonResult | None = None
-        self._reference: ReferenceSnapshot | None = None
+        #: The pinned references with their comparisons and badge identity,
+        #: set only by ``MainWindow._apply_comparison``. Empty means nothing
+        #: to compare against.
+        self._pins: list[ReferencePin] = []
         self._debounce = QTimer(self, singleShot=True, interval=200)
         self._debounce.timeout.connect(self._validate_draft)
         self._build()
@@ -275,52 +277,55 @@ class InspectorPanel(QWidget):
         self.show_placeholder()
         self._docs_section.set_collapsed(True)
 
-    def set_comparison(
-        self, comparisons: list[ComparisonResult], references: list[ReferenceSnapshot]
-    ) -> None:
-        """Set the reference comparison state.
+    def set_comparison(self, pins: list[ReferencePin]) -> None:
+        """Set the pinned-reference state.
 
         Called by ``MainWindow`` -- the single place computing this state --
-        on every document change and every reference dock/undock/hide
-        toggle. Refreshes the *currently shown* card in place, without
-        rebuilding it: a ``ParameterCard`` gets its reference block
-        refreshed (never touching its own draft/commit machinery); a
-        ``GhostParameterCard`` -- which exists only because a comparison was
-        showing -- falls back to the placeholder once the comparison goes
-        empty (hidden, undocked, or no document).
-
-        Phase 0 of the multi-reference track: both lists hold at most one
-        entry today, and every render below still reads only the first.
+        on every document change and every pin/remove/hide toggle. Refreshes
+        the *currently shown* card in place, without rebuilding it: a
+        ``ParameterCard`` gets its ledger refreshed (never touching its own
+        draft/commit machinery); a ``GhostParameterCard`` -- which exists
+        only because a comparison was showing -- falls back to the
+        placeholder once nothing is pinned.
         """
-        comparison = comparisons[0] if comparisons else None
-        self._comparison = comparison
-        self._reference = references[0] if references else None
+        self._pins = list(pins)
         if isinstance(self._card, ParameterCard):
             self._apply_reference_block(self._card.parameter)
-        elif isinstance(self._card, GhostParameterCard) and comparison is None:
+        elif isinstance(self._card, GhostParameterCard) and not pins:
             self.show_placeholder()
 
+    def _value_groups(self, section_path: tuple[str, ...], key: str):
+        """This key's per-reference values, grouped by identical value in pin
+        order -- the ledger's rows. Empty when no pinned reference has
+        anything to say about the key."""
+        rows = [
+            pin.comparison.row(section_path, key) if pin.comparison is not None else None
+            for pin in self._pins
+        ]
+        return group_reference_values(rows)
+
     def _apply_reference_block(self, parameter: ParameterItem) -> None:
-        """Populate/hide the current card's reference block from *parameter*.
+        """Populate/hide the current card's ledger from *parameter*.
 
         No-op-safe to call whenever the current card is a ``ParameterCard``,
-        whichever comparison state is active; hides the block outright with
-        no comparison, no docked reference, or a MAIN_ONLY row (the
-        reference has no such key at all).
+        whichever comparison state is active; hides the ledger outright when
+        no pinned reference has this key at all (every row MAIN_ONLY, or
+        nothing pinned), which ``group_reference_values`` reports as no
+        groups.
         """
         if self._card is None:
             return
-        if self._comparison is None or self._reference is None:
-            self._card.set_reference(None, None, None)
-            return
         section_path = tuple(parameter.path[:-1])
-        row = self._comparison.row(section_path, parameter.path[-1])
-        if row is None or row.state is RowState.MAIN_ONLY:
-            self._card.set_reference(None, None, None)
+        groups = self._value_groups(section_path, parameter.path[-1])
+        if not groups:
+            self._card.set_reference((), [], None)
             return
         meta = bpx_gateway.field_meta(parameter.path)
-        kind = classify(row.ref_value, meta)
-        self._card.set_reference(row.ref_value, row.state, kind)
+        # Kind is classified from the first-pinned value: every group at one
+        # key holds the same shape of thing, and the card formats them all
+        # the same way.
+        kind = classify(groups[0].value, meta)
+        self._card.set_reference(groups, self._pins, kind)
 
     def show_ghost_parameter(self, section_path: tuple[str, ...], key: str) -> None:
         """Show the read-only ghost card for a REF_ONLY row: a parameter
@@ -328,17 +333,14 @@ class InspectorPanel(QWidget):
         back to the placeholder if the comparison
         has moved on since the row was selected (e.g. the reference was
         just undocked)."""
-        if self._comparison is None or self._reference is None:
-            self.show_placeholder()
-            return
-        row = self._comparison.row(section_path, key)
-        if row is None or row.state is not RowState.REF_ONLY:
+        groups = self._value_groups(section_path, key)
+        if not groups:
             self.show_placeholder()
             return
         meta = bpx_gateway.field_meta(section_path + (key,))
-        kind = classify(row.ref_value, meta)
-        card = GhostParameterCard(section_path, key, row.ref_value, kind)
-        card.copy_up_requested.connect(self._on_ghost_copy_up)
+        kind = classify(groups[0].value, meta)
+        card = GhostParameterCard(section_path, key, groups, self._pins, kind)
+        card.pull_requested.connect(self._on_ghost_pull)
         self._set_surface(card, fills=False)
         self._card = card
         self._deactivate_sections()
@@ -457,7 +459,7 @@ class InspectorPanel(QWidget):
         card.commit_requested.connect(self._on_commit)
         card.bulk_commit_requested.connect(self._on_bulk_commit)
         card.rename_requested.connect(self._on_card_rename_requested)
-        card.copy_up_requested.connect(self._on_copy_up)
+        card.pull_requested.connect(self._on_pull)
         # The card sits at its natural height with the page's white tail
         # beneath, unless its grid has rows to spare -- see _apply_grid_fill.
         self._set_surface(card, fills=False)
@@ -631,49 +633,60 @@ class InspectorPanel(QWidget):
             return
         self.committed.emit()
 
-    def _on_copy_up(self) -> None:
-        """Execute the current ``ParameterCard``'s "Copy up": copy the
-        docked reference's raw value verbatim into the main document at
-        this parameter's path.
+    def _pull_source(self, index: int):
+        """The pin a Pull click named, or ``None`` if the pin list has moved
+        on since the ledger was painted (a reference removed between paint
+        and click)."""
+        return self._pins[index] if 0 <= index < len(self._pins) else None
 
-        The reference value comes from the stored comparison, not any value
-        cached on the card, so this always reflects the comparison last
-        computed. Guards defensively against a stale/absent comparison or an
-        EQUAL row (the button is already disabled for EQUAL from the UI side
-        -- ``ReferenceValueBlock.set_content`` -- this is a backstop, not a
-        second implementation of that rule). Reuses the ``committed`` signal
-        so ``MainWindow`` runs its standard post-commit refresh, which
+    def _on_pull(self, index: int) -> None:
+        """Execute the current ``ParameterCard``'s "Pull": copy the named
+        reference's raw value verbatim into the main document at this
+        parameter's path.
+
+        The value comes from the stored comparison, not any value cached on
+        the card, so this always reflects the comparison last computed.
+        Guards defensively against a stale pin index or an EQUAL/MAIN_ONLY
+        row (the ledger shows no Pull button for those -- this is a backstop,
+        not a second implementation of that rule). Reuses the ``committed``
+        signal so ``MainWindow`` runs its standard post-commit refresh, which
         recomputes the comparison from the new document.
         """
         if self._card is None or self._state.active is None:
             return
-        if self._comparison is None or self._reference is None:
+        pin = self._pull_source(index)
+        if pin is None or pin.comparison is None:
             return
         parameter = self._card.parameter
         section_path = parameter.path[:-1]
-        row = self._comparison.row(section_path, parameter.path[-1])
+        row = pin.comparison.row(section_path, parameter.path[-1])
         if row is None or row.state in (RowState.MAIN_ONLY, RowState.EQUAL):
             return
-        self._state.active.execute_command(PullParameter(parameter.path, row.ref_value))
+        self._state.active.execute_command(
+            PullParameter(parameter.path, row.ref_value, source_label=pin.name)
+        )
         self.committed.emit()
 
-    def _on_ghost_copy_up(self) -> None:
-        """Execute a ghost row's "Copy up": a REF_ONLY
-        row has no parameter in the main document yet, so this always adds
-        one. The ``GhostParameterCard`` retains ``section_path``/``key`` --
-        there is no committed parameter to read a path from -- and, as in
-        ``_on_copy_up``, the value is re-resolved from the stored comparison
+    def _on_ghost_pull(self, index: int) -> None:
+        """Execute a ghost row's "Pull": a REF_ONLY row has no parameter in
+        the main document yet, so this always adds one. The
+        ``GhostParameterCard`` retains ``section_path``/``key`` -- there is
+        no committed parameter to read a path from -- and, as in
+        ``_on_pull``, the value is re-resolved from the stored comparison
         rather than the card's own cached copy.
         """
         if not isinstance(self._card, GhostParameterCard) or self._state.active is None:
             return
-        if self._comparison is None or self._reference is None:
+        pin = self._pull_source(index)
+        if pin is None or pin.comparison is None:
             return
         section_path, key = self._card.section_path, self._card.key
-        row = self._comparison.row(section_path, key)
+        row = pin.comparison.row(section_path, key)
         if row is None or row.state is not RowState.REF_ONLY:
             return
-        self._state.active.execute_command(PullParameter(section_path + (key,), row.ref_value))
+        self._state.active.execute_command(
+            PullParameter(section_path + (key,), row.ref_value, source_label=pin.name)
+        )
         self.committed.emit()
 
     def _on_bulk_commit(self, command) -> None:

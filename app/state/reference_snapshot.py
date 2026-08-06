@@ -44,6 +44,15 @@ class ReferenceSnapshot:
     parameter_count: int
     mtime: float | None
     set_id: str | None = None
+    #: The file's declared BPX version, for the Workspace row's expanded
+    #: record. ``None`` when the Header declares none -- shown as "-" rather
+    #: than guessed.
+    bpx_version: str | None = None
+    #: The curated citation for a bundled set (the catalog's own
+    #: ``references`` field). Empty for a file reference, which shows its
+    #: path instead -- a file on disk has provenance the app can point at,
+    #: where a bundled set has only its paper.
+    citation: str = ""
 
     @classmethod
     def load(cls, path: Path) -> "ReferenceSnapshot":
@@ -66,6 +75,7 @@ class ReferenceSnapshot:
             section_count=document.section_count,
             parameter_count=document.parameter_count,
             mtime=path.stat().st_mtime,
+            bpx_version=identity.bpx_version or None,
         )
 
     @classmethod
@@ -98,4 +108,6 @@ class ReferenceSnapshot:
             parameter_count=document.parameter_count,
             mtime=None,
             set_id=set_id,
+            bpx_version=identity.bpx_version or None,
+            citation=ref_set.references,
         )
