@@ -258,12 +258,33 @@ def _ratio_words(bucket: SectionBucket) -> str:
     return f"{len(field_tasks)} of {bucket.required_total} remaining"
 
 
+#: Task kinds whose row already *is* "this field is not here". A ``missing``
+#: diagnostic absorbed into one of them can only restate the row it sits
+#: under, by construction of ``partition_issues`` rule (a) -- it matched
+#: precisely because both describe the same absent field.
+_MISSING_TASK_KINDS = (TaskKind.MISSING_FIELD, TaskKind.MISSING_SECTION)
+
+
 def _absorbed_messages(task: CompletionTask, partition: PartitionedIssues | None) -> tuple[str, ...]:
     """The real validator messages *task* stands in for, merging
-    a float/int union pair the same way the Issues surfaces do."""
+    a float/int union pair the same way the Issues surfaces do.
+
+    A ``missing`` diagnostic under a MISSING task is dropped: the row above
+    it already carries the field's name and its (REQUIRED) tag, so printing
+    the validator's "Field required" beneath said the same thing twice on
+    every one of thirty-five rows. This is a structural test, not a reading
+    of the validator's words -- absorption matched these two *because* they
+    describe the same absent field. Every other absorbed message still
+    prints, including a NULL_FIELD's, where the validator has something the
+    row does not say (what was wrong with the value that is there).
+    """
     if partition is None:
         return ()
     pairs = partition.absorbed_by_task.get(task, ())
+    if task.kind in _MISSING_TASK_KINDS:
+        pairs = tuple(
+            pair for pair in pairs if getattr(pair[0], "error_type", None) != "missing"
+        )
     merged = merge_union_pair(tuple(diagnostic for diagnostic, _ in pairs))
     return tuple(diagnostic.message for diagnostic in merged)
 

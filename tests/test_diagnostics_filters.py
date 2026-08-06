@@ -389,3 +389,27 @@ def test_chip_toggles_on_left_click_only(qtbot):
     assert chip.is_on()
     qtbot.mouseClick(chip, Qt.LeftButton)
     assert not chip.is_on()
+
+
+# ---------------------------------------------------------------------------
+# Row content: what an outstanding row does not repeat, and how wide it gets
+# ---------------------------------------------------------------------------
+
+
+def test_a_missing_field_row_does_not_repeat_itself(app_driver):
+    """Absorption seats a "missing" diagnostic under the very task that
+    describes the same absent field, so printing its message under the row
+    said "REQUIRED" and "Field required" on every one of thirty-five rows.
+    A structural drop, not a reading of the validator's words."""
+    from ui_qt.diagnostics_panel import _absorbed_messages
+
+    app_driver._w._new("DFN")
+    partition = app_driver._w._diagnostics._partition
+    missing = [
+        task
+        for task in partition.absorbed_by_task
+        if task.kind.name.startswith("MISSING")
+    ]
+    assert missing, "expected a fresh DFN to carry absorbed missing-field tasks"
+    for task in missing:
+        assert _absorbed_messages(task, partition) == ()
