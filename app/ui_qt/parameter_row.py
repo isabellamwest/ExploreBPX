@@ -237,12 +237,17 @@ def compose_issue_row_html(location: str, message: str) -> str:
     line. *location* is expected already section-relative (the owning
     section is the group header/rail entry above the row), and its trailing
     unit is muted like every other parameter label."""
+    if not location:
+        # The message is the whole row here (a document-level diagnostic, or
+        # the Issues tab, already scoped to one parameter). Muted META is the
+        # right weight for a *second* line under a bold location; as the only
+        # line it made the page's actual content read as a footnote, so it
+        # takes the body rung and the body colour instead.
+        return _span(message, color=style.DEFAULT_TEXT)
     detail = (
         f'<span style="color:{style.MUTED}; {typography.size_qss(typography.META)}">'
         f"{_html.escape(message)}</span>"
     )
-    if not location:
-        return detail
     name, unit = split_name_and_unit(location)
     head = _span(name, color=style.DEFAULT_TEXT, bold=True)
     if unit:

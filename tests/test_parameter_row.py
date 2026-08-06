@@ -9,13 +9,14 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtWidgets import QApplication, QListWidget, QListWidgetItem
 
-from ui_qt import icons, style
+from ui_qt import icons, style, typography
 from ui_qt.parameter_row import (
     HTML_ROLE,
     MARK_BOX,
     REF_BAR_ROLE,
     ParameterRowDelegate,
     build_parameter_row_html,
+    compose_issue_row_html,
     compose_row_html,
     split_name_and_unit,
 )
@@ -150,3 +151,20 @@ def test_ref_bar_role_actually_paints_the_gutter_bar(rich_list, qtbot):
         for y in range(0, min(30, image.height()))
     }
     assert style.REFERENCE in colours
+
+
+def test_a_located_issue_row_keeps_its_message_as_a_smaller_second_line():
+    html = compose_issue_row_html("Thickness [m]", "value must be positive")
+    assert "<br>" in html
+    assert typography.size_qss(typography.META) in html
+
+
+def test_a_message_only_issue_row_is_body_text_not_a_footnote():
+    """With no location the message *is* the row (a document-level
+    diagnostic, or the Issues tab). Muted META is the right weight for a
+    second line under a heading; as the only line it made the page's
+    content read as a footnote."""
+    html = compose_issue_row_html("", "value must be positive")
+    assert typography.size_qss(typography.META) not in html
+    assert style.MUTED not in html
+    assert style.DEFAULT_TEXT in html
