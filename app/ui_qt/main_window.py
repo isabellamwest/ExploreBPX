@@ -143,6 +143,10 @@ class MainWindow(QMainWindow):
         #: a bundled template/example directory. Session-scoped on purpose; not
         #: persisted.
         self._save_dialog_dir: Path | None = None
+        #: Which pinned reference the Source page compares against -- its own
+        #: selection, held here because Reload and the page's ← pull arrows
+        #: act on it too. Clamped to the pin list on every render.
+        self._source_reference_index = 0
         #: When True, ``closeEvent`` skips the unsaved-changes prompt. Set by
         #: test teardown and by shutdown paths that already decided the
         #: document's fate; never set by user-facing code.
@@ -156,6 +160,7 @@ class MainWindow(QMainWindow):
         self._source = SourcePage()
         self._source.pull_requested.connect(self._on_source_pull)
         self._source.reload_requested.connect(self._on_reload_reference)
+        self._source.reference_selected.connect(self._on_source_reference_selected)
         # Double-click Editor jump: the page's one Editor link,
         # through the shared NavigationService like every other navigation.
         self._source.navigate_requested.connect(
@@ -1033,10 +1038,10 @@ class MainWindow(QMainWindow):
         # backing file once one exists, the document's own filename before.
         self._source.refresh(
             document.raw if document is not None else None,
-            pins[0] if pins else None,
+            pins,
             main_name=self._fallback_filename(session) if session is not None else "",
             main_model=document.identity.model if document is not None else None,
-            pin_count=len(pins),
+            selected=self._source_reference_index,
         )
 
     def _check_reference_stale(self) -> None:
@@ -1065,15 +1070,28 @@ class MainWindow(QMainWindow):
         # only watched the first pin would miss in silence.
         self._source.set_stale_names(stale)
 
+    def _on_source_reference_selected(self, index: int) -> None:
+        """The Source page's selector chose a different pinned reference.
+
+        Re-renders through the standard fan-out rather than poking the page:
+        the pane rows, the stale band and the ← pull arrows all read the
+        selection, so they must move together.
+        """
+        self._source_reference_index = index
+        self._apply_comparison()
+        self._check_reference_stale()
+
     def _on_reload_reference(self) -> None:
         """The stale band's Reload: re-snapshot the reference from disk and
         recompute -- never silently (the band's click is the consent).
 
-        An unreadable file gets the standard "Cannot open file" error;
-        the pinned snapshot and the band stay exactly as they were.
+        Reloads whichever reference the Source page is showing, not merely
+        the first pinned. An unreadable file gets the standard "Cannot open
+        file" error; the pinned snapshot and the band stay exactly as they
+        were.
         """
         try:
-            self._state.reload_reference()
+            self._state.reload_reference(self._source.selected_reference_index())
         except (LoadError, OSError) as exc:
             QMessageBox.critical(self, "Cannot open file", str(exc))
             return
@@ -1113,7 +1131,11 @@ class MainWindow(QMainWindow):
         tag plus a toast, and the Editor is opt-in via the toast's Show
         in Editor action (or a row double-click, as ever).
         """
-        reference = self._state.reference
+        # The reference the Source page is showing, not merely the first
+        # pinned: the ← arrows sit beside its pane, so they must pull from it.
+        index = self._source.selected_reference_index()
+        references = self._state.references
+        reference = references[index] if 0 <= index < len(references) else None
         session = self._state.active
         if reference is None or session is None:
             return

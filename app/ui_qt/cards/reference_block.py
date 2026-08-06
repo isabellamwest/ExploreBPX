@@ -19,11 +19,12 @@ presence *is* the differs signal -- there is no third word, no severity
 colour, and no styling that could read as validation. A reference lacking
 the key contributes no row at all rather than an empty placeholder.
 
-For a differing, table-representable reference the rows are followed by
-:class:`ReferenceTableGrid` -- a small read-only x/y grid of the
-first-pinned reference that has the key, labelled with that pin's badge so
-it is never ambiguous whose numbers are on screen. (Phase 2 of the
-multi-reference track turns that label into a selector over every pin.)
+For a table-representable reference the rows are followed by
+:class:`ReferenceTableGrid` -- a small read-only x/y grid showing one
+reference's numbers at a time, behind a badge selector over every pinned
+reference that has the key (design rule 5). Two columns of numbers side by
+side is a comparison the eye cannot make; that is what the chart overlay is
+for.
 
 Plain ``QLabel``s and buttons only -- deliberately outside any editor's
 draft/commit machinery (known Qt pitfall): populating this can never trip
@@ -68,8 +69,8 @@ def _monospace_font():
 class ReferenceTableGrid(QWidget):
     """A read-only ``x``/``y`` grid of a differing reference table's rows.
 
-    Shown beneath the ledger rows once a reference is table-representable and
-    does not equal main (:meth:`ReferenceLedger.set_table_rows`). A row that
+    Shown beneath the ledger rows for whichever reference the badge selector
+    has chosen (:meth:`ReferenceLedger.set_table_references`). A row that
     has no exactly-matching ``(x, y)`` pair in the main draft -- see
     ``core.compare.matching_table_rows`` -- renders both its cells in
     reference purple; a row that happens to coincide with a main row reads
@@ -231,15 +232,25 @@ class ReferenceLedger(QFrame):
         caption_layout = QHBoxLayout(self._grid_caption)
         caption_layout.setContentsMargins(0, 6, 0, 2)
         caption_layout.setSpacing(6)
-        self._grid_badge_slot = QHBoxLayout()
-        self._grid_badge_slot.setContentsMargins(0, 0, 0, 0)
-        caption_layout.addLayout(self._grid_badge_slot)
         caption_label = QLabel("Reference values")
         caption_label.setObjectName("LedgerGridCaption")
         caption_layout.addWidget(caption_label)
+        #: The selector: one badge button per reference that has this key,
+        #: exactly one filled at a time. Filled means "these are the numbers
+        #: on screen" -- the same grammar the chart legend uses.
+        self._grid_badge_slot = QHBoxLayout()
+        self._grid_badge_slot.setContentsMargins(0, 0, 0, 0)
+        self._grid_badge_slot.setSpacing(4)
+        caption_layout.addLayout(self._grid_badge_slot)
         caption_layout.addStretch(1)
         self._grid_caption.hide()
         self._layout.addWidget(self._grid_caption)
+
+        #: The selector's buttons, and the table references they choose
+        #: between: ``(pin, rows, matches)`` in pin order.
+        self._grid_buttons: list[badges.ReferenceBadgeButton] = []
+        self._table_references: list[tuple[ReferencePin, list, list]] = []
+        self._selected_reference = 0
 
         self._table_grid = ReferenceTableGrid()
         self._table_grid.hide()
@@ -280,27 +291,64 @@ class ReferenceLedger(QFrame):
             self._rows.append(row)
             self._layout.insertWidget(position, row)
 
-    def set_table_rows(
-        self,
-        rows: list[list[object]],
-        matches: list[bool],
-        pin: ReferencePin | None,
+    def set_table_references(
+        self, references: list[tuple[ReferencePin, list[list[object]], list[bool]]]
     ) -> None:
-        """Show *pin*'s table beneath the rows, badge-labelled so it is never
-        ambiguous whose numbers these are. ``None`` hides the grid."""
-        for index in reversed(range(self._grid_badge_slot.count())):
-            item = self._grid_badge_slot.takeAt(index)
-            widget = item.widget()
-            if widget is not None:
-                widget.setParent(None)
-                widget.deleteLater()
-        if pin is None:
+        """Show one reference's table beneath the rows, behind a badge
+        selector over all of *references* (design rule 5).
+
+        One at a time, defaulting to the first pinned: two columns of numbers
+        side by side is a comparison the eye cannot make, which is what the
+        chart overlay is for. A reference lacking the key never reaches here,
+        so it is absent from the selector rather than present and empty.
+        An empty list hides the grid and its caption entirely.
+
+        The selector is hidden for a single reference: a control with one
+        choice is not a choice, and the badge beside the caption already
+        says whose numbers these are.
+        """
+        for button in self._grid_buttons:
+            self._grid_badge_slot.removeWidget(button)
+            button.setParent(None)
+            button.deleteLater()
+        self._grid_buttons = []
+        self._table_references = list(references)
+
+        if not references:
             self._grid_caption.hide()
             self._table_grid.hide()
             return
-        self._grid_badge_slot.addWidget(
-            badges.make_reference_badge(pin.letters, pin.colour, pin.name)
-        )
-        self._table_grid.set_rows(rows, matches)
+
+        self._selected_reference = min(self._selected_reference, len(references) - 1)
+        for index, (pin, _rows, _matches) in enumerate(references):
+            button = badges.ReferenceBadgeButton(
+                pin.letters,
+                pin.colour,
+                pin.name,
+                checked=index == self._selected_reference,
+            )
+            button.clicked.connect(self._on_grid_badge_clicked)
+            self._grid_buttons.append(button)
+            self._grid_badge_slot.addWidget(button)
+        self._show_selected_table()
         self._grid_caption.show()
         self._table_grid.show()
+
+    def _on_grid_badge_clicked(self) -> None:
+        """Exclusive selection: the clicked badge fills, every other empties.
+
+        Clicking the already-selected badge re-fills it rather than leaving
+        the grid showing numbers with nothing claiming them -- there is no
+        "no reference selected" state to fall into.
+        """
+        button = self.sender()
+        if button not in self._grid_buttons:
+            return
+        self._selected_reference = self._grid_buttons.index(button)
+        for index, other in enumerate(self._grid_buttons):
+            other.setChecked(index == self._selected_reference)
+        self._show_selected_table()
+
+    def _show_selected_table(self) -> None:
+        _pin, rows, matches = self._table_references[self._selected_reference]
+        self._table_grid.set_rows(rows, matches)

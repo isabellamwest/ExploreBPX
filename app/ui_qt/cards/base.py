@@ -167,16 +167,17 @@ class EditorCard(QWidget):
         told, so the validator stays the sole source of truth.
         """
 
-    def set_reference_table(self, rows: list[list[object]] | None) -> None:
-        """Overlay a differing, table-representable reference's rows on this
-        card's own live preview, or clear the overlay with ``None``.
+    def set_reference_curves(self, curves) -> None:
+        """Overlay one curve per pinned reference that has this key on this
+        card's own live preview; an empty list clears the overlay.
 
         A no-op for every card whose editor is not table-shaped (most
-        cards). ``rows`` is already the ``(x, y)`` pairs the reference's own
-        grid would show (``bodies.table_rows``) -- this never re-parses the
-        reference value itself. ``ParameterCard`` calls this whenever the
-        docked reference changes, independent of which mode a strip-based
-        card currently shows.
+        cards). Each ``table_preview.ReferenceCurve`` already carries the
+        ``(x, y)`` pairs that reference's own grid would show
+        (``bodies.table_rows``) -- this never re-parses a reference value
+        itself. ``ParameterCard`` calls this whenever the pinned references
+        change, independent of which mode a strip-based card currently
+        shows.
         """
 
     def reference_value_width(self) -> int | None:

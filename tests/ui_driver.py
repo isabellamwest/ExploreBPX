@@ -565,12 +565,27 @@ class AppDriver:
         return self._w._source._ref_head.text()
 
     def source_reference_badge_letters(self) -> str | None:
-        """The badge letters beside the reference pane's header, or ``None``
+        """The letters of the reference pane's *selected* badge, or ``None``
         with no reference shown."""
-        slot = self._w._source._ref_badge_slot
-        if slot.count() == 0:
-            return None
-        return slot.itemAt(0).widget().text()
+        for button in self._w._source._ref_badge_buttons:
+            if button.isChecked():
+                return button.text()
+        return None
+
+    def source_reference_badges(self) -> list[str]:
+        """Every badge in the reference pane's selector, in pin order."""
+        return [button.text() for button in self._w._source._ref_badge_buttons]
+
+    def click_source_reference_badge(self, index: int) -> "AppDriver":
+        """Click the reference pane selector's badge at *index*, switching
+        which reference the page compares against."""
+        buttons = self._w._source._ref_badge_buttons
+        assert index < len(buttons), f"No Source reference badge at {index}"
+        buttons[index].click()
+        return self
+
+    def source_selected_reference_index(self) -> int:
+        return self._w._source.selected_reference_index()
 
     def source_reload(self) -> "AppDriver":
         """Click the stale band's Reload link."""
@@ -1050,6 +1065,71 @@ class AppDriver:
         """Whether the ledger's read-only x/y grid is showing."""
         ledger = self._ledger()
         return ledger is not None and not ledger._table_grid.isHidden()
+
+    def reference_grid_badges(self) -> list[str]:
+        """The grid selector's badges, in pin order -- only the references
+        whose table differs from main appear."""
+        ledger = self._ledger()
+        return [] if ledger is None else [b.text() for b in ledger._grid_buttons]
+
+    def reference_grid_selected(self) -> str | None:
+        """The letters of the grid selector's filled badge."""
+        ledger = self._ledger()
+        if ledger is None:
+            return None
+        for button in ledger._grid_buttons:
+            if button.isChecked():
+                return button.text()
+        return None
+
+    def click_reference_grid_badge(self, index: int) -> "AppDriver":
+        """Click the grid selector's badge at *index*, switching which
+        reference's numbers the grid shows."""
+        buttons = self._ledger()._grid_buttons
+        assert index < len(buttons), f"No reference grid badge at {index}"
+        buttons[index].click()
+        return self
+
+    def reference_grid_row_count(self) -> int:
+        return self._ledger()._table_grid._table.rowCount()
+
+    # --- chart overlay ---------------------------------------------------
+
+    def _preview(self):
+        """The current card's live chart preview, if its editor has one."""
+        card = self._w._inspector._card
+        editor = getattr(card, "_editor", None) if card is not None else None
+        body = getattr(editor, "_table_body", None) if editor is not None else None
+        return getattr(body, "_preview", None) if body is not None else None
+
+    def charts_available(self) -> bool:
+        """Whether QtCharts could be imported in this build -- every chart
+        read below is meaningless without it."""
+        from ui_qt.cards.table_preview import charts_available
+
+        return charts_available()
+
+    def chart_legend_badges(self) -> list[str]:
+        """The chart legend's badges, one per overlaid reference curve."""
+        return [button.text() for button in self._preview()._legend._buttons]
+
+    def chart_legend_tooltips(self) -> list[str]:
+        """Each legend badge's tooltip -- the reference's name, the curve's
+        own domain and its point count."""
+        return [button.toolTip() for button in self._preview()._legend._buttons]
+
+    def click_chart_legend_badge(self, index: int) -> "AppDriver":
+        """Click the legend badge at *index*, toggling its curve."""
+        self._preview()._legend._buttons[index].click()
+        return self
+
+    def chart_curve_points(self, index: int) -> list[tuple[float, float]]:
+        """The plotted points of the overlaid curve at *index*."""
+        return self._preview()._curve_points[index]
+
+    def chart_curve_shown(self, index: int) -> bool:
+        """Whether the overlaid curve at *index* is currently drawn."""
+        return self._preview()._ref_series[index].isVisible()
 
     def ghost_card_shown(self) -> bool:
         from ui_qt.cards.ghost_card import GhostParameterCard

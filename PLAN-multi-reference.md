@@ -2,11 +2,11 @@
 
 ## Status / handoff (2026-08-06, self-contained — session memory does not follow the repo)
 
-**Phase 1 is built and green (1650) but NOT committed.** Signed wireframes (rev 3, the visual
+**Phases 1 and 2 are built and green (1658).** Phase 1 is committed (`05214ef`). Signed wireframes (rev 3, the visual
 reference for every surface): (internal design archive)
 The Phase 1 build spec, showing what actually shipped and what rev 3 draws that is Phase 2/3:
 (internal design archive)
-**Next action: Phase 2.**
+**Next action: Phase 3 (scalar spread scale).**
 
 Earlier commits on main: `3088779` Phase 0 pluralization · `adddc7b` Pull `source_label` ·
 `85c6560` grouping helper + `core/spread.py` (+40 unit tests) · `02fee76` typography tokens
@@ -141,7 +141,25 @@ tokens (the typography track landed before Phase 1 started).
 - Qt risks: dynamic row rebuild must not leak stale button connections (rebuild rows
   wholesale per `set_comparison`, matching inspector refresh-in-place discipline).
 
-### Phase 2 — Surface C: overlay + table selector + source-page selector
+### Phase 2 — Surface C: overlay + table selector + source-page selector  ✅ done (uncommitted)
+
+Departures agreed while building, 2026-08-06:
+
+- **One selector grammar, two surfaces.** A checkable badge
+  (`badges.ReferenceBadgeButton`) where **filled means present on screen**:
+  in the chart legend "this curve is drawn", in the grid selector and the
+  Source pane "these are the numbers you are reading". Rev 3 drew a ring
+  around a filled badge for the grid; filled-vs-hollow reuses one idiom and
+  keeps the no-tick/no-cross rule.
+- **References equal to main are absent from the grid selector and the
+  chart.** Their column would repeat the editor's own numbers and their
+  curve would lie exactly under the main line, so a badge for them promises
+  something the eye cannot find. They keep their quiet "same" ledger row.
+- **The Source page's "Reference 1 of N" ordinal is gone** — the selector
+  itself now says which, so the ordinal was saying it twice. `reload_reference`
+  takes a pin index and the ← pull arrows read the page's selection.
+- The chart's dashed purple single-reference line is retired: curves are
+  solid, in badge colours, thinner than main's own.
 - `table_preview.py`: single `_ref_line` slot → per-pin series with badge-colour pens;
   dynamic legend (Main + badge per ref with key), legend-row-based hover/click (not
   chart-canvas picking); no extrapolation (never merge points across references).

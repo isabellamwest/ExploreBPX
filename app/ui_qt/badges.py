@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QRect, Qt
 from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter
-from PySide6.QtWidgets import QLabel
+from PySide6.QtWidgets import QLabel, QPushButton
 
 from . import style, typography
 
@@ -118,6 +118,21 @@ def make_badge_label(text: str, bg: str, fg: str) -> QLabel:
 REFERENCE_BADGE_SIZE = 18
 
 
+def _reference_badge_qss(colour: str, *, filled: bool) -> str:
+    """The disc's look in either state. Filled means "this reference is on
+    screen right now"; hollow keeps the same circle, letters and colour but
+    drops the fill, so an inactive badge is legibly the same reference rather
+    than a different mark. No cross, no strike, no tick -- the app's dot
+    language bans those."""
+    fill = colour if filled else "transparent"
+    text = "#ffffff" if filled else colour
+    return (
+        f"background:{fill}; color:{text}; border:1px solid {colour}; "
+        f"border-radius:{REFERENCE_BADGE_SIZE // 2}px; "
+        f"{typography.size_qss(FONT_PIXEL_SIZE)} {typography.semibold_qss()}"
+    )
+
+
 def make_reference_badge(letters: str, colour: str, tooltip: str = "") -> QLabel:
     """A pinned reference's identity disc: its two letters in white on its
     pin-order *colour* (see :mod:`ui_qt.reference_identity`).
@@ -132,11 +147,41 @@ def make_reference_badge(letters: str, colour: str, tooltip: str = "") -> QLabel
     label = QLabel(letters)
     label.setAlignment(Qt.AlignCenter)
     label.setFixedSize(REFERENCE_BADGE_SIZE, REFERENCE_BADGE_SIZE)
-    label.setStyleSheet(
-        f"background:{colour}; color:#ffffff; "
-        f"border-radius:{REFERENCE_BADGE_SIZE // 2}px; "
-        f"{typography.size_qss(FONT_PIXEL_SIZE)} {typography.semibold_qss()}"
-    )
+    label.setStyleSheet(_reference_badge_qss(colour, filled=True))
     if tooltip:
         label.setToolTip(tooltip)
     return label
+
+
+class ReferenceBadgeButton(QPushButton):
+    """The same disc as a checkable control: the chart legend's curve toggle
+    and the reference grid's selector.
+
+    One grammar for both -- **filled means present on screen**. In the legend
+    that is "this curve is drawn"; in the grid selector, "these are the
+    numbers you are reading". A caller wanting exclusive selection drives the
+    checked states itself; this widget only reports clicks.
+
+    A class rather than a factory plus a closure: the restyle-on-toggle slot
+    has to be a bound method of this very QObject, which PySide holds weakly.
+    A lambda capturing the button would be a pure-Python cycle that only the
+    cyclic GC could break -- the collector this app must never rely on to
+    free widgets (project convention).
+    """
+
+    def __init__(self, letters: str, colour: str, tooltip: str = "", *, checked: bool = True) -> None:
+        super().__init__(letters)
+        self._colour = colour
+        self.setObjectName("ReferenceBadgeButton")
+        self.setCheckable(True)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFixedSize(REFERENCE_BADGE_SIZE, REFERENCE_BADGE_SIZE)
+        self.setFlat(True)
+        if tooltip:
+            self.setToolTip(tooltip)
+        self.toggled.connect(self._restyle)
+        self.setChecked(checked)
+        self._restyle()
+
+    def _restyle(self) -> None:
+        self.setStyleSheet(_reference_badge_qss(self._colour, filled=self.isChecked()))

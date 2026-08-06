@@ -28,5 +28,5 @@ class TableCard(ModalCard):
         self._table_body = TableBody()
         super().__init__(parameter, meta, [Mode(INTERPOLATED_TABLE, self._table_body)], 0)
 
-    def set_reference_table(self, rows: list[list[object]] | None) -> None:
-        self._table_body.set_reference_rows(rows)
+    def set_reference_curves(self, curves) -> None:
+        self._table_body.set_reference_curves(curves)

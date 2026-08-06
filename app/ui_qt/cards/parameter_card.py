@@ -72,6 +72,8 @@ from .function import table_is_representable
 from .page import page_content, page_header
 from .reference_block import ReferenceLedger
 from .registry import create_card
+from .table_preview import ReferenceCurve
+
 
 class ParameterCard(QWidget):
     """Composes the header, per-kind editor and description for one parameter."""
@@ -232,9 +234,9 @@ class ParameterCard(QWidget):
         Populate-only: this never touches ``self._editor``'s draft/commit
         signals (known Qt pitfall), so calling it can never trip
         ``_touched``, whatever order it is called relative to construction --
-        it does, however, always tell the editor whether to overlay a table
-        reference on its own live preview
-        (:meth:`~.base.EditorCard.set_reference_table`), a no-op for any
+        it does, however, always tell the editor which reference curves to
+        overlay on its own live preview
+        (:meth:`~.base.EditorCard.set_reference_curves`), a no-op for any
         editor that is not table-shaped.
         """
         self._reference_active = bool(groups)
@@ -243,7 +245,7 @@ class ParameterCard(QWidget):
                 self._main_file_heading.hide()
             if self._ledger is not None:
                 self._ledger.hide()
-            self._editor.set_reference_table(None)
+            self._editor.set_reference_curves([])
             return
         if self._ledger is None:
             self._main_file_heading = QLabel("Main")
@@ -277,22 +279,30 @@ class ParameterCard(QWidget):
         self._main_file_heading.show()
         self._ledger.show()
 
-    def _apply_table_grid(
+    def _table_references(
         self, groups: tuple[ValueGroup, ...], pins: list[ReferencePin]
-    ) -> None:
-        """Show the read-only x/y grid for the first-pinned reference whose
-        value differs from main and is table-representable.
+    ) -> list[tuple[ReferencePin, list[list[object]], list[bool]]]:
+        """Every pinned reference whose value at this key is a table this
+        card can show *and* differs from main, in pin order, with its rows
+        and per-row match marks.
 
-        A differing table gets the richer treatment (grid + chart overlay);
-        an EQUAL table keeps the compact one-line row, same as every other
-        equal value. Phase 2 of the multi-reference track turns the grid's
-        badge label into a selector over every pin that has the key.
+        A reference that agrees with main is deliberately absent from both
+        the grid and the chart: its column would repeat the editor's own
+        numbers and its curve would lie exactly under the main line, so a
+        badge for it would promise something the eye cannot find. It keeps
+        its quiet "same" ledger row, the same restraint every other equal
+        value gets.
+
+        One entry per *reference*, not per value group: two references
+        sharing a value share a ledger row, but each still needs its own
+        selector entry and its own curve.
         """
+        main_rows = table_rows(self.parameter.value)
+        entries = []
         for group in groups:
             if group.equals_main or not table_is_representable(group.value):
                 continue
             ref_rows = table_rows(group.value)
-            main_rows = table_rows(self.parameter.value)
             if main_rows:
                 matches = matching_table_rows(main_rows, ref_rows)
             else:
@@ -300,11 +310,29 @@ class ParameterCard(QWidget):
                 # row-by-row -- marking every row purple would read as pure
                 # noise, so the whole grid stays quiet instead.
                 matches = [True] * len(ref_rows)
-            self._ledger.set_table_rows(ref_rows, matches, pins[group.indices[0]])
-            self._editor.set_reference_table(ref_rows)
-            return
-        self._ledger.set_table_rows([], [], None)
-        self._editor.set_reference_table(None)
+            for index in group.indices:
+                entries.append((pins[index], ref_rows, matches))
+        entries.sort(key=lambda entry: entry[0].index)
+        return entries
+
+    def _apply_table_grid(
+        self, groups: tuple[ValueGroup, ...], pins: list[ReferencePin]
+    ) -> None:
+        """Feed the ledger's reference grid and the editor's chart overlay.
+
+        The grid shows one reference at a time behind a badge selector
+        (design rule 5), defaulting to the first pinned that has the key;
+        the chart overlays them all at once, since curves can be read
+        together where columns of numbers cannot.
+        """
+        entries = self._table_references(groups, pins)
+        self._ledger.set_table_references(entries)
+        self._editor.set_reference_curves(
+            [
+                ReferenceCurve(pin.letters, pin.colour, pin.name, rows)
+                for pin, rows, _matches in entries
+            ]
+        )
 
     def growable_grid(self):
         """The inner editor's grid, if it has one -- see

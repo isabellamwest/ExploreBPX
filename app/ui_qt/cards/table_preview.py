@@ -21,23 +21,34 @@ are skipped rather than coerced (``chart_axes.as_plot_number``) -- the grid
 and the validator remain the source of truth for those; the plot just shows
 what can be shown.
 
-**Reference overlay.** ``set_reference_rows`` (``mode="xy"`` only) draws a
-docked reference's own table as a second series -- a dashed reference-purple
-line, no scatter markers of its own, so it never competes with the draft's
-solid accent line + dots. A small legend appears above the chart only while
-an overlay is present. Independent of ``update_rows``: the main draft can
-keep changing while the overlay stays put until ``set_reference_rows`` is
-called again (or with ``None``, to clear it).
+**Reference overlay.** ``set_reference_curves`` (``mode="xy"`` only) draws
+one line per pinned reference that has this key, each in its own badge
+colour, thinner than the draft's own solid accent line + dots so none of
+them competes with it. A legend appears above the chart only while an
+overlay is present: a "Main" swatch, then one badge per curve. Clicking a
+badge toggles its curve; hovering one gives that reference's name, domain
+and point count.
+
+**No extrapolation, ever.** Each curve is drawn from that reference's own
+points and stops at its own domain edge -- points are never merged across
+references and no curve is extended to meet another's range. A curve that
+ends early simply ends; its legend badge's tooltip says where.
+
+Independent of ``update_rows``: the main draft can keep changing while the
+overlay stays put until ``set_reference_curves`` is called again (or with an
+empty list, to clear it).
 """
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from dataclasses import dataclass, field
+
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QPen
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
-from .. import typography
-from ..style import ACCENT, MUTED, REFERENCE
+from .. import badges, typography
+from ..style import ACCENT, MUTED
 from .chart_axes import (
     as_plot_number,
     fit_axis,
@@ -61,10 +72,30 @@ except ImportError:  # pragma: no cover - depends on the PySide6 build
 
 _LINE = ACCENT
 
+#: Reference curves are drawn thinner than the draft's own 2px line: the
+#: value being edited stays the loudest thing on the chart however many
+#: references are overlaid on it.
+_REF_LINE_WIDTH = 1.6
+
 
 def charts_available() -> bool:
     """Whether QtCharts could be imported in this build."""
     return _CHARTS_AVAILABLE
+
+
+@dataclass(frozen=True)
+class ReferenceCurve:
+    """One pinned reference's overlay: its badge identity and its own rows.
+
+    Deliberately not a ``ReferencePin`` -- the chart paints badges and
+    labels, and has no business knowing about comparisons or snapshots. The
+    card that owns both does the translation.
+    """
+
+    letters: str
+    colour: str
+    name: str
+    rows: list[list[object]] = field(default_factory=list)
 
 
 class TablePreview(QWidget):
@@ -86,13 +117,21 @@ class TablePreview(QWidget):
             self.setVisible(False)
             return
 
-        #: The main draft's own points, and a docked reference's overlay
-        #: points -- kept separate so either can be replotted without
-        #: disturbing the other (see ``update_rows``/``set_reference_rows``).
+        #: The main draft's own points, and one point list per overlaid
+        #: reference curve -- kept separate so either can be replotted
+        #: without disturbing the other (see ``update_rows`` /
+        #: ``set_reference_curves``).
         self._main_points: list[tuple[float, float]] = []
-        self._ref_points: list[tuple[float, float]] = []
+        self._curves: list[ReferenceCurve] = []
+        self._curve_points: list[list[tuple[float, float]]] = []
+        #: Per-curve visibility, driven by the legend badges. A hidden curve
+        #: keeps its place in the list (and its badge) -- it is switched off,
+        #: not removed.
+        self._curve_shown: list[bool] = []
+        self._ref_series: list[QLineSeries] = []
 
-        self._legend = _legend_row()
+        self._legend = _LegendRow()
+        self._legend.curve_toggled.connect(self._on_curve_toggled)
         self._legend.hide()
         layout.addWidget(self._legend)
 
@@ -110,23 +149,13 @@ class TablePreview(QWidget):
         self._chart.addSeries(self._line)
         self._chart.addSeries(self._dots)
 
-        # The reference overlay: a dashed purple line only, no markers of its
-        # own -- it reads as "the other file's curve", not a second set of
-        # editable points.
-        self._ref_line = QLineSeries()
-        ref_pen = QPen(QColor(REFERENCE))
-        ref_pen.setWidthF(1.9)
-        ref_pen.setStyle(Qt.DashLine)
-        self._ref_line.setPen(ref_pen)
-        self._chart.addSeries(self._ref_line)
-
         self._axis_x = QValueAxis()
         self._axis_y = QValueAxis()
         for axis in (self._axis_x, self._axis_y):
             style_axis(axis, self.font())
         self._chart.addAxis(self._axis_x, Qt.AlignBottom)
         self._chart.addAxis(self._axis_y, Qt.AlignLeft)
-        for series in (self._line, self._dots, self._ref_line):
+        for series in (self._line, self._dots):
             series.attachAxis(self._axis_x)
             series.attachAxis(self._axis_y)
 
@@ -159,19 +188,54 @@ class TablePreview(QWidget):
         self._main_points = self._points(rows)
         self._redraw()
 
-    def set_reference_rows(self, rows: list[list[object]] | None) -> None:
-        """Overlay *rows* -- a differing reference table's own ``(x, y)``
-        pairs -- as the dashed purple series, or clear it with ``None``.
+    def set_reference_curves(self, curves: list[ReferenceCurve]) -> None:
+        """Overlay one line per pinned reference that has this key, each in
+        its own badge colour. An empty list clears the overlay.
 
-        Shows/hides the small legend alongside: present only while an
-        overlay is actually drawn, since the plain solid line already speaks
-        for itself with nothing to distinguish it from.
+        Shows/hides the legend alongside: present only while an overlay is
+        actually drawn, since the plain solid line speaks for itself with
+        nothing to distinguish it from. Rebuilds the series wholesale --
+        badge identity comes from pin order, so a removed reference must not
+        leave a curve behind wearing a colour that has moved on.
         """
         if not self.available:
             return
-        self._ref_points = self._points(rows) if rows else []
-        self._legend.setVisible(bool(self._ref_points))
+        self._curves = list(curves)
+        self._curve_points = [self._points(curve.rows) for curve in self._curves]
+        self._curve_shown = [True] * len(self._curves)
+        self._rebuild_reference_series()
+        self._legend.set_curves(
+            [
+                (curve, _domain_text(points))
+                for curve, points in zip(self._curves, self._curve_points)
+            ]
+        )
+        self._legend.setVisible(bool(self._curves))
         self._redraw()
+
+    def _rebuild_reference_series(self) -> None:
+        """One ``QLineSeries`` per curve, in badge colour. Torn down and
+        rebuilt rather than reused: the count changes with the pin list."""
+        for series in self._ref_series:
+            self._chart.removeSeries(series)
+        self._ref_series = []
+        for curve in self._curves:
+            series = QLineSeries()
+            pen = QPen(QColor(curve.colour))
+            pen.setWidthF(_REF_LINE_WIDTH)
+            series.setPen(pen)
+            self._chart.addSeries(series)
+            series.attachAxis(self._axis_x)
+            series.attachAxis(self._axis_y)
+            self._ref_series.append(series)
+
+    def _on_curve_toggled(self, index: int, shown: bool) -> None:
+        """A legend badge was clicked. Hiding a curve leaves the axes alone:
+        the plot must not jump under the cursor as curves are switched off
+        to read one of them."""
+        if 0 <= index < len(self._curve_shown):
+            self._curve_shown[index] = shown
+            self._ref_series[index].setVisible(shown)
 
     def _redraw(self) -> None:
         self._line.clear()
@@ -179,10 +243,19 @@ class TablePreview(QWidget):
         for x, y in self._main_points:
             self._line.append(x, y)
             self._dots.append(x, y)
-        self._ref_line.clear()
-        for x, y in self._ref_points:
-            self._ref_line.append(x, y)
-        all_points = self._main_points + self._ref_points
+        for series, points, shown in zip(
+            self._ref_series, self._curve_points, self._curve_shown
+        ):
+            series.clear()
+            # Each curve holds only its own reference's points, so it stops
+            # at that reference's own domain edge: nothing here extends or
+            # merges a curve to meet another's range.
+            for x, y in points:
+                series.append(x, y)
+            series.setVisible(shown)
+        all_points = self._main_points + [
+            point for points in self._curve_points for point in points
+        ]
         if not all_points:
             self._show_empty(True)
             return
@@ -223,30 +296,77 @@ class TablePreview(QWidget):
 # ----------------------------------------------------------------------
 
 
-def _legend_row() -> QWidget:
-    """"Main"/"Reference" swatches shown above the chart while an overlay is
-    present -- plain labels, no circled marks (the app's dot-language rules
-    ban those), just the same solid-vs-dashed distinction the two lines
-    themselves draw."""
-    row = QWidget()
-    row.setObjectName("ChartLegend")
-    layout = QHBoxLayout(row)
-    layout.setContentsMargins(0, 0, 0, 4)
-    layout.setSpacing(4)
-    layout.addWidget(_legend_swatch(_LINE, dashed=False))
-    layout.addWidget(_legend_label("Main"))
-    layout.addSpacing(10)
-    layout.addWidget(_legend_swatch(REFERENCE, dashed=True))
-    layout.addWidget(_legend_label("Reference"))
-    layout.addStretch(1)
-    return row
+def _domain_text(points: list[tuple[float, float]]) -> str:
+    """"domain 0 – 0.8 · 41 points" -- the plain facts about one curve's own
+    extent, for its legend badge's tooltip. This is where a curve that stops
+    early says so; the chart itself carries no inline annotation."""
+    if not points:
+        return "no numeric points"
+    xs = [x for x, _y in points]
+    count = len(points)
+    plural = "point" if count == 1 else "points"
+    return f"domain {_number(min(xs))} – {_number(max(xs))} · {count} {plural}"
 
 
-def _legend_swatch(color: str, *, dashed: bool) -> QLabel:
+def _number(value: float) -> str:
+    """A short, honest rendering of an axis bound -- trailing zeros trimmed,
+    never rounded to fewer significant figures than the value has."""
+    text = f"{value:g}"
+    return text
+
+
+class _LegendRow(QWidget):
+    """"Main" swatch, then one badge per overlaid reference curve.
+
+    The badges *are* the controls: clicking one toggles its curve, hovering
+    one gives that reference's name, domain and point count. Legend-row
+    controls rather than picking on the chart canvas -- a 140px-high plot
+    with four curves crossing has no reliable hit target, and a badge is the
+    same mark the reference wears everywhere else.
+    """
+
+    #: (curve index, now shown).
+    curve_toggled = Signal(int, bool)
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setObjectName("ChartLegend")
+        self._layout = QHBoxLayout(self)
+        self._layout.setContentsMargins(0, 0, 0, 4)
+        self._layout.setSpacing(4)
+        self._layout.addWidget(_legend_swatch(_LINE))
+        self._layout.addWidget(_legend_label("Main"))
+        self._layout.addSpacing(10)
+        self._buttons: list[badges.ReferenceBadgeButton] = []
+        self._layout.addStretch(1)
+
+    def set_curves(self, curves: list[tuple[ReferenceCurve, str]]) -> None:
+        """Rebuild the badges from *curves*, each paired with its domain
+        text."""
+        for button in self._buttons:
+            self._layout.removeWidget(button)
+            button.setParent(None)
+            button.deleteLater()
+        self._buttons = []
+        for index, (curve, domain) in enumerate(curves):
+            button = badges.ReferenceBadgeButton(
+                curve.letters, curve.colour, f"{curve.name} · {domain}"
+            )
+            button.toggled.connect(self._on_toggled)
+            self._buttons.append(button)
+            # Before the trailing stretch, after the "Main" swatch pair.
+            self._layout.insertWidget(self._layout.count() - 1, button)
+
+    def _on_toggled(self, shown: bool) -> None:
+        button = self.sender()
+        if button in self._buttons:
+            self.curve_toggled.emit(self._buttons.index(button), shown)
+
+
+def _legend_swatch(color: str) -> QLabel:
     swatch = QLabel()
     swatch.setFixedSize(14, 10)
-    border_style = "dashed" if dashed else "solid"
-    swatch.setStyleSheet(f"border-top: 2px {border_style} {color}; margin-top: 4px;")
+    swatch.setStyleSheet(f"border-top: 2px solid {color}; margin-top: 4px;")
     return swatch
 
 

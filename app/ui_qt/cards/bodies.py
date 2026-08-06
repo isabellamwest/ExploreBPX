@@ -237,15 +237,15 @@ class TableBody(ModeBody):
     def set_cell_issues(self, issues) -> None:
         self._grid.set_cell_issues(table_cells(issues))
 
-    def set_reference_rows(self, rows: list[list[object]] | None) -> None:
-        """Overlay a differing reference table's *rows* on the live preview,
-        or clear the overlay with ``None``. *rows* is already the ``(x, y)``
-        pairs the reference's own grid would show (see :func:`table_rows`) --
-        this never re-parses the reference value itself. A no-op while this
-        body is not the active mode: the card still calls it (see
-        ``FunctionCard``/``TableCard``), it simply has nothing visible to
-        show until the strip switches back here."""
-        self._preview.set_reference_rows(rows)
+    def set_reference_curves(self, curves) -> None:
+        """Overlay one curve per pinned reference that has this key on the
+        live preview; an empty list clears it. Each curve already carries
+        the ``(x, y)`` pairs that reference's own grid would show (see
+        :func:`table_rows`) -- this never re-parses a reference value
+        itself. A no-op while this body is not the active mode: the card
+        still calls it (see ``FunctionCard``/``TableCard``), it simply has
+        nothing visible to show until the strip switches back here."""
+        self._preview.set_reference_curves(curves)
 
     def pending_grid(self):
         return self._grid

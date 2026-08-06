@@ -324,22 +324,81 @@ def test_ghost_rows_are_the_union_across_pins(three_pins):
 # ---------------------------------------------------------------------------
 
 
-def test_source_header_says_which_reference_of_how_many(three_pins):
+def test_source_selector_offers_every_pin_and_starts_on_the_first(three_pins):
     d = three_pins
     d.show_view("Source")
 
-    assert d.source_reference_header_text().startswith("Reference 1 of 3")
-    assert "chen.json" in d.source_reference_header_text()
+    assert d.source_reference_badges() == ["Ch", "Ma", "Ok"]
     assert d.source_reference_badge_letters() == "Ch"
+    assert "chen.json" in d.source_reference_header_text()
 
 
-def test_source_header_drops_the_ordinal_for_a_single_pin(app_driver, tmp_path, monkeypatch):
+def test_source_selector_switches_which_reference_the_pane_shows(three_pins):
+    d = three_pins
+    d.show_view("Source")
+
+    d.click_source_reference_badge(1)
+
+    assert d.source_selected_reference_index() == 1
+    assert d.source_reference_badge_letters() == "Ma"
+    assert "marquis.json" in d.source_reference_header_text()
+
+
+def test_source_pull_takes_the_value_from_the_selected_reference(three_pins, monkeypatch):
+    """The ← arrows sit beside the reference pane, so they must pull from
+    whichever reference that pane is showing."""
+    d = three_pins
+    d.show_view("Source")
+    d.click_source_reference_badge(1)  # marquis, whose capacity is 7.0
+
+    captured: list = []
+    session = d._w._state.active
+    original = session.execute_command
+    monkeypatch.setattr(
+        session,
+        "execute_command",
+        lambda command: (captured.append(command), original(command))[1],
+    )
+
+    d._w._on_source_pull(list(_CAPACITY), False)
+
+    assert captured[0].value == 7.0
+    assert captured[0].source_label == "marquis.json"
+
+
+def test_source_reload_acts_on_the_selected_reference(three_pins, tmp_path):
+    """Reload re-snapshots the reference being read, not merely the first
+    pinned."""
+    import os
+    import time
+
+    d = three_pins
+    d.show_view("Source")
+    d.click_source_reference_badge(1)
+
+    changed = tmp_path / "marquis.json"
+    changed.write_text(
+        json.dumps(_document({"Nominal cell capacity [A.h]": 9.0})), encoding="utf-8"
+    )
+    os.utime(changed, (time.time() + 10, time.time() + 10))
+
+    d._w._on_reload_reference()
+
+    assert d._w._state.references[1].raw["Parameterisation"]["Cell"][
+        "Nominal cell capacity [A.h]"
+    ] == 9.0
+    # The other pins are untouched by one reference's reload.
+    assert d._w._state.references[0].filename == "chen.json"
+
+
+def test_source_selector_is_a_single_badge_for_a_single_pin(app_driver, tmp_path, monkeypatch):
     d = app_driver
     d.open(_write(tmp_path, "main.json", _MAIN))
     _pin(d, monkeypatch, _write(tmp_path, "chen.json", _REF_A))
 
     d.show_view("Source")
 
+    assert d.source_reference_badges() == ["Ch"]
     assert d.source_reference_header_text().startswith("Reference  ·  chen.json")
 
 
@@ -365,3 +424,104 @@ def test_stale_band_names_a_reference_that_is_not_the_one_shown(
     assert d.source_stale_band_visible()
     assert d.source_stale_band_text() == "marquis.json changed on disk"
 
+
+
+# ---------------------------------------------------------------------------
+# Phase 2: chart overlay and the reference-grid selector
+# ---------------------------------------------------------------------------
+
+_TABLE_MAIN = {
+    "Header": {"BPX": "0.1.0", "Title": "T", "Model": "SPM"},
+    "Parameterisation": {
+        "Negative electrode": {"OCP [V]": {"x": [0.0, 0.5, 1.0], "y": [1.0, 0.5, 0.1]}}
+    },
+}
+
+
+def _table_doc(x, y):
+    return {
+        "Header": {"BPX": "0.1.0", "Title": "T", "Model": "SPM"},
+        "Parameterisation": {"Negative electrode": {"OCP [V]": {"x": x, "y": y}}},
+    }
+
+
+_OCP_PATH = ("Parameterisation", "Negative electrode", "OCP [V]")
+
+
+@pytest.fixture
+def table_pins(app_driver, tmp_path, monkeypatch):
+    """A table-valued parameter with three references: two differing tables
+    and one that matches main exactly."""
+    app_driver.open(_write(tmp_path, "main.json", _TABLE_MAIN))
+    for name, doc in (
+        ("chen.json", _table_doc([0.0, 0.5, 1.0], [1.1, 0.6, 0.2])),
+        # Stops at 0.5: its curve must end there, never be extended to meet
+        # the others.
+        ("marquis.json", _table_doc([0.0, 0.5], [0.9, 0.4])),
+        ("okane.json", _table_doc([0.0, 0.5, 1.0], [1.0, 0.5, 0.1])),
+    ):
+        _pin(app_driver, monkeypatch, _write(tmp_path, name, doc))
+    return app_driver
+
+
+def test_grid_selector_offers_only_the_differing_references(table_pins):
+    """okane matches main exactly, so it keeps its quiet "same" ledger row
+    and never appears in the selector -- its column would repeat the
+    editor's own numbers."""
+    d = table_pins
+    d.go_to(_OCP_PATH)
+
+    assert d.reference_grid_visible()
+    assert d.reference_grid_badges() == ["Ch", "Ma"]
+    assert d.reference_grid_selected() == "Ch"
+
+
+def test_grid_selector_switches_which_numbers_are_shown(table_pins):
+    d = table_pins
+    d.go_to(_OCP_PATH)
+    assert d.reference_grid_row_count() == 3  # chen has three points
+
+    d.click_reference_grid_badge(1)
+
+    assert d.reference_grid_selected() == "Ma"
+    assert d.reference_grid_row_count() == 2  # marquis stops at 0.5
+
+
+def test_chart_overlays_one_curve_per_differing_reference(table_pins):
+    d = table_pins
+    d.go_to(_OCP_PATH)
+    if not d.charts_available():
+        pytest.skip("QtCharts is absent from this PySide6 build")
+
+    assert d.chart_legend_badges() == ["Ch", "Ma"]
+    # Each curve holds only its own reference's points: marquis stops at its
+    # own domain edge rather than being extended to meet chen's.
+    assert d.chart_curve_points(1) == [(0.0, 0.9), (0.5, 0.4)]
+
+
+def test_chart_legend_badge_toggles_its_own_curve(table_pins):
+    d = table_pins
+    d.go_to(_OCP_PATH)
+    if not d.charts_available():
+        pytest.skip("QtCharts is absent from this PySide6 build")
+
+    assert d.chart_curve_shown(0)
+
+    d.click_chart_legend_badge(0)
+
+    assert not d.chart_curve_shown(0)
+    assert d.chart_curve_shown(1)  # the others are untouched
+    # The points stay: a hidden curve is switched off, not thrown away.
+    assert d.chart_curve_points(0)
+
+
+def test_chart_legend_badge_tooltip_names_the_domain(table_pins):
+    d = table_pins
+    d.go_to(_OCP_PATH)
+    if not d.charts_available():
+        pytest.skip("QtCharts is absent from this PySide6 build")
+
+    tooltip = d.chart_legend_tooltips()[1]
+    assert tooltip.startswith("marquis.json")
+    assert "domain 0 – 0.5" in tooltip
+    assert "2 points" in tooltip

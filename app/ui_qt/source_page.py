@@ -1164,9 +1164,18 @@ class SourcePage(QWidget):
     #: A row was double-clicked: jump to it in the Editor. The
     #: page re-emits; MainWindow routes through ``NavigationService``.
     navigate_requested = Signal(object)
+    #: The pane-header selector chose a different pinned reference (its pin
+    #: index). MainWindow re-renders the page against it; everything the
+    #: page does -- the comparison, Reload, the ← pull arrows -- then acts on
+    #: that reference and no other.
+    reference_selected = Signal(int)
 
     def __init__(self) -> None:
         super().__init__()
+        #: Which pinned reference the reference pane shows. Pin index, not a
+        #: snapshot: the pin list is rebuilt on every change, and an index
+        #: survives that where an object identity would not.
+        self._selected_reference = 0
         self._view = SourceView()
         self._view.pull_requested.connect(self.pull_requested)
         self._view.navigate_requested.connect(self.navigate_requested)
@@ -1221,13 +1230,15 @@ class SourcePage(QWidget):
         gutter_spacer = QWidget()
         gutter_spacer.setFixedWidth(_GUTTER_PX)
         head_layout.addWidget(gutter_spacer)
-        # The reference pane's header carries the shown pin's badge, so the
-        # page speaks the same identity language as every other comparison
-        # surface. The badge is rebuilt per refresh (pin order owns it), so
-        # it lives in a slot rather than being a fixed child.
+        # The reference pane's header carries a badge per pinned reference,
+        # exactly one filled -- the same selector grammar the card's
+        # reference grid uses, and the same identity language every other
+        # comparison surface speaks. Rebuilt per refresh (pin order owns
+        # it), so it lives in a slot rather than being a fixed child.
         self._ref_badge_slot = QHBoxLayout()
         self._ref_badge_slot.setContentsMargins(0, 0, 0, 0)
-        self._ref_badge_slot.setSpacing(0)
+        self._ref_badge_slot.setSpacing(4)
+        self._ref_badge_buttons: list[badges.ReferenceBadgeButton] = []
         ref_side = QHBoxLayout()
         ref_side.setContentsMargins(0, 0, 0, 0)
         ref_side.setSpacing(6)
@@ -1267,24 +1278,28 @@ class SourcePage(QWidget):
     def refresh(
         self,
         main_raw: dict | None,
-        pin=None,
+        pins=None,
         main_name: str = "",
         main_model: str | None = None,
-        pin_count: int = 0,
+        selected: int = 0,
     ) -> None:
-        """Re-render from the current document and the shown reference pin.
+        """Re-render from the current document and the pinned references.
 
         Called from ``MainWindow._apply_comparison`` -- the same fan-out
         every comparison-state change already goes through -- so edits,
-        undo/redo, open/new and pin/remove all land here. With a reference
-        pinned the page renders the aligned two-pane comparison;
+        undo/redo, open/new and pin/remove all land here. With at least one
+        reference pinned the page renders the aligned two-pane comparison;
         *main_name*/*main_model* label the main pane's header.
 
-        *pin* is the first pinned reference and *pin_count* how many there
-        are. The page shows one at a time, so the header says **which** of
-        how many rather than implying it is the only one -- Phase 2 of the
-        multi-reference track adds the selector that changes it.
+        The page shows **one** reference at a time -- two raw-JSON panes are
+        already as much as the eye can align -- and *selected* says which.
+        Its badge selector switches between them; with a single pin the
+        selector is a lone badge, since a control with one choice is not a
+        choice.
         """
+        pins = list(pins or [])
+        self._selected_reference = min(selected, len(pins) - 1) if pins else 0
+        pin = pins[self._selected_reference] if pins else None
         reference = pin.snapshot if pin is not None else None
         two_pane = main_raw is not None and reference is not None
         single_pane = main_raw is not None and reference is None
@@ -1301,36 +1316,51 @@ class SourcePage(QWidget):
             # The band is a two-pane notice; an undocked/replaced reference
             # takes it with it (a fresh dock re-checks from MainWindow).
             self._stale_band.setVisible(False)
-        self._set_reference_badge(pin if two_pane else None)
+        self._set_reference_badges(pins if two_pane else [])
         if two_pane:
             self._main_head.setText(
                 _pane_header_text("Main", main_name, main_model)
             )
-            # "Reference 1 of 3" only when there is more than one: with a
-            # single pin the ordinal would be noise, and with several its
-            # absence would be a lie.
-            role = "Reference" if pin_count <= 1 else f"Reference 1 of {pin_count}"
             self._ref_head.setText(
-                _pane_header_text(role, reference.filename, reference.model)
+                _pane_header_text("Reference", reference.filename, reference.model)
             )
             rows = build_rows(main_raw, reference.raw)
         else:
             rows = build_rows(main_raw) if main_raw is not None else []
         self._view.set_rows(rows, two_pane=two_pane)
 
-    def _set_reference_badge(self, pin) -> None:
-        """Put the shown pin's badge beside the reference pane's header, or
-        clear the slot when no pin is shown."""
-        for index in reversed(range(self._ref_badge_slot.count())):
-            item = self._ref_badge_slot.takeAt(index)
-            widget = item.widget()
-            if widget is not None:
-                widget.setParent(None)
-                widget.deleteLater()
-        if pin is not None:
-            self._ref_badge_slot.addWidget(
-                badges.make_reference_badge(pin.letters, pin.colour, pin.name)
+    def selected_reference_index(self) -> int:
+        """The pin index the reference pane is currently showing."""
+        return self._selected_reference
+
+    def _set_reference_badges(self, pins: list) -> None:
+        """Rebuild the reference pane's selector, exactly one badge filled."""
+        for button in self._ref_badge_buttons:
+            self._ref_badge_slot.removeWidget(button)
+            button.setParent(None)
+            button.deleteLater()
+        self._ref_badge_buttons = []
+        for index, pin in enumerate(pins):
+            button = badges.ReferenceBadgeButton(
+                pin.letters, pin.colour, pin.name, checked=index == self._selected_reference
             )
+            button.clicked.connect(self._on_reference_badge_clicked)
+            self._ref_badge_buttons.append(button)
+            self._ref_badge_slot.addWidget(button)
+
+    def _on_reference_badge_clicked(self) -> None:
+        """Exclusive selection. Re-emitted rather than handled here: which
+        reference the page compares against is MainWindow's state, and the
+        pane's rows, the stale band and the ← pull arrows all have to move
+        together with it."""
+        button = self.sender()
+        if button not in self._ref_badge_buttons:
+            return
+        index = self._ref_badge_buttons.index(button)
+        for position, other in enumerate(self._ref_badge_buttons):
+            other.setChecked(position == index)
+        if index != self._selected_reference:
+            self.reference_selected.emit(index)
 
     def _on_fold_toggle(self) -> None:
         self._view.set_tables_folded(self._view.all_tables_expanded())

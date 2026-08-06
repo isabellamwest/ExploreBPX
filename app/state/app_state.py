@@ -214,20 +214,27 @@ class AppState:
                 del self.references[index]
                 return
 
-    def reload_reference(self) -> None:
-        """Re-snapshot the first pinned reference from its own path on disk
-        (the Source page's stale-band Reload).
+    def reload_reference(self, index: int = 0) -> None:
+        """Re-snapshot the reference pinned at *index* from its own path on
+        disk (the Source page's stale-band Reload).
+
+        The index is the Source page's own selection, so Reload always acts
+        on the reference being read rather than on whichever happened to be
+        pinned first. Replaced in place: reloading is a refresh of one pin,
+        never a reordering of the set.
 
         Raises ``core.bpx_gateway.LoadError``/``OSError`` exactly as
         ``ReferenceSnapshot.load`` does; on failure the pinned snapshot is
         left untouched (the caller surfaces the error -- C3).
 
         A library-set reference (``path`` is None) is a quiet no-op: a
-        bundled set is immutable, so there is nothing on disk to reload.
-        Still singular: the Source page it serves grows its own reference
-        selector in Phase 2, and reloads whichever pin that selects.
+        bundled set is immutable, so there is nothing on disk to reload. So
+        is an index past the end -- a pin removed between the band appearing
+        and Reload being clicked.
         """
-        existing = self.reference
-        if existing is None or existing.path is None:
+        if not 0 <= index < len(self.references):
             return
-        self.references[0] = ReferenceSnapshot.load(existing.path)
+        existing = self.references[index]
+        if existing.path is None:
+            return
+        self.references[index] = ReferenceSnapshot.load(existing.path)

@@ -277,7 +277,7 @@ def test_differing_table_reference_shows_grid_with_diff_marks_and_overlay():
 
     if charts_available():
         preview = card._editor._table_body._preview
-        assert preview._ref_points == [(0.0, 2.0), (1.0, 3.0), (5.0, 9.0)]
+        assert preview._curve_points == [[(0.0, 2.0), (1.0, 3.0), (5.0, 9.0)]]
         assert not preview._legend.isHidden()
 
 
@@ -294,7 +294,7 @@ def test_equal_table_reference_keeps_the_compact_one_liner():
 
     if charts_available():
         preview = card._editor._table_body._preview
-        assert preview._ref_points == []
+        assert preview._curve_points == []
         assert preview._legend.isHidden()
 
 
@@ -303,11 +303,11 @@ def test_undocking_the_reference_clears_the_table_overlay():
     card = _table_card({"x": [0, 1], "y": [2, 3]})
     card.set_reference(*_one_reference({"x": [0, 5], "y": [2, 9]}), ParameterKind.TABLE)
     preview = card._editor._table_body._preview
-    assert preview._ref_points
+    assert preview._curve_points
 
     card.set_reference((), [], None)
 
-    assert preview._ref_points == []
+    assert preview._curve_points == []
     assert preview._legend.isHidden()
 
 
@@ -319,12 +319,12 @@ def test_growing_the_grid_keeps_the_reference_section_and_its_overlay():
     card = _table_card({"x": [0, 1], "y": [2, 3]})
     card.set_reference(*_one_reference({"x": [0, 5], "y": [2, 9]}), ParameterKind.TABLE)
     preview = card._editor._table_body._preview
-    assert preview._ref_points
+    assert preview._curve_points
 
     card.growable_grid().set_fill_available(True)
 
     assert card._ledger.isVisibleTo(card)
-    assert preview._ref_points
+    assert preview._curve_points
     assert preview.isVisibleTo(card._editor)
 
 
@@ -352,10 +352,10 @@ def test_function_cards_table_overlay_survives_switching_mode_away_and_back():
     card = _function_card({"x": [0, 1], "y": [2, 3]})  # opens on InterpolatedTable
     card.set_reference(*_one_reference({"x": [0, 1, 9], "y": [2, 3, 50]}), ParameterKind.FUNCTION)
     table_body = card._editor._table_body
-    assert table_body._preview._ref_points == [(0.0, 2.0), (1.0, 3.0), (9.0, 50.0)]
+    assert table_body._preview._curve_points == [[(0.0, 2.0), (1.0, 3.0), (9.0, 50.0)]]
 
     card._editor.select_mode("FloatInt")
-    assert table_body._preview._ref_points == [(0.0, 2.0), (1.0, 3.0), (9.0, 50.0)]
+    assert table_body._preview._curve_points == [[(0.0, 2.0), (1.0, 3.0), (9.0, 50.0)]]
 
     card._editor.select_mode("InterpolatedTable")
-    assert table_body._preview._ref_points == [(0.0, 2.0), (1.0, 3.0), (9.0, 50.0)]
+    assert table_body._preview._curve_points == [[(0.0, 2.0), (1.0, 3.0), (9.0, 50.0)]]

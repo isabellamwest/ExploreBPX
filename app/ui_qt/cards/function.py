@@ -90,9 +90,9 @@ class FunctionCard(ModalCard):
         labels = [mode.label for mode in modes]
         super().__init__(parameter, meta, modes, labels.index(opens_in))
 
-    def set_reference_table(self, rows: list[list[object]] | None) -> None:
+    def set_reference_curves(self, curves) -> None:
         """Delegate to the ``InterpolatedTable`` mode's own body, whichever
         mode the strip currently shows -- a hidden body simply has nothing
         visible to draw until the strip switches back to it (see
-        ``TableBody.set_reference_rows``)."""
-        self._table_body.set_reference_rows(rows)
+        ``TableBody.set_reference_curves``)."""
+        self._table_body.set_reference_curves(curves)

@@ -245,7 +245,7 @@ def test_two_panes_share_a_wrapped_line_height(qtbot):
     # Short enough that it cannot wrap at any plausible font metric -- the
     # old "short" fit the pane by a single character under Courier New.
     ref["Header"] = dict(_LONG_DOC["Header"], Description="s")
-    page.refresh(_LONG_DOC, pin=_RefStub(ref))
+    page.refresh(_LONG_DOC, pins=[_RefStub(ref)])
     view = _sized(page, 700)
 
     index = next(
@@ -275,10 +275,10 @@ def test_hint_visible_only_with_document_and_no_reference(qtbot):
     page = SourcePage()
     qtbot.addWidget(page)
 
-    page.refresh(_DOC, pin=None)
+    page.refresh(_DOC, pins=[])
     assert not page._hint.isHidden()
 
-    page.refresh(_DOC, pin=_RefStub(_DOC))
+    page.refresh(_DOC, pins=[_RefStub(_DOC)])
     assert page._hint.isHidden()
 
 
@@ -332,7 +332,7 @@ _DOC_MAIN_ONLY = {
 def _two_pane(qtbot, main_raw, ref_raw):
     page = SourcePage()
     qtbot.addWidget(page)
-    page.refresh(main_raw, pin=_RefStub(ref_raw))
+    page.refresh(main_raw, pins=[_RefStub(ref_raw)])
     return page
 
 
@@ -448,12 +448,12 @@ def test_pane_headers_show_roles_names_and_models(qtbot):
     page = SourcePage()
     qtbot.addWidget(page)
 
-    page.refresh(_DOC, pin=None)
+    page.refresh(_DOC, pins=[])
     assert page._pane_head.isHidden()
 
     page.refresh(
         _DOC,
-        pin=_RefStub(_REF, filename="lfp.json", model="SPMe"),
+        pins=[_RefStub(_REF, filename="lfp.json", model="SPMe")],
         main_name="nmc.json",
         main_model="DFN",
     )
@@ -1053,7 +1053,7 @@ def test_selection_prunes_when_its_row_vanishes(qtbot):
         "Header": {"BPX": "0.1.0", "Model": "SPM"},
         "Parameterisation": _DOC_MAIN_ONLY["Parameterisation"],
     }
-    page.refresh(without_title, pin=_RefStub(without_title))
+    page.refresh(without_title, pins=[_RefStub(without_title)])
 
     assert page._view.selected_path() is None
 
@@ -1075,7 +1075,7 @@ def test_set_stale_needs_a_docked_reference(qtbot):
     page.set_stale(True)
     assert page._stale_band.isHidden()
 
-    page.refresh(_DOC, pin=_RefStub(_REF))
+    page.refresh(_DOC, pins=[_RefStub(_REF)])
     page.set_stale(True)
     assert not page._stale_band.isHidden()
 
