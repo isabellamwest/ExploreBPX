@@ -599,6 +599,28 @@ class _DiagnosticsRowDelegate(ParameterRowDelegate):
     _INTERACTIVE_KINDS = frozenset({"issue", "task"})
     _FOLD_HEADER_HEIGHT = 30
     _BAND_KINDS = frozenset({"fold_header", "clear_summary"})
+    #: The widest a stream row's *content* gets, however wide the window is.
+    #: A validator message ran the full bleed -- around 200 characters a line
+    #: on a maximised window, well past readable -- and its right-aligned
+    #: "Go to ›" ended up a thousand pixels from the row it belonged to.
+    #: Wider than ``style.CONTENT_MEASURE``, which is sized for prose these
+    #: dense technical strings are not, and a no-op on a narrow window.
+    _MEASURE = 900
+
+    def _available_width(self, option) -> float:
+        return min(super()._available_width(option), self._MEASURE)
+
+    def _measured(self, option) -> QStyleOptionViewItem:
+        """*option* with its row narrowed to the measure.
+
+        The rect is what both the text wrap and the right-aligned action are
+        laid out against, so narrowing it here is what keeps the two in one
+        column. The band kinds never come through here: their shaded
+        background is full-bleed by design.
+        """
+        narrowed = QStyleOptionViewItem(option)
+        narrowed.rect.setWidth(min(narrowed.rect.width(), self._MEASURE))
+        return narrowed
 
     def paint(self, painter, option, index) -> None:
         kind = index.data(_KIND_ROLE)
@@ -611,8 +633,8 @@ class _DiagnosticsRowDelegate(ParameterRowDelegate):
         if kind == "clear_row":
             self._paint_clear_row(painter, option, index)
             return
+        option = self._measured(option)
         if kind is not None and kind not in self._INTERACTIVE_KINDS:
-            option = QStyleOptionViewItem(option)
             option.state &= ~(QStyle.State_MouseOver | QStyle.State_Selected)
         super().paint(painter, option, index)
 

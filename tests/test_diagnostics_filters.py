@@ -413,3 +413,21 @@ def test_a_missing_field_row_does_not_repeat_itself(app_driver):
     assert missing, "expected a fresh DFN to carry absorbed missing-field tasks"
     for task in missing:
         assert _absorbed_messages(task, partition) == ()
+
+
+def test_stream_rows_stop_at_a_readable_measure(app_driver, tmp_path):
+    """A validator message ran the full bleed on a wide window, and its
+    right-aligned "Go to ›" ended up a thousand pixels from its own row."""
+    from PySide6.QtWidgets import QStyleOptionViewItem
+
+    from ui_qt.diagnostics_panel import _DiagnosticsRowDelegate
+
+    delegate = _DiagnosticsRowDelegate(None)
+    option = QStyleOptionViewItem()
+    option.rect.setWidth(1400)
+
+    assert delegate._measured(option).rect.width() == delegate._MEASURE
+
+    # A window narrower than the measure is left exactly as it is.
+    option.rect.setWidth(500)
+    assert delegate._measured(option).rect.width() == 500
