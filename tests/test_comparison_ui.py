@@ -16,6 +16,7 @@ import pytest
 pytest.importorskip("PySide6")
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 
 import ui_qt.main_window as main_window_module
 from core.compare import ComparisonResult, RowDiff, RowState, SectionDiff, compare
@@ -919,3 +920,18 @@ def test_end_to_end_with_bundled_about_energy_examples(app_driver, monkeypatch):
     assert app_driver.comparison_strip_visible()
     assert app_driver.comparison_strip_chip_names() == [ref_path.name]
     assert not app_driver.comparison_strip_chip_tooltips()[0].endswith("no differences")
+
+
+def test_the_source_diff_chip_speaks_the_comparison_colour_not_a_severity():
+    """One idea, one colour: "differs from the reference" is purple
+    everywhere (gutter bars, badges, pull chips). The chip was an amber that
+    argued it sat outside the warning family; beside WARNING_TINT on the
+    same screen it did not."""
+    def _hue_of(colour: str) -> float:
+        return QColor(colour).hueF()
+
+    assert _hue_of(style.DIFF_TINT) == pytest.approx(_hue_of(style.REFERENCE), abs=0.05)
+    assert _hue_of(style.DIFF_TINT) != pytest.approx(_hue_of(style.WARNING_TINT), abs=0.2)
+    # Darker than the pale reference wash: a chip behind a value has to hold
+    # at value size.
+    assert QColor(style.DIFF_TINT).lightnessF() < QColor(style.REFERENCE_TINT).lightnessF()

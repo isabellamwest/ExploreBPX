@@ -99,11 +99,15 @@ REFERENCE_WASH = "#f8f5fc"
 #: staying visibly purple at 3px.
 REFERENCE_SOFT = "#a08cc4"
 #: The Source page's value chip: the wash behind a value that differs
-#: between the two panes. Warm but its own tint -- "differs" is
-#: information, not a severity, so it is deliberately
-#: darker than ``WARNING_TINT`` (it must read at value-chip size) while
-#: staying out of the error/warning families.
-DIFF_TINT = "#ffdfb8"
+#: between the two panes. A tint of ``REFERENCE``, because "differs from the
+#: reference" is one idea and the app says it in one colour -- the same call
+#: that replaced the parameter list's amber wash with purple gutter bars
+#: (comparison is not severity). This was itself an amber (#ffdfb8) that
+#: argued it sat outside the warning family; beside ``WARNING_TINT`` on the
+#: same screen it did not, and a page of differing values read as a page of
+#: warnings. Deliberately darker than ``REFERENCE_TINT``: a chip behind a
+#: value has to hold at value size, where the pale wash disappears.
+DIFF_TINT = "#e5dcf3"
 #: Neutral grey badge background: the "All sections" rail entry's total
 #: badge and every "outstanding" count badge (rail/pane), which are never
 #: red/amber -- "outstanding is not an error" kept visible in the colour
