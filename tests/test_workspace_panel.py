@@ -523,3 +523,23 @@ def test_dropping_an_unparseable_file_shows_the_load_error_dialog(
     assert len(calls) == 1
     assert d.current_view_index() == 2  # stayed on Workspace, nothing opened
     assert d.workspace_info_text() == "No document open"
+
+
+def test_document_card_names_what_is_still_outstanding(app_driver):
+    """A fresh DFN passes the schema with three parameters, so the card said
+    "Valid" in green beside a title reading "(incomplete)" while 35 required
+    fields were empty. The completion count is the app's own, not a
+    validator verdict, so it trails the validator's words and never touches
+    the dot's colour."""
+    app_driver._w._new("DFN")
+    ws = app_driver._w._workspace
+
+    text = ws._info_badge.text()
+    assert text.startswith("Valid · ")
+    assert text.endswith(" outstanding")
+
+
+def test_a_complete_document_says_only_valid(app_driver, valid_spm_path):
+    app_driver.open(valid_spm_path)
+
+    assert "outstanding" not in app_driver._w._workspace._info_badge.text()

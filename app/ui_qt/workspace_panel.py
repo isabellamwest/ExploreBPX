@@ -627,6 +627,7 @@ class WorkspacePanel(QWidget):
         dirty: bool,
         error_count: int = 0,
         warning_count: int = 0,
+        outstanding_count: int = 0,
         references: list[ReferenceSnapshot] | None = None,
     ) -> None:
         """Update the main-document and reference sections from current state.
@@ -667,7 +668,7 @@ class WorkspacePanel(QWidget):
         self._info_fields["Contents"].setText(
             f"{document.section_count} sections · {document.parameter_count} parameters"
         )
-        self._set_validity_badge(error_count, warning_count)
+        self._set_validity_badge(error_count, warning_count, outstanding_count)
 
     def _set_references(self, references: list[ReferenceSnapshot]) -> None:
         """Rebuild the References section's rows for the current pins.
@@ -708,7 +709,17 @@ class WorkspacePanel(QWidget):
             button.setEnabled(not at_cap)
             button.setToolTip(AT_CAP_MESSAGE if at_cap else "")
 
-    def _set_validity_badge(self, errors: int, warnings: int) -> None:
+    def _set_validity_badge(self, errors: int, warnings: int, outstanding: int = 0) -> None:
+        """The main document's dot-and-text mark: what the validator says,
+        plus what is still missing.
+
+        *outstanding* is the app's own completion count, not a validator
+        verdict, so it never changes the dot's colour and always trails the
+        validator's own words. It has to be here all the same: a freshly
+        created DFN passes the schema with three parameters, and a lone
+        green "Valid" beside a title reading "(incomplete)" told the user
+        the file was ready when 35 required fields were still empty.
+        """
         if not errors and not warnings:
             text, colour = "Valid", OK
         elif errors:
@@ -721,6 +732,8 @@ class WorkspacePanel(QWidget):
                 f"{warnings} warning" + ("s" if warnings != 1 else ""),
                 WARNING,
             )
+        if outstanding:
+            text = f"{text} · {outstanding} outstanding"
         self._info_badge.setText(text)
         self._info_dot.setText(icons.html_img(icons.DOT, color=colour))
         self._info_dot.show()

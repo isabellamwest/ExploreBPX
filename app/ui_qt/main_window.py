@@ -133,6 +133,7 @@ class MainWindow(QMainWindow):
         # Cached by _refresh_all, read by _update_workspace_info -- see there.
         self._workspace_error_count = 0
         self._workspace_warning_count = 0
+        self._workspace_outstanding_count = 0
         #: Reference comparison state: one whole-document diff per pinned
         #: reference, in pin order -- empty with nothing pinned or no document
         #: open. UI-session state, not persisted, recomputed whenever a
@@ -1395,6 +1396,7 @@ class MainWindow(QMainWindow):
             dirty,
             self._workspace_error_count,
             self._workspace_warning_count,
+            self._workspace_outstanding_count,
             references=self._state.references,
         )
 
@@ -1474,6 +1476,10 @@ class MainWindow(QMainWindow):
         # its own count -- resets to 0/0 whenever there's no document.
         self._workspace_error_count = errors
         self._workspace_warning_count = warnings
+        # The app's own completion count, cached alongside the validator's
+        # totals so the Workspace card and the Diagnostics chip can never
+        # disagree about how much is still missing.
+        self._workspace_outstanding_count = buckets.outstanding_count if buckets else 0
         severity = "error" if errors else ("warning" if warnings else None)
         self._btn_diagnostics.set_badge(errors + warnings, severity)
         # Source is the one rail entry gated on an open document:
