@@ -438,7 +438,10 @@ QFrame#ReferenceRow QPushButton#ReferenceTileRemove {
 QFrame#ReferenceRow QPushButton#ReferenceTileRemove:hover { color: #1f2328; text-decoration: underline; }
 QLabel#ReferenceRowName { font-weight: ${semibold}; }
 QLabel#ReferenceRowModel { color: #57606a; font-size: ${meta}px; }
-QLabel#ReferenceRowChevron { color: #8c959f; font-size: ${micro}px; }
+/* The row's expand state lives entirely in this caret, so it takes the body
+   rung and the muted (not ghost) grey: at ${micro}px the flip between the
+   collapsed and expanded glyphs was a few pixels and read as neither. */
+QLabel#ReferenceRowChevron { color: #57606a; font-size: ${body}px; }
 QWidget#ReferenceRowDetail { border-top: 1px solid #d5cde6; }
 /* The pin count sits at the footer's far right, the quietest thing on the
    row -- bookkeeping, not an instruction. */

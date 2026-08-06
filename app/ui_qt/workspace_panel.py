@@ -38,6 +38,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from core.bpx_gateway import SUPPORTED_EXTENSIONS
 from core.document import BPXDocument
 from core.document_factory import SUPPORTED_MODELS
 from state.app_state import MAX_PINNED_REFERENCES
@@ -56,9 +57,11 @@ _INFO_PANEL_EMPTY_STATE_TEXT = "No document open"
 #: pin, and the Open dialog's disabled "Pin as reference".
 AT_CAP_MESSAGE = f"{MAX_PINNED_REFERENCES} already pinned · remove one first"
 
-# Kept in sync with the Open/Export dialog filter ("BPX (*.json *.yaml *.yml)")
-# in main_window.py; both describe the same supported set of file extensions.
-SUPPORTED_BPX_EXTENSIONS = (".json", ".yaml", ".yml")
+#: What a drop on this panel is allowed to be. Re-exported from
+#: ``core.bpx_gateway`` rather than restated: the drop target and every file
+#: dialog now answer "which files can this app open?" from the one tuple the
+#: loader itself reads (see ``ui_qt/file_filters.py``).
+SUPPORTED_BPX_EXTENSIONS = SUPPORTED_EXTENSIONS
 
 #: The actions rail's fixed width (explicit user call): wider than the
 #: New chooser's rows strictly need, so the rail/pane divider sits further
@@ -173,6 +176,10 @@ class ReferenceRow(QFrame):
         self._chevron = QLabel("▸")
         self._chevron.setObjectName("ReferenceRowChevron")
         head_layout.addWidget(self._chevron)
+        # The whole head toggles the detail, so it says so before it is
+        # clicked: at MICRO the caret was the sole affordance and too small
+        # to register either as a control or as a change of state.
+        head.setCursor(Qt.PointingHandCursor)
         layout.addWidget(head)
 
         self._detail = self._build_detail(snapshot)
