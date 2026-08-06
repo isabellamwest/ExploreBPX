@@ -649,7 +649,9 @@ def _locs(result):
 
 
 def test_validate_completed_on_valid_file(valid_spm_dict):
-    assert bpx_gateway.validate(valid_spm_dict).completed is True
+    result = bpx_gateway.validate(valid_spm_dict)
+    assert result.completed is True
+    assert result.reach is bpx_gateway.CheckReach.COMPLETE
 
 
 def test_validate_completed_when_only_body_sections_fail(valid_spm_dict):
@@ -660,6 +662,7 @@ def test_validate_completed_when_only_body_sections_fail(valid_spm_dict):
     result = bpx_gateway.validate(broken)
     assert result.is_valid is False
     assert result.completed is True
+    assert result.reach is bpx_gateway.CheckReach.COMPLETE
     assert any(loc[:2] == ("State", "Initial conditions") for loc in _locs(result))
 
 
@@ -673,6 +676,7 @@ def test_validate_header_failure_masks_body_and_reports_incomplete(valid_spm_dic
     result = bpx_gateway.validate(broken)
     assert result.is_valid is False
     assert result.completed is False
+    assert result.reach is bpx_gateway.CheckReach.HEADER
     locs = _locs(result)
     assert ("Model",) in locs, "header abort reports a Header-relative loc"
     assert not any("Initial temperature [K]" in loc for loc in locs), (
@@ -692,6 +696,7 @@ def test_validate_parameterisation_failure_masks_state_and_reports_incomplete(
     result = bpx_gateway.validate(broken)
     assert result.is_valid is False
     assert result.completed is False
+    assert result.reach is bpx_gateway.CheckReach.PARAMETERISATION
     locs = _locs(result)
     assert any(loc[:1] == ("Cell",) for loc in locs)
     assert not any("Initial temperature [K]" in loc for loc in locs), (
@@ -709,6 +714,7 @@ def test_validate_model_type_mismatch_reports_incomplete(valid_spm_dict):
     result = bpx_gateway.validate(broken)
     assert result.is_valid is False
     assert result.completed is False
+    assert result.reach is bpx_gateway.CheckReach.PARAMETERISATION
     assert any(
         bpx_gateway._MODEL_MISMATCH_MARKER in issue.message for issue in result.issues
     )
@@ -722,3 +728,91 @@ def test_validate_raw_exception_reports_incomplete(valid_spm_dict):
     result = bpx_gateway.validate(broken)
     assert result.is_valid is False
     assert result.completed is False
+    assert result.reach is bpx_gateway.CheckReach.NOT_RUN
+
+
+def test_checking_reach_unrecognised_abort_claims_least():
+    """An abort-shaped loc from neither known stage cannot occur with the
+    pinned bpx; if an upgrade ever produces one, resolve to HEADER -- the
+    least claim a ValidationError still licenses (the Header stage always
+    runs first), never an overstatement of what was checked."""
+    errors = [{"loc": ("Mystery section",), "msg": "?"}]
+    assert bpx_gateway._checking_reach(errors) is bpx_gateway.CheckReach.HEADER
+
+
+# ---------------------------------------------------------------------------
+# The legacy v0.x seam -- is_legacy / convert_legacy route to
+# bpx._migrations (is_legacy_bpx / convert_v0_to_v1), a *private* bpx
+# module used deliberately because bpx has no public equivalent. These
+# tests pin the installed bpx's behaviour in the same spirit as
+# _MODEL_MISMATCH_MARKER: a bpx upgrade that moves the module, changes the
+# detection rule, or stops auto-converting inside parse_bpx_obj fails
+# loudly here rather than silently skewing what the app says about a file.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def legacy_v0_dict(fixtures_dir):
+    """A real BPX v0.x file (``Header.BPX`` = 0.1): no State block, the
+    temperatures still living in Parameterisation.Cell."""
+    import json
+
+    return json.loads(
+        (fixtures_dir / "nmc_pouch_cell_BPX.json").read_text("utf-8")
+    )
+
+
+def test_is_legacy_detects_real_v0_file(legacy_v0_dict):
+    assert bpx_gateway.is_legacy(legacy_v0_dict) is True
+
+
+def test_is_legacy_false_for_current_file(valid_spm_dict):
+    assert bpx_gateway.is_legacy(valid_spm_dict) is False
+
+
+def test_is_legacy_false_for_numeric_v1_version(valid_spm_dict):
+    """A float ``Header.BPX`` >= 1 is deprecated spelling, not legacy --
+    bpx coerces it and judges the file against the current schema."""
+    numeric = copy.deepcopy(valid_spm_dict)
+    numeric["Header"]["BPX"] = 1.0
+    assert bpx_gateway.is_legacy(numeric) is False
+
+
+def test_is_legacy_false_when_version_not_detectable(valid_spm_dict):
+    """A missing or malformed version field means the file is not
+    *detectably* legacy: is_legacy says False, and the fault itself is
+    validation's to report (bpx raises the same ValueError during parse --
+    see test_validate_raw_exception_reports_incomplete)."""
+    missing = copy.deepcopy(valid_spm_dict)
+    del missing["Header"]["BPX"]
+    assert bpx_gateway.is_legacy(missing) is False
+    malformed = copy.deepcopy(valid_spm_dict)
+    malformed["Header"]["BPX"] = "banana"
+    assert bpx_gateway.is_legacy(malformed) is False
+
+
+def test_validate_auto_converts_legacy_and_warns(legacy_v0_dict):
+    """bpx judges a v0.x object only after converting a copy of it: the run
+    completes against the *converted* document and the only trace is the
+    conversion warning (transparency track finding 1). Pins that
+    ``is_legacy`` and bpx's own convert-on-parse can never silently
+    diverge, and that the warning stays recognisable."""
+    result = bpx_gateway.validate(legacy_v0_dict)
+    assert result.completed is True
+    assert any(
+        "legacy BPX v0.x" in issue.message for issue in result.issues
+    ), "bpx no longer warns on legacy auto-conversion -- revisit the legacy seam"
+
+
+def test_convert_legacy_produces_what_bpx_judges(legacy_v0_dict):
+    """convert_legacy returns the v1.x repack bpx itself validates: State
+    synthesised, the input untouched, and the converted copy no longer
+    detectably legacy nor conversion-warned when validated."""
+    pristine = copy.deepcopy(legacy_v0_dict)
+    converted = bpx_gateway.convert_legacy(legacy_v0_dict)
+    assert legacy_v0_dict == pristine, "convert_legacy must not mutate its input"
+    assert "State" in converted
+    assert bpx_gateway.is_legacy(converted) is False
+    result = bpx_gateway.validate(converted)
+    assert result.completed is True
+    assert not any("legacy BPX v0.x" in issue.message for issue in result.issues)

@@ -119,6 +119,10 @@ class BPXDocument:
     tree: TreeNode
     issues: list[ValidatorDiagnostic] = field(default_factory=list)
     is_valid: bool = False
+    #: Mirrors :attr:`core.bpx_gateway.ValidationResult.reach`: how far
+    #: ``bpx``'s staged run got on this document's current content
+    #: (re-derived on every rebuild, so it is always the live answer).
+    validation_reach: bpx_gateway.CheckReach = bpx_gateway.CheckReach.COMPLETE
     #: Mirrors :attr:`core.bpx_gateway.ValidationResult.completed`: False when
     #: ``bpx`` aborted before judging the whole document, in which case a
     #: parameter without issues was never actually checked.
@@ -160,6 +164,7 @@ class BPXDocument:
             tree=tree,
             issues=result.issues,
             is_valid=result.is_valid,
+            validation_reach=result.reach,
             validation_completed=result.completed,
             _node_path_map=node_path_map,
             _parameter_path_map=parameter_path_map,

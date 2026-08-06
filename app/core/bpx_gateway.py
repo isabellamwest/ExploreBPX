@@ -2,10 +2,17 @@
 
 All coupling to BPX lives here (an anti-corruption layer). The rest of the
 application depends on this module's interface, never on ``bpx`` internals.
-Only the public ``bpx`` API is used:
+The public ``bpx`` API is used:
 
 * ``bpx.parse_bpx_obj`` for parsing/validation,
-* ``bpx.BPX.model_json_schema`` for parameter metadata.
+* ``bpx.BPX.model_json_schema`` for parameter metadata,
+
+plus one deliberate exception: ``bpx._migrations`` for legacy v0.x detection
+and conversion (see :func:`is_legacy`/:func:`convert_legacy`), because
+``bpx`` exposes no public equivalent. It is a private module, so its use is
+pinned by tests in ``tests/test_gateway.py`` -- the same treatment as
+:data:`_MODEL_MISMATCH_MARKER` -- so a ``bpx`` upgrade that moves or changes
+it fails loudly rather than silently skewing what the app says about a file.
 """
 
 from __future__ import annotations
@@ -15,10 +22,12 @@ import inspect
 import json
 import warnings
 from dataclasses import dataclass, field
+from enum import Enum
 from functools import lru_cache
 
 import bpx
 import yaml
+from bpx import _migrations as _bpx_migrations
 from pydantic import ValidationError
 
 from .validation import (
@@ -90,20 +99,51 @@ class ExpectedField:
     required: bool
 
 
+class CheckReach(Enum):
+    """How far ``bpx``'s staged validation reached before stopping.
+
+    ``bpx`` validates in stages -- Header first, then Parameterisation, then
+    the rest of the model -- and a failing stage aborts the run, leaving every
+    later section unvalidated (a bad Header masks the whole body; a bad
+    Parameterisation masks State/Validation). Each member names the last
+    stage that was actually judged, so a caller can state honestly what was
+    and was not examined (transparency track finding 4):
+
+    * ``NOT_RUN`` -- ``bpx`` died before producing any field-level judgement
+      at all; nothing was checked.
+    * ``HEADER`` -- the Header was judged; Parameterisation, State and
+      Validation were never examined.
+    * ``PARAMETERISATION`` -- Header and Parameterisation were judged; State,
+      Validation and the model-level cross-checks were never examined.
+    * ``COMPLETE`` -- the whole document was judged.
+    """
+
+    NOT_RUN = "not run"
+    HEADER = "header"
+    PARAMETERISATION = "parameterisation"
+    COMPLETE = "complete"
+
+
 @dataclass
 class ValidationResult:
     """Outcome of validating a raw BPX dictionary."""
 
     is_valid: bool
     issues: list[ValidatorDiagnostic] = field(default_factory=list)
-    #: False when ``bpx`` aborted before judging the whole document. ``bpx``
-    #: validates in stages -- Header first, then Parameterisation, then the
-    #: rest of the model -- and a failing stage aborts the run, leaving every
-    #: later section unvalidated (a bad Header masks the whole body; a bad
-    #: Parameterisation masks State/Validation). When False, a parameter
-    #: without issues has *not* been checked: absence of an issue is not a
-    #: clean bill of health, and callers must not present it as one.
-    completed: bool = True
+    #: How far the staged run reached (see :class:`CheckReach`). Anything
+    #: short of ``COMPLETE`` means a parameter without issues has *not*
+    #: been checked: absence of an issue is not a clean bill of health, and
+    #: callers must not present it as one.
+    reach: CheckReach = CheckReach.COMPLETE
+
+    @property
+    def completed(self) -> bool:
+        """False when ``bpx`` aborted before judging the whole document.
+
+        Derived from :attr:`reach` (its boolean shadow), so the two can
+        never disagree about whether the run finished.
+        """
+        return self.reach is CheckReach.COMPLETE
 
 
 #: The extensions :func:`load_raw` reads as YAML. Everything else is read as
@@ -127,17 +167,27 @@ def format_for_filename(filename: str) -> str:
     return "yaml" if filename.lower().endswith(YAML_EXTENSIONS) else "json"
 
 
+def decode_source(data: bytes | str) -> str:
+    """Decode raw file content into text, tolerating a leading UTF-8 BOM.
+
+    utf-8-sig strips the BOM (common in files saved by Windows editors) and
+    is a no-op otherwise. json.loads rejects a BOM outright, while
+    yaml.safe_load tolerates one -- one decode rule keeps the two supported
+    formats consistent. The single way source bytes become text:
+    :func:`load_raw` parses through it and ``core.load_record`` re-reads the
+    same text for the YAML-comment fact, so the two can never read one file
+    differently.
+    """
+    return data.decode("utf-8-sig") if isinstance(data, (bytes, bytearray)) else data
+
+
 def load_raw(data: bytes | str, filename: str = "") -> tuple[dict, str]:
     """Decode raw JSON/YAML bytes into a ``dict`` and report the format.
 
     The format is inferred from the file extension and defaults to JSON.
     Raises :class:`LoadError` if the content is not a JSON/YAML object.
     """
-    # utf-8-sig strips a leading UTF-8 BOM (common in files saved by Windows
-    # editors) and is a no-op otherwise. json.loads rejects a BOM outright,
-    # while yaml.safe_load tolerates one -- decoding here keeps the two
-    # supported formats consistent.
-    text = data.decode("utf-8-sig") if isinstance(data, (bytes, bytearray)) else data
+    text = decode_source(data)
     fmt = format_for_filename(filename)
     try:
         parsed = yaml.safe_load(text) if fmt == "yaml" else json.loads(text)
@@ -146,6 +196,39 @@ def load_raw(data: bytes | str, filename: str = "") -> tuple[dict, str]:
     if not isinstance(parsed, dict):
         raise LoadError("BPX root must be a JSON/YAML object (dictionary).")
     return parsed, fmt
+
+
+def is_legacy(raw: dict) -> bool:
+    """True when *raw* is detectably a legacy BPX v0.x object.
+
+    Exactly the rule ``bpx`` itself applies before auto-converting inside
+    ``parse_bpx_obj`` (``bpx._migrations.is_legacy_bpx``: ``Header.BPX``
+    major version < 1) -- never a hand-rolled version check, so this
+    detection and :func:`validate`'s conversion behaviour cannot diverge.
+
+    A missing or malformed version field returns False: the file is not
+    *detectably* legacy, and the fault itself is reported by validation
+    (``bpx`` raises the same ``ValueError`` during parse, surfaced as a
+    :class:`~core.validation.BPXExceptionDiagnostic` with
+    ``reach == NOT_RUN``), so no claim goes unstated.
+    """
+    try:
+        return bool(_bpx_migrations.is_legacy_bpx(raw))
+    except ValueError:
+        return False
+
+
+def convert_legacy(raw: dict) -> dict:
+    """A v1.x repack of legacy v0.x object *raw* (*raw* is not mutated).
+
+    Exactly the conversion ``bpx`` applies internally before judging a
+    legacy object (``bpx._migrations.convert_v0_to_v1``), exposed so the
+    app can offer a converted *copy* explicitly (decision D3) instead of
+    hiding the conversion inside validation. Only meaningful for a dict
+    :func:`is_legacy` accepted; ``bpx`` documents the result as
+    approximate -- State synthesised, cross-version semantics uncorrected.
+    """
+    return _bpx_migrations.convert_v0_to_v1(raw)
 
 
 #: bpx's model-type dispatch abort (``schema.py`` ``_dispatch_param_subclasses``
@@ -157,28 +240,49 @@ def load_raw(data: bytes | str, filename: str = "") -> tuple[dict, str]:
 _MODEL_MISMATCH_MARKER = "does not correspond with the model type"
 
 
-def _validation_completed(errors: list[dict]) -> bool:
-    """Whether ``bpx`` ran validation to completion, judged from the shape of
-    a ``ValidationError``'s error list.
+def _checking_reach(errors: list[dict]) -> CheckReach:
+    """How far ``bpx`` ran, judged from the shape of a ``ValidationError``'s
+    error list.
 
     An abort is visible in the report itself: errors escaping a staged
     validator carry locs *relative to the stage that raised* (``("Model",)``
     from Header, ``("Cell", ...)`` from Parameterisation), whereas a completed
     run only reports locs anchored at a top-level BPX property (``("State",
-    ...)``) or model-level checks at ``()``. The top-level property names come
-    from the live schema, not a hand-kept list. The one abort that also
-    reports ``()`` -- the model-type dispatch mismatch -- is recognised by
-    its message (see :data:`_MODEL_MISMATCH_MARKER`).
+    ...)``) or model-level checks at ``()``. Which stage raised follows from
+    the same shape: an abort loc's head is a property of that stage's own
+    schema definition (Header's, or one of the Parameterisation family's).
+    Every property set comes from the live schema, not a hand-kept list, and
+    the two stages share no property name with each other or with the top
+    level. The one abort that instead reports ``()`` -- the model-type
+    dispatch mismatch -- is recognised by its message (see
+    :data:`_MODEL_MISMATCH_MARKER`) and means the Parameterisation was
+    judged against the declared model.
+
+    Every abort-shaped loc that is not Parameterisation-family resolves to
+    ``HEADER``: a Header-stage loc by attribution, and any shape the pinned
+    ``bpx`` cannot produce (Header and Parameterisation are its only staged
+    validators -- asserted in ``tests/test_gateway.py``) by least claim --
+    any ``ValidationError`` means the Header stage ran first, and claiming
+    less checking than happened is the safe direction under the honesty
+    charter.
     """
+    defs = _schema().get("$defs", {})
     top_level = set(_schema().get("properties", {}))
+    parameterisation_fields: set[str] = set()
+    for name in _PARAMETERISATION_FAMILY:
+        parameterisation_fields |= set(defs.get(name, {}).get("properties", {}))
     for error in errors:
         loc = tuple(error.get("loc") or ())
         if not loc:
             if _MODEL_MISMATCH_MARKER in str(error.get("msg", "")):
-                return False
-        elif loc[0] not in top_level:
-            return False
-    return True
+                return CheckReach.PARAMETERISATION
+            continue
+        if loc[0] in top_level:
+            continue
+        if loc[0] in parameterisation_fields:
+            return CheckReach.PARAMETERISATION
+        return CheckReach.HEADER
+    return CheckReach.COMPLETE
 
 
 def validate(raw: dict, v_tol: float = 0.001) -> ValidationResult:
@@ -189,7 +293,7 @@ def validate(raw: dict, v_tol: float = 0.001) -> ValidationResult:
     still be explored.
     """
     issues: list[ValidatorDiagnostic] = []
-    completed = True
+    reach = CheckReach.COMPLETE
     # ``parse_bpx_obj`` mutates the dict it is given (it replaces sections with
     # parsed models), so validate against a copy to keep ``raw`` pristine.
     candidate = copy.deepcopy(raw)
@@ -202,15 +306,15 @@ def validate(raw: dict, v_tol: float = 0.001) -> ValidationResult:
             errors = exc.errors()
             issues.extend(issues_from_pydantic(errors))
             is_valid = False
-            completed = _validation_completed(errors)
+            reach = _checking_reach(errors)
         except Exception as exc:  # noqa: BLE001 - BPXSchemaError, ValueError, etc.
             # A raw exception means ``bpx`` died before producing any
             # field-level judgement at all -- nothing was validated.
             issues.append(BPXExceptionDiagnostic(raw_exception=exc))
             is_valid = False
-            completed = False
+            reach = CheckReach.NOT_RUN
     issues.extend(warnings_as_diagnostics(caught))
-    return ValidationResult(is_valid=is_valid, issues=issues, completed=completed)
+    return ValidationResult(is_valid=is_valid, issues=issues, reach=reach)
 
 
 @lru_cache(maxsize=1)

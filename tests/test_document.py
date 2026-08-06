@@ -12,6 +12,25 @@ def test_valid_document(valid_spm_bytes):
     assert document.find(("Parameterisation", "Cell")) is not None
 
 
+def test_document_mirrors_validation_reach(valid_spm_dict):
+    """``validation_reach`` mirrors the gateway's staged answer on every
+    build, and ``validation_completed`` stays its boolean shadow."""
+    import copy
+    import json
+
+    from core.bpx_gateway import CheckReach
+
+    complete = BPXDocument.from_raw(valid_spm_dict, filename="a.json", fmt="json")
+    assert complete.validation_reach is CheckReach.COMPLETE
+    assert complete.validation_completed is True
+
+    broken = copy.deepcopy(valid_spm_dict)
+    broken["Header"]["Model"] = "XFN"
+    aborted = BPXDocument.from_bytes(json.dumps(broken).encode(), "a.json")
+    assert aborted.validation_reach is CheckReach.HEADER
+    assert aborted.validation_completed is False
+
+
 def test_model_level_error_attaches_to_the_named_parameter(valid_spm_dict):
     """A bpx model-level check (material_check) reports loc == (), but names the
     parameter in its message. The error must land on that parameter -- so its
