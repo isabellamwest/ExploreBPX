@@ -1,9 +1,9 @@
 """``ReferenceLibraryDialog``: browse the bundled PyBaMM reference sets and
-choose one to dock as the workspace Reference.
+choose one to pin as a reference.
 
-A pure chooser: it holds no app state and never docks anything itself --
+A pure chooser: it holds no app state and never pins anything itself --
 accepting simply reports :meth:`selected_set_id` and the caller routes it through
-``AppState.open_reference_set``. The sets carry no ``Validation`` runs
+``AppState.pin_reference_set``. The sets carry no ``Validation`` runs
 (PyBaMM parameter sets hold no cycling data), which is why this exists
 apart from the run-comparison ``DatabaseExamplesDialog``; see the
 "Bundled PyBaMM parameter sets" entry in ``docs/future.md``.
@@ -14,13 +14,13 @@ rule: never circled tick/cross badges anywhere in the app), beside a detail
 card reusing the reference group-box chrome. The detail shows the chosen
 file's own Header fields verbatim -- Title, Model, References, Description
 (each set's conversion caveats live in its Description, and they must be
-readable *before* docking) -- plus section/parameter counts derived through
-:class:`core.document.BPXDocument`, the same derivation the docked tile
+readable *before* pinning) -- plus section/parameter counts derived through
+:class:`core.document.BPXDocument`, the same derivation the pinned row
 itself uses, and ``core.reference_library.PROVENANCE`` in the footer: these
 are derived artifacts under someone else's licence, so origin and citation
 belong on screen rather than in a ``NOTICE.md`` no packaged user can open.
 Chen2020 (the curated flagship, always first) is pre-selected
-so the detail pane is never empty and the dock button never needs a
+so the detail pane is never empty and the pin button never needs a
 disabled placeholder state. A future second source (LiionDB, ...) becomes
 another picker group in this same dialog.
 """
@@ -39,6 +39,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.document import BPXDocument
+from state.app_state import MAX_PINNED_REFERENCES
 from core.reference_library import (
     PROVENANCE,
     ReferenceSet,
@@ -206,12 +207,19 @@ class ReferenceLibraryDialog(QDialog):
 
     def _build_footer(self) -> QHBoxLayout:
         footer = QHBoxLayout()
-        hint = QLabel("Docks as the read-only Reference · replaces any docked reference")
+        # Pin language, and the truth about what pinning does: it *appends*,
+        # up to MAX_PINNED_REFERENCES. This footer still promised the
+        # single-slot behaviour ("replaces any docked reference") that the
+        # multi-reference track retired, which is the one thing a hint must
+        # never do.
+        hint = QLabel(
+            f"Pins as a read-only reference · up to {MAX_PINNED_REFERENCES} at once"
+        )
         hint.setObjectName("Hint")
         footer.addWidget(hint)
         footer.addStretch(1)
         buttons = QDialogButtonBox()
-        self._dock_button = buttons.addButton("Dock as reference", QDialogButtonBox.AcceptRole)
+        self._dock_button = buttons.addButton("Pin as reference", QDialogButtonBox.AcceptRole)
         self._dock_button.setObjectName("ReferenceLibraryDockButton")
         self._dock_button.setDefault(True)
         buttons.addButton(QDialogButtonBox.Cancel)
