@@ -295,3 +295,35 @@ def test_a_blocked_draft_holds_the_badge_instead_of_previewing_its_value(
     panel._validate_draft()
 
     assert card._badge.text() == "Valid"         # held, not re-validated
+
+
+def test_empty_state_names_the_section_when_only_a_section_is_selected(qtbot, spm_workfile):
+    """Selecting a section *is* selecting an object, so the generic prompt
+    contradicted what the user had just done. The empty state names the
+    section and asks for the one thing actually missing."""
+    from PySide6.QtWidgets import QLabel
+
+    state = AppState()
+    state.open(spm_workfile)
+    state.active.select(_CAPACITY[:-1])
+
+    panel = InspectorPanel(state)
+    qtbot.addWidget(panel)
+    panel.show_placeholder()
+
+    label = panel._content.findChild(QLabel, "InspectorPlaceholder")
+    assert label.text() == "Select a parameter from Cell to inspect + edit it."
+
+
+def test_empty_state_stays_generic_with_nothing_selected(qtbot, spm_workfile):
+    from PySide6.QtWidgets import QLabel
+
+    state = AppState()
+    state.open(spm_workfile)
+
+    panel = InspectorPanel(state)
+    qtbot.addWidget(panel)
+    panel.show_placeholder()
+
+    label = panel._content.findChild(QLabel, "InspectorPlaceholder")
+    assert label.text().startswith("Select an object")
