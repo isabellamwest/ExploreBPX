@@ -215,6 +215,21 @@ Design rules 1 and 2. `DocumentIdentity` gains `description` and `references`. C
 discipline applies to the editable rows: populate before connecting change signals, clear
 `_touched` after `reset()`, or a bare Enter commits something nobody typed.
 
+**Wireframes signed (Bella, 2026-08-06):**
+(internal design archive)
+- **Record: concept B, "identity then the plaque"** — Title/Description/Citation editable
+up top, immutable file facts in a quieter full-bleed band below (Model · Read as ·
+Checked · Contents · From · Status). Model absorbs the old "BPX version" row
+("DFN · BPX 1.1.0"); the reference's old "Validity" row is absorbed into Checked
+(reach first, then the D7 verdict words). Empty editable rows state their absence in
+ghost text ("Add a citation…").
+- **Stream: S1, the stream's own fold-header grammar** — the group is exempt from the
+chips, foldable but never hidden, absent when nothing is notable, muted marks (never
+amber: these lines are not counted diagnostics).
+- **Label rule: "This file" is banned everywhere, labels and prose alike.** The stream
+group header is the file's own name ("nmc_pouch.yaml · 2 notes"); sentences name the
+file too. D2's "This file group" wording below is superseded by this rule.
+
 ### Phase 5 — the three interventions
 Legacy open prompt, stale-on-disk Save block, YAML comment confirmation. All three stand
 between a person and their work, so each gets its own wireframe pass and its exact words
