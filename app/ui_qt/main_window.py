@@ -66,6 +66,7 @@ from .style import STYLESHEET
 from .toast import Toast
 from .tree_panel import TreePanel
 from .diagnostics_panel import DiagnosticsPanel
+from .file_facts import file_facts
 from .workspace_panel import AT_CAP_MESSAGE, WorkspacePanel
 
 _NO_DOCUMENT_TEXT = "No document"
@@ -1477,7 +1478,8 @@ class MainWindow(QMainWindow):
         is deliberately not used for any of them -- see
         ``core.completion.partition_issues``.
         """
-        document = self._state.active.document if self._state.active else None
+        session = self._state.active
+        document = session.document if session is not None else None
         # One derivation point, computed before anything renders: the tree's
         # dot and the parameter list's dot both carry *page-visible* truth,
         # so the partition must exist before set_root paints.
@@ -1503,7 +1505,17 @@ class MainWindow(QMainWindow):
         )
 
         buckets = page_buckets.bucket_page_content(raw, model, partition, tasks) if document is not None else None
-        self._diagnostics.refresh(buckets, partition, model)
+        # The diagnostics stream's own file-facts group (S1) -- the same
+        # load-time facts the Workspace record states in its own words,
+        # restated here from the same ``session.load_record``/``document.
+        # validation_reach``. Empty with no document, so no group renders.
+        filename = self._fallback_filename(session) if document is not None else ""
+        facts = (
+            file_facts(filename, session.load_record, document.validation_reach, document.identity.bpx_version)
+            if document is not None
+            else ()
+        )
+        self._diagnostics.refresh(buckets, partition, model, filename, facts)
         self._search.index_document(document)
         errors = partition.error_count if partition is not None else 0
         warnings = partition.warning_count if partition is not None else 0

@@ -18,6 +18,17 @@ Layout:
   chips (errors, warnings, outstanding), counts from ``PageBuckets``
   totals, plus a "Collapse all"/"Expand all" text affordance at the right
   end once two or more sections render (D15).
+* A **file-facts group** (S1, transparency track Phase 4 --
+  ``PLAN-transparency.md``) ahead of every bucket: the stream's own
+  statement of the load-time facts ``core.load_record.LoadRecord``/
+  ``BPXDocument.validation_reach`` already carry (a legacy v0.x
+  conversion, an aborted checking run, YAML comments a save would
+  destroy) -- see :mod:`ui_qt.file_facts` for the facts themselves. One
+  quiet, muted-dot row per fact under a fold header exactly like a
+  section bucket's own (foldable, in Collapse all/Expand all, never
+  dismissible), exempt from the three chips (computed outside the filter
+  path, like the clear line). Renders only while at least one fact exists
+  -- the everyday clean file adds nothing.
 * A **stream** (``_StreamView``, one ``QListWidget``) below it: only
   sections that have something in them render (D3) -- a bucket with zero
   errors/warnings/outstanding is *clear* and is named instead on one
@@ -90,6 +101,7 @@ from core.page_buckets import (
 from core.validation import Severity, merge_union_pair
 
 from . import icons, parameter_row, style, typography
+from .file_facts import FileFact
 from .parameter_row import ParameterRowDelegate
 
 _MSG_NO_DOCUMENT = "No document open"
@@ -112,6 +124,12 @@ _ACTION_GO_TO = "Go to ›"
 _ACTION_ADD_SECTION = "+ Add section"
 _ACTION_CHOOSE = "Choose…"
 
+#: The file-facts group's sentinel fold-state path (S1) -- unlike
+#: :data:`DOCUMENT_BUCKET_PATH` (``()``) or a real section path (schema
+#: property names), this literal token can never collide with one, so it
+#: shares :class:`_StreamView`'s one ``_collapsed`` set safely.
+_FILE_FACTS_PATH: tuple[str, ...] = ("__file_facts__",)
+
 #: Task-row glyphs: a hollow circle for "nothing committed yet"
 #: (MISSING_FIELD/MISSING_SECTION/DECLARE_MODEL), a half-filled circle for
 #: "committed, but null" (NULL_FIELD) -- the same missing/added-no-value
@@ -129,7 +147,9 @@ _GLYPH_NULL = "◐"
 _NAV_PATH_ROLE = 256
 _KIND_ROLE = Qt.UserRole + 300  # issue|task|message|subhead|fold_header|clear_summary|clear_row|all_clear
 _TASK_ROLE = Qt.UserRole + 301
-#: SectionBucket -- "fold_header" rows (the bucket that header is for) and
+#: :class:`_FoldHeader` for "fold_header" rows (the path/label/suffix that
+#: header is for -- a section bucket's own header and the file-facts
+#: group's own header share this one shape) and ``SectionBucket`` for
 #: "clear_row" rows (the clear bucket that row names, so an absent one can
 #: still be painted italic from its own real font; see
 #: :meth:`_DiagnosticsRowDelegate._paint_clear_row`).
@@ -435,20 +455,31 @@ def _section_header_suffix(bucket: SectionBucket) -> str:
     return " · ".join(parts)
 
 
-def _add_fold_header_row(list_widget: QListWidget, bucket: SectionBucket, collapsed: bool) -> None:
-    """One foldable header per rendered bucket: chevron + bold label + the
-    muted words-only suffix (:func:`_section_header_suffix`), painted as a
-    shaded band by :class:`_DiagnosticsRowDelegate`. The plain text below
-    already carries the suffix (unlike the old rail/fold-header badges,
-    which were paint-only) -- ``diagnostics_stream_headers()`` reads it
-    directly."""
+@dataclass(frozen=True)
+class _FoldHeader:
+    """One banded fold-header row's path/label/suffix -- generalised off
+    ``SectionBucket`` so the file-facts group (S1) can reuse the very same
+    header machinery a section bucket does, keyed by its own sentinel path
+    (:data:`_FILE_FACTS_PATH`) rather than a faked-up bucket. *path* is also
+    the fold-state key stored in :attr:`_StreamView._collapsed`."""
+
+    path: tuple[str, ...]
+    label: str
+    suffix: str
+
+
+def _add_fold_header_row(list_widget: QListWidget, header: _FoldHeader, collapsed: bool) -> None:
+    """One foldable header row: chevron + bold label + the muted words-only
+    suffix, painted as a shaded band by :class:`_DiagnosticsRowDelegate`.
+    The plain text below already carries the suffix (unlike the old
+    rail/fold-header badges, which were paint-only) --
+    ``diagnostics_stream_headers()`` reads it directly."""
     chevron = "▸" if collapsed else "▾"
-    suffix = _section_header_suffix(bucket)
-    text = f"{chevron} {bucket.label}" + (f"  {suffix}" if suffix else "")
+    text = f"{chevron} {header.label}" + (f"  {header.suffix}" if header.suffix else "")
     item = QListWidgetItem(text)
     item.setFlags(Qt.ItemIsEnabled)  # visible + clickable, never selectable
     item.setData(_KIND_ROLE, "fold_header")
-    item.setData(_FOLD_BUCKET_ROLE, bucket)
+    item.setData(_FOLD_BUCKET_ROLE, header)
     item.setData(_FOLD_COLLAPSED_ROLE, collapsed)
     list_widget.addItem(item)
 
@@ -512,6 +543,63 @@ def _add_clear_row(list_widget: QListWidget, bucket: SectionBucket) -> None:
     list_widget.addItem(item)
 
 
+# ---------------------------------------------------------------------------
+# The file-facts group (S1) -- ahead of every bucket, its own fold header
+# (:func:`_add_fold_header_row`, the same machinery a section bucket uses)
+# plus one quiet row per fact. Like the clear line/all-clear row, this is
+# computed straight from unfiltered truth -- the three chips never touch it.
+# ---------------------------------------------------------------------------
+
+
+def _file_facts_suffix(count: int) -> str:
+    return f"{count} note" if count == 1 else f"{count} notes"
+
+
+def _file_fact_html(fact: FileFact) -> str:
+    """One fact row's rich-text fragment: a muted filled dot (never amber --
+    these are structural facts, not counted diagnostics), a bold headline,
+    a muted META detail line beneath -- the same glyph-then-two-line shape
+    :func:`_task_row_html` already uses for a task row's own ring/half mark."""
+    dot_img = icons.html_img(icons.DOT, color=style.MUTED, size=parameter_row.MARK_BOX)
+    headline = parameter_row.compose_row_html(fact.headline, [], name_color=style.DEFAULT_TEXT)
+    detail = (
+        f'<span style="color:{style.MUTED}; {typography.size_qss(typography.META)}">'
+        f"{_html.escape(fact.sub)}</span>"
+    )
+    return f"{dot_img}  {headline}<br>{detail}"
+
+
+def _add_file_fact_row(list_widget: QListWidget, fact: FileFact) -> None:
+    """One quiet, non-selectable, non-activatable file-facts row -- no
+    severity, no trailing action, no badge (stream rule D5), the same
+    plain-text-plus-``HTML_ROLE`` idiom :func:`_add_clear_row` uses."""
+    item = QListWidgetItem(f"{fact.headline}\n{fact.sub}")
+    item.setFlags(Qt.ItemIsEnabled)  # visible, never selectable/activatable
+    item.setData(_KIND_ROLE, "file_fact")
+    item.setData(parameter_row.HTML_ROLE, _file_fact_html(fact))
+    list_widget.addItem(item)
+
+
+def _add_file_facts_group(
+    list_widget: QListWidget, filename: str, facts: tuple[FileFact, ...], *, collapsed: bool
+) -> bool:
+    """Build the file-facts group's fold header + rows and report whether
+    anything rendered. Renders only while *facts* is non-empty (D3's
+    "nothing to show, say nothing" rule extended to this group) -- an
+    everyday clean file adds nothing to the page. Folding hides the rows
+    only: the header, and the fact of how many notes there are, never
+    disappears -- there is no separate "dismiss" affordance."""
+    if not facts:
+        return False
+    header = _FoldHeader(_FILE_FACTS_PATH, filename, _file_facts_suffix(len(facts)))
+    _add_fold_header_row(list_widget, header, collapsed)
+    if collapsed:
+        return True
+    for fact in facts:
+        _add_file_fact_row(list_widget, fact)
+    return True
+
+
 def _add_all_clear_row(list_widget: QListWidget, total_buckets: int, *, model: str | None) -> None:
     """D9's pinned, non-activatable reassurance for a genuinely clean
     document: the shared all-clear glyph+wording (:func:`style.all_clear`)
@@ -561,7 +649,8 @@ def _add_section(
     if not visible_issues and not required_rows and not optional_rows:
         return False
 
-    _add_fold_header_row(list_widget, bucket, collapsed)
+    header = _FoldHeader(bucket.path, bucket.label, _section_header_suffix(bucket))
+    _add_fold_header_row(list_widget, header, collapsed)
     if collapsed:
         return True
 
@@ -657,11 +746,11 @@ class _DiagnosticsRowDelegate(ParameterRowDelegate):
         painter.restore()
 
     def _paint_fold_header(self, painter, option, index) -> None:
-        bucket: SectionBucket = index.data(_FOLD_BUCKET_ROLE)
+        header: _FoldHeader = index.data(_FOLD_BUCKET_ROLE)
         collapsed = bool(index.data(_FOLD_COLLAPSED_ROLE))
         chevron = "▸" if collapsed else "▾"
-        label_text = f"{chevron}  {bucket.label}"
-        suffix = _section_header_suffix(bucket)
+        label_text = f"{chevron}  {header.label}"
+        suffix = header.suffix
 
         painter.save()
         painter.fillRect(option.rect, QColor(style.RAIL_BG))
@@ -752,6 +841,9 @@ class _StreamView(QWidget):
         self._last_partition: PartitionedIssues | None = None
         self._last_model: str | None = None
         self._last_filters = _FilterState()
+        self._last_filename = ""
+        self._last_facts: tuple[FileFact, ...] = ()
+        self._file_facts_rendered = False
 
     def reset_fold_state(self) -> None:
         """Per-section folds and the clear line's own expanded flag -- both
@@ -765,15 +857,29 @@ class _StreamView(QWidget):
         partition: PartitionedIssues | None,
         model: str | None,
         filters: _FilterState,
+        filename: str = "",
+        facts: tuple[FileFact, ...] = (),
     ) -> None:
         self._last_buckets = buckets
         self._last_partition = partition
         self._last_model = model
         self._last_filters = filters
+        self._last_filename = filename
+        self._last_facts = facts
         self._list.clear()
 
-        clear_buckets: list[SectionBucket] = []
+        # Tracked separately from ``_rendered_section_paths`` -- D15's own
+        # "fewer than two rendered SECTIONS" gate (:meth:`collapse_all_label`)
+        # stays section-only, so a lone facts group does not conjure a
+        # "Collapse all" affordance that would only ever fold that one
+        # always-present group. :meth:`toggle_all_folds` still includes it
+        # once the affordance is genuinely shown (S1: "include it").
+        self._file_facts_rendered = _add_file_facts_group(
+            self._list, filename, facts, collapsed=_FILE_FACTS_PATH in self._collapsed
+        )
+
         rendered_paths: list[tuple[str, ...]] = []
+        clear_buckets: list[SectionBucket] = []
         for bucket in buckets.buckets:
             if _bucket_is_clear(bucket):
                 clear_buckets.append(bucket)
@@ -808,13 +914,22 @@ class _StreamView(QWidget):
         """Fold every currently-rendered section if any is expanded, else
         unfold them all -- one click regardless of how mixed the current
         fold state is. The caller (:class:`DiagnosticsPanel`) re-renders
-        afterwards; this only updates the fold set itself."""
+        afterwards; this only updates the fold set itself.
+
+        Whether *any* is expanded, and whether there is anything to do at
+        all, is judged from rendered sections alone (unchanged, D15) -- the
+        file-facts group never by itself unlocks or drives this affordance.
+        Once the affordance genuinely acts, though, its own path joins the
+        targets (S1: "include it in Collapse all/Expand all")."""
         if not self._rendered_section_paths:
             return
+        targets = set(self._rendered_section_paths)
+        if self._file_facts_rendered:
+            targets.add(_FILE_FACTS_PATH)
         if any(path not in self._collapsed for path in self._rendered_section_paths):
-            self._collapsed.update(self._rendered_section_paths)
+            self._collapsed.update(targets)
         else:
-            self._collapsed.difference_update(self._rendered_section_paths)
+            self._collapsed.difference_update(targets)
 
     def _on_activated(self, item: QListWidgetItem) -> None:
         kind = item.data(_KIND_ROLE)
@@ -826,14 +941,21 @@ class _StreamView(QWidget):
     def _on_clicked(self, item: QListWidgetItem) -> None:
         kind = item.data(_KIND_ROLE)
         if kind == "fold_header":
-            bucket: SectionBucket = item.data(_FOLD_BUCKET_ROLE)
-            self._collapsed.symmetric_difference_update({bucket.path})
+            header: _FoldHeader = item.data(_FOLD_BUCKET_ROLE)
+            self._collapsed.symmetric_difference_update({header.path})
         elif kind == "clear_summary":
             self._clear_expanded = not self._clear_expanded
         else:
             return
         if self._last_buckets is not None:
-            self.render(self._last_buckets, self._last_partition, self._last_model, self._last_filters)
+            self.render(
+                self._last_buckets,
+                self._last_partition,
+                self._last_model,
+                self._last_filters,
+                self._last_filename,
+                self._last_facts,
+            )
         if kind == "fold_header":
             self.folds_changed.emit()
 
@@ -1106,13 +1228,20 @@ class DiagnosticsPanel(QWidget):
         self._buckets: PageBuckets | None = None
         self._partition: PartitionedIssues | None = None
         self._model: str | None = None
+        self._filename = ""
+        self._facts: tuple[FileFact, ...] = ()
 
     def reset_view_state(self) -> None:
         self._stream.reset_fold_state()
         self._strip.reset_filters()
 
     def refresh(
-        self, buckets: PageBuckets | None, partition: PartitionedIssues | None, model: str | None
+        self,
+        buckets: PageBuckets | None,
+        partition: PartitionedIssues | None,
+        model: str | None,
+        filename: str = "",
+        facts: tuple[FileFact, ...] = (),
     ) -> None:
         """Rebuild the strip and stream from one derivation point's output.
 
@@ -1122,11 +1251,17 @@ class DiagnosticsPanel(QWidget):
         *partition* is passed through only for its ``absorbed_by_task``
         lookup (secondary text); *model* only for the Partial
         notice (see :data:`_MSG_PARTIAL_NO_TARGET`) -- every grouping/count
-        this panel renders otherwise comes from *buckets* alone.
+        this panel renders otherwise comes from *buckets* alone. *filename*/
+        *facts* feed the file-facts group (S1, :mod:`ui_qt.file_facts`) --
+        both default empty so every existing caller that never mentions them
+        (e.g. the keyboard-navigation fixture) renders no such group, exactly
+        the pre-S1 behaviour.
         """
         self._buckets = buckets
         self._partition = partition
         self._model = model
+        self._filename = filename
+        self._facts = facts
         if buckets is None:
             self._placeholder.setText(_MSG_NO_DOCUMENT)
             self._stack.setCurrentIndex(1)
@@ -1158,5 +1293,7 @@ class DiagnosticsPanel(QWidget):
         if self._buckets is None:
             return
         filters = self._strip.filter_state()
-        self._stream.render(self._buckets, self._partition, self._model, filters)
+        self._stream.render(
+            self._buckets, self._partition, self._model, filters, self._filename, self._facts
+        )
         self._strip.set_collapse_all_label(self._stream.collapse_all_label())

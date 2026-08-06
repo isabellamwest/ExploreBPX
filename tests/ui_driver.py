@@ -230,13 +230,15 @@ class AppDriver:
         return self.activate_validation_row(self._validation_rows("fold_header")[index])
 
     def all_sections_fold_headers(self) -> list[tuple[str, bool]]:
-        """``(section_label, collapsed)`` for every stream fold header, in
-        display order."""
+        """``(section_label, collapsed)`` for every rendered SECTION bucket's
+        fold header, in display order -- the file-facts group (S1) is not a
+        section and is excluded, matching this method's own name."""
         from ui_qt import diagnostics_panel as dp
 
         return [
             (item.data(dp._FOLD_BUCKET_ROLE).label, bool(item.data(dp._FOLD_COLLAPSED_ROLE)))
             for item in self._validation_rows("fold_header")
+            if item.data(dp._FOLD_BUCKET_ROLE).path != dp._FILE_FACTS_PATH
         ]
 
     def diagnostics_fold_section(self, label: str) -> "AppDriver":
@@ -307,10 +309,24 @@ class AppDriver:
         return next((b for b in buckets.buckets if b.label == label), None)
 
     def diagnostics_stream_headers(self) -> list[str]:
-        """Every rendered section's fold-header text, chevron stripped, in
-        order -- label plus its D5 suffix (e.g. "State  1 error · 2 of 5
-        remaining")."""
+        """Every rendered fold-header's text, chevron stripped, in display
+        order -- a section bucket's own (label plus its D5 suffix, e.g.
+        "State  1 error · 2 of 5 remaining") *and*, when it renders, the
+        file-facts group's (S1) ahead of every one of them."""
         return [_strip_chevron(item.text()) for item in self._validation_rows("fold_header")]
+
+    def diagnostics_stream_section_headers(self) -> list[str]:
+        """Like :meth:`diagnostics_stream_headers`, but SECTION buckets
+        only -- the file-facts group (S1) excluded -- for assertions about
+        section-bucket rendering that predate S1 and are unaffected by
+        whether a document also happens to carry a file fact."""
+        from ui_qt import diagnostics_panel as dp
+
+        return [
+            _strip_chevron(item.text())
+            for item in self._validation_rows("fold_header")
+            if item.data(dp._FOLD_BUCKET_ROLE).path != dp._FILE_FACTS_PATH
+        ]
 
     def diagnostics_stream_issue_texts(self) -> list[str]:
         return [item.text() for item in self._validation_rows("issue")]
@@ -320,6 +336,23 @@ class AppDriver:
 
     def diagnostics_stream_subhead_texts(self) -> list[str]:
         return [item.text() for item in self._validation_rows("subhead")]
+
+    def diagnostics_file_facts_header(self) -> str | None:
+        """The file-facts group's own fold-header text (S1), chevron
+        stripped, e.g. "nmc_pouch_cell_BPX.json  1 note" -- or ``None``
+        while the group isn't rendered at all (no fact for the open
+        document)."""
+        from ui_qt import diagnostics_panel as dp
+
+        for item in self._validation_rows("fold_header"):
+            if item.data(dp._FOLD_BUCKET_ROLE).path == dp._FILE_FACTS_PATH:
+                return _strip_chevron(item.text())
+        return None
+
+    def diagnostics_file_fact_texts(self) -> list[str]:
+        """Plain text ("headline\\nsub") of every rendered file-facts row,
+        in order -- empty while the group is folded or absent."""
+        return [item.text() for item in self._validation_rows("file_fact")]
 
     def diagnostics_clear_line_text(self) -> str | None:
         """The clear line's own text, chevron stripped (e.g. "7 sections

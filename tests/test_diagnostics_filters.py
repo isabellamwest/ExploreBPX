@@ -119,7 +119,7 @@ def test_outstanding_chip_off_hides_required_and_optional_task_rows(app_driver, 
     # A filtered-empty section leaves no trace at all (amended D10): Cell/
     # Negative electrode/Positive electrode are entirely task-only, so all
     # three headers disappear too, leaving only clean Header on the clear line.
-    assert d.diagnostics_stream_headers() == []
+    assert d.diagnostics_stream_section_headers() == []
     assert d.diagnostics_clear_line_text() == "1 section clear"
     bucket = d.diagnostics_bucket("Cell")
     assert bucket.outstanding_count == 6
@@ -192,7 +192,7 @@ def test_all_chips_off_no_sections_render_but_the_clear_line_still_holds(app_dri
     d.diagnostics_toggle_chip("errors")
     d.diagnostics_toggle_chip("warnings")
 
-    assert d.diagnostics_stream_headers() == []
+    assert d.diagnostics_stream_section_headers() == []
     assert d.diagnostics_clear_line_text() == "2 sections clear"  # Header, State -- unaffected by filters
 
 
@@ -348,9 +348,10 @@ def _reconcile(d, filters):
     assert rendered_issues + suppressed_issues == total_issues
     assert rendered_tasks + suppressed_tasks == total_tasks
     # Nothing renders that PageBuckets does not contain: every rendered
-    # section header names a real, non-clear bucket.
+    # section header names a real, non-clear bucket (the file-facts group,
+    # S1, is not a bucket at all and is excluded from this check).
     bucket_labels = {b.label for b in buckets.buckets}
-    for header in d.diagnostics_stream_headers():
+    for header in d.diagnostics_stream_section_headers():
         assert any(header.startswith(label) for label in bucket_labels)
 
 
@@ -369,7 +370,7 @@ def test_reconciliation_holds_with_every_chip_off(app_driver, many_issues_path):
     d.diagnostics_toggle_chip("warnings")
     d.diagnostics_toggle_chip("outstanding")
 
-    assert d.diagnostics_stream_headers() == []  # everything suppressed
+    assert d.diagnostics_stream_section_headers() == []  # everything suppressed
     _reconcile(d, d._w._diagnostics._strip.filter_state())
 
 

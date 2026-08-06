@@ -12,8 +12,9 @@ edits -- the live answer to "how far has checking reached *now*" is
 :attr:`core.document.BPXDocument.validation_reach`, re-derived on every
 rebuild; :attr:`LoadRecord.checked` is that answer for the content as
 loaded. Phase 4 puts these facts on screen (the file record's *Read as* /
-*Checked* rows and the diagnostics stream's pinned **This file** group);
-this module deliberately knows nothing about how they are shown.
+*Checked* rows and the diagnostics stream's pinned file-facts group, headed
+by the file's own name); this module deliberately knows nothing about how
+they are shown.
 """
 
 from __future__ import annotations

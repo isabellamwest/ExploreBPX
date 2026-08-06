@@ -84,7 +84,7 @@ def test_stream_lists_only_non_clean_buckets_with_the_clear_line_naming_the_rest
     d.open(many_issues_path)
     # Cell/Negative electrode/Positive electrode carry errors; Header/State
     # are untouched -- clean buckets never get a header (D3).
-    assert d.diagnostics_stream_headers() == [
+    assert d.diagnostics_stream_section_headers() == [
         "Cell  2 errors",
         "Negative electrode  1 error",
         "Positive electrode  1 error",
@@ -131,12 +131,15 @@ def test_absent_required_section_header_reads_section_absent(app_driver, tmp_pat
 def test_document_bucket_appears_only_when_occupied(app_driver, valid_spm_path, fixtures_dir):
     d = app_driver
     d.open(valid_spm_path)
-    assert not any(header.startswith("Document") for header in d.diagnostics_stream_headers())
+    assert not any(header.startswith("Document") for header in d.diagnostics_stream_section_headers())
 
     d.open(fixtures_dir / "nmc_pouch_cell_BPX.json")
-    headers = d.diagnostics_stream_headers()
+    headers = d.diagnostics_stream_section_headers()
     assert any(header.startswith("Document") for header in headers)
-    # Document sits first, occupied buckets in document order after it.
+    # Document sits first among SECTION buckets, occupied buckets in
+    # document order after it (the file-facts group, S1, sits ahead of
+    # every bucket including Document -- covered in
+    # test_diagnostics_file_facts.py, not here).
     assert headers[0].startswith("Document")
 
 
@@ -303,7 +306,7 @@ def test_one_error_in_one_section_leaves_the_rest_clear(app_driver, tmp_path, va
     d = app_driver
     d.open(_write(tmp_path, "one_error.json", raw))
 
-    assert d.diagnostics_stream_headers() == ["Cell  1 error"]
+    assert d.diagnostics_stream_section_headers() == ["Cell  1 error"]
     total = len(d._w._diagnostics._buckets.buckets)
     assert d.diagnostics_clear_line_text() == f"{total - 1} sections clear"
 
@@ -533,14 +536,14 @@ def test_collapse_all_hidden_with_fewer_than_two_rendered_sections(app_driver, t
     d = app_driver
     d.open(_write(tmp_path, "one_section.json", raw))
 
-    assert len(d.diagnostics_stream_headers()) == 1
+    assert len(d.diagnostics_stream_section_headers()) == 1
     assert d.diagnostics_collapse_all_text() is None
 
 
 def test_collapse_all_toggles_every_rendered_section_at_once(app_driver, many_issues_path):
     d = app_driver
     d.open(many_issues_path)
-    assert len(d.diagnostics_stream_headers()) == 3
+    assert len(d.diagnostics_stream_section_headers()) == 3
     assert d.diagnostics_collapse_all_text() == "Collapse all"  # all expanded by default
 
     d.diagnostics_toggle_collapse_all()
