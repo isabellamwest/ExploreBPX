@@ -16,6 +16,7 @@ from core import bpx_gateway, command_service, editing, export
 from core.bpx_gateway import ValidationResult
 from core.commands import ChangeModel, Command, Preview, SetValue
 from core.document import BPXDocument
+from core.load_record import LoadRecord
 from core.tree_model import ParameterItem, TreeNode
 from core.validation import ValidatorDiagnostic
 
@@ -100,6 +101,12 @@ class DocumentSession:
         self._redo_stack: list[_Transition] = []
         self._saved_document: BPXDocument | None = document
         self.backing_file: Path | None = None
+        #: The load-time facts for the document this session was opened from
+        #: (``core.load_record.LoadRecord``), captured once by ``AppState``
+        #: at open/clone time. ``None`` for a document that was never loaded
+        #: from source content (a New scaffold) -- the record states what the
+        #: load did, and a scaffold had no load.
+        self.load_record: LoadRecord | None = None
 
     @property
     def dirty(self) -> bool:

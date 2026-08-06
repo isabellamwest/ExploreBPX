@@ -14,6 +14,7 @@ from pathlib import Path
 from core import reference_library
 from core.bpx_gateway import load_raw
 from core.document import BPXDocument
+from core.load_record import LoadRecord
 
 
 @dataclass(frozen=True)
@@ -48,11 +49,19 @@ class ReferenceSnapshot:
     #: record. ``None`` when the Header declares none -- shown as "-" rather
     #: than guessed.
     bpx_version: str | None = None
-    #: The curated citation for a bundled set (the catalog's own
-    #: ``references`` field). Empty for a file reference, which shows its
-    #: path instead -- a file on disk has provenance the app can point at,
-    #: where a bundled set has only its paper.
+    #: The citation shown in the record's Citation row: a bundled set's
+    #: curated catalog ``references`` field, or a file reference's own
+    #: ``Header.References`` (decision D1: the spec field surfaces as
+    #: *Citation*). Empty when neither exists -- the row states the absence.
     citation: str = ""
+    #: The file's ``Header.Description``, for the record's Description row.
+    description: str = ""
+    #: The load-time facts (``core.load_record.LoadRecord``) -- format read,
+    #: legacy detection, how far checking reached, comments, disk facts --
+    #: captured by the same rule as the main document's, so the two records
+    #: can never state the same fact differently. ``None`` never occurs for
+    #: a loaded snapshot; the default only keeps old call sites valid.
+    record: LoadRecord | None = None
 
     @classmethod
     def load(cls, path: Path) -> "ReferenceSnapshot":
@@ -62,7 +71,8 @@ class ReferenceSnapshot:
         and ``OSError`` if the file cannot be read -- the same failure modes
         as ``AppState.open``.
         """
-        raw, fmt = load_raw(path.read_bytes(), path.name)
+        data = path.read_bytes()
+        raw, fmt = load_raw(data, path.name)
         document = BPXDocument.from_raw(raw, filename=path.name, fmt=fmt)
         identity = document.identity
         return cls(
@@ -76,6 +86,9 @@ class ReferenceSnapshot:
             parameter_count=document.parameter_count,
             mtime=path.stat().st_mtime,
             bpx_version=identity.bpx_version or None,
+            citation=identity.references,
+            description=identity.description,
+            record=LoadRecord.capture(data, document, path=path),
         )
 
     @classmethod
@@ -110,4 +123,10 @@ class ReferenceSnapshot:
             set_id=set_id,
             bpx_version=identity.bpx_version or None,
             citation=ref_set.references,
+            description=identity.description,
+            # A bundled set has no source bytes and no disk facts; empty
+            # source is honest here -- the document's fmt is "json", so the
+            # comment fact is False by construction and everything else in
+            # the record comes from the document itself.
+            record=LoadRecord.capture(b"", document),
         )

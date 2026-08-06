@@ -89,12 +89,17 @@ class DocumentIdentity:
 
     Frontend-agnostic: both the top bar and the Workspace info panel read
     identity through this value object rather than the raw dict, keeping
-    knowledge of the BPX Header shape inside ``core``.
+    knowledge of the BPX Header shape inside ``core``. Carries all five
+    Header fields -- ``Description`` and ``References`` included, so the
+    file record can state what a file is (transparency track finding 6;
+    ``References`` is shown as *Citation* per decision D1).
     """
 
     title: str
     model: str
     bpx_version: str
+    description: str = ""
+    references: str = ""
 
 
 def _identity_from_raw(raw: dict) -> DocumentIdentity:
@@ -102,10 +107,14 @@ def _identity_from_raw(raw: dict) -> DocumentIdentity:
     title = header.get("Title") or ""
     model = header.get("Model") or ""
     bpx_version = header.get("BPX") or ""
+    description = header.get("Description") or ""
+    references = header.get("References") or ""
     return DocumentIdentity(
         title=str(title),
         model=str(model),
         bpx_version=str(bpx_version),
+        description=str(description),
+        references=str(references),
     )
 
 

@@ -51,6 +51,59 @@ def test_breadcrumb_object_click_clears_parameter(valid_spm_bytes):
     assert session.selected_parameter() is None
 
 
+def test_open_captures_the_load_record(spm_workfile):
+    """Opening captures the load-time facts once, from the same bytes the
+    document was built from -- the record Phase 4's file record renders."""
+    from core.bpx_gateway import CheckReach
+
+    state = AppState()
+    state.open(spm_workfile)
+    record = state.active.load_record
+    assert record is not None
+    assert record.fmt == "json"
+    assert record.checked is CheckReach.COMPLETE
+    assert record.size_bytes == spm_workfile.stat().st_size
+    assert record.mtime == spm_workfile.stat().st_mtime
+
+
+def test_new_document_has_no_load_record(valid_spm_path):
+    """A scaffold was never loaded from source content: no record, and the
+    UI states nothing about a load that did not happen."""
+    state = AppState()
+    state.new_document("SPM")
+    assert state.active.load_record is None
+
+
+def test_new_from_file_records_the_source_provenance(spm_workfile):
+    """The clone's record states where its content came from, even though
+    nothing will ever be saved there (backing_file stays None)."""
+    state = AppState()
+    state.new_from_file(spm_workfile)
+    record = state.active.load_record
+    assert record is not None
+    assert record.size_bytes == spm_workfile.stat().st_size
+    assert state.active.backing_file is None
+
+
+def test_reference_snapshot_carries_the_record_shape(spm_workfile):
+    """A pinned reference states the same facts as a main document: its
+    Header identity and its own load record."""
+    import json
+
+    from state.reference_snapshot import ReferenceSnapshot
+
+    raw = json.loads(spm_workfile.read_text("utf-8"))
+    raw["Header"]["Description"] = "Pouch cell"
+    raw["Header"]["References"] = "Chen et al 2020"
+    spm_workfile.write_text(json.dumps(raw), encoding="utf-8")
+    snapshot = ReferenceSnapshot.load(spm_workfile)
+    assert snapshot.description == "Pouch cell"
+    assert snapshot.citation == "Chen et al 2020"
+    assert snapshot.record is not None
+    assert snapshot.record.fmt == "json"
+    assert snapshot.record.size_bytes == spm_workfile.stat().st_size
+
+
 def test_opening_new_file_resets_selection(valid_spm_path):
     state = AppState()
     state.open(valid_spm_path)

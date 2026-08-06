@@ -12,6 +12,24 @@ def test_valid_document(valid_spm_bytes):
     assert document.find(("Parameterisation", "Cell")) is not None
 
 
+def test_identity_reads_description_and_references(valid_spm_dict):
+    """The record surfaces all five Header fields: Description and
+    References (shown as Citation, D1) included -- finding 6."""
+    valid_spm_dict["Header"]["Description"] = "Pouch cell"
+    valid_spm_dict["Header"]["References"] = "Chen et al 2020"
+    document = BPXDocument.from_raw(valid_spm_dict, filename="a.json", fmt="json")
+    assert document.identity.description == "Pouch cell"
+    assert document.identity.references == "Chen et al 2020"
+
+
+def test_identity_missing_description_and_references_are_empty(valid_spm_dict):
+    valid_spm_dict["Header"].pop("Description", None)
+    valid_spm_dict["Header"].pop("References", None)
+    document = BPXDocument.from_raw(valid_spm_dict, filename="a.json", fmt="json")
+    assert document.identity.description == ""
+    assert document.identity.references == ""
+
+
 def test_document_mirrors_validation_reach(valid_spm_dict):
     """``validation_reach`` mirrors the gateway's staged answer on every
     build, and ``validation_completed`` stays its boolean shadow."""

@@ -45,6 +45,13 @@ def test_from_library_fields_mirror_the_catalog_and_the_document():
     assert snapshot.error_count == 0
     assert snapshot.section_count > 0
     assert snapshot.parameter_count > 0
+    # The one record shape: a bundled set carries a load record too -- no
+    # disk facts (nothing backs it on disk) and never a comment fact.
+    assert snapshot.record is not None
+    assert snapshot.record.fmt == "json"
+    assert snapshot.record.has_yaml_comments is False
+    assert snapshot.record.size_bytes is None
+    assert snapshot.record.mtime is None
 
 
 def test_from_library_rejects_an_unknown_id():

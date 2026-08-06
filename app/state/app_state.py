@@ -12,6 +12,7 @@ from pathlib import Path
 
 from core import document_factory
 from core.document import BPXDocument
+from core.load_record import LoadRecord
 from state.document_session import DocumentSession
 from state.reference_snapshot import ReferenceSnapshot
 
@@ -88,9 +89,14 @@ class AppState:
         Raises ``core.bpx_gateway.LoadError`` for unparseable files and
         ``OSError`` if the file cannot be read.
         """
-        document = BPXDocument.from_bytes(path.read_bytes(), path.name)
+        data = path.read_bytes()
+        document = BPXDocument.from_bytes(data, path.name)
         session = DocumentSession(document)
         session.backing_file = path
+        # Captured from the same bytes the document was built from, so the
+        # record states what this load actually did (format, legacy, reach,
+        # comments, disk facts) -- never a second look at the file.
+        session.load_record = LoadRecord.capture(data, document, path=path)
         self.active = session
 
     def new_document(self, model: str) -> None:
@@ -130,7 +136,8 @@ class AppState:
         ``ALREADY_REFERENCE`` and is left as-is.
         """
         clone_name = f"{path.stem} (copy){path.suffix}"
-        document = BPXDocument.from_bytes(path.read_bytes(), clone_name)
+        data = path.read_bytes()
+        document = BPXDocument.from_bytes(data, clone_name)
         existing = self._pinned_at(path)
         outcome = PinReferenceOutcome.ADDED
         reference: ReferenceSnapshot | None = None
@@ -142,6 +149,9 @@ class AppState:
             reference = ReferenceSnapshot.load(path)
         session = DocumentSession(document)
         session.dirty = True
+        # The clone's content came from *path* even though nothing will be
+        # saved there -- the record's From facts state that provenance.
+        session.load_record = LoadRecord.capture(data, document, path=path)
         self.active = session
         if reference is not None:
             self.references.append(reference)
