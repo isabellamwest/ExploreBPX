@@ -63,6 +63,14 @@ _NO_MAX_WIDTH = 16777215
 #: not a second full editor.
 _VISIBLE_ROWS = 6
 
+#: Where the ledger's value column starts, measured from the ledger's own
+#: left edge: past the badge cluster, which owns the same fixed width as the
+#: main editor's "Main" role label. Everything in the ledger that shows a
+#: *value* -- the rows, the spread scale, the reference grid -- starts here,
+#: so one vertical line runs down the card from the main input to the last
+#: grid cell.
+_VALUE_COLUMN_INDENT = style.ROLE_LABEL_WIDTH + style.ROLE_ROW_SPACING
+
 
 def _monospace_font():
     return typography.mono()
@@ -89,6 +97,13 @@ class ReferenceTableGrid(QWidget):
         self._table = QTableWidget(0, 2)
         self._table.setObjectName("ReferenceTableGridTable")
         self._table.setHorizontalHeaderLabels(("x", "y"))
+        for column in range(self._table.columnCount()):
+            # Right-aligned over its own numbers, like the editable grids
+            # above and the cells below -- a centred header floats between
+            # two columns and belongs to neither.
+            self._table.horizontalHeaderItem(column).setTextAlignment(
+                Qt.AlignRight | Qt.AlignVCenter
+            )
         self._table.verticalHeader().setVisible(False)
         # Dense glance rows: this is a comparison aid, not a second editor,
         # so it packs tighter than the main grid's editable rows.
@@ -237,9 +252,7 @@ class ReferenceLedger(QFrame):
         self._spread = SpreadScaleView()
         spread_holder = QWidget()
         spread_layout = QHBoxLayout(spread_holder)
-        spread_layout.setContentsMargins(
-            style.ROLE_LABEL_WIDTH + style.ROLE_ROW_SPACING, 6, 0, 0
-        )
+        spread_layout.setContentsMargins(_VALUE_COLUMN_INDENT, 6, 0, 0)
         spread_layout.addWidget(self._spread, 1)
         # Zero-stretch spacer, the same idiom the rows use: inert until the
         # axis is capped to the value-box measure, then it takes the slack.
@@ -250,7 +263,10 @@ class ReferenceLedger(QFrame):
 
         self._grid_caption = QWidget()
         caption_layout = QHBoxLayout(self._grid_caption)
-        caption_layout.setContentsMargins(0, 6, 0, 2)
+        # Indented onto the value column, like every row's value and the
+        # spread scale: the grid shows the same references' numbers, so it
+        # starts where their values start rather than out under the badges.
+        caption_layout.setContentsMargins(_VALUE_COLUMN_INDENT, 6, 0, 2)
         caption_layout.setSpacing(6)
         caption_label = QLabel("Reference values")
         caption_label.setObjectName("LedgerGridCaption")
@@ -274,7 +290,11 @@ class ReferenceLedger(QFrame):
 
         self._table_grid = ReferenceTableGrid()
         self._table_grid.hide()
-        self._layout.addWidget(self._table_grid)
+        grid_holder = QWidget()
+        grid_layout = QHBoxLayout(grid_holder)
+        grid_layout.setContentsMargins(_VALUE_COLUMN_INDENT, 0, 0, 0)
+        grid_layout.addWidget(self._table_grid)
+        self._layout.addWidget(grid_holder)
 
     def set_rows(
         self,
