@@ -387,3 +387,28 @@ def test_remove_reference_frees_a_slot_at_the_cap(valid_spm_path, tmp_path):
     replacement = tmp_path / "replacement.json"
     shutil.copy(valid_spm_path, replacement)
     assert state.pin_reference(replacement) is PinReferenceOutcome.ADDED
+
+
+def test_the_undo_stack_stops_growing_at_its_depth(spm_workfile):
+    """Each transition pins a whole document, so an uncapped stack grew
+    without limit for the length of a session. The cap drops the oldest
+    step; everything within reach still undoes exactly as before."""
+    from core.commands import SetValue
+    from state.document_session import UNDO_DEPTH
+
+    state = AppState()
+    state.open(spm_workfile)
+    session = state.active
+    path = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
+
+    for step in range(UNDO_DEPTH + 20):
+        session.execute_command(SetValue(path, float(step)))
+
+    assert len(session._undo_stack) == UNDO_DEPTH
+
+    for _ in range(UNDO_DEPTH):
+        session.undo()
+    # Undone all the way back to the oldest step still held: that is step 20's
+    # own "before", the value written by step 19.
+    assert session.document.find_parameter(path).value == 19.0
+    assert session._undo_stack == []

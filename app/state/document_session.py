@@ -67,6 +67,16 @@ class _Transition:
     after_selection: _Selection
 
 
+#: How many commands stay undoable. Each transition pins the whole document
+#: as it was, and consecutive transitions share those objects, so the real
+#: cost is roughly one document per command: measured at ~0.64 MB for the
+#: bundled 200 KB pouch-cell file, i.e. ~64 MB at this depth and unbounded
+#: growth without it. A hundred steps is far past what a parameter-editing
+#: session reaches by hand, and reaching it drops the *oldest* step, never
+#: anything the user can currently see.
+UNDO_DEPTH = 100
+
+
 class DocumentSession:
     """State for one open BPX document.
 
@@ -176,6 +186,7 @@ class DocumentSession:
                     after_selection=self._selection(),
                 )
             )
+            del self._undo_stack[:-UNDO_DEPTH]
 
     def undo(self) -> None:
         """Restore the document and selection from before the last command.
