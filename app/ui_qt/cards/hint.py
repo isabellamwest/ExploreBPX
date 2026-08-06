@@ -19,6 +19,29 @@ from PySide6.QtWidgets import QLabel, QToolButton, QVBoxLayout, QWidget
 from ..style import MUTED
 
 
+class WrappedHelp(QLabel):
+    """Muted help text that is never given less height than it needs.
+
+    A wrapping ``QLabel`` reports its height as a function of its width, and
+    that dependency does not survive every layout it can end up inside -- the
+    mode strip's ``QStackedLayout`` in particular, where the Function
+    editor's syntax hint was handed one line's height and painted its second
+    line half-cut. Pinning the minimum to the wrapped height at the width it
+    actually got makes the layout honour it.
+
+    Converges: height never feeds back into width here, so one resize
+    settles it.
+    """
+
+    def __init__(self, text: str = "", parent: QWidget | None = None) -> None:
+        super().__init__(text, parent)
+        self.setWordWrap(True)
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        super().resizeEvent(event)
+        self.setMinimumHeight(self.heightForWidth(self.width()))
+
+
 class GridHint(QWidget):
     """A disclosure toggle over a muted bullet list, collapsed by default."""
 
@@ -37,9 +60,8 @@ class GridHint(QWidget):
         self._toggle.toggled.connect(self._on_toggled)
         layout.addWidget(self._toggle, 0, Qt.AlignLeft)
 
-        self._body = QLabel("\n".join(f"•  {line}" for line in bullets))
+        self._body = WrappedHelp("\n".join(f"•  {line}" for line in bullets))
         self._body.setObjectName("GridHintBody")
-        self._body.setWordWrap(True)
         self._body.setStyleSheet(f"color: {MUTED}; padding: 2px 0 2px 14px;")
         self._body.hide()
         layout.addWidget(self._body)

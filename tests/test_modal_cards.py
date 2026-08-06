@@ -630,3 +630,34 @@ def test_raw_value_card_gates_on_json_and_stays_editable():
     edit.setPlainText("{not json")
     assert card.commit_blocked_reason() is not None
     assert card.value() == {"oops": 1}  # falls back to seed, never a broken string
+
+
+def test_a_long_expression_reads_from_its_start(qtbot):
+    """A QLineEdit scrolls to the cursor, and setText leaves it at the end,
+    so a long OCP expression showed only its tail. The modeller must be able
+    to see what their own function begins with."""
+    from ui_qt.cards.bodies import ExpressionBody
+
+    body = ExpressionBody()
+    qtbot.addWidget(body)
+    body.set_value("9.47e-01 * exp(-x) + 5.42e+04 * tanh(-3.19 * (x - 2.01))")
+
+    assert body._edit.cursorPosition() == 0
+
+    body._edit.setCursorPosition(20)
+    body.reset()
+    assert body._edit.cursorPosition() == 0
+
+
+def test_the_expression_hint_is_never_given_less_height_than_it_needs(qtbot):
+    """Wrapped help text lost its second line inside the mode strip's
+    stacked layout, which does not carry a label's height-for-width."""
+    from ui_qt.cards.hint import WrappedHelp
+
+    help_text = WrappedHelp("word " * 60)
+    qtbot.addWidget(help_text)
+    help_text.resize(200, 10)
+    help_text.show()
+    qtbot.waitExposed(help_text)
+
+    assert help_text.minimumHeight() >= help_text.heightForWidth(help_text.width())

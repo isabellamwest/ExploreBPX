@@ -43,7 +43,7 @@ from .. import typography
 from ..style import ERROR, MUTED, VALUE_INPUT_MAX_WIDTH
 from .cell_issues import table_cells
 from .grid import NumericGrid
-from .hint import GridHint
+from .hint import GridHint, WrappedHelp
 from .table_preview import TablePreview
 
 
@@ -166,8 +166,9 @@ class ExpressionBody(ModeBody):
         # multi-line docstring read as a slab of raw text under the input);
         # the words stay bpx's own.
         lines = bpx_gateway.function_syntax_help().splitlines()
-        hint = QLabel(" · ".join(line.strip().lstrip("- ") for line in lines if line.strip()))
-        hint.setWordWrap(True)
+        hint = WrappedHelp(
+            " · ".join(line.strip().lstrip("- ") for line in lines if line.strip())
+        )
         hint.setStyleSheet(
             f"color: {MUTED}; {typography.size_qss(typography.META)}"
         )
@@ -185,10 +186,23 @@ class ExpressionBody(ModeBody):
 
     def set_value(self, value: object) -> None:
         self._seed = value
-        self._edit.setText(format_value(value))
+        self._show(value)
 
     def reset(self) -> None:
-        self._edit.setText(format_value(self._seed))
+        self._show(self._seed)
+
+    def _show(self, value: object) -> None:
+        """Populate the box reading from the *start* of the expression.
+
+        ``setText`` leaves the cursor at the end, which scrolls a long OCP
+        expression so that the only part on screen is its tail -- the
+        modeller cannot see what their own function begins with. Homing the
+        cursor shows the beginning; the rest is one keystroke away either
+        way, and nothing about the stored value changes.
+        """
+        self._edit.setText(format_value(value))
+        self._edit.setCursorPosition(0)
+
 
     def focus_widget(self) -> QWidget:
         return self._edit
