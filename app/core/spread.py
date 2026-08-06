@@ -56,9 +56,13 @@ class SpreadScale:
     #: True for a log axis (the UI labels the choice either way, so the
     #: switch is never silent).
     log: bool
-    #: Padded axis bounds, in value space (suitable for end labels).
-    axis_lo: float
-    axis_hi: float
+    #: The lowest and highest values actually *stated*, by the main document
+    #: or any reference -- what the axis ends are labelled with. The padding
+    #: that keeps the outermost marks off the edges lives inside
+    #: ``position`` and deliberately never surfaces as a number: an axis end
+    #: reading a value no file states would be the app inventing data.
+    value_lo: float
+    value_hi: float
     ticks: tuple[SpreadTick, ...]
     #: The main document's marker position in [0, 1], or None when the main
     #: value is empty -- the scale then reads as a picker over references.
@@ -94,6 +98,7 @@ def build_spread(main: float | None, refs: Sequence[float]) -> SpreadScale:
     pad = (t_hi - t_lo) * PADDING
     t_lo, t_hi = t_lo - pad, t_hi + pad
     span = t_hi - t_lo
+    value_lo, value_hi = min(values), max(values)
 
     def position(v: float) -> float:
         return (transform(v) - t_lo) / span
@@ -108,20 +113,28 @@ def build_spread(main: float | None, refs: Sequence[float]) -> SpreadScale:
             ticks.append(SpreadTick(value, position(value), (index,)))
     ticks.sort(key=lambda tick: tick.position)
 
-    if not use_log:
-        untransform = lambda t: t
-    elif values[0] > 0:
-        untransform = lambda t: 10.0**t
-    else:
-        untransform = lambda t: -(10.0 ** (-t))
     return SpreadScale(
         True,
         use_log,
-        untransform(t_lo),
-        untransform(t_hi),
+        value_lo,
+        value_hi,
         tuple(ticks),
         None if main is None else position(main),
     )
+
+
+def numeric(value: object) -> float | None:
+    """*value* as a plain float, or ``None`` when it is not a finite number.
+
+    The one gate between a stored raw value and this module's arithmetic, so
+    a card never sniffs types of its own. ``bool`` is excluded despite being
+    an ``int`` subclass (the same call ``core.values.is_grid_cell`` makes):
+    plotting ``True`` at 1.0 would state a number no file contains.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    number = float(value)
+    return number if math.isfinite(number) else None
 
 
 def _spans_decades(values: list[float]) -> bool:

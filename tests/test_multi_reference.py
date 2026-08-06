@@ -280,6 +280,113 @@ def test_pull_names_the_groups_first_pinned_source(three_pins, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# Spread scale (design rule 4)
+# ---------------------------------------------------------------------------
+
+
+def test_spread_scale_marks_every_distinct_value_and_the_main_one(three_pins):
+    """Main 5.0, chen and okane 6.0, marquis 7.0: two ticks, the shared one
+    carrying both its pins' badges, plus main's own marker."""
+    d = three_pins
+    d.go_to(_CAPACITY)
+
+    assert d.spread_visible()
+    assert d.spread_tick_values() == [6.0, 7.0]
+    assert d.spread_tick_badges(0) == ["Ch", "Ok"]
+    assert d.spread_tick_badges(1) == ["Ma"]
+    assert d.spread_has_main_marker()
+
+
+def test_spread_scale_hides_when_every_value_coincides(three_pins):
+    """Reference temperature agrees everywhere, so the axis would be a
+    picture of nothing -- and the "same" rows above already say it."""
+    d = three_pins
+    d.go_to(_CELL_PATH + ("Reference temperature [K]",))
+
+    assert not d.spread_visible()
+
+
+def test_spread_scale_hides_for_a_non_numeric_parameter(three_pins):
+    """Gated on the kind the app already classified, never on a fresh look
+    at the value: the Header's title is text, so it gets no axis."""
+    d = three_pins
+    d.go_to(("Header", "Title"))
+
+    assert not d.spread_visible()
+
+
+def test_spread_scale_hover_names_the_references_and_the_exact_value(three_pins):
+    d = three_pins
+    d.go_to(_CAPACITY)
+
+    assert d.spread_tooltip_at_tick(0) == "chen.json, okane.json · 6.0"
+    assert d.spread_tooltip_at_tick(1) == "marquis.json · 7.0"
+    assert d.spread_tooltip_at_main() == "Main file · 5.0"
+
+
+def test_spread_scale_names_a_linear_axis(three_pins):
+    d = three_pins
+    d.go_to(_CAPACITY)
+
+    assert d.spread_axis_kind() == "linear"
+
+
+def test_spread_scale_switches_to_log_past_two_decades(app_driver, tmp_path, monkeypatch):
+    """The switch is never silent: the axis says which one it is."""
+    d = app_driver
+    d.open(_write(tmp_path, "main.json", _document({"Nominal cell capacity [A.h]": 1.0})))
+    _pin(
+        d,
+        monkeypatch,
+        _write(tmp_path, "big.json", _document({"Nominal cell capacity [A.h]": 5000.0})),
+    )
+    d.go_to(_CAPACITY)
+
+    assert d.spread_visible()
+    assert d.spread_axis_kind() == "log"
+
+
+def test_spread_scale_stacks_dots_that_would_hide_each_other(qtbot):
+    """Two stated values a fraction of the span apart are one dot covering
+    another at any real width. They step up a level instead; only the level
+    moves, never the x."""
+    from core.spread import build_spread
+    from ui_qt.cards.spread_scale import SpreadScaleView
+
+    spread = SpreadScaleView()
+    qtbot.addWidget(spread)
+    spread.set_scale(build_spread(None, [28700.0, 28746.0, 33133.0]), _strip_pins("a", "b", "c"))
+    spread.show()
+    qtbot.waitExposed(spread)
+    spread.setFixedWidth(280)
+
+    placed = spread._placements()
+    assert [tick.value for tick, _x, _base in placed] == [28700.0, 28746.0, 33133.0]
+    assert [base for _tick, _x, base in placed] == [0, 1, 0]
+    # Exact positions survive the stacking: the raised dot sits above its
+    # own value, never nudged along the axis to make room.
+    for tick, x, _base in placed:
+        assert x == spread._x_for(tick.position)
+
+
+def test_spread_scale_on_a_ghost_card_has_no_main_marker(app_driver, tmp_path, monkeypatch):
+    """A key the main file lacks: the references still spread against each
+    other, with nothing to anchor them to."""
+    d = app_driver
+    d.open(_write(tmp_path, "main.json", _MAIN))
+    for name, area in (("one.json", 1.0), ("two.json", 2.0)):
+        raw = _document({"Nominal cell capacity [A.h]": 5.0, "Electrode area [m2]": area})
+        _pin(d, monkeypatch, _write(tmp_path, name, raw))
+    d.go_to(_CELL_PATH)
+
+    d.select_ghost_row("Electrode area [m2]")
+
+    assert d.spread_visible()
+    assert d.spread_tick_values() == [1.0, 2.0]
+    assert not d.spread_has_main_marker()
+
+
+# ---------------------------------------------------------------------------
 # Parameter list and tree gutter
 # ---------------------------------------------------------------------------
 

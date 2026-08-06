@@ -24,6 +24,7 @@ from ..reference_identity import ReferencePin
 from ..style import VALUE_INPUT_MAX_WIDTH
 from .page import page_content, page_header
 from .reference_block import ReferenceLedger
+from .spread_scale import scale_for
 
 #: The kinds whose main editor would show a unit label are the only ones
 #: whose value box is capped to the standard input width here -- with no main
@@ -93,12 +94,20 @@ class GhostParameterCard(QWidget):
             group.value if isinstance(group.value, str) else value_preview(group.value, kind)[0]
             for group in groups
         ]
+        width = VALUE_INPUT_MAX_WIDTH if kind in _CAPPED_KINDS else None
         self._ledger.set_rows(
             groups,
             pins,
             texts,
-            width=VALUE_INPUT_MAX_WIDTH if kind in _CAPPED_KINDS else None,
+            width=width,
             monospace=monospace,
+        )
+        # The same spread scale a ParameterCard shows, with no main marker:
+        # nothing here has a main value to anchor to, so the axis says only
+        # how far the references sit from each other. Two references stating
+        # one value still hide it, exactly as elsewhere.
+        self._ledger.set_spread(
+            scale_for(None, groups, len(pins), kind), pins, width=width
         )
 
         layout.addStretch(1)

@@ -17,7 +17,10 @@ Top to bottom, a ``ParameterCard`` holds:
      badge cluster occupying the same fixed-width column as the editor's
      own "Main" role label, so every value starts at the same x. The "Main"
      label and the whole reference section are absent entirely with nothing
-     pinned -- the card is then exactly today's, full width.
+     pinned -- the card is then exactly today's, full width. For a numeric
+     scalar the ledger closes with the spread scale
+     (:class:`~.spread_scale.SpreadScaleView`), the one thing a column of
+     numbers cannot say: how far apart they are.
 
 ``ParameterCard`` is a pure composition container. It forwards the inner
 editor's ``draft_changed`` / ``draft_reset`` / ``commit_requested`` signals
@@ -59,6 +62,7 @@ from core.compare import ValueGroup, matching_table_rows
 from core.parameter_metadata import resolve_parameter_metadata
 from core.parameter_types import ParameterKind, split_name_and_unit
 from core.tree_model import ParameterItem
+from core.values import format_value
 
 from ..icons import DOT, PENCIL, hover_icon, html_img
 from ..latex import symbol_label
@@ -72,6 +76,7 @@ from .function import table_is_representable
 from .page import page_content, page_header
 from .reference_block import ReferenceLedger
 from .registry import create_card
+from .spread_scale import scale_for
 from .table_preview import ReferenceCurve
 
 
@@ -268,12 +273,22 @@ class ParameterCard(QWidget):
             group.value if isinstance(group.value, str) else value_preview(group.value, kind)[0]
             for group in groups
         ]
+        width = self._editor.reference_value_width()
         self._ledger.set_rows(
             groups,
             pins,
             texts,
-            width=self._editor.reference_value_width(),
+            width=width,
             monospace=monospace,
+        )
+        # The spread scale, for a numeric scalar whose values are not all the
+        # same (design rule 4): the rows above state the values, the axis
+        # says how far apart they are.
+        self._ledger.set_spread(
+            scale_for(self.parameter.value, groups, len(pins), kind),
+            pins,
+            main_text=format_value(self.parameter.value),
+            width=width,
         )
         self._apply_table_grid(groups, pins)
         self._main_file_heading.show()

@@ -9,7 +9,7 @@ import math
 
 import pytest
 
-from app.core.spread import build_spread
+from app.core.spread import build_spread, numeric
 
 
 # ── hidden / visible ────────────────────────────────────────────────────────
@@ -47,11 +47,20 @@ def test_visible_when_one_reference_differs_from_main():
 # ── linear axis ─────────────────────────────────────────────────────────────
 
 
-def test_linear_bounds_pad_beyond_extremes():
+def test_linear_padding_keeps_the_extremes_off_the_axis_ends():
     scale = build_spread(2.0, [1.0, 3.0])
     assert scale.log is False
-    assert scale.axis_lo < 1.0
-    assert scale.axis_hi > 3.0
+    assert 0.0 < scale.ticks[0].position < scale.ticks[-1].position < 1.0
+
+
+def test_end_labels_are_the_stated_extremes_not_the_padded_bounds():
+    scale = build_spread(2.0, [1.0, 3.0])
+    assert (scale.value_lo, scale.value_hi) == (1.0, 3.0)
+
+
+def test_a_main_value_outside_the_references_becomes_an_end_label():
+    scale = build_spread(10.0, [1.0, 2.0])
+    assert (scale.value_lo, scale.value_hi) == (1.0, 10.0)
 
 
 def test_positions_ascend_with_value_and_stay_inside_the_axis():
@@ -63,7 +72,6 @@ def test_positions_ascend_with_value_and_stay_inside_the_axis():
 
 def test_main_outside_the_reference_span_extends_the_axis():
     scale = build_spread(10.0, [1.0, 2.0])
-    assert scale.axis_hi > 10.0
     assert scale.main_position > max(t.position for t in scale.ticks)
     assert scale.main_position < 1.0
 
@@ -103,22 +111,21 @@ def test_zero_never_log():
     assert build_spread(None, [0.0, 1e5]).log is False
 
 
-def test_log_axis_bounds_bracket_the_values():
+def test_log_axis_orders_the_values_and_labels_the_stated_extremes():
     scale = build_spread(None, [1e-15, 5e-12])
     assert scale.log is True
-    assert 0.0 < scale.axis_lo < 1e-15
-    assert scale.axis_hi > 5e-12
     assert [t.value for t in scale.ticks] == [1e-15, 5e-12]
+    assert (scale.value_lo, scale.value_hi) == (1e-15, 5e-12)
+    assert 0.0 < scale.ticks[0].position < scale.ticks[-1].position < 1.0
 
 
-def test_all_negative_log_keeps_numeric_order_and_signed_bounds():
+def test_all_negative_log_keeps_numeric_order():
     scale = build_spread(None, [-1e-10, -1e-15])
     assert scale.log is True
     more_negative = next(t for t in scale.ticks if t.value == -1e-10)
     less_negative = next(t for t in scale.ticks if t.value == -1e-15)
     assert more_negative.position < less_negative.position
-    assert scale.axis_lo < -1e-10
-    assert -1e-15 < scale.axis_hi < 0.0
+    assert (scale.value_lo, scale.value_hi) == (-1e-10, -1e-15)
 
 
 # ── non-finite input ────────────────────────────────────────────────────────
@@ -134,3 +141,16 @@ def test_non_finite_references_are_ignored():
     scale = build_spread(1.0, [math.inf, 2.0])
     assert scale.visible is True
     assert [t.value for t in scale.ticks] == [2.0]
+
+
+# ── numeric() ───────────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("value", [2, 2.5, -3])
+def test_numeric_accepts_plain_numbers(value):
+    assert numeric(value) == float(value)
+
+
+@pytest.mark.parametrize("value", [None, "2.5", True, False, [1.0], float("nan")])
+def test_numeric_rejects_everything_else(value):
+    assert numeric(value) is None

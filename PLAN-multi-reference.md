@@ -2,11 +2,13 @@
 
 ## Status / handoff (2026-08-06, self-contained — session memory does not follow the repo)
 
-**Phases 1 and 2 are on main and green (1658)**: `05214ef` Phase 1, `cb81f27` Phase 2. Signed wireframes (rev 3, the visual
+**Phases 1, 2 and 3 are done and the suite is green (1677)**: `05214ef` Phase 1, `cb81f27`
+Phase 2, Phase 3 uncommitted at the time of writing. Signed wireframes (rev 3, the visual
 reference for every surface): (internal design archive)
 The Phase 1 build spec, showing what actually shipped and what rev 3 draws that is Phase 2/3:
 (internal design archive)
-**Next action: Phase 3 (scalar spread scale).**
+**Next action: none in this track — every surface in the design rules is built.** Still
+deferred by the signed design, not by omission: persistence across restart, and pin reorder.
 
 Earlier commits on main: `3088779` Phase 0 pluralization · `adddc7b` Pull `source_label` ·
 `85c6560` grouping helper + `core/spread.py` (+40 unit tests) · `02fee76` typography tokens
@@ -170,14 +172,31 @@ Departures agreed while building, 2026-08-06:
 - Tests: overlay count/legend/toggle/domain-stop; selector default/switch/absent-key;
   source-page selector switching. Respect the QtCharts import guard in every new path.
 
-### Phase 3 — Surface D: scalar spread scale
-- New `app/core/spread.py` (pure, badge-ignorant — plain values in, geometry out): bounds +
-  padding, log/linear decision, coincident grouping, hidden-state rule. 3-4 functions, no Qt.
-- New `app/ui_qt/cards/spread_scale.py` painted widget per rule 4; wired into
-  `parameter_card.py` gated on numeric kinds via existing `ParameterKind` machinery
-  (never a fresh numeric sniff).
-- Tests: pure unit tests for all geometry rules (incl. mixed-sign never-log); AppDriver +
-  screenshot for visibility rules, hover, marker styling.
+### Phase 3 — Surface D: scalar spread scale  ✅ done
+
+Departures agreed while building, 2026-08-06:
+
+- **Dots stack on collision, not only on coincidence.** Rule 4 stacks
+  references sharing a value; on real files the common case is values
+  *nearly* sharing one (28700 vs 28746 mol.m-3 are 2.6px apart on a 280px
+  axis) and one dot simply hid the other. A tick pushed up a level keeps its
+  exact x and grows its stem, so nothing moves along the axis — only the
+  level. Coincidence is now the zero-gap case of one rule.
+- **The axis ends are labelled with the stated extremes, not the padded
+  bounds.** `SpreadScale.axis_lo`/`axis_hi` were the padded numbers, which no
+  file states; they are now `value_lo`/`value_hi`, the real min and max, and
+  the padding lives only inside `position`. Nothing on screen is a number the
+  app made up.
+- **The axis width is capped to the value-box measure**, so the scale is the
+  geometry of the column directly above it rather than a strip across a wide
+  pane.
+- **Ghost cards get the scale too** (main marker absent): `core/spread.py`
+  already models an empty main, and REF_ONLY is exactly where "how far apart
+  are these three files" has no other answer on screen.
+- The linear/log word is drawn in `GHOST_TEXT`, lighter than the end labels:
+  those are values, this is only how the axis is drawn.
+- New `core.spread.numeric()` is the single number gate (bool excluded), so
+  no card sniffs types of its own.
 
 ## Process
 - Each phase: `python -m pytest` headless from repo root, honest report (matplotlib absent

@@ -49,10 +49,12 @@ from PySide6.QtWidgets import (
 )
 
 from core.compare import ValueGroup
+from core.spread import SpreadScale
 from core.values import format_value
 
 from .. import badges, style, typography
 from ..reference_identity import ReferencePin
+from .spread_scale import SpreadScaleView
 
 #: "No maximum": Qt's QWIDGETSIZE_MAX, restored when the row is not narrow.
 _NO_MAX_WIDTH = 16777215
@@ -228,6 +230,24 @@ class ReferenceLedger(QFrame):
 
         self._rows: list[_LedgerRow] = []
 
+        #: The spread scale, directly under the rows and indented to start at
+        #: the same x as their value boxes -- the axis is the geometry of the
+        #: column above it, so it is aligned with that column, not with the
+        #: badges.
+        self._spread = SpreadScaleView()
+        spread_holder = QWidget()
+        spread_layout = QHBoxLayout(spread_holder)
+        spread_layout.setContentsMargins(
+            style.ROLE_LABEL_WIDTH + style.ROLE_ROW_SPACING, 6, 0, 0
+        )
+        spread_layout.addWidget(self._spread, 1)
+        # Zero-stretch spacer, the same idiom the rows use: inert until the
+        # axis is capped to the value-box measure, then it takes the slack.
+        spread_layout.addStretch(0)
+        self._spread_holder = spread_holder
+        self._spread_holder.hide()
+        self._layout.addWidget(spread_holder)
+
         self._grid_caption = QWidget()
         caption_layout = QHBoxLayout(self._grid_caption)
         caption_layout.setContentsMargins(0, 6, 0, 2)
@@ -290,6 +310,25 @@ class ReferenceLedger(QFrame):
             row.pull_requested.connect(self.pull_requested)
             self._rows.append(row)
             self._layout.insertWidget(position, row)
+
+    def set_spread(
+        self,
+        scale: SpreadScale | None,
+        pins: list[ReferencePin],
+        *,
+        main_text: str = "",
+        width: int | None = None,
+    ) -> None:
+        """Show the spread scale under the rows, or hide it (design rule 4).
+
+        The caller decides whether this parameter gets a scale at all -- only
+        it knows the kind -- and ``core.spread`` decides whether the values
+        are worth an axis. ``None``, or a scale ``core.spread`` calls
+        invisible, hides the whole strip: an axis carrying one distinct value
+        would be a picture of nothing.
+        """
+        self._spread.set_scale(scale, pins, main_text=main_text, width=width)
+        self._spread_holder.setVisible(self._spread.is_active)
 
     def set_table_references(
         self, references: list[tuple[ReferencePin, list[list[object]], list[bool]]]

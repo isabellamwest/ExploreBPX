@@ -1093,6 +1093,58 @@ class AppDriver:
     def reference_grid_row_count(self) -> int:
         return self._ledger()._table_grid._table.rowCount()
 
+    # --- spread scale ----------------------------------------------------
+
+    def _spread(self):
+        ledger = self._ledger()
+        return None if ledger is None else ledger._spread
+
+    def spread_visible(self) -> bool:
+        """Whether the current card shows the 1-D spread scale."""
+        spread = self._spread()
+        return spread is not None and spread.is_active
+
+    def spread_axis_kind(self) -> str:
+        """"linear" or "log" -- the axis the scale chose and names."""
+        spread = self._spread()
+        return "" if spread is None else spread.axis_kind()
+
+    def spread_tick_values(self) -> list[float]:
+        """The stated reference values on the axis, low to high."""
+        spread = self._spread()
+        if spread is None or spread._scale is None:
+            return []
+        return [tick.value for tick in spread._scale.ticks]
+
+    def spread_tick_badges(self, index: int = 0) -> list[str]:
+        """The badge letters stacked on the tick at *index*, in pin order."""
+        spread = self._spread()
+        tick = spread._scale.ticks[index]
+        return [spread._pins[pin].letters for pin in tick.indices]
+
+    def spread_tick_levels(self) -> list[int]:
+        """The stack level each tick's lowest dot sits on -- 0 unless dots
+        would have collided at the axis's painted width."""
+        spread = self._spread()
+        return [base for _tick, _x, base in spread._placements()]
+
+    def spread_has_main_marker(self) -> bool:
+        spread = self._spread()
+        return spread is not None and spread._scale is not None and (
+            spread._scale.main_position is not None
+        )
+
+    def spread_tooltip_at_tick(self, index: int = 0) -> str:
+        """The hover text over the tick at *index* -- names plus exact
+        value, read at the tick's own painted x."""
+        spread = self._spread()
+        tick = spread._scale.ticks[index]
+        return spread.tooltip_at(spread._x_for(tick.position))
+
+    def spread_tooltip_at_main(self) -> str:
+        spread = self._spread()
+        return spread.tooltip_at(spread._x_for(spread._scale.main_position))
+
     # --- chart overlay ---------------------------------------------------
 
     def _preview(self):
