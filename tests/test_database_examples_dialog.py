@@ -392,6 +392,18 @@ def test_own_notice_hidden_once_the_own_run_has_data():
     assert dialog._own_notice.isHidden()
 
 
+def test_own_notice_leaves_the_call_to_action_to_the_empty_chart_pane():
+    """With an empty own run and no reference run yet, both the notice and
+    the pane's hint are on screen; only one of them may say "pick"."""
+    empty_run = {"Time [s]": [], "Current [A]": [], "Voltage [V]": []}
+
+    dialog = DatabaseExamplesDialog(empty_run)
+
+    assert not dialog._own_notice.isHidden()
+    assert dialog._view_stack.currentWidget() is dialog._hint_label
+    assert "pick" not in dialog._own_notice.text().lower()
+
+
 # ---------------------------------------------------------------------------
 # CompareNumbersTable: the key-numbers table beneath the charts
 # ---------------------------------------------------------------------------

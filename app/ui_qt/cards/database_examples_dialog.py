@@ -94,11 +94,10 @@ MAX_REFERENCE_RUNS = len(_REFERENCE_COLORS)
 _YOU_WIDTH = 3.0
 _REFERENCE_WIDTH = 2.0
 
-#: Worded to hold in both empty-run states: before any reference run is
-#: added (when the hint label is what fills the right pane) and after.
-_NO_OWN_DATA_NOTICE = (
-    "No data in this experiment yet. Pick a reference run on the left to view it."
-)
+#: A statement of fact about the own run only -- no call to action, which
+#: belongs to the empty chart pane's hint and would otherwise repeat it
+#: while both are on screen.
+_NO_OWN_DATA_NOTICE = "No data in this experiment yet."
 
 
 @dataclass(frozen=True)
