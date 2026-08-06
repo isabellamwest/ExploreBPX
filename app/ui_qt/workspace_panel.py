@@ -50,6 +50,7 @@ from state.reference_snapshot import ReferenceSnapshot
 from . import badges, icons
 from .group_box import TintedSection
 from .reference_identity import badge_colour, badge_letters
+from . import typography
 from .style import ERROR, MUTED, OK, WARNING
 from .typography import panel_title
 
@@ -270,6 +271,9 @@ class _EditableText(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
+        # A plain wrapped label on purpose: the identity form sizes its
+        # rows correctly, and pinning wrapped minimums here left a stale
+        # mid-layout minimum inflating the row (caught on screen).
         self._display = QLabel()
         self._display.setObjectName(display_object_name)
         self._display.setProperty("editableValue", True)
@@ -356,77 +360,67 @@ class _EditableText(QWidget):
             style.polish(self._display)
 
 
-class _ExpandableFact(QWidget):
-    """A fact row value that can expand one sentence of detail beneath
-    itself. The chevron appears only when there is detail to show, so a
-    plain fact ("JSON") carries no dead affordance. Expansion state
-    survives a refresh because the widget persists and only its texts are
-    rewritten."""
+class _ExpandableFact(QLabel):
+    """A fact row that can expand one sentence of detail beneath its value.
+
+    One label, one form row, text-only state changes: the detail renders
+    as a muted ``META`` second line inside this label's own rich text when
+    expanded, and the chevron appears only when there is detail to show, so
+    a plain fact ("JSON") carries no dead affordance. Expansion survives a
+    refresh because the widget persists and only its texts are rewritten.
+
+    This shape is the conclusion of three geometry-probed on-screen
+    failures: a detail label in its own row -- nested, spanning, form or
+    grid, with or without wrapped-minimum pinning -- is mis-sized whenever
+    it starts hidden, because the pane computes height-for-width at full
+    section width while the body renders inside the content measure.
+    ``setText`` on an always-visible direct form field is the one operation
+    this pane provably lays out correctly (the identity and reference
+    forms live on it)."""
 
     def __init__(self) -> None:
         super().__init__()
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(2)
-
-        self._head = QWidget()
-        head_layout = QHBoxLayout(self._head)
-        head_layout.setContentsMargins(0, 0, 0, 0)
-        head_layout.setSpacing(6)
-        self._value = QLabel()
-        self._value.setObjectName("WorkspaceCardValue")
-        self._value.setWordWrap(True)
-        head_layout.addWidget(self._value)
-        self._chevron = QLabel("▸")
-        self._chevron.setObjectName("ReferenceRowChevron")
-        head_layout.addWidget(self._chevron)
-        head_layout.addStretch(1)
-        layout.addWidget(self._head)
-
-        self._detail = QLabel()
-        self._detail.setObjectName("WorkspaceFactDetail")
-        self._detail.setWordWrap(True)
-        self._detail.hide()
-        layout.addWidget(self._detail)
-
-        # A rich-text QLabel accepts mouse presses (link handling), which
-        # would swallow the row's toggle click -- these labels are display
-        # only, so let every click fall through to this widget.
-        for child in (self._value, self._chevron, self._detail):
-            child.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self.setObjectName("WorkspaceCardValue")
+        self.setWordWrap(True)
+        self._value_html = ""
+        self._detail_text = ""
+        self._expanded = False
 
     def set_fact(self, value_html: str, detail: str = "") -> None:
-        self._value.setText(value_html)
-        self._detail.setText(detail)
-        has_detail = bool(detail)
-        self._chevron.setVisible(has_detail)
-        self._head.setCursor(
-            Qt.PointingHandCursor if has_detail else Qt.ArrowCursor
-        )
-        if not has_detail:
-            self.set_expanded(False)
+        self._value_html = value_html
+        self._detail_text = detail
+        self.setCursor(Qt.PointingHandCursor if detail else Qt.ArrowCursor)
+        if not detail:
+            self._expanded = False
+        self._render()
 
     def value_text(self) -> str:
-        return self._value.text()
+        return self._value_html
 
     def detail_text(self) -> str:
-        return self._detail.text()
+        return self._detail_text
 
     def is_expanded(self) -> bool:
-        # isHidden, never isVisible: the latter is False for every widget
-        # of an unshown window (the offscreen suite's normal state).
-        return not self._detail.isHidden()
+        return self._expanded and bool(self._detail_text)
 
     def set_expanded(self, expanded: bool) -> None:
-        self._detail.setVisible(expanded and bool(self._detail.text()))
-        self._chevron.setText("▾" if not self._detail.isHidden() else "▸")
+        self._expanded = expanded and bool(self._detail_text)
+        self._render()
+
+    def _render(self) -> None:
+        text = self._value_html
+        if self._detail_text:
+            chevron = "▾" if self._expanded else "▸"
+            text = f"{text}&nbsp; <span style='color:{MUTED}'>{chevron}</span>"
+        if self._expanded and self._detail_text:
+            text = (
+                f"{text}<br/><span style='color:#57606a; "
+                f"font-size:{typography.META}px'>{self._detail_text}</span>"
+            )
+        self.setText(text)
 
     def mousePressEvent(self, event) -> None:  # noqa: N802 - Qt naming
-        """Anywhere on the row toggles its detail, when there is one. A
-        class-level override on purpose: assigning a bound method onto the
-        child head widget would be the pure-Python widget cycle the offscreen
-        suite has already paid for (see the project guide)."""
-        if event.button() == Qt.LeftButton and bool(self._detail.text()):
+        if event.button() == Qt.LeftButton and self._detail_text:
             self.set_expanded(not self.is_expanded())
             event.accept()
             return
@@ -854,9 +848,6 @@ class WorkspacePanel(QWidget):
         self._fact_band = QWidget()
         self._fact_band.setObjectName("WorkspaceFactBand")
         self._fact_band.setAttribute(Qt.WA_StyledBackground, True)
-        band_layout = QVBoxLayout(self._fact_band)
-        band_layout.setContentsMargins(10, 7, 10, 9)
-        band_layout.setSpacing(0)
 
         self._fact_model = _detail_value("")
         self._fact_read_as = _ExpandableFact()
@@ -875,7 +866,12 @@ class WorkspacePanel(QWidget):
 
         self._fact_status = _detail_value("")
 
+        # The form is the band's direct layout with every row visible from
+        # construction -- the one shape the pane provably sizes correctly
+        # (see _ExpandableFact's docstring for the paid-for detour).
         self._fact_form = self._record_form()
+        self._fact_form.setContentsMargins(10, 7, 10, 9)
+        self._fact_band.setLayout(self._fact_form)
         for key, widget in (
             ("Model", self._fact_model),
             ("Read as", self._fact_read_as),
@@ -885,7 +881,6 @@ class WorkspacePanel(QWidget):
             ("Status", self._fact_status),
         ):
             self._add_record_row(self._fact_form, key, widget)
-        band_layout.addLayout(self._fact_form)
         body.addWidget(self._fact_band)
         return section
 
