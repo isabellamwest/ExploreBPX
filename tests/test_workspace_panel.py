@@ -526,17 +526,38 @@ def test_dropping_an_unparseable_file_shows_the_load_error_dialog(
 
 
 def test_document_card_names_what_is_still_outstanding(app_driver):
-    """A fresh DFN passes the schema with three parameters, so the card said
-    "Valid" in green beside a title reading "(incomplete)" while 35 required
-    fields were empty. The completion count is the app's own, not a
-    validator verdict, so it trails the validator's words and never touches
-    the dot's colour."""
+    """A fresh DFN's badge names the incomplete count -- and does not say
+    "Valid": bpx aborts its staged run over the missing required fields, so
+    no verdict exists to state (H2). "Not checked" is the same word the
+    Inspector uses for a parameter in that state."""
     app_driver._w._new("DFN")
+    assert app_driver._w._state.active.document.validation_completed is False
     ws = app_driver._w._workspace
 
     text = ws._info_badge.text()
-    assert text.startswith("Valid · ")
+    assert text.startswith("Not checked · ")
     assert text.endswith(" incomplete")
+
+
+def test_an_aborted_run_badges_not_checked_never_valid(
+    app_driver, tmp_path, valid_spm_dict
+):
+    """One deleted required field aborts bpx's staged run (State is never
+    judged) and the lone "Field required" error is absorbed into the
+    incomplete count -- zero errors on show. Zero errors from an aborted run
+    is not a verdict, so the badge must not read "Valid" (H2)."""
+    import copy
+    import json
+
+    raw = copy.deepcopy(valid_spm_dict)
+    del raw["Parameterisation"]["Cell"]["Electrode area [m2]"]
+    path = tmp_path / "aborted.json"
+    path.write_text(json.dumps(raw), encoding="utf-8")
+
+    d = app_driver.open(path)
+
+    assert d._w._state.active.document.validation_completed is False
+    assert d._w._workspace._info_badge.text() == "Not checked · 1 incomplete"
 
 
 def test_a_complete_document_says_only_valid(app_driver, valid_spm_path):

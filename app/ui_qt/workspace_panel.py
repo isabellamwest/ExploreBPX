@@ -47,7 +47,7 @@ from state.reference_snapshot import ReferenceSnapshot
 from . import badges, icons
 from .group_box import TintedSection
 from .reference_identity import badge_colour, badge_letters
-from .style import ERROR, OK, WARNING
+from .style import ERROR, MUTED, OK, WARNING
 from .typography import panel_title
 
 _INFO_PANEL_EMPTY_STATE_TEXT = "No document open"
@@ -668,7 +668,12 @@ class WorkspacePanel(QWidget):
         self._info_fields["Contents"].setText(
             f"{document.section_count} sections · {document.parameter_count} parameters"
         )
-        self._set_validity_badge(error_count, warning_count, outstanding_count)
+        self._set_validity_badge(
+            error_count,
+            warning_count,
+            outstanding_count,
+            completed=document.validation_completed,
+        )
 
     def _set_references(self, references: list[ReferenceSnapshot]) -> None:
         """Rebuild the References section's rows for the current pins.
@@ -709,7 +714,9 @@ class WorkspacePanel(QWidget):
             button.setEnabled(not at_cap)
             button.setToolTip(AT_CAP_MESSAGE if at_cap else "")
 
-    def _set_validity_badge(self, errors: int, warnings: int, outstanding: int = 0) -> None:
+    def _set_validity_badge(
+        self, errors: int, warnings: int, outstanding: int = 0, completed: bool = True
+    ) -> None:
         """The main document's dot-and-text mark: what the validator says,
         plus what is still missing.
 
@@ -719,9 +726,16 @@ class WorkspacePanel(QWidget):
         created DFN passes the schema with three parameters, and a lone
         green "Valid" beside a title reading "(incomplete)" told the user
         the file was ready when 35 required fields were still empty.
+
+        *completed* is ``validation_completed`` (H2): when ``bpx`` aborted
+        its staged run, every abort error can be absence-shaped and absorbed
+        into the incomplete count, leaving zero errors to show -- but zero
+        errors from an aborted run is not a verdict, and "Valid" would claim
+        a check that never finished. The badge says "Not checked" instead,
+        exactly the word the Inspector uses for a parameter in that state.
         """
         if not errors and not warnings:
-            text, colour = "Valid", OK
+            text, colour = ("Valid", OK) if completed else ("Not checked", MUTED)
         elif errors:
             parts = [f"{errors} error" + ("s" if errors != 1 else "")]
             if warnings:
