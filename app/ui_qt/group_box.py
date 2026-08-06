@@ -205,6 +205,13 @@ class TintedSection(QWidget):
         header.addStretch(1)
         if suffix is not None:
             header.addWidget(suffix)
+        # The header shares the body's measure rather than the full bleed.
+        # Right-aligned across a wide window the suffix drifted hundreds of
+        # pixels from the content it annotates ("Read-only" adrift of the
+        # reference rows, "3 warnings" adrift of the document it counts);
+        # capped, the title and its suffix are the bookends of the same
+        # column the body fills.
+        self.header.setMaximumWidth(style.CONTENT_MEASURE)
         outer.addWidget(self.header)
 
         self.body = QWidget()
