@@ -56,3 +56,30 @@ def test_core_does_not_import_frontend_or_state():
         if "import state" in text or "from state" in text:
             offenders.append((path.name, "state"))
     assert not offenders, f"core must not depend on ui_qt/state: {offenders}"
+
+def test_dialog_filters_derive_from_the_loader_s_own_extension_list():
+    """One source of truth: a dialog can never offer a format the loader
+    does not read, or hide one it does."""
+    from core.bpx_gateway import SUPPORTED_EXTENSIONS
+    from ui_qt.file_filters import BPX_FILTER, BPX_FILTER_WITH_ALL, export_filter
+
+    for extension in SUPPORTED_EXTENSIONS:
+        assert f"*{extension}" in BPX_FILTER
+        assert f"*{extension}" in BPX_FILTER_WITH_ALL
+    assert export_filter("yaml") == "YAML (*.yaml *.yml)"
+    assert export_filter("json") == "JSON (*.json)"
+
+
+def test_no_module_spells_the_bpx_extension_list_out_by_hand():
+    """The five hand-written copies of the filter string are what
+    ``ui_qt/file_filters.py`` exists to prevent coming back."""
+    import pathlib
+
+    root = pathlib.Path(__file__).resolve().parent.parent / "app"
+    offenders = [
+        path.relative_to(root).as_posix()
+        for path in root.rglob("*.py")
+        if path.name != "file_filters.py"
+        and "*.json *.yaml *.yml" in path.read_text(encoding="utf-8")
+    ]
+    assert offenders == []

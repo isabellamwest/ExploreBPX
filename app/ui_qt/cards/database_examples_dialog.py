@@ -52,6 +52,7 @@ from core.example_library import (
 from core.values import format_value
 
 from .. import typography
+from ..file_filters import BPX_FILTER_WITH_ALL
 from ..style import ACCENT, BORDER, ERROR, MUTED
 from ..typography import panel_title
 from .chart_axes import as_plot_number
@@ -606,7 +607,7 @@ class DatabaseExamplesDialog(QDialog):
             self,
             "Open BPX file",
             "",
-            "BPX files (*.json *.yaml *.yml);;All files (*)",
+            BPX_FILTER_WITH_ALL,
         )
         if path:
             self._add_reference_file(path)

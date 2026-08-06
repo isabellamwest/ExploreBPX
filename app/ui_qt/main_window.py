@@ -52,6 +52,7 @@ from state.reference_snapshot import ReferenceSnapshot
 from . import icons
 from .activity_bar import ActivityBar
 from .editor_page import EditorPage
+from .file_filters import BPX_FILTER, export_filter
 from .inspector import InspectorPanel
 from .navigation import NavigationService, NavigationTarget
 from .page_header import PageHeader
@@ -844,7 +845,7 @@ class MainWindow(QMainWindow):
         return choice == QMessageBox.Ok
 
     def _open(self) -> None:
-        name, _ = QFileDialog.getOpenFileName(self, "Open BPX", "", "BPX (*.json *.yaml *.yml)")
+        name, _ = QFileDialog.getOpenFileName(self, "Open BPX", "", BPX_FILTER)
         if not name:
             return
         self._open_chosen_path(Path(name))
@@ -916,7 +917,7 @@ class MainWindow(QMainWindow):
         said what they want, and docking a reference never touches the main
         document.
         """
-        name, _ = QFileDialog.getOpenFileName(self, "Open BPX", "", "BPX (*.json *.yaml *.yml)")
+        name, _ = QFileDialog.getOpenFileName(self, "Open BPX", "", BPX_FILTER)
         if not name:
             return
         self._open_reference_path(Path(name))
@@ -1208,7 +1209,7 @@ class MainWindow(QMainWindow):
         cards confirm at a glance what was just set up.
         """
         name, _ = QFileDialog.getOpenFileName(
-            self, "New from Existing File", "", "BPX (*.json *.yaml *.yml)"
+            self, "New from Existing File", "", BPX_FILTER
         )
         if not name:
             return
@@ -1269,7 +1270,7 @@ class MainWindow(QMainWindow):
             name, _ = QFileDialog.getSaveFileName(
                 self, "Save BPX",
                 str(start_dir / suggested) if suggested else str(start_dir),
-                "BPX (*.json *.yaml *.yml)",
+                BPX_FILTER,
             )
             if not name:
                 return False
@@ -1322,7 +1323,7 @@ class MainWindow(QMainWindow):
             default = str(backing.with_name(f"{backing.stem} (copy){suffix}"))
         else:
             default = str(Path(session.document.filename).with_suffix(suffix))
-        filt = "YAML (*.yaml *.yml)" if fmt == "yaml" else "JSON (*.json)"
+        filt = export_filter(fmt)
         name, _ = QFileDialog.getSaveFileName(self, "Export BPX", default, filt)
         if not name:
             return

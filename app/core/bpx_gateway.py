@@ -106,6 +106,16 @@ class ValidationResult:
     completed: bool = True
 
 
+#: The extensions :func:`load_raw` reads as YAML. Everything else is read as
+#: JSON, so this is the whole of the format decision.
+YAML_EXTENSIONS = (".yaml", ".yml")
+#: Every extension the app opens, in the order a file dialog should offer
+#: them. The single source of truth: the UI's dialog filters and drop-target
+#: check both derive from this rather than repeating the list (see
+#: ``ui_qt/file_filters.py``), so a new format is added in one place.
+SUPPORTED_EXTENSIONS = (".json", *YAML_EXTENSIONS)
+
+
 def load_raw(data: bytes | str, filename: str = "") -> tuple[dict, str]:
     """Decode raw JSON/YAML bytes into a ``dict`` and report the format.
 
@@ -117,7 +127,7 @@ def load_raw(data: bytes | str, filename: str = "") -> tuple[dict, str]:
     # while yaml.safe_load tolerates one -- decoding here keeps the two
     # supported formats consistent.
     text = data.decode("utf-8-sig") if isinstance(data, (bytes, bytearray)) else data
-    fmt = "yaml" if filename.lower().endswith((".yml", ".yaml")) else "json"
+    fmt = "yaml" if filename.lower().endswith(YAML_EXTENSIONS) else "json"
     try:
         parsed = yaml.safe_load(text) if fmt == "yaml" else json.loads(text)
     except (json.JSONDecodeError, yaml.YAMLError) as exc:
