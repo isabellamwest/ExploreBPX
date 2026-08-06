@@ -463,3 +463,23 @@ def test_is_dirty_true_for_edited_text_draft():
     card = create_card(param, None)
     card._edit.setPlainText("hello world")
     assert card.is_dirty is True
+
+
+def test_no_parameter_kind_falls_back_to_the_read_only_card():
+    """The registry's ``.get()`` default is belt-and-braces, not a live
+    branch: every kind a ParameterItem can carry has a real editor, so a
+    value can never arrive at a card that refuses to edit it.
+
+    SECTION is excluded because it is a container in the tree, never a
+    ParameterItem's kind. If this fails, a kind gained an enum entry before
+    it gained an editor -- add the editor rather than relaxing the test.
+    """
+    _app()
+    from ui_qt.cards.unknown import ReadOnlyCard
+
+    for kind in ParameterKind:
+        if kind is ParameterKind.SECTION:
+            continue
+        parameter = ParameterItem(label="X", path=("Header", "X"), value=None, kind=kind)
+        card = create_card(parameter, None)
+        assert not isinstance(card, ReadOnlyCard), f"{kind} has no editor"

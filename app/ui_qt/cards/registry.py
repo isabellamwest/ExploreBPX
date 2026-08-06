@@ -90,4 +90,10 @@ def _build_card(parameter: ParameterItem, meta: FieldMeta | None) -> EditorCard:
         if table_is_representable(parameter.value):
             return TableCard(parameter, meta)
         return RawValueCard(parameter, meta, _TABLE_RAW_NOTICE)
+    # Every kind a ParameterItem can actually carry is handled above or in
+    # _REGISTRY -- ``test_cards.py`` proves the dispatch total, so this
+    # default never fires today. It stays as the last resort for a kind
+    # added to the enum before its editor exists: an app whose whole job is
+    # opening broken files must degrade to a read-only view of the value,
+    # never to a KeyError where the Inspector should be.
     return _REGISTRY.get(parameter.kind, ReadOnlyCard)(parameter, meta)
