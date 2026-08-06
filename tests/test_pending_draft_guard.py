@@ -11,7 +11,9 @@ The contract now matches what a spreadsheet or a form does:
 - the destructive actions count the draft as unsaved work, so the existing
   Save/Discard/Cancel prompt appears;
 - a draft that *cannot* be written (``commit_blocked_reason``) aborts the
-  save instead of writing a file without it.
+  save instead of writing a file without it -- and the abort is spoken: a
+  toast names the blocked edit, the reason, and offers the Editor page,
+  because the card's inline reason is invisible from every other page.
 """
 
 from __future__ import annotations
@@ -138,6 +140,48 @@ def test_a_blocked_draft_aborts_the_save(app_driver, spm_workfile, monkeypatch):
     assert _on_disk(spm_workfile) == original
 
 
+def test_a_blocked_save_refuses_out_loud(app_driver, spm_workfile, monkeypatch):
+    """The abort names what is blocked, why, and the way back -- checked
+    from another page, where the card's inline reason cannot be seen."""
+    app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(6.5)
+    window = app_driver._w
+    card = window._inspector._card
+    monkeypatch.setattr(card, "commit_blocked_reason", lambda: "unparseable")
+    app_driver.show_view("Workspace")
+
+    assert window._save() is False
+
+    assert app_driver.toast_text() == (
+        'Cannot save: the edit to "Nominal cell capacity [A.h]" cannot be '
+        "written. unparseable"
+    )
+    assert app_driver.toast_action_text() == "Show in Editor"
+    # The way back changes no selection: the draft is still there to repair.
+    app_driver.toast_click_action()
+    assert app_driver.current_view_name() == "Editor"
+    assert window._inspector.has_pending_draft()
+
+
+def test_the_guard_save_choice_refuses_out_loud(
+    app_driver, spm_workfile, monkeypatch
+):
+    """Choosing "Save" in the Save/Discard/Cancel guard used to abort with
+    no sign at all when the draft was blocked -- the dialog closed, nothing
+    saved, nothing said."""
+    app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(6.5)
+    window = app_driver._w
+    card = window._inspector._card
+    monkeypatch.setattr(card, "commit_blocked_reason", lambda: "unparseable")
+    monkeypatch.setattr(
+        main_window_module.QMessageBox,
+        "question",
+        lambda *a, **k: main_window_module.QMessageBox.Save,
+    )
+
+    assert window._confirm_discard_if_dirty() is False
+    assert app_driver.toast_text().startswith("Cannot save:")
+
+
 # ----------------------------------------------------------------------
 # Export mirrors Save's own draft-flush semantics (see MainWindow._export_as)
 # ----------------------------------------------------------------------
@@ -181,3 +225,15 @@ def test_export_aborts_when_the_draft_is_unwritable(
     window._export_as("json")
 
     assert not export_path.exists()
+
+
+def test_a_blocked_export_refuses_out_loud(app_driver, spm_workfile, monkeypatch):
+    """Export's refusal speaks too, before any file dialog appears."""
+    app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(6.5)
+    window = app_driver._w
+    card = window._inspector._card
+    monkeypatch.setattr(card, "commit_blocked_reason", lambda: "unparseable")
+
+    window._export_as("json")
+
+    assert app_driver.toast_text().startswith("Cannot export:")

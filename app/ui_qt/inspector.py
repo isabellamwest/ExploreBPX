@@ -594,6 +594,26 @@ class InspectorPanel(QWidget):
             self._on_commit()
         return True
 
+    def pending_draft_block(self) -> tuple[str | None, str] | None:
+        """The blocked draft behind an ``apply_pending_draft`` False, as
+        ``(parameter name, reason)`` -- or ``None``: no card, no draft, or
+        one that commits cleanly.
+
+        The card already states the reason inline, but that surface is
+        invisible from every other page, so a Save/Export refusing over it
+        needs these facts to refuse out loud rather than silently (H6).
+        The name is ``None`` for a card without a ``parameter`` (none can
+        block today -- a defensive miss, not a real state).
+        """
+        if self._card is None or not self.has_pending_draft():
+            return None
+        reason = self._card.commit_blocked_reason()
+        if reason is None:
+            return None
+        parameter = getattr(self._card, "parameter", None)
+        name = parameter.path[-1] if parameter is not None else None
+        return name, reason
+
     def _validate_draft(self) -> None:
         if self._card is None or self._state.active is None:
             return

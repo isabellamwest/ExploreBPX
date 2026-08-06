@@ -1253,9 +1253,9 @@ class MainWindow(QMainWindow):
         if self._state.active is None:
             return False
         if not self._inspector.apply_pending_draft():
-            # The draft cannot be written at all and the card says why
-            # inline. Saving anyway would quietly write a file that does not
+            # Saving anyway would quietly write a file that does not
             # contain what the user is looking at.
+            self._refuse_blocked_write("save")
             return False
         session = self._state.active
         adopted_backing = False
@@ -1297,6 +1297,27 @@ class MainWindow(QMainWindow):
         self._apply_comparison()
         return True
 
+    def _refuse_blocked_write(self, verb: str) -> None:
+        """Refuse a Save/Export over an unwritable draft *out loud*.
+
+        The card states the reason inline, but from any other page -- or
+        inside the Save/Discard/Cancel guard on the way out of Open, New or
+        close -- the abort used to be silent: nothing saved, nothing said.
+        The refusal names what is blocked, why, and the way back (the
+        transparency plan's refusal shape). Showing the Editor page changes
+        no selection, so the draft is still there to repair.
+        """
+        block = self._inspector.pending_draft_block()
+        if block is None:
+            return
+        name, reason = block
+        target = f'the edit to "{name}"' if name else "an edit on the open card"
+        self._toast.show_message(
+            f"Cannot {verb}: {target} cannot be written. {reason}",
+            action_text="Show in Editor",
+            action=lambda: self._show_page(_EDITOR_PAGE_INDEX),
+        )
+
     def _export_as(self, fmt: str) -> None:
         """Write a copy of the document to a user-chosen location in *fmt*
         ("json" or "yaml"), the format the user picked from the Export menu.
@@ -1313,9 +1334,9 @@ class MainWindow(QMainWindow):
         if self._state.active is None or self._state.active.document is None:
             return
         if not self._inspector.apply_pending_draft():
-            # The draft cannot be written at all and the card says why
-            # inline -- see _save. Exporting anyway would write a file that
-            # does not contain what the user is looking at.
+            # Exporting anyway would write a file that does not contain
+            # what the user is looking at -- see _save.
+            self._refuse_blocked_write("export")
             return
         session = self._state.active
         suffix = ".yaml" if fmt == "yaml" else ".json"
