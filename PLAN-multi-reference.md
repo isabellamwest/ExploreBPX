@@ -2,7 +2,7 @@
 
 ## Status / handoff (2026-08-06, self-contained — session memory does not follow the repo)
 
-**Phases 1 and 2 are built and green (1658).** Phase 1 is committed (`05214ef`). Signed wireframes (rev 3, the visual
+**Phases 1 and 2 are on main and green (1658)**: `05214ef` Phase 1, `cb81f27` Phase 2. Signed wireframes (rev 3, the visual
 reference for every surface): (internal design archive)
 The Phase 1 build spec, showing what actually shipped and what rev 3 draws that is Phase 2/3:
 (internal design archive)
@@ -119,7 +119,7 @@ tokens (the typography track landed before Phase 1 started).
 - No new tests; existing suite unchanged and green is the acceptance gate. After the
   rename, grep `state.reference`-singular reads — only intentional deferrals may remain.
 
-### Phase 1 — Surface B: pin-append, identity, Workspace, strip, Ledger, gutter  ✅ done (uncommitted)
+### Phase 1 — Surface B: pin-append, identity, Workspace, strip, Ledger, gutter  ✅ done (`05214ef`)
 - State: `open_reference`/`open_reference_set` → `pin_reference`/`pin_reference_set`
   (append + cap outcome `AT_CAP`); `remove_reference(pin)` takes an argument; delete
   `swap_roles`; `new_from_file` routes through the pin path (D2).
@@ -141,7 +141,7 @@ tokens (the typography track landed before Phase 1 started).
 - Qt risks: dynamic row rebuild must not leak stale button connections (rebuild rows
   wholesale per `set_comparison`, matching inspector refresh-in-place discipline).
 
-### Phase 2 — Surface C: overlay + table selector + source-page selector  ✅ done (uncommitted)
+### Phase 2 — Surface C: overlay + table selector + source-page selector  ✅ done (`cb81f27`)
 
 Departures agreed while building, 2026-08-06:
 
