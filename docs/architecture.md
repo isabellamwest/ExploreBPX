@@ -209,14 +209,16 @@ navigate to locations rather than filtering or replacing the hierarchy.
   expanded; floating windows are reserved for read-only visualisation, such
   as the validation-run comparison charts. A card's ( i ) opens a quick
   documentation popover; the Documentation section carries the full prose.
-- **Diagnostics page** — a summary strip over a section rail beside a detail
-  pane of per-section **Issues** and **Outstanding** groups. The strip's
-  chips double as view-only filters that never change any reported count.
-  `core/page_buckets.py` supplies the one grouping that the strip, rail and
-  pane all render from, so they cannot disagree.
+- **Diagnostics page** — a summary strip over one scrolling stream of
+  per-section groups, each holding a section's issue rows and incomplete
+  rows under a foldable header. The strip's chips double as view-only
+  filters that never change any reported count. `core/page_buckets.py`
+  supplies the one grouping that the strip and stream both render from, so
+  they cannot disagree.
 - **Toolbar and status bar** — Save, Export (JSON/YAML), Undo, Redo and
   Search sit on the right of the top bar; opening files lives on the
-  Workspace page. The status bar carries source and modified/saved state.
+  Workspace page. The status bar carries the file name and its
+  Saved/Unsaved-changes state.
 
 ## Interaction conventions
 

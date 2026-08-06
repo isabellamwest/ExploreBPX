@@ -142,7 +142,7 @@ class ReferenceTableGrid(QWidget):
 
 class _LedgerRow(QWidget):
     """One distinct reference value: its badge cluster, the value, and either
-    "same" or a Pull button."""
+    "same" or a "Use this value" button."""
 
     #: Emitted with the *first-pinned* index in this row's group. First
     #: pinned, not "the one clicked": the row is one value shared by several
