@@ -25,8 +25,11 @@ below records the prompt; if Bella prefers read-only after all, only D3 changes.
 
 Phase 1 is **complete** (2026-08-06, outcome recorded under the phase below); the
 wording glossary (D7/D8/D9) is implemented and the H2 badge violation it uncovered is
-fixed. Next action: **Phase 3**, `LoadRecord` in `core` — Phases 4 and 5 still need
-their wireframe passes before any UI is built.
+fixed. Phase 3 is **complete** (2026-08-06, outcome under the phase below): `LoadRecord`
+in `core`, the legacy seam through the gateway, and "how far checking reached" modelled
+as `CheckReach` rather than a boolean. Next action: **Phase 4**, starting with its
+wireframe pass — Phases 4 and 5 still need their wireframe passes before any UI is
+built.
 
 ## Governing principle — the honesty charter
 
@@ -183,6 +186,29 @@ Unit tested, no UI. Closes finding 5: the format decision is made once and carri
 Legacy detection routes through `core/bpx_gateway.py` to `bpx._migrations.is_legacy_bpx` /
 `convert_v0_to_v1` — a private module, pinned by a test in the same style as
 `_MODEL_MISMATCH_MARKER` so a `bpx` upgrade fails loudly. Never a hand-rolled version check.
+
+**Outcome (2026-08-06): complete, suite 1716 green** (baseline 1699 + 17 new tests).
+- `core/load_record.py`: frozen `LoadRecord` (fmt · is_legacy · checked ·
+has_yaml_comments · size_bytes · mtime) with `LoadRecord.capture(data, document, path)`.
+Format and reach are carried from the document's own load, never re-derived (finding 5).
+YAML comments are judged by the yaml scanner's token spans — a `#` outside every token
+span is a comment — so a `#` inside a quoted scalar, a plain-scalar DOI fragment, or a
+block-scalar body never false-positives (all pinned by tests).
+- Gateway: `is_legacy` / `convert_legacy` route to `bpx._migrations` (the one private
+import, declared in the module docstring). An undetectable version field reads as *not
+detectably legacy* (False) — validation reports the fault itself, so nothing is fudged.
+Pinned against the installed bpx: detection on the real v0.1 fixture, agreement with
+bpx's own convert-on-parse (the "legacy BPX v0.x" warning), input never mutated.
+- "How far checking reached" is now modelled, not merely boolean: `CheckReach`
+(NOT_RUN · HEADER · PARAMETERISATION · COMPLETE), derived from the same loc-shape
+reading `_validation_completed` used (stage attribution via the live schema's own
+property sets; an unrecognisable abort claims the least, HEADER).
+`ValidationResult.completed` is now a property derived from `reach`, so the two can
+never disagree; `BPXDocument.validation_reach` mirrors reach on every rebuild — the
+live answer Phase 4's Checked row and stream line need, while `LoadRecord.checked`
+stays the load-time snapshot.
+- Deliberately not wired into `state`/UI: `capture`'s call site (`AppState.open`) lands
+with Phase 4, where the record is first shown.
 
 ### Phase 4 — the record and the stream group on screen
 Design rules 1 and 2. `DocumentIdentity` gains `description` and `references`. Card
