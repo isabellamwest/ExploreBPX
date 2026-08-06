@@ -44,6 +44,16 @@ def test_load_raw_rejects_non_object():
         bpx_gateway.load_raw(b"[1, 2, 3]", "thing.json")
 
 
+def test_format_for_filename_is_the_one_extension_rule():
+    """Loader and ``DocumentSession.save`` both read this rule; a second
+    hardcoded extension list is exactly what it exists to prevent."""
+    assert bpx_gateway.format_for_filename("a.json") == "json"
+    assert bpx_gateway.format_for_filename("a.yaml") == "yaml"
+    assert bpx_gateway.format_for_filename("a.yml") == "yaml"
+    assert bpx_gateway.format_for_filename("A.YAML") == "yaml"
+    assert bpx_gateway.format_for_filename("no_extension") == "json"
+
+
 def test_load_raw_rejects_malformed():
     with pytest.raises(LoadError):
         bpx_gateway.load_raw(b"{not json", "thing.json")

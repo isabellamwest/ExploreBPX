@@ -116,6 +116,17 @@ YAML_EXTENSIONS = (".yaml", ".yml")
 SUPPORTED_EXTENSIONS = (".json", *YAML_EXTENSIONS)
 
 
+def format_for_filename(filename: str) -> str:
+    """The format *filename*'s extension declares: ``"yaml"`` or ``"json"``.
+
+    The whole of the extension-to-format rule, in one place: the loader
+    reads by it and ``DocumentSession.save`` writes by it, so the two can
+    never diverge over which extensions count as YAML (transparency track
+    finding 5 -- the decision used to be made independently in both).
+    """
+    return "yaml" if filename.lower().endswith(YAML_EXTENSIONS) else "json"
+
+
 def load_raw(data: bytes | str, filename: str = "") -> tuple[dict, str]:
     """Decode raw JSON/YAML bytes into a ``dict`` and report the format.
 
@@ -127,7 +138,7 @@ def load_raw(data: bytes | str, filename: str = "") -> tuple[dict, str]:
     # while yaml.safe_load tolerates one -- decoding here keeps the two
     # supported formats consistent.
     text = data.decode("utf-8-sig") if isinstance(data, (bytes, bytearray)) else data
-    fmt = "yaml" if filename.lower().endswith(YAML_EXTENSIONS) else "json"
+    fmt = format_for_filename(filename)
     try:
         parsed = yaml.safe_load(text) if fmt == "yaml" else json.loads(text)
     except (json.JSONDecodeError, yaml.YAMLError) as exc:

@@ -318,8 +318,10 @@ class DocumentSession:
     def save(self) -> None:
         """Write the current document to ``backing_file`` and clear dirty.
 
-        The output format is derived from the backing file's extension so
-        that the written bytes always match the file's declared type.
+        The output format comes from the backing file's extension via the
+        gateway's one extension-to-format rule (the same rule the loader
+        read by), so the written bytes always match the file's declared
+        type.
 
         Raises ``ValueError`` if no document is loaded or no backing file
         is set. Raises ``OSError`` if the write fails.
@@ -328,7 +330,6 @@ class DocumentSession:
             raise ValueError("No document loaded")
         if self.backing_file is None:
             raise ValueError("No backing file set; use export to save to a new location")
-        name = self.backing_file.name.lower()
-        fmt = "yaml" if name.endswith((".yml", ".yaml")) else "json"
+        fmt = bpx_gateway.format_for_filename(self.backing_file.name)
         self.backing_file.write_bytes(export.to_bytes(self.document.raw, fmt))
         self.dirty = False
