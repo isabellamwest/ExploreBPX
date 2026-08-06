@@ -76,23 +76,23 @@ def test_workspace_info_shows_identity_and_file_state_once_opened(
     assert "Model: SPM" in text
     assert "BPX version: 1.0.0" in text
     assert f"File: {valid_spm_path.name}" in text
-    assert "State: Saved" in text
+    assert "Status: Saved" in text
 
 
 def test_workspace_info_reflects_dirty_state(app_driver, spm_workfile):
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(6.0).commit()
 
-    assert "State: Modified" in app_driver.workspace_info_text()
+    assert "Status: Unsaved changes" in app_driver.workspace_info_text()
 
 
 def test_workspace_info_returns_to_saved_after_save(app_driver, spm_workfile):
     d = app_driver
     d.open(spm_workfile).go_to(_CAPACITY).edit_field(6.0).commit()
-    assert "State: Modified" in d.workspace_info_text()
+    assert "Status: Unsaved changes" in d.workspace_info_text()
 
     d._w._save()
 
-    assert "State: Saved" in d.workspace_info_text()
+    assert "Status: Saved" in d.workspace_info_text()
 
 
 def test_workspace_info_filename_updates_after_save_as(
@@ -112,7 +112,7 @@ def test_workspace_info_filename_updates_after_save_as(
     d._w._save()
 
     assert f"File: {new_path.name}" in d.workspace_info_text()
-    assert "State: Saved" in d.workspace_info_text()
+    assert "Status: Saved" in d.workspace_info_text()
 
 
 def test_opening_from_workspace_page_switches_to_editor_page(
@@ -147,7 +147,7 @@ def test_opening_from_workspace_page_goes_through_discard_guard(
     """
     d = app_driver
     d.open(spm_workfile).go_to(_CAPACITY).edit_field(6.0).commit()
-    assert d.status_text() == f"{spm_workfile.name}  |  Modified"
+    assert d.status_text() == f"{spm_workfile.name}  |  Unsaved changes"
     original_status = d.status_text()
 
     monkeypatch.setattr(
@@ -251,7 +251,7 @@ def test_choosing_new_model_creates_document_and_switches_to_editor(app_driver, 
     assert d.current_view_index() == 0
     assert d.activity_bar_selected_label() == "Editor"
     assert d._w._state.active.document.identity.model == model
-    assert "State: Modified" in d.workspace_info_text()
+    assert "Status: Unsaved changes" in d.workspace_info_text()
     assert "File: untitled.json" in d.workspace_info_text()
 
 
@@ -262,7 +262,7 @@ def test_new_from_workspace_page_goes_through_discard_guard_and_cancel_aborts(
     d.open(spm_workfile).go_to(_CAPACITY).edit_field(6.0).commit()
     original_identity = d.identity_text()
     original_status = d.status_text()
-    assert "Modified" in original_status
+    assert "Unsaved changes" in original_status
 
     d.show_view("Workspace")  # starting off the Editor page so a wrongful
     # switch-to-Editor on the abort path would actually move the index
@@ -455,7 +455,7 @@ def test_dropping_a_file_goes_through_discard_guard_and_cancel_aborts(
     d.open(spm_workfile).go_to(_CAPACITY).edit_field(6.0).commit()
     original_identity = d.identity_text()
     original_status = d.status_text()
-    assert "Modified" in original_status
+    assert "Unsaved changes" in original_status
 
     d.show_view("Workspace")  # starting off the Editor page so a wrongful
     # switch-to-Editor on the abort path would actually move the index
@@ -536,10 +536,10 @@ def test_document_card_names_what_is_still_outstanding(app_driver):
 
     text = ws._info_badge.text()
     assert text.startswith("Valid · ")
-    assert text.endswith(" outstanding")
+    assert text.endswith(" incomplete")
 
 
 def test_a_complete_document_says_only_valid(app_driver, valid_spm_path):
     app_driver.open(valid_spm_path)
 
-    assert "outstanding" not in app_driver._w._workspace._info_badge.text()
+    assert "incomplete" not in app_driver._w._workspace._info_badge.text()

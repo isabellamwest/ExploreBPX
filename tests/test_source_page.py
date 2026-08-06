@@ -873,7 +873,7 @@ def test_source_pull_stays_on_the_source_page(app_driver, tmp_path, monkeypatch)
     app_driver.source_pull(path)
 
     # The page's rhythm is click, pull, click, pull -- confirmation happens
-    # in place (the row's transient "Pulled" tag), never a page switch. The
+    # in place (the row's transient "Used" tag), never a page switch. The
     # Editor is opt-in: the toast's action, or a double-click.
     assert app_driver.current_view_name() == "Source"
     assert app_driver.source_flash_path() == path
@@ -885,7 +885,7 @@ def test_source_pull_toast_offers_the_editor(app_driver, tmp_path, monkeypatch):
 
     app_driver.source_pull(("Parameterisation", "Cell", "Nominal cell capacity [A.h]"))
 
-    assert app_driver.toast_text() == "Pulled Nominal cell capacity [A.h]"
+    assert app_driver.toast_text() == 'Used "Nominal cell capacity [A.h]" from reference.json'
     assert app_driver.toast_action_text() == "Show in Editor"
 
     # The action is the one deliberate road to the Editor -- and it lands

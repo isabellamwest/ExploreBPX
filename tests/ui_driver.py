@@ -602,7 +602,7 @@ class AppDriver:
         return self
 
     def source_flash_path(self) -> tuple[str, ...] | None:
-        """The row currently showing the transient "Pulled" gutter tag,
+        """The row currently showing the transient "Used" gutter tag,
         or ``None`` once it has faded (or before any pull)."""
         return self._w._source._view.flash_path()
 
@@ -1674,7 +1674,7 @@ class AppDriver:
 
     def validity(self) -> str:
         """The Inspector validity badge: '', 'Valid', 'Warning', 'Invalid'
-        or 'Not validated' (bpx aborted before judging this parameter)."""
+        or 'Not checked' (bpx aborted before judging this parameter)."""
         return self._w._inspector._card._badge.text()
 
     def field_value(self):
@@ -1886,7 +1886,7 @@ class AppDriver:
         lines = [f"Title: {title}"]
         if ws._info_badge.text():
             lines.append(f"Validity: {ws._info_badge.text()}")
-        for key in ("Model", "BPX version", "File", "State", "Contents"):
+        for key in ("Model", "BPX version", "File", "Status", "Contents"):
             lines.append(f"{key}: {ws._info_fields[key].text()}")
         return "\n".join(lines)
 

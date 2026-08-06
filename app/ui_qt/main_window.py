@@ -1129,7 +1129,7 @@ class MainWindow(QMainWindow):
 
         The pull stays on the Source page: its rhythm
         is next ›, pull, next ›, pull, so unlike ``_on_committed`` this
-        never navigates -- confirmation is the row's transient "Pulled"
+        never navigates -- confirmation is the row's transient "Used"
         tag plus a toast, and the Editor is opt-in via the toast's Show
         in Editor action (or a row double-click, as ever).
         """
@@ -1162,7 +1162,7 @@ class MainWindow(QMainWindow):
         self._refresh_all()
         self._source.flash_pulled(path)
         self._toast.show_message(
-            f"Pulled {path[-1]}",
+            f'Used "{path[-1]}" from {reference.filename}',
             action_text="Show in Editor",
             action=lambda: self._navigation.navigate(path),
         )
@@ -1348,7 +1348,7 @@ class MainWindow(QMainWindow):
         name = session.backing_file.name if session.backing_file else session.document.filename
         prefix = "* " if session.dirty else ""
         self.setWindowTitle(f"{prefix}{name} \u2014 ExploreBPX")
-        state_text = "Modified" if session.dirty else "Saved"
+        state_text = "Unsaved changes" if session.dirty else "Saved"
         self._status_label.setText(f"{name}  |  {state_text}")
 
     def _fallback_filename(self, session: DocumentSession) -> str:

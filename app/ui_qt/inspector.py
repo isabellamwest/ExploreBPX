@@ -15,7 +15,7 @@ The Inspector is one scrolling page, top to bottom:
     diagnostic elsewhere in the file never colours this parameter's mark.
     When ``bpx`` aborted before judging this parameter's section
     (``validation_completed`` is False), an issue-free parameter reads as
-    neutral "Not validated" rather than a false green "Valid".
+    neutral "Not checked" rather than a false green "Valid".
   - **Issues section**: a full-bleed tinted section listing the shown
     parameter's validation issues, present only while it *has* issues
     (committed or live-preview) -- an issue-free parameter's page simply has
@@ -753,7 +753,7 @@ class InspectorPanel(QWidget):
             if completed:
                 self._card.set_validity("Valid", OK)
             else:
-                self._card.set_validity("Not validated", MUTED)
+                self._card.set_validity("Not checked", MUTED)
             return
         self._card.set_validity(
             "Invalid" if has_errors else "Warning", ERROR if has_errors else WARNING

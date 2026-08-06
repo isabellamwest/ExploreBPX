@@ -485,7 +485,7 @@ class WorkspacePanel(QWidget):
         body.addWidget(self._info_title)
 
         self._info_form, self._info_fields = self._build_kv_form(
-            ("Model", "BPX version", "File", "State", "Contents")
+            ("Model", "BPX version", "File", "Status", "Contents")
         )
         body.addLayout(self._info_form)
         return section
@@ -664,7 +664,7 @@ class WorkspacePanel(QWidget):
         self._info_fields["Model"].setText(identity.model or "-")
         self._info_fields["BPX version"].setText(identity.bpx_version or "-")
         self._info_fields["File"].setText(filename or "-")
-        self._info_fields["State"].setText("Modified" if dirty else "Saved")
+        self._info_fields["Status"].setText("Unsaved changes" if dirty else "Saved")
         self._info_fields["Contents"].setText(
             f"{document.section_count} sections · {document.parameter_count} parameters"
         )
@@ -733,7 +733,7 @@ class WorkspacePanel(QWidget):
                 WARNING,
             )
         if outstanding:
-            text = f"{text} · {outstanding} outstanding"
+            text = f"{text} · {outstanding} incomplete"
         self._info_badge.setText(text)
         self._info_dot.setText(icons.html_img(icons.DOT, color=colour))
         self._info_dot.show()

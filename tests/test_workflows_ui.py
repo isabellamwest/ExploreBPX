@@ -398,7 +398,7 @@ def test_masked_section_badges_not_validated_instead_of_valid(
 ):
     """bpx validates in stages, and a Parameterisation error aborts the run
     before State is ever judged (see test_gateway.py's staged-abort tests).
-    A parameter bpx never judged must badge neutral "Not validated" -- a
+    A parameter bpx never judged must badge neutral "Not checked" -- a
     green "Valid" there would be a false clean bill of health."""
     d = app_driver
     d.open(spm_workfile).go_to(_TEMPERATURE)
@@ -409,12 +409,12 @@ def test_masked_section_badges_not_validated_instead_of_valid(
     assert d.validity() == "Invalid"
 
     d.go_to(_TEMPERATURE)
-    assert d.validity() == "Not validated"
+    assert d.validity() == "Not checked"
 
     # The live preview of a draft is equally unjudged while the abort holds.
     d.edit_field("300")
     d.wait_for_live_validation()
-    assert d.validity() == "Not validated"
+    assert d.validity() == "Not checked"
     d.escape()
 
     # Repair the Cell parameter: State is judged again and the badge returns.

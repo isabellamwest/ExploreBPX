@@ -215,7 +215,7 @@ def test_state4_done(app_driver, valid_spm_path):
     assert d.diagnostics_stream_headers() == []
     total = len(d._w._diagnostics._buckets.buckets)
     assert d.diagnostics_all_clear_text() == (
-        style.all_clear("No issues, nothing outstanding")
+        style.all_clear("No issues, nothing incomplete")
         + f"\n{total} of {total} sections complete and valid"
     )
     assert d.validation_badge_count() == 0

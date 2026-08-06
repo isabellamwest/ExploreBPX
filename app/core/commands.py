@@ -154,9 +154,8 @@ class PullParameter(Command):
 
     ``source_label`` names which reference the value came from (multi-
     reference track Phase 1, e.g. a docked file's display name), used by
-    ``command_service.execute`` to title the undo entry `Pull "<key>" from
-    <source_label>`. Defaults to ``""`` -- the single-reference callers this
-    phase does not yet touch keep today's plain `Copy up "<key>"` wording.
+    ``command_service.execute`` to title the undo entry `Use "<key>" from
+    <source_label>`. Defaults to ``""``, which titles it plain `Use "<key>"`.
     """
 
     path: tuple[str, ...]

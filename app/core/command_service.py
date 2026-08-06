@@ -187,16 +187,15 @@ def _missing_ancestors(raw: dict, path: tuple[str, ...]) -> tuple[tuple[str, ...
 
 
 def _pull_label(path: tuple[str, ...], source_label: str) -> str:
-    """The undo/redo entry title for a "Copy up" pull (multi-reference track
-    Phase 1): `Pull "<key>" from <source_label>` once a source is named, else
-    today's plain `Copy up "<key>"` -- the single-reference callers this
-    phase does not yet touch pass no ``source_label``, so their undo history
-    reads exactly as before.
+    """The undo/redo entry title for a ``PullParameter``/``PullSection``
+    write (transparency track D9 wording): `Use "<key>" from <source_label>`
+    once a source is named, else the plain `Use "<key>"` -- only the words;
+    the command names themselves keep Pull.
     """
     key = path[-1]
     if source_label:
-        return f'Pull "{key}" from {source_label}'
-    return f'Copy up "{key}"'
+        return f'Use "{key}" from {source_label}'
+    return f'Use "{key}"'
 
 
 def _pull_updates(

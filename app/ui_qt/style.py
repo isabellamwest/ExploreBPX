@@ -204,7 +204,7 @@ def warning_count_tooltip(count: int) -> str:
 
 
 def outstanding_count_tooltip(count: int) -> str:
-    return _count_phrase(count, "outstanding item")
+    return _count_phrase(count, "incomplete item")
 
 
 def counts_tooltip(error_count: int, warning_count: int, outstanding_count: int) -> str:
@@ -500,16 +500,16 @@ QTableWidget#ReferenceTableGridTable QHeaderView::section {
     background: transparent; border: none; border-bottom: 1px solid #eaeef2;
     color: #8c959f; font-weight: ${semibold}; font-size: ${meta}px; padding: 1px 6px;
 }
-/* "Copy up": a quiet purple text button beside the value -- the pull action
-   stays discoverable without outweighing the main editor (the old solid
-   fill was the loudest thing on the card). Hidden for an EQUAL row --
-   nothing to copy -- rather than shown disabled. */
-QPushButton#CopyUpButton {
+/* "Use this value": a quiet purple text button beside the ledger value --
+   the pull action stays discoverable without outweighing the main editor
+   (the old solid fill was the loudest thing on the card). Hidden for an
+   EQUAL row -- nothing to copy -- rather than shown disabled. */
+QPushButton#PullButton {
     background: transparent; color: #6f42c1; font-weight: ${semibold};
     border: none; border-radius: 4px; padding: 4px 8px;
 }
-QPushButton#CopyUpButton:hover:!disabled { color: #5a3399; background: #f3ecfa; }
-QPushButton#CopyUpButton:disabled { color: #8c959f; font-weight: ${regular}; }
+QPushButton#PullButton:hover:!disabled { color: #5a3399; background: #f3ecfa; }
+QPushButton#PullButton:disabled { color: #8c959f; font-weight: ${regular}; }
 QLabel#GhostCardHeading { color: #6f42c1; font-weight: ${semibold}; font-size: ${meta}px; }
 /* Source page toolbar: the fold-all toggle sits left in both modes;
    single-pane also shows the main file's identity + the purple docking

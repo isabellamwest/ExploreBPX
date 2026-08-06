@@ -4,7 +4,7 @@ row -- a parameter some pinned reference has and the main document does not.
 No draft, no input widget: just the parameter's name and the ledger
 (:class:`~.reference_block.ReferenceLedger`, shared with ``ParameterCard``'s
 own reference section so the two can never drift), one row per distinct
-reference value with Pull always offered -- there is no main-file value for
+reference value with "Use this value" always offered -- there is no main-file value for
 any of them to be "the same" as. Mirrors ``ValidationEmptyState``'s "never
 dirty" contract (a class-level ``is_dirty``/``is_editable``) so the
 Inspector's undo guard (which reads ``is_dirty``) and the test driver's

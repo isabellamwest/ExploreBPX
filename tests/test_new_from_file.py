@@ -164,7 +164,7 @@ def test_click_flow_clones_pins_and_stays_on_workspace(app_driver, origin_path, 
     assert d.toast_text() == "New document from main.json · pinned as reference"
     assert d.reference_tile_visible()
     assert "main.json" in d.reference_tile_text()
-    assert "State: Modified" in d.workspace_info_text()
+    assert "Status: Unsaved changes" in d.workspace_info_text()
     assert not d.undo_enabled()
     assert d._w._state.active.document.filename == "main (copy).json"
     # Equal clone and origin: the comparison exists and reports no differences.

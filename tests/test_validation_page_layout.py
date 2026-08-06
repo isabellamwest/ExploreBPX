@@ -51,7 +51,7 @@ def test_strip_counts_wording(qtbot):
 
     strip.set_counts(0, 0, 0)
     assert "0 error" in strip._errors.text() and "0 warning" in strip._warnings.text()
-    assert "0 outstanding" in strip._outstanding.text()
+    assert "0 incomplete" in strip._outstanding.text()
 
     strip.set_counts(1, 0, 0)
     assert "1 error" in strip._errors.text()
@@ -61,7 +61,7 @@ def test_strip_counts_wording(qtbot):
     assert "4 errors" in strip._errors.text()
     assert "1 warning" in strip._warnings.text()
     assert "1 warnings" not in strip._warnings.text()
-    assert "12 outstanding" in strip._outstanding.text()
+    assert "12 incomplete" in strip._outstanding.text()
 
 
 def test_strip_totals_match_the_app_rail_badge(app_driver, many_issues_path):
@@ -263,7 +263,7 @@ def test_fully_clean_document_shows_the_all_clear_row_and_clear_line(app_driver,
     assert d.diagnostics_stream_headers() == []
     total = len(d._w._diagnostics._buckets.buckets)
     assert d.diagnostics_all_clear_text() == (
-        style.all_clear("No issues, nothing outstanding")
+        style.all_clear("No issues, nothing incomplete")
         + f"\n{total} of {total} sections complete and valid"
     )
     assert d.diagnostics_clear_line_text() == f"{total} sections clear"
@@ -275,7 +275,7 @@ def test_partial_and_fully_clear_all_clear_row_shows_the_partial_notice_as_line_
     """Amended D9 (2026-08-05 review finding): under Partial there is no
     completion target, so "N of N sections complete and valid" is a false
     claim even when the page is genuinely error/warning/outstanding-free --
-    line 1 (the plain check + "No issues, nothing outstanding") is
+    line 1 (the plain check + "No issues, nothing incomplete") is
     unchanged, but line 2 becomes the Partial notice, and it must not ALSO
     render as its own separate row."""
     from core import document_factory
@@ -292,7 +292,7 @@ def test_partial_and_fully_clear_all_clear_row_shows_the_partial_notice_as_line_
     assert d._w._diagnostics._buckets.outstanding_count == 0
 
     assert d.diagnostics_all_clear_text() == (
-        style.all_clear("No issues, nothing outstanding") + f"\n{_MSG_PARTIAL_NO_TARGET}"
+        style.all_clear("No issues, nothing incomplete") + f"\n{_MSG_PARTIAL_NO_TARGET}"
     )
     assert d._validation_rows("message") == []  # not also a separate Partial-notice row
 

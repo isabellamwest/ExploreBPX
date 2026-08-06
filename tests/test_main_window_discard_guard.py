@@ -31,7 +31,7 @@ _CAPACITY = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
 
 def _make_dirty(app_driver, spm_workfile) -> None:
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(6.0).commit()
-    assert app_driver.status_text() == f"{spm_workfile.name}  |  Modified"
+    assert app_driver.status_text() == f"{spm_workfile.name}  |  Unsaved changes"
 
 
 def _fail_if_called(*args, **kwargs):

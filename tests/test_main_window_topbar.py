@@ -2,7 +2,7 @@
 
 Covers Steps 2+3 of the top-bar/workspace redesign: the top bar's identity
 label composed from ``document.identity``, Save/Export enabled state, and the
-bottom status bar showing only file name + Saved/Modified (never the Title).
+bottom status bar showing only file name + Saved/Unsaved changes (never the Title).
 
 The identity label carries only Title and BPX version -- Model is omitted
 and is edited in the Editor instead, via the normal ``Header.Model`` enum
@@ -104,4 +104,4 @@ def test_status_bar_reflects_dirty_state(app_driver, spm_workfile):
     capacity = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
     app_driver.open(spm_workfile).go_to(capacity).edit_field(6.0).commit()
 
-    assert app_driver.status_text() == f"{spm_workfile.name}  |  Modified"
+    assert app_driver.status_text() == f"{spm_workfile.name}  |  Unsaved changes"

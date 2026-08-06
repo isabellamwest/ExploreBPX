@@ -98,8 +98,8 @@ def test_count_tooltip_wording_and_pluralisation():
     assert style.error_count_tooltip(1) == "1 validator error"
     assert style.error_count_tooltip(2) == "2 validator errors"
     assert style.warning_count_tooltip(1) == "1 validator warning"
-    assert style.outstanding_count_tooltip(1) == "1 outstanding item"
-    assert style.outstanding_count_tooltip(3) == "3 outstanding items"
+    assert style.outstanding_count_tooltip(1) == "1 incomplete item"
+    assert style.outstanding_count_tooltip(3) == "3 incomplete items"
 
 
 def test_counts_tooltip_omits_zero_parts():

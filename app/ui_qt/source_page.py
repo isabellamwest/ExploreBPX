@@ -67,7 +67,7 @@ _PULL_H = 20
 #: The one-line stand-in for a closed dict/list value.
 _CLOSED_SUMMARY = "table"
 
-#: How long the just-pulled row's gutter shows its "Pulled" tag. Long
+#: How long the just-pulled row's gutter shows its "Used" tag. Long
 #: enough to register where the eye already is, short enough that a
 #: next-pull rhythm never shows a stale tag.
 _PULLED_FLASH_MS = 2500
@@ -559,7 +559,7 @@ class SourceView(QAbstractScrollArea):
         #: line index, so it survives re-renders, folds and edits; arrow
         #: keys move it and a row click places it directly.
         self._selected: tuple[str, ...] | None = None
-        #: The just-pulled row's path while its gutter "Pulled" tag shows
+        #: The just-pulled row's path while its gutter "Used" tag shows
         #: (the stay-put confirmation after a pull); cleared by the
         #: single-shot timer, or by ``set_rows`` if the row itself vanishes
         #: (undo).
@@ -615,7 +615,7 @@ class SourceView(QAbstractScrollArea):
         self._rebuild()
 
     def flash_pulled(self, path: tuple[str, ...]) -> None:
-        """Show the transient "Pulled" tag in *path*'s gutter slot -- the
+        """Show the transient "Used" tag in *path*'s gutter slot -- the
         stay-put confirmation of a completed ← pull. One at a time: a new
         pull moves the tag and restarts its clock."""
         self._flash_path = tuple(path)
@@ -623,7 +623,7 @@ class SourceView(QAbstractScrollArea):
         self.viewport().update()
 
     def flash_path(self) -> tuple[str, ...] | None:
-        """The row currently showing the "Pulled" tag, or ``None``
+        """The row currently showing the "Used" tag, or ``None``
         (test/driver read)."""
         return self._flash_path
 
@@ -1078,7 +1078,7 @@ class SourceView(QAbstractScrollArea):
     def _paint_pulled_tag(
         self, painter: QPainter, pane_width: int, top: int, line_height: int
     ) -> None:
-        """The transient "Pulled" confirmation, in the ← chip's own slot
+        """The transient "Used" confirmation, in the ← chip's own slot
         and palette -- a role word, not a glyph."""
         width = _GUTTER_PX - 4
         x = pane_width + (_GUTTER_PX - width) // 2
@@ -1090,7 +1090,7 @@ class SourceView(QAbstractScrollArea):
         font = typography.mono(typography.MICRO, weight=typography.SEMIBOLD)
         painter.setFont(font)
         painter.setPen(QColor(style.REFERENCE))
-        painter.drawText(x, y, width, _PULL_H, Qt.AlignCenter, "Pulled")
+        painter.drawText(x, y, width, _PULL_H, Qt.AlignCenter, "Used")
 
     # -- interaction -----------------------------------------------------
 
@@ -1377,7 +1377,7 @@ class SourcePage(QWidget):
         self._view.setFocus()
 
     def flash_pulled(self, path: tuple[str, ...]) -> None:
-        """Show the view's transient "Pulled" tag on *path*'s row (called
+        """Show the view's transient "Used" tag on *path*'s row (called
         by MainWindow after the pull command commits and the page has
         re-rendered)."""
         self._view.flash_pulled(path)

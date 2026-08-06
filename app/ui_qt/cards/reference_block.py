@@ -14,7 +14,8 @@ the main editor's input above; the value column itself starts at the same x
 as that input (``style.ROLE_LABEL_WIDTH``), so the eye compares vertically.
 
 A row says exactly one thing beyond its value: **same** when the value
-equals the main document's, or a **Pull** button when it differs. Pull's
+equals the main document's, or a **Use this value** button when it differs
+(the pull action, D9 wording). The button's
 presence *is* the differs signal -- there is no third word, no severity
 colour, and no styling that could read as validation. A reference lacking
 the key contributes no row at all rather than an empty placeholder.
@@ -211,10 +212,10 @@ class _LedgerRow(QWidget):
             same.setObjectName("LedgerSameLabel")
             row.addWidget(same, 0, Qt.AlignTop)
         else:
-            pull = QPushButton("Pull")
+            pull = QPushButton("Use this value")
             pull.setObjectName("PullButton")
             pull.setCursor(Qt.PointingHandCursor)
-            pull.setToolTip(f"Pull this value from {pins[self._source_index].name}")
+            pull.setToolTip(f"Use this value from {pins[self._source_index].name}")
             pull.clicked.connect(self._emit_pull)
             row.addWidget(pull, 0, Qt.AlignTop)
 

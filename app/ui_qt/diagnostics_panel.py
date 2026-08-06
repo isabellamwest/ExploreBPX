@@ -523,7 +523,7 @@ def _add_all_clear_row(list_widget: QListWidget, total_buckets: int, *, model: s
     that notice instead, and it does not ALSO render as its own row (the
     caller's if/elif in :meth:`_StreamView.render` guarantees that). The
     clear line still renders below this row, expandable as usual."""
-    line1 = style.all_clear("No issues, nothing outstanding")
+    line1 = style.all_clear("No issues, nothing incomplete")
     line2 = _MSG_PARTIAL_NO_TARGET if model == "Partial" else f"{total_buckets} of {total_buckets} sections complete and valid"
     html = (
         f'<span style="color:{style.DEFAULT_TEXT};">{_html.escape(line1)}</span><br>'
@@ -1045,7 +1045,7 @@ class _SummaryStrip(QWidget):
             _chip_html(
                 icons.RING,
                 style.MUTED,
-                f"{outstanding} outstanding",
+                f"{outstanding} incomplete",
                 on=self._outstanding.is_on() and outstanding > 0,
             )
         )
