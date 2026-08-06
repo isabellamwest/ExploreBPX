@@ -414,6 +414,18 @@ QWidget#ReferenceGroupBoxHeader {
 QLabel#WorkspaceCardTitle { font-size: ${title}px; font-weight: ${semibold}; }
 QLabel#WorkspaceCardTitle:disabled { color: #8c959f; font-weight: ${regular}; }
 QLabel#WorkspaceCardKey { color: #57606a; }
+/* The record's editable identity rows (Phase 4, concept B): a persistent
+   dashed underline is the edit affordance, ghost text states an absent
+   value ("Add a citation…") without inventing one. The title's line edit
+   matches the title label's own rung so the text never jumps on click. */
+QLabel[editableValue="true"] { border-bottom: 1px dashed #b6c0ca; }
+QLabel[editableValue="true"][ghosted="true"] { color: #8c959f; }
+QLineEdit#WorkspaceTitleEditor { font-size: ${title}px; font-weight: ${semibold}; }
+/* The fact plaque: the file's own immutable facts on a wash one step
+   quieter than the section's (#f6f8fa -> #eef1f4), so "editable above,
+   facts below" is visible structure rather than a rule in a docstring. */
+QWidget#WorkspaceFactBand { background: #eef1f4; }
+QLabel#WorkspaceFactDetail { color: #57606a; font-size: ${meta}px; }
 /* The reference box's panel title keeps its purple identity while joining
    the caps tier -- colour is identity, caps is hierarchy. */
 QLabel#ReferenceHeading { color: #6f42c1; font-weight: ${semibold}; font-size: ${meta}px; }

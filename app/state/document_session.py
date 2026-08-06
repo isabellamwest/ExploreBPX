@@ -9,6 +9,7 @@ shell."""
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -338,5 +339,17 @@ class DocumentSession:
         if self.backing_file is None:
             raise ValueError("No backing file set; use export to save to a new location")
         fmt = bpx_gateway.format_for_filename(self.backing_file.name)
-        self.backing_file.write_bytes(export.to_bytes(self.document.raw, fmt))
+        data = export.to_bytes(self.document.raw, fmt)
+        self.backing_file.write_bytes(data)
+        # Re-capture the load record from the bytes just written: the file
+        # this session is backed by has changed, and a record still stating
+        # the open-time size/mtime/comments would be a stale fact on the
+        # Workspace record (a save through safe_dump also, truthfully,
+        # leaves no comments). ``fmt`` is forced to the written format --
+        # ``capture`` reads ``document.fmt``, which stays the *load*
+        # format, and a Save As across extensions would otherwise lie.
+        record = LoadRecord.capture(data, self.document, path=self.backing_file)
+        if record.fmt != fmt:
+            record = dataclasses.replace(record, fmt=fmt)
+        self.load_record = record
         self.dirty = False

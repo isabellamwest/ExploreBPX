@@ -54,7 +54,10 @@ class ReferenceSnapshot:
     #: ``Header.References`` (decision D1: the spec field surfaces as
     #: *Citation*). Empty when neither exists -- the row states the absence.
     citation: str = ""
-    #: The file's ``Header.Description``, for the record's Description row.
+    #: The file's ``Header.Title`` and ``Header.Description``, for the
+    #: record's Title/Description rows (``filename`` stays the row-head
+    #: label; Title is the document's own name for itself).
+    title: str = ""
     description: str = ""
     #: The load-time facts (``core.load_record.LoadRecord``) -- format read,
     #: legacy detection, how far checking reached, comments, disk facts --
@@ -87,6 +90,7 @@ class ReferenceSnapshot:
             mtime=path.stat().st_mtime,
             bpx_version=identity.bpx_version or None,
             citation=identity.references,
+            title=identity.title,
             description=identity.description,
             record=LoadRecord.capture(data, document, path=path),
         )
@@ -123,6 +127,7 @@ class ReferenceSnapshot:
             set_id=set_id,
             bpx_version=identity.bpx_version or None,
             citation=ref_set.references,
+            title=identity.title,
             description=identity.description,
             # A bundled set has no source bytes and no disk facts; empty
             # source is honest here -- the document's fmt is "json", so the

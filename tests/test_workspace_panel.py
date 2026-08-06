@@ -73,9 +73,10 @@ def test_workspace_info_shows_identity_and_file_state_once_opened(
 
     text = app_driver.workspace_info_text()
     assert "Title: Minimal valid SPM example" in text
-    assert "Model: SPM" in text
-    assert "BPX version: 1.0.0" in text
-    assert f"File: {valid_spm_path.name}" in text
+    assert "Model: SPM · BPX 1.0.0" in text
+    assert "Read as: JSON" in text
+    assert "Checked: Complete · Valid" in text
+    assert f"From: {valid_spm_path}" in text
     assert "Status: Saved" in text
 
 
@@ -111,7 +112,9 @@ def test_workspace_info_filename_updates_after_save_as(
 
     d._w._save()
 
-    assert f"File: {new_path.name}" in d.workspace_info_text()
+    # Save re-captures the load record from the bytes it wrote, so the
+    # From row names the file this document is now backed by.
+    assert f"From: {new_path}" in d.workspace_info_text()
     assert "Status: Saved" in d.workspace_info_text()
 
 
@@ -174,7 +177,7 @@ def test_document_card_shows_validity_and_contents(app_driver, valid_spm_path):
     assert not ws._info_badge.isHidden()
     # section/parameter counts come straight from the document, not invented.
     doc = app_driver._w._state.active.document
-    assert ws._info_fields["Contents"].text() == (
+    assert ws._fact_contents.text() == (
         f"{doc.section_count} sections · {doc.parameter_count} parameters"
     )
 
@@ -216,8 +219,10 @@ def test_document_card_badge_matches_partitioned_count_not_raw_diagnostics(
 
 def test_document_card_is_blank_with_no_document(app_driver):
     ws = app_driver._w._workspace
-    assert ws._info_title.text() == "No document open"
+    assert not ws._info_empty.isHidden()
+    assert ws._info_empty.text() == "No document open"
     assert ws._info_badge.isHidden()
+    assert ws._fact_band.isHidden()
 
 
 def test_new_chooser_offers_exactly_the_supported_models(app_driver):
@@ -251,8 +256,10 @@ def test_choosing_new_model_creates_document_and_switches_to_editor(app_driver, 
     assert d.current_view_index() == 0
     assert d.activity_bar_selected_label() == "Editor"
     assert d._w._state.active.document.identity.model == model
-    assert "Status: Unsaved changes" in d.workspace_info_text()
-    assert "File: untitled.json" in d.workspace_info_text()
+    # A scaffold was never loaded and never saved: no From row to state,
+    # and the Status row says so in the record's own words.
+    assert "Status: Unsaved changes · never saved" in d.workspace_info_text()
+    assert "From:" not in d.workspace_info_text()
 
 
 def test_new_from_workspace_page_goes_through_discard_guard_and_cancel_aborts(
@@ -564,3 +571,141 @@ def test_a_complete_document_says_only_valid(app_driver, valid_spm_path):
     app_driver.open(valid_spm_path)
 
     assert "incomplete" not in app_driver._w._workspace._info_badge.text()
+
+
+# --- the Phase 4 record: editable identity rows + the fact plaque ----------
+
+
+def test_record_title_edit_commits_through_setvalue(app_driver, spm_workfile, qtbot):
+    """Typing in the record's Title row lands in Header.Title through the
+    same command path as the Header card (D6), so it marks the session
+    dirty and every surface refreshes."""
+    d = app_driver
+    d.open(spm_workfile)
+    ws = d._w._workspace
+
+    ws._info_title.begin_edit()
+    ws._info_title._editor.setText("Renamed cell")
+    qtbot.keyClick(ws._info_title._editor, Qt.Key_Return)
+
+    session = d._w._state.active
+    assert session.document.raw["Header"]["Title"] == "Renamed cell"
+    assert session.dirty
+    assert "Title: Renamed cell" in d.workspace_info_text()
+
+    session.undo()
+    d._w._refresh_all()
+    assert "Title: Minimal valid SPM example" in d.workspace_info_text()
+
+
+def test_record_citation_edit_reaches_header_references(app_driver, spm_workfile, qtbot):
+    """The Citation row edits the Header's ``References`` field (D1: the
+    spec field surfaces as Citation, the code path keeps the spec name)."""
+    d = app_driver
+    d.open(spm_workfile)
+    ws = d._w._workspace
+
+    ws._info_citation.begin_edit()
+    ws._info_citation._editor.setText("Chen et al 2020")
+    qtbot.keyClick(ws._info_citation._editor, Qt.Key_Return)
+
+    assert d._w._state.active.document.raw["Header"]["References"] == "Chen et al 2020"
+    assert "Citation: Chen et al 2020" in d.workspace_info_text()
+
+
+def test_record_bare_enter_never_commits(app_driver, spm_workfile, qtbot):
+    """An untouched editor commits nothing: no command, no dirty -- the
+    card discipline, translated to the record."""
+    d = app_driver
+    d.open(spm_workfile)
+    ws = d._w._workspace
+
+    ws._info_title.begin_edit()
+    qtbot.keyClick(ws._info_title._editor, Qt.Key_Return)
+
+    assert not d._w._state.active.dirty
+
+
+def test_record_escape_reverts_the_draft(app_driver, spm_workfile, qtbot):
+    d = app_driver
+    d.open(spm_workfile)
+    ws = d._w._workspace
+
+    ws._info_title.begin_edit()
+    ws._info_title._editor.setText("abandoned")
+    qtbot.keyClick(ws._info_title._editor, Qt.Key_Escape)
+
+    assert not d._w._state.active.dirty
+    assert "Title: Minimal valid SPM example" in d.workspace_info_text()
+
+
+def test_record_empty_identity_rows_state_their_absence(app_driver, valid_spm_dict, tmp_path):
+    """An absent Description/Citation shows its ghost invitation rather
+    than nothing -- absence stated (the argument that rejected concept C)."""
+    import json
+
+    valid_spm_dict["Header"].pop("Description", None)
+    valid_spm_dict["Header"].pop("References", None)
+    work = tmp_path / "bare.json"
+    work.write_text(json.dumps(valid_spm_dict), encoding="utf-8")
+
+    d = app_driver
+    d.open(work)
+    ws = d._w._workspace
+    assert ws._info_description._display.text() == "Add a description…"
+    assert ws._info_citation._display.text() == "Add a citation…"
+
+
+def test_record_states_yaml_comments_fact(app_driver, valid_spm_dict, tmp_path, qtbot):
+    """A YAML file with comments carries the fact on its Read as row, and
+    the row expands to the consequence sentence (D4)."""
+    import yaml as yaml_module
+
+    work = tmp_path / "commented.yaml"
+    work.write_text(
+        "# calibration notes\n" + yaml_module.safe_dump(valid_spm_dict),
+        encoding="utf-8",
+    )
+
+    d = app_driver
+    d.open(work)
+    ws = d._w._workspace
+    text = d.workspace_info_text()
+    assert "Read as: YAML" in text
+    assert "has comments" in text
+
+    fact = ws._fact_read_as
+    assert not fact.is_expanded()
+    qtbot.mouseClick(fact, Qt.LeftButton)
+    assert fact.is_expanded()
+    assert "comments and formatting will not survive" in fact.detail_text()
+
+
+def test_record_states_legacy_conversion_fact(app_driver, fixtures_dir):
+    """A v0.x file's Checked row names the conversion bpx judged, and its
+    detail names the file and what the conversion did (finding 1)."""
+    from core.bpx_gateway import BPX_VERSION
+
+    d = app_driver
+    d.open(fixtures_dir / "nmc_pouch_cell_BPX.json")
+    ws = d._w._workspace
+
+    assert f"Checked: As a BPX {BPX_VERSION} conversion" in d.workspace_info_text()
+    detail = ws._fact_checked.detail_text()
+    assert "nmc_pouch_cell_BPX.json is BPX 0.1" in detail
+    assert "converted copy" in detail
+
+
+def test_record_refresh_mid_edit_keeps_the_draft(app_driver, spm_workfile, qtbot):
+    """A refresh arriving while the user is typing must not clobber the
+    editor -- only the seed moves."""
+    d = app_driver
+    d.open(spm_workfile)
+    ws = d._w._workspace
+
+    ws._info_title.begin_edit()
+    ws._info_title._editor.setText("half-typed draft")
+    d._w._refresh_all()
+
+    assert ws._info_title._editor.isVisible() or not ws._info_title._editor.isHidden()
+    assert ws._info_title._editor.text() == "half-typed draft"

@@ -120,14 +120,15 @@ def test_rows_start_collapsed_and_click_expands_the_full_record(three_pins):
 
     assert d.reference_row_expanded(1)
     detail = d.reference_row_detail_text(1)
-    assert "Origin: File on disk" in detail
-    # Verbatim from the validator, whatever it says about this fixture --
-    # the row reports, it never judges.
-    assert "Validity: " in detail
+    # The one record shape (Phase 4): identical rows to the main document,
+    # read-only. Verbatim from the validator, whatever it says about this
+    # fixture -- the row reports, it never judges.
+    assert "Title: " in detail
+    assert "Checked: " in detail
     assert "Contents: 3 sections" in detail
-    # A file reference names its path; a library set would cite its paper.
-    assert "File: " in detail
-    assert "Citation" not in detail
+    # A file reference's From row names its path plus the disk facts.
+    assert "From: " in detail
+    assert "marquis.json" in detail
     # Expanding one row leaves the others alone.
     assert not d.reference_row_expanded(0)
 

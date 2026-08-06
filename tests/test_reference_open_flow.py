@@ -53,7 +53,7 @@ def test_clicking_open_as_reference_docks_and_shows_the_tile(
     assert valid_spm_path.name in text
     assert "Model: SPM" in text
     assert "Contents: 11 sections · 44 parameters" in text
-    assert "Validity: Valid" in text
+    assert "Checked: Complete · Valid" in text
 
 
 def test_removing_the_reference_returns_the_card_to_its_empty_state(

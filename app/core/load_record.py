@@ -77,6 +77,11 @@ class LoadRecord:
     #: stale-on-disk check. ``None`` when no file backs the content.
     size_bytes: int | None = None
     mtime: float | None = None
+    #: The path the content was read from, as given to :meth:`capture` --
+    #: the "From" of the file record. Load-time provenance, deliberately
+    #: not the save target: a clone keeps its source here while its
+    #: ``backing_file`` stays unset. Empty when no file was involved.
+    source: str = ""
 
     @classmethod
     def capture(
@@ -111,4 +116,5 @@ class LoadRecord:
             ),
             size_bytes=size_bytes,
             mtime=mtime,
+            source=str(path) if path is not None else "",
         )

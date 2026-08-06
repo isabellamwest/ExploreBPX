@@ -24,23 +24,26 @@ pill).
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QMimeData, Qt, Signal
+from PySide6.QtCore import QEvent, QMimeData, Qt, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent, QFontMetrics
 from PySide6.QtWidgets import (
     QFormLayout,
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
     QVBoxLayout,
     QWidget,
 )
 
-from core.bpx_gateway import SUPPORTED_EXTENSIONS
+from core.bpx_gateway import BPX_VERSION, SUPPORTED_EXTENSIONS, CheckReach
 from core.document import BPXDocument
 from core.document_factory import SUPPORTED_MODELS
+from core.load_record import LoadRecord
 from state.app_state import MAX_PINNED_REFERENCES
 from state.reference_snapshot import ReferenceSnapshot
 
@@ -114,6 +117,116 @@ def _reference_validity_text(errors: int, warnings: int) -> tuple[str, str]:
     return ", ".join(parts), WARNING
 
 
+def _verdict_words(errors: int, warnings: int) -> str:
+    """The D7 validity-ladder words for a completed run: "Valid",
+    "2 errors, 1 warning", "3 warnings" -- the same composition every other
+    validity surface uses."""
+    if not errors and not warnings:
+        return "Valid"
+    parts = []
+    if errors:
+        parts.append(f"{errors} error" + ("s" if errors != 1 else ""))
+    if warnings:
+        parts.append(f"{warnings} warning" + ("s" if warnings != 1 else ""))
+    return ", ".join(parts)
+
+
+def _model_row_text(model: str | None, bpx_version: str | None) -> str:
+    """The record's merged Model row: "DFN · BPX 1.1.0" (the version part
+    omitted when the Header declares none) -- the format reference rows
+    already used, now shared by the main document (one record shape)."""
+    return " · ".join(
+        part
+        for part in (model or "-", f"BPX {bpx_version}" if bpx_version else "")
+        if part
+    )
+
+
+def _checked_row_text(
+    reach: CheckReach, errors: int, warnings: int, is_legacy: bool
+) -> str:
+    """The record's Checked row: how far checking went, then the verdict.
+
+    An aborted run names the stage it stopped after and says plainly that
+    nothing below it was judged (H2); a completed run leads with "Complete"
+    and the ladder words. A legacy file prefixes the fact that ``bpx``
+    judged a converted copy, not the file as it stands (finding 1)."""
+    if reach is CheckReach.COMPLETE:
+        base = f"Complete · {_verdict_words(errors, warnings)}"
+    elif reach is CheckReach.NOT_RUN:
+        base = "Not run · nothing was checked"
+    else:
+        stage = "Header" if reach is CheckReach.HEADER else "Parameterisation"
+        base = f"{stage}, then stopped"
+        # With counted findings, they explain the stop and the row stays
+        # compact; with none to show, the absence must be said out loud --
+        # an empty-looking aborted run is exactly the H2 hazard.
+        if errors or warnings:
+            base = f"{base} · {_verdict_words(errors, warnings)}"
+        else:
+            base = f"{base} · nothing below it was checked"
+    if is_legacy:
+        # Stage names keep their capital; "Complete"/"Not run" fold into the
+        # sentence after the conversion prefix.
+        tail = base if base.startswith(("Header", "Parameterisation")) else base[0].lower() + base[1:]
+        return f"As a BPX {BPX_VERSION} conversion · {tail}"
+    return base
+
+
+def _legacy_checked_detail(filename: str, file_version: str | None) -> str:
+    """The Checked row's expanded sentence for a legacy file: names the
+    file, its own version, and what the conversion bpx judged actually did
+    (bpx's documented consequences, not our summary of them)."""
+    version = f"BPX {file_version}" if file_version else "a BPX 0.x file"
+    return (
+        f"{filename} is {version} · bpx checked a converted copy: State "
+        "synthesised, initial SOC set to 1, lumped thermal conductivity "
+        "dropped. The editor shows the file as it is on disk."
+    )
+
+
+#: The Read as row's expanded sentence when the opened YAML carries
+#: comments (decision D4). States the consequence only -- the once-per-
+#: document save confirmation is Phase 5's dialog and is not promised here
+#: before it exists.
+_COMMENTS_DETAIL = (
+    "Saving rewrites the whole file: comments and formatting will not survive."
+)
+
+
+def _size_text(size_bytes: int) -> str:
+    """A disk size in the record's units: bytes below 1 KB, whole KB below
+    1 MB, one-decimal MB above."""
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+    if size_bytes < 1024 * 1024:
+        return f"{max(round(size_bytes / 1024), 1)} KB"
+    return f"{size_bytes / (1024 * 1024):.1f} MB"
+
+
+def _stamp_text(mtime: float) -> str:
+    """A modified time as "2 Aug 14:22", gaining its year only when it is
+    not this year's -- the shortest stamp that stays unambiguous."""
+    stamped = datetime.fromtimestamp(mtime)
+    if stamped.year == datetime.now().year:
+        return f"{stamped.day} {stamped:%b %H:%M}"
+    return f"{stamped.day} {stamped:%b %Y %H:%M}"
+
+
+def _read_as_fact(record: LoadRecord | None, fmt: str) -> tuple[str, str]:
+    """The Read as row's (value html, expandable detail) pair: the format
+    the loader actually used, plus the comment fact when the source carries
+    comments a save would destroy."""
+    shown = (record.fmt if record else fmt).upper()
+    if record is not None and record.has_yaml_comments:
+        value = (
+            f"{shown} <span style='color:#57606a'>·</span> "
+            f"<span style='color:{WARNING}'>has comments</span>"
+        )
+        return value, _COMMENTS_DETAIL
+    return shown, ""
+
+
 def _validity_dot_label() -> QLabel:
     """The small filled dot beside a validity line -- the shared dot family
     (:mod:`ui_qt.icons`), rendered as a rich-text ``<img>`` exactly like the
@@ -123,6 +236,201 @@ def _validity_dot_label() -> QLabel:
     label = QLabel()
     label.setObjectName("ValidityDot")
     return label
+
+
+class _EditableText(QWidget):
+    """An in-place editable record value: a label until clicked, a line
+    edit while editing (decision D6 -- not a second editor: the caller
+    routes the committed text through the same ``SetValue`` command as the
+    Header cards, so undo is identical wherever the user typed).
+
+    Card discipline, translated to a record row: the editor is seeded
+    *before* it is shown, a commit fires only when the text actually
+    changed from that seed (a bare Enter or stray focus-out can never
+    commit something nobody typed), Esc reverts, and a refresh mid-edit
+    never clobbers the editor (``set_text`` only updates the seed and the
+    label). An empty value shows its ghost invitation ("Add a citation…")
+    -- absence stated, per the record's own rules.
+    """
+
+    #: The edited text, emitted only when it differs from the seed.
+    committed = Signal(str)
+
+    def __init__(
+        self,
+        display_object_name: str,
+        placeholder: str,
+        editor_object_name: str = "WorkspaceRecordEditor",
+    ) -> None:
+        super().__init__()
+        self._seed = ""
+        self._placeholder = placeholder
+        self._cancelling = False
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        self._display = QLabel()
+        self._display.setObjectName(display_object_name)
+        self._display.setProperty("editableValue", True)
+        self._display.setWordWrap(True)
+        self._display.setCursor(Qt.IBeamCursor)
+        layout.addWidget(self._display)
+
+        self._editor = QLineEdit()
+        self._editor.setObjectName(editor_object_name)
+        self._editor.setPlaceholderText(placeholder)
+        self._editor.editingFinished.connect(self._commit)
+        self._editor.installEventFilter(self)
+        self._editor.hide()
+        layout.addWidget(self._editor)
+
+        self._apply_display()
+
+    def set_text(self, text: str) -> None:
+        """Update the committed value this row shows. Mid-edit, only the
+        seed moves: the user's draft is theirs until they commit or Esc.
+        ``isHidden`` throughout this class, never ``isVisible`` -- the
+        latter is False for every widget of an unshown window, so it would
+        misread "editing" as "closed" in the offscreen suite."""
+        self._seed = text
+        if self._editor.isHidden():
+            self._apply_display()
+
+    def text(self) -> str:
+        return self._seed
+
+    def begin_edit(self) -> None:
+        """Open the editor, seeded with the committed value (populated
+        before it can see focus or keys -- the card rule)."""
+        self._editor.setText(self._seed)
+        self._display.hide()
+        self._editor.show()
+        self._editor.setFocus()
+        self._editor.selectAll()
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802 - Qt naming
+        if event.button() == Qt.LeftButton and self._editor.isHidden():
+            self.begin_edit()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def eventFilter(self, watched, event) -> bool:  # noqa: N802 - Qt naming
+        if (
+            watched is self._editor
+            and event.type() == QEvent.KeyPress
+            and event.key() == Qt.Key_Escape
+        ):
+            # Revert: close without committing. The hide() below drops focus,
+            # which fires editingFinished -- the flag stops that stray signal
+            # from committing the abandoned draft.
+            self._cancelling = True
+            self._editor.hide()
+            self._display.show()
+            self._cancelling = False
+            self._apply_display()
+            return True
+        return super().eventFilter(watched, event)
+
+    def _commit(self) -> None:
+        if self._cancelling or self._editor.isHidden():
+            return
+        text = self._editor.text()
+        self._editor.hide()
+        self._display.show()
+        if text != self._seed:
+            self._seed = text
+            self._apply_display()
+            self.committed.emit(text)
+        else:
+            self._apply_display()
+
+    def _apply_display(self) -> None:
+        ghosted = not self._seed
+        self._display.setText(self._seed or self._placeholder)
+        if self._display.property("ghosted") != ghosted:
+            self._display.setProperty("ghosted", ghosted)
+            style = self._display.style()
+            style.unpolish(self._display)
+            style.polish(self._display)
+
+
+class _ExpandableFact(QWidget):
+    """A fact row value that can expand one sentence of detail beneath
+    itself. The chevron appears only when there is detail to show, so a
+    plain fact ("JSON") carries no dead affordance. Expansion state
+    survives a refresh because the widget persists and only its texts are
+    rewritten."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+
+        self._head = QWidget()
+        head_layout = QHBoxLayout(self._head)
+        head_layout.setContentsMargins(0, 0, 0, 0)
+        head_layout.setSpacing(6)
+        self._value = QLabel()
+        self._value.setObjectName("WorkspaceCardValue")
+        self._value.setWordWrap(True)
+        head_layout.addWidget(self._value)
+        self._chevron = QLabel("▸")
+        self._chevron.setObjectName("ReferenceRowChevron")
+        head_layout.addWidget(self._chevron)
+        head_layout.addStretch(1)
+        layout.addWidget(self._head)
+
+        self._detail = QLabel()
+        self._detail.setObjectName("WorkspaceFactDetail")
+        self._detail.setWordWrap(True)
+        self._detail.hide()
+        layout.addWidget(self._detail)
+
+        # A rich-text QLabel accepts mouse presses (link handling), which
+        # would swallow the row's toggle click -- these labels are display
+        # only, so let every click fall through to this widget.
+        for child in (self._value, self._chevron, self._detail):
+            child.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+
+    def set_fact(self, value_html: str, detail: str = "") -> None:
+        self._value.setText(value_html)
+        self._detail.setText(detail)
+        has_detail = bool(detail)
+        self._chevron.setVisible(has_detail)
+        self._head.setCursor(
+            Qt.PointingHandCursor if has_detail else Qt.ArrowCursor
+        )
+        if not has_detail:
+            self.set_expanded(False)
+
+    def value_text(self) -> str:
+        return self._value.text()
+
+    def detail_text(self) -> str:
+        return self._detail.text()
+
+    def is_expanded(self) -> bool:
+        # isHidden, never isVisible: the latter is False for every widget
+        # of an unshown window (the offscreen suite's normal state).
+        return not self._detail.isHidden()
+
+    def set_expanded(self, expanded: bool) -> None:
+        self._detail.setVisible(expanded and bool(self._detail.text()))
+        self._chevron.setText("▾" if not self._detail.isHidden() else "▸")
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802 - Qt naming
+        """Anywhere on the row toggles its detail, when there is one. A
+        class-level override on purpose: assigning a bound method onto the
+        child head widget would be the pure-Python widget cycle the offscreen
+        suite has already paid for (see the project guide)."""
+        if event.button() == Qt.LeftButton and bool(self._detail.text()):
+            self.set_expanded(not self.is_expanded())
+            event.accept()
+            return
+        super().mousePressEvent(event)
 
 
 class ReferenceRow(QFrame):
@@ -187,10 +495,12 @@ class ReferenceRow(QFrame):
         layout.addWidget(self._detail)
 
     def _build_detail(self, snapshot: ReferenceSnapshot) -> QWidget:
-        """The expanded record: everything the old single-reference section
-        showed, per reference. Origin and the last row differ by where the
-        reference came from -- a bundled set cites its paper, a file names
-        its path."""
+        """The expanded record, in the one record shape the main document
+        uses (Phase 4): Title · Description · Citation · Model · Read as ·
+        Checked · Contents · From -- identical rows, all read-only, no
+        Status row (a reference is never saved). The old Origin row is
+        absorbed into From, and the old Validity row into Checked, whose
+        dot keeps the reference rule: never ``ERROR`` red."""
         detail = QWidget()
         detail.setObjectName("ReferenceRowDetail")
         form = QFormLayout(detail)
@@ -201,34 +511,23 @@ class ReferenceRow(QFrame):
         form.setLabelAlignment(Qt.AlignLeft)
         form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
 
-        from_library = snapshot.set_id is not None
+        record = snapshot.record
+        read_as, _comment_detail = _read_as_fact(record, "json")
         rows: list[tuple[str, QWidget]] = [
-            ("Origin", _detail_value("Reference library" if from_library else "File on disk")),
-            ("Validity", self._build_validity_value(snapshot)),
-            (
-                "Model",
-                _detail_value(
-                    " · ".join(
-                        part
-                        for part in (
-                            snapshot.model or "-",
-                            f"BPX {snapshot.bpx_version}" if snapshot.bpx_version else "",
-                        )
-                        if part
-                    )
-                ),
-            ),
+            ("Title", _detail_value(snapshot.title or "-")),
+            ("Description", _detail_value(snapshot.description or "-")),
+            ("Citation", _detail_value(snapshot.citation or "-")),
+            ("Model", _detail_value(_model_row_text(snapshot.model, snapshot.bpx_version))),
+            ("Read as", _detail_value(read_as)),
+            ("Checked", self._build_checked_value(snapshot)),
             (
                 "Contents",
                 _detail_value(
                     f"{snapshot.section_count} sections · {snapshot.parameter_count} parameters"
                 ),
             ),
+            ("From", self._build_from_value(snapshot)),
         ]
-        if from_library:
-            rows.append(("Citation", _detail_value(snapshot.citation or "-")))
-        else:
-            rows.append(("File", _PathLabel(str(snapshot.path)) if snapshot.path else _detail_value("-")))
 
         for key, widget in rows:
             label = QLabel(f"{key}:")
@@ -236,10 +535,42 @@ class ReferenceRow(QFrame):
             form.addRow(label, widget)
         return detail
 
-    def _build_validity_value(self, snapshot: ReferenceSnapshot) -> QWidget:
-        """Validity as dot *and* words -- the dot alone lives nowhere on
-        this page, so it can never be misread as a comparison mark."""
-        text, colour = _reference_validity_text(snapshot.error_count, snapshot.warning_count)
+    def _build_from_value(self, snapshot: ReferenceSnapshot) -> QWidget:
+        """The From row: a bundled set came from the reference library; a
+        file names its path plus the disk facts captured at pin time."""
+        if snapshot.set_id is not None:
+            return _detail_value("Reference library")
+        if snapshot.path is None:
+            return _detail_value("-")
+        record = snapshot.record
+        widget = QWidget()
+        row = QHBoxLayout(widget)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(6)
+        row.addWidget(_PathLabel(str(snapshot.path)), 1)
+        if record is not None and record.size_bytes is not None and record.mtime is not None:
+            meta = QLabel(f"· {_size_text(record.size_bytes)} · {_stamp_text(record.mtime)}")
+            meta.setObjectName("WorkspaceCardKey")
+            row.addWidget(meta, 0, Qt.AlignVCenter)
+        return widget
+
+    def _build_checked_value(self, snapshot: ReferenceSnapshot) -> QWidget:
+        """Checked as dot *and* words: how far checking went, then the
+        verdict (the absorbed Validity row). The dot goes ``MUTED`` for
+        anything short of a completed run -- zero errors from an aborted
+        run is not a verdict (H2)."""
+        record = snapshot.record
+        reach = record.checked if record is not None else CheckReach.COMPLETE
+        text = _checked_row_text(
+            reach,
+            snapshot.error_count,
+            snapshot.warning_count,
+            record.is_legacy if record is not None else False,
+        )
+        if reach is CheckReach.COMPLETE:
+            _, colour = _reference_validity_text(snapshot.error_count, snapshot.warning_count)
+        else:
+            colour = MUTED
         widget = QWidget()
         row = QHBoxLayout(widget)
         row.setContentsMargins(0, 0, 0, 0)
@@ -249,8 +580,8 @@ class ReferenceRow(QFrame):
         row.addWidget(dot, 0, Qt.AlignVCenter)
         self._validity_label = QLabel(text)
         self._validity_label.setObjectName("DocInfoBadge")
-        row.addWidget(self._validity_label, 0, Qt.AlignVCenter)
-        row.addStretch(1)
+        self._validity_label.setWordWrap(True)
+        row.addWidget(self._validity_label, 1, Qt.AlignVCenter)
         return widget
 
     @property
@@ -303,6 +634,11 @@ class _PathLabel(QLabel):
         self.setMinimumWidth(0)
         self._apply_elision()
 
+    def set_path(self, path: str) -> None:
+        self._full_text = path
+        self.setToolTip(path)
+        self._apply_elision()
+
     def resizeEvent(self, event) -> None:  # noqa: N802 - Qt naming
         super().resizeEvent(event)
         self._apply_elision()
@@ -324,6 +660,10 @@ class WorkspacePanel(QWidget):
     #: Carries the ``ReferenceSnapshot`` its row points at -- with several
     #: references pinned, "Remove" has to say *which*.
     remove_reference_requested = Signal(object)
+    #: An in-place identity edit in the record: (Header field alias, new
+    #: text). MainWindow routes it through the session's ``SetValue`` --
+    #: decision D6, the same command and undo the Header cards use.
+    identity_edited = Signal(str, str)
 
     def __init__(self) -> None:
         super().__init__()
@@ -406,10 +746,10 @@ class WorkspacePanel(QWidget):
         return pane
 
     @staticmethod
-    def _build_kv_form(keys: tuple[str, ...]) -> tuple[QFormLayout, dict[str, QLabel]]:
-        """A section's keyed record rows -- one shared recipe so the document
-        and reference sections can never drift apart. Explicit left alignment
-        throughout: macOS's native form style centres the rows and
+    def _record_form() -> QFormLayout:
+        """A section's keyed record-row layout -- one shared recipe so the
+        document and reference sections can never drift apart. Explicit left
+        alignment throughout: macOS's native form style centres the rows and
         right-aligns the labels, which reads as scattered text rather than
         a keyed record. Growing fields keep a long value ("11 sections · 44
         parameters") fully visible instead of squeezed."""
@@ -420,16 +760,13 @@ class WorkspacePanel(QWidget):
         form.setFormAlignment(Qt.AlignLeft | Qt.AlignTop)
         form.setLabelAlignment(Qt.AlignLeft)
         form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-        fields: dict[str, QLabel] = {}
-        for key in keys:
-            value = QLabel()
-            value.setObjectName("WorkspaceCardValue")
-            value.setWordWrap(True)
-            label = QLabel(f"{key}:")
-            label.setObjectName("WorkspaceCardKey")
-            form.addRow(label, value)
-            fields[key] = value
-        return form, fields
+        return form
+
+    @staticmethod
+    def _add_record_row(form: QFormLayout, key: str, widget: QWidget) -> None:
+        label = QLabel(f"{key}:")
+        label.setObjectName("WorkspaceCardKey")
+        form.addRow(label, widget)
 
     def _build_validity_row(self) -> tuple[QHBoxLayout, QLabel, QLabel]:
         """The dot-plus-text validity line: a coloured mark from the shared
@@ -469,25 +806,87 @@ class WorkspacePanel(QWidget):
         return widget, dot, text
 
     def _build_info_section(self) -> QWidget:
-        """The main-document tinted section: caps title naming the role
-        plainly ("Main document" -- "main" is the app's one role word, per
-        the UI copy rule), its validity summary in the title row's suffix,
-        then identity and contents in the body."""
+        """The main-document tinted section, in the signed concept B shape:
+        caps title naming the role plainly ("Main document" -- "main" is the
+        app's one role word, per the UI copy rule) with the validity summary
+        in the title row's suffix; then the *identity block* -- Title,
+        Description, Citation, the three rows a person may edit in place --
+        over the *fact plaque*, a quieter wash carrying the file's own
+        immutable facts (Model · Read as · Checked · Contents · From ·
+        Status). The split is the D6 rule made visible: the upper block is
+        yours, the plaque is the file's."""
         suffix, self._info_dot, self._info_badge = self._build_validity_suffix()
         section = TintedSection(
             "Main document", object_name="WorkspaceMainSection", suffix=suffix
         )
         body = section.body_layout
 
-        self._info_title = QLabel()
-        self._info_title.setObjectName("WorkspaceCardTitle")
-        self._info_title.setWordWrap(True)
+        # Empty-state line, shown alone when no document is open.
+        self._info_empty = QLabel(_INFO_PANEL_EMPTY_STATE_TEXT)
+        self._info_empty.setObjectName("WorkspaceCardTitle")
+        self._info_empty.setEnabled(False)
+        body.addWidget(self._info_empty)
+
+        self._info_title = _EditableText(
+            "WorkspaceCardTitle", "Add a title…",
+            editor_object_name="WorkspaceTitleEditor",
+        )
+        self._info_title.committed.connect(
+            lambda text: self.identity_edited.emit("Title", text)
+        )
         body.addWidget(self._info_title)
 
-        self._info_form, self._info_fields = self._build_kv_form(
-            ("Model", "BPX version", "File", "Status", "Contents")
+        self._info_description = _EditableText(
+            "WorkspaceCardValue", "Add a description…"
         )
-        body.addLayout(self._info_form)
+        self._info_description.committed.connect(
+            lambda text: self.identity_edited.emit("Description", text)
+        )
+        self._info_citation = _EditableText("WorkspaceCardValue", "Add a citation…")
+        self._info_citation.committed.connect(
+            lambda text: self.identity_edited.emit("References", text)
+        )
+        self._identity_form = self._record_form()
+        self._add_record_row(self._identity_form, "Description", self._info_description)
+        self._add_record_row(self._identity_form, "Citation", self._info_citation)
+        body.addLayout(self._identity_form)
+
+        self._fact_band = QWidget()
+        self._fact_band.setObjectName("WorkspaceFactBand")
+        self._fact_band.setAttribute(Qt.WA_StyledBackground, True)
+        band_layout = QVBoxLayout(self._fact_band)
+        band_layout.setContentsMargins(10, 7, 10, 9)
+        band_layout.setSpacing(0)
+
+        self._fact_model = _detail_value("")
+        self._fact_read_as = _ExpandableFact()
+        self._fact_checked = _ExpandableFact()
+        self._fact_contents = _detail_value("")
+
+        self._fact_from = QWidget()
+        from_row = QHBoxLayout(self._fact_from)
+        from_row.setContentsMargins(0, 0, 0, 0)
+        from_row.setSpacing(6)
+        self._fact_from_path = _PathLabel("")
+        from_row.addWidget(self._fact_from_path, 1)
+        self._fact_from_meta = QLabel()
+        self._fact_from_meta.setObjectName("WorkspaceCardKey")
+        from_row.addWidget(self._fact_from_meta, 0, Qt.AlignVCenter)
+
+        self._fact_status = _detail_value("")
+
+        self._fact_form = self._record_form()
+        for key, widget in (
+            ("Model", self._fact_model),
+            ("Read as", self._fact_read_as),
+            ("Checked", self._fact_checked),
+            ("Contents", self._fact_contents),
+            ("From", self._fact_from),
+            ("Status", self._fact_status),
+        ):
+            self._add_record_row(self._fact_form, key, widget)
+        band_layout.addLayout(self._fact_form)
+        body.addWidget(self._fact_band)
         return section
 
     def _build_reference_section(self) -> QWidget:
@@ -629,15 +1028,19 @@ class WorkspacePanel(QWidget):
         warning_count: int = 0,
         outstanding_count: int = 0,
         references: list[ReferenceSnapshot] | None = None,
+        load_record: LoadRecord | None = None,
+        never_saved: bool = False,
     ) -> None:
         """Update the main-document and reference sections from current state.
 
-        Identity (Title/Model/BPX version) and the section/parameter counts are
-        read only through the document's own properties; ``filename``/``dirty``
-        are caller-supplied facts derived from the active session, never from
-        the raw dict. ``error_count``/``warning_count`` are likewise supplied
-        by the caller -- the already-computed ``PartitionedIssues`` totals
-        from ``main_window._refresh_all``, not re-derived here from
+        Identity and the section/parameter counts are read only through the
+        document's own properties; ``filename``/``dirty``/``never_saved``
+        are caller-supplied facts derived from the active session, never
+        from the raw dict, and ``load_record`` is the session's load-time
+        record (``None`` for a New scaffold, which had no load to state).
+        ``error_count``/``warning_count`` are likewise supplied by the
+        caller -- the already-computed ``PartitionedIssues`` totals from
+        ``main_window._refresh_all``, not re-derived here from
         ``document.error_count``/``warning_count``, so the badge can never
         disagree with the Diagnostics rail badge over an absorbed diagnostic.
 
@@ -648,26 +1051,63 @@ class WorkspacePanel(QWidget):
         self._set_references(list(references or []))
 
         if document is None:
-            self._info_title.setText(_INFO_PANEL_EMPTY_STATE_TEXT)
-            self._info_title.setEnabled(False)
+            self._info_empty.show()
+            self._info_title.hide()
+            self._set_form_rows_visible(self._identity_form, False)
+            self._fact_band.hide()
             self._info_dot.hide()
             self._info_badge.hide()
-            for value in self._info_fields.values():
-                value.setText("")
-            self._set_form_rows_visible(self._info_form, False)
             return
 
-        self._info_title.setEnabled(True)
+        self._info_empty.hide()
+        self._info_title.show()
+        self._set_form_rows_visible(self._identity_form, True)
+        self._fact_band.show()
+
         identity = document.identity
-        self._info_title.setText(identity.title or "Untitled document")
-        self._set_form_rows_visible(self._info_form, True)
-        self._info_fields["Model"].setText(identity.model or "-")
-        self._info_fields["BPX version"].setText(identity.bpx_version or "-")
-        self._info_fields["File"].setText(filename or "-")
-        self._info_fields["Status"].setText("Unsaved changes" if dirty else "Saved")
-        self._info_fields["Contents"].setText(
+        self._info_title.set_text(identity.title)
+        self._info_description.set_text(identity.description)
+        self._info_citation.set_text(identity.references)
+
+        self._fact_model.setText(_model_row_text(identity.model, identity.bpx_version))
+        read_as, comment_detail = _read_as_fact(load_record, document.fmt)
+        self._fact_read_as.set_fact(read_as, comment_detail)
+        legacy = load_record.is_legacy if load_record is not None else False
+        self._fact_checked.set_fact(
+            _checked_row_text(
+                document.validation_reach, error_count, warning_count, legacy
+            ),
+            _legacy_checked_detail(filename or document.filename, identity.bpx_version)
+            if legacy
+            else "",
+        )
+        self._fact_contents.setText(
             f"{document.section_count} sections · {document.parameter_count} parameters"
         )
+
+        has_source = load_record is not None and bool(load_record.source)
+        from_label = self._fact_form.labelForField(self._fact_from)
+        self._fact_from.setVisible(has_source)
+        if from_label is not None:
+            from_label.setVisible(has_source)
+        if has_source:
+            self._fact_from_path.set_path(load_record.source)
+            has_disk_facts = (
+                load_record.size_bytes is not None and load_record.mtime is not None
+            )
+            if has_disk_facts:
+                self._fact_from_meta.setText(
+                    f"· {_size_text(load_record.size_bytes)}"
+                    f" · {_stamp_text(load_record.mtime)}"
+                )
+            self._fact_from_meta.setVisible(has_disk_facts)
+
+        if never_saved:
+            status = "Unsaved changes · never saved"
+        else:
+            status = "Unsaved changes" if dirty else "Saved"
+        self._fact_status.setText(status)
+
         self._set_validity_badge(
             error_count,
             warning_count,

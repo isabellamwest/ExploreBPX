@@ -755,7 +755,7 @@ class AppDriver:
             f"Model: {row.snapshot.model or '-'}",
             f"Contents: {row.snapshot.section_count} sections · "
             f"{row.snapshot.parameter_count} parameters",
-            f"Validity: {row._validity_label.text()}",
+            f"Checked: {row._validity_label.text()}",
         ]
         return "\n".join(lines)
 
@@ -1880,14 +1880,23 @@ class AppDriver:
         (single label -> formatted card) does not ripple into every test.
         """
         ws = self._w._workspace
-        title = ws._info_title.text()
-        if title == "No document open":
-            return title
-        lines = [f"Title: {title}"]
+        if not ws._info_empty.isHidden():
+            return ws._info_empty.text()
+        lines = [f"Title: {ws._info_title.text()}"]
         if ws._info_badge.text():
             lines.append(f"Validity: {ws._info_badge.text()}")
-        for key in ("Model", "BPX version", "File", "Status", "Contents"):
-            lines.append(f"{key}: {ws._info_fields[key].text()}")
+        lines.append(f"Description: {ws._info_description.text()}")
+        lines.append(f"Citation: {ws._info_citation.text()}")
+        lines.append(f"Model: {ws._fact_model.text()}")
+        lines.append(f"Read as: {ws._fact_read_as.value_text()}")
+        lines.append(f"Checked: {ws._fact_checked.value_text()}")
+        lines.append(f"Contents: {ws._fact_contents.text()}")
+        if not ws._fact_from.isHidden():
+            # The full path (the label itself elides), plus the disk facts.
+            lines.append(
+                f"From: {ws._fact_from_path.toolTip()} {ws._fact_from_meta.text()}".rstrip()
+            )
+        lines.append(f"Status: {ws._fact_status.text()}")
         return "\n".join(lines)
 
     def tree_selection_label(self) -> str | None:

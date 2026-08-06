@@ -382,6 +382,7 @@ class MainWindow(QMainWindow):
         self._workspace.open_library_requested.connect(self._open_reference_library)
         self._workspace.new_from_file_requested.connect(self._new_from_file)
         self._workspace.remove_reference_requested.connect(self._on_remove_reference_requested)
+        self._workspace.identity_edited.connect(self._on_identity_edited)
 
     # --- navigation -----------------------------------------------------
     def _on_view_changed(self, page_index: int) -> None:
@@ -1419,7 +1420,21 @@ class MainWindow(QMainWindow):
             self._workspace_warning_count,
             self._workspace_outstanding_count,
             references=self._state.references,
+            load_record=session.load_record if session else None,
+            never_saved=session is not None and session.backing_file is None,
         )
+
+    def _on_identity_edited(self, field: str, text: str) -> None:
+        """A record identity row was committed in place (Title, Description
+        or Citation -- the latter the Header's ``References`` field, D1).
+        The same ``SetValue`` command the Header cards issue, then the
+        standard post-commit refresh, so undo and every surface behave
+        identically wherever the user typed (D6)."""
+        session = self._state.active
+        if session is None or session.document is None:
+            return
+        session.apply_value(("Header", field), text)
+        self._on_committed()
 
     def _update_actions_enabled(self) -> None:
         """Save/Export are only enabled once a document is loaded (a session

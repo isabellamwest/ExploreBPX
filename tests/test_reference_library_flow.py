@@ -60,7 +60,7 @@ def test_library_button_docks_the_accepted_set(app_driver, monkeypatch):
     assert entry.short_title in text
     assert "Read-only" in text
     assert f"Model: {entry.model}" in text
-    assert "Validity: Valid" in text
+    assert "Checked: Complete · Valid" in text
     assert d.toast_text() == f"{entry.short_title} · pinned as reference"
 
 
