@@ -263,8 +263,8 @@ class InspectorPanel(QWidget):
         self._docs_view.show_metadata(None)
         self._update_sections()
 
-    def _selected_section_label(self) -> str:
-        """The selected section's own name, or "" when this is not the
+    def _selected_section(self):
+        """The selected section's node, or ``None`` when this is not the
         "a section, but no parameter within it" state.
 
         ``selected_path`` is the section even while a parameter is selected
@@ -275,23 +275,29 @@ class InspectorPanel(QWidget):
         """
         session = self._state.active
         if session is None or session.document is None:
-            return ""
+            return None
         if not session.selected_path or session.selected_parameter_path is not None:
-            return ""
-        node = session.document.find(session.selected_path)
-        return session.selected_path[-1] if node is not None else ""
+            return None
+        return session.document.find(session.selected_path)
+
+    def _placeholder_text(self) -> str:
+        """What the empty pane should say about the current selection.
+
+        Selecting a section *is* selecting an object, so the generic prompt
+        read as a contradiction of what the user had just done. And a
+        section with nothing in it yet -- every section of a freshly created
+        document -- cannot be asked for a parameter it does not have, so it
+        gets the one move that is actually available.
+        """
+        node = self._selected_section()
+        if node is None:
+            return "Select an object from the structure to inspect + edit it."
+        if not node.parameters:
+            return f"{node.label} has no parameters yet. Add one from the list."
+        return f"Select a parameter from {node.label} to inspect + edit it."
 
     def show_placeholder(self) -> None:
-        # Selecting a section is selecting an object, so the generic prompt
-        # read as a contradiction of what the user had just done. When there
-        # is a section, the empty state names it and asks for the one thing
-        # actually missing.
-        section = self._selected_section_label()
-        placeholder = QLabel(
-            f"Select a parameter from {section} to inspect + edit it."
-            if section
-            else "Select an object from the structure to inspect + edit it."
-        )
+        placeholder = QLabel(self._placeholder_text())
         placeholder.setObjectName("InspectorPlaceholder")
         # The one surface with no page header of its own: centred in the
         # pane (an empty state), not typeset at the top-left of a page.

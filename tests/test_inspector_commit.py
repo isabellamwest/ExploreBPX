@@ -327,3 +327,21 @@ def test_empty_state_stays_generic_with_nothing_selected(qtbot, spm_workfile):
 
     label = panel._content.findChild(QLabel, "InspectorPlaceholder")
     assert label.text().startswith("Select an object")
+
+
+def test_empty_state_never_asks_for_a_parameter_a_section_does_not_have(qtbot):
+    """Every section of a freshly created document is empty, so "select a
+    parameter from Cell" asked for something impossible. Point at the move
+    that exists instead."""
+    from PySide6.QtWidgets import QLabel
+
+    state = AppState()
+    state.new_document("DFN")
+    state.active.select(("Parameterisation", "Cell"))
+
+    panel = InspectorPanel(state)
+    qtbot.addWidget(panel)
+    panel.show_placeholder()
+
+    label = panel._content.findChild(QLabel, "InspectorPlaceholder")
+    assert label.text() == "Cell has no parameters yet. Add one from the list."
