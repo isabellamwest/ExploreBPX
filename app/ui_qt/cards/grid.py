@@ -192,6 +192,14 @@ class _GridModel(QAbstractTableModel):
         return Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable
 
     def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.DisplayRole):  # noqa: N802
+        if role == Qt.TextAlignmentRole and orientation == Qt.Horizontal:
+            # A header sits over its own column, so it aligns the way that
+            # column's cells do. Qt's default centres it, which left every
+            # numeric header floating between its numbers and the one beside
+            # it -- see the cells' own TextAlignmentRole above.
+            if section in self._text_columns:
+                return int(Qt.AlignLeft | Qt.AlignVCenter)
+            return int(Qt.AlignRight | Qt.AlignVCenter)
         if role != Qt.DisplayRole:
             return None
         if orientation == Qt.Horizontal:
@@ -899,6 +907,10 @@ class _MultiColumnGridModel(QAbstractTableModel):
         return Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable
 
     def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.DisplayRole):  # noqa: N802
+        if role == Qt.TextAlignmentRole and orientation == Qt.Horizontal:
+            # Every column here is numeric, so every header right-aligns over
+            # its own numbers rather than centring between two columns.
+            return int(Qt.AlignRight | Qt.AlignVCenter)
         if role != Qt.DisplayRole:
             return None
         if orientation == Qt.Horizontal:
