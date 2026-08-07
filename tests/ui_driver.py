@@ -1705,6 +1705,20 @@ class AppDriver:
     def save_enabled(self) -> bool:
         return self._w._save_action.isEnabled()
 
+    def save_shortcut(self) -> str:
+        """Save's key, read off the action rather than a QShortcut -- that is
+        where it lives, so that it inherits the action's enabled state."""
+        return self._w._save_action.shortcut().toString()
+
+    def open_shortcut(self) -> str:
+        return self._w._open_shortcut.key().toString()
+
+    def press_open_shortcut(self) -> "AppDriver":
+        """Fire Ctrl+O without a synthesised key press, so the test does not
+        depend on the offscreen window holding real Qt focus."""
+        self._w._open_shortcut.activated.emit()
+        return self
+
     def export_enabled(self) -> bool:
         return self._w._export_action.isEnabled()
 

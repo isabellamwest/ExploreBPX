@@ -220,7 +220,9 @@ class MainWindow(QMainWindow):
 
         Opening a file lives on the Workspace page's "Open File" button now, so
         the top bar carries no Open action -- only document identity, Save,
-        Export and search.
+        Export and search. Open keeps a window-level shortcut all the same:
+        the button is unreachable from the Editor and Diagnostics pages, and a
+        key needs no chrome to exist.
         """
         bar = self.addToolBar("Main")
         # A stock QToolBar is movable, and right-clicking it opens
@@ -235,7 +237,20 @@ class MainWindow(QMainWindow):
         spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         bar.addWidget(spacer)
 
+        # Save's shortcut rides on the action itself rather than a separate
+        # QShortcut, the opposite of Undo below: Save is never focus-aware --
+        # it is always the document command, whatever holds focus -- so it
+        # should also inherit the action's enabled state, which leaves the key
+        # dead exactly where the button is greyed (no document, read-only).
         self._save_action = bar.addAction("Save", self._save)
+        # ``setShortcuts`` (plural), not ``setShortcut``: the singular takes one
+        # QKeySequence, so a StandardKey collapses to its primary binding and
+        # the platform's other bindings for Save go unclaimed. The QShortcut
+        # registrations below answer every binding of their standard key, and
+        # Save should not be the odd one out.
+        self._save_action.setShortcuts(QKeySequence.Save)
+        save_keys = QKeySequence(QKeySequence.Save).toString(QKeySequence.NativeText)
+        self._save_action.setToolTip(f"Save ({save_keys})")
         self._export_action = self._build_export_button()
         bar.addWidget(self._export_action)
 
@@ -286,6 +301,14 @@ class MainWindow(QMainWindow):
         bar.addWidget(self._search)
         for sequence in (QKeySequence.Find, QKeySequence("Ctrl+P")):
             QShortcut(sequence, self, activated=self._focus_search)
+
+        # Open's only control is the Workspace page's button, so from the
+        # Editor or Diagnostics page there is no route to it at all. The
+        # standard key restores one from every page without putting the
+        # action back into the top bar. It stays live unconditionally:
+        # opening a file is valid whatever the active document is, including
+        # none and read-only, and _open owns the guards from there.
+        self._open_shortcut = QShortcut(QKeySequence.Open, self, activated=self._open)
 
     def _build_export_button(self) -> QToolButton:
         """The toolbar's Export control: a flat button whose click opens a
