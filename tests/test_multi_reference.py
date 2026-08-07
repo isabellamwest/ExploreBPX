@@ -187,8 +187,8 @@ def test_strip_shows_a_quiet_chip_per_pin(three_pins):
     # Counts are per reference and live only in the tooltip: okane carries an
     # extra key, so its ref-only count differs from the other two.
     tooltips = d.comparison_strip_chip_tooltips()
-    assert "1 differs" in tooltips[0] and "ref only" not in tooltips[0]
-    assert "1 ref only" in tooltips[2]
+    assert "1 differs" in tooltips[0] and "reference only" not in tooltips[0]
+    assert "1 reference only" in tooltips[2]
 
 
 def test_strip_keeps_names_while_they_fit_and_drops_them_together(qtbot):

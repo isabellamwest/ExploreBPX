@@ -281,5 +281,7 @@ def test_ask_open_intent_real_dialog_replace_main(app_driver, valid_spm_path):
     intent = d._w._ask_open_intent("incoming.json")
 
     assert captured["title"] == "Open incoming.json"
-    assert captured["text"] == "A document is already open. Open this file as:"
+    assert captured["text"] == (
+        "spm_example_valid.json is already open. Open incoming.json as:"
+    )
     assert intent is main_window_module.OpenIntent.REPLACE_MAIN

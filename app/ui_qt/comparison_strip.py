@@ -23,20 +23,21 @@ from . import badges, style
 from .reference_identity import ReferencePin
 
 def _counts_text(comparison: ComparisonResult) -> str:
-    """"14 differ · 8 ref only" -- singular forms at 1, a zero side omitted
-    entirely, "no differences" when both are zero (M2 brief)."""
+    """"14 differ · 8 reference only" -- singular forms at 1, a zero side
+    omitted entirely, "no differences" when both are zero (M2 brief).
+    "Reference" spelled out, never "ref" (decision D1)."""
     differ = comparison.differ_count
     ref_only = comparison.ref_only_count
     parts = []
     if differ:
         parts.append("1 differs" if differ == 1 else f"{differ} differ")
     if ref_only:
-        parts.append(f"{ref_only} ref only")
+        parts.append(f"{ref_only} reference only")
     return " · ".join(parts) if parts else "no differences"
 
 
 def chip_tooltip(pin: ReferencePin) -> str:
-    """"Chen2020 · DFN · 14 differ · 8 ref only" -- the whole of what the
+    """"Chen2020 · DFN · 14 differ · 8 reference only" -- the whole of what the
     chip is not saying out loud. The counts tail is dropped when there is no
     comparison at all (no main document open): a chip must never imply a
     comparison that was never run."""

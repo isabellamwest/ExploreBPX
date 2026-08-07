@@ -269,7 +269,9 @@ def test_strip_counts_live_in_the_chip_tooltip(panel):
 
     panel.set_comparison(_one_pin(MAIN_RAW, REF_RAW))
     assert panel._strip._chips[0]._name.text() == "reference.json"
-    assert panel._strip._chips[0].toolTip() == "reference.json · SPM · 2 differ · 1 ref only"
+    assert panel._strip._chips[0].toolTip() == (
+        "reference.json · SPM · 2 differ · 1 reference only"
+    )
 
     one_differ = ComparisonResult(
         sections={
@@ -464,7 +466,7 @@ def test_strip_appears_with_correct_counts_after_docking(app_driver, main_and_re
     assert app_driver.comparison_strip_visible()
     assert app_driver.comparison_strip_chip_names() == [ref_path.name]
     assert app_driver.comparison_strip_chip_tooltips() == [
-        f"{ref_path.name} · SPM · 2 differ · 1 ref only"
+        f"{ref_path.name} · SPM · 2 differ · 1 reference only"
     ]
 
 
@@ -732,7 +734,9 @@ def test_replacing_the_main_document_with_reference_docked_refreshes(
     main_path, ref_path = main_and_ref
     app_driver.open(main_path)
     _dock_reference(app_driver, ref_path, monkeypatch)
-    assert app_driver.comparison_strip_chip_tooltips()[0].endswith("2 differ · 1 ref only")
+    assert app_driver.comparison_strip_chip_tooltips()[0].endswith(
+        "2 differ · 1 reference only"
+    )
 
     matching_main_path = tmp_path / "matches_reference.json"
     matching_main_path.write_text(json.dumps(MATCHING_MAIN_RAW), encoding="utf-8")

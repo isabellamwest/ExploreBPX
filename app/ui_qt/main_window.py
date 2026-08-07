@@ -910,7 +910,8 @@ class MainWindow(QMainWindow):
         choice = QMessageBox.question(
             self,
             "Unsaved changes",
-            "This document has unsaved changes. Save before continuing?",
+            f"{self._fallback_filename(session)} has unsaved changes. "
+            "Save before continuing?",
             QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
             QMessageBox.Save,
         )
@@ -996,7 +997,12 @@ class MainWindow(QMainWindow):
         """
         box = QMessageBox(self)
         box.setWindowTitle(f"Open {filename}")
-        box.setText("A document is already open. Open this file as:")
+        # Both files named (the label rule: never "this file"): the one that
+        # is open, and the one this choice routes.
+        box.setText(
+            f"{self._fallback_filename(self._state.active)} is already open. "
+            f"Open {filename} as:"
+        )
         replace_main = box.addButton("Replace main", QMessageBox.AcceptRole)
         # One stable label: pinning appends, so this choice never replaces
         # anything. At the cap it is the one control that cannot act, so it
@@ -1623,7 +1629,7 @@ class MainWindow(QMainWindow):
             return
         name = session.backing_file.name if session.backing_file else session.document.filename
         prefix = "* " if session.dirty else ""
-        self.setWindowTitle(f"{prefix}{name} \u2014 ExploreBPX")
+        self.setWindowTitle(f"{prefix}{name} - ExploreBPX")
         if session.read_only:
             # Not the D8 saved-state pair: a read-only session has no saved
             # state to report, only its mode.

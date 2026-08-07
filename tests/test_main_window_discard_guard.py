@@ -49,6 +49,25 @@ def _stub_replace_main(app_driver, monkeypatch) -> None:
     )
 
 
+def test_discard_guard_names_the_file(app_driver, spm_workfile, monkeypatch):
+    """The guard's sentence names the file (the label rule: never "This
+    document"), so the person deciding knows which work is at stake."""
+    _make_dirty(app_driver, spm_workfile)
+    seen = {}
+
+    def fake_question(parent, title, text, *args, **kwargs):
+        seen["title"] = title
+        seen["text"] = text
+        return QMessageBox.Cancel
+
+    monkeypatch.setattr(main_window_module.QMessageBox, "question", fake_question)
+    assert app_driver._w._confirm_discard_if_dirty() is False
+    assert seen["title"] == "Unsaved changes"
+    assert seen["text"] == (
+        f"{spm_workfile.name} has unsaved changes. Save before continuing?"
+    )
+
+
 def test_open_with_clean_document_does_not_prompt(
     app_driver, valid_spm_path, spm_workfile, monkeypatch
 ):
