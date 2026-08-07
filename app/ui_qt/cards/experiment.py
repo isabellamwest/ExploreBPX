@@ -616,7 +616,12 @@ class ExperimentCard(QWidget):
             self._show_import_message(f"{Path(path).name} has no data rows to import.")
             return
         targets = self._csv_targets()
-        dialog = CsvImportDialog(data, tuple(label for label, _ in targets), self)
+        dialog = CsvImportDialog(
+            data,
+            tuple(label for label, _ in targets),
+            self,
+            filename=Path(path).name,
+        )
         dialog.exec()
         if dialog.accepted_mapping is not None:
             self._apply_csv_import(data, dialog.accepted_mapping)

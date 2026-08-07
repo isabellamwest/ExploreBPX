@@ -7,6 +7,9 @@ header row, cells kept as text), one selector per target parameter proposing
 a mapping, and a preview of the file itself. Import is blocked -- with the
 reason spelled out -- while the mapping is unusable.
 
+``filename`` is the picked file's display name: sentences about the file name
+it, never "this file".
+
 Three optional parameters let a second caller (the x/y table grid) reuse this
 same dialog without changing the series import's behaviour, which is the
 default in every case:
@@ -64,6 +67,7 @@ class CsvImportDialog(QDialog):
         targets: tuple[str, ...],
         parent=None,
         *,
+        filename: str,
         proposed: tuple[int | None, ...] | None = None,
         require_all_targets: bool = False,
         offer_append: bool = False,
@@ -72,6 +76,7 @@ class CsvImportDialog(QDialog):
         self.setWindowTitle("Import CSV")
         self._data = data
         self._targets = targets
+        self._filename = filename
         self._require_all_targets = require_all_targets
         self._offer_append = offer_append
         self._accepted_mapping: tuple[int | None, ...] | None = None
@@ -185,7 +190,7 @@ class CsvImportDialog(QDialog):
                 # wrong instead.
                 count = self._data.column_count
                 return (
-                    f"This file has {count} column{'s' if count != 1 else ''}; "
+                    f"{self._filename} has {count} column{'s' if count != 1 else ''}; "
                     f"{_join_targets(self._targets)} each need one."
                 )
             return f"Choose a column for {_join_targets(self._targets)}."

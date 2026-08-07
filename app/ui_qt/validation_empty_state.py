@@ -134,11 +134,12 @@ class ValidationEmptyState(QWidget):
 
         # One popup, one pending intent -- mirrors tree_panel.TreePanel's own
         # _popup_intent convention: None means the plain "+ Add
-        # experiment" click; a CsvData means the CSV flow is waiting on a
-        # name before it can run the mapping dialog (see _on_name_chosen).
+        # experiment" click; a (CsvData, filename) pair means the CSV flow is
+        # waiting on a name before it can run the mapping dialog (see
+        # _on_name_chosen).
         self._popup = NamePopup(self)
         self._popup.name_chosen.connect(self._on_name_chosen)
-        self._pending_import: CsvData | None = None
+        self._pending_import: tuple[CsvData, str] | None = None
 
     # ------------------------------------------------------------------
     # "+ Add experiment": one AddSection undo step
@@ -162,7 +163,8 @@ class ValidationEmptyState(QWidget):
         if pending is None:
             self.bulk_commit_requested.emit(AddSection(("Validation",), name))
             return
-        self._prompt_csv_mapping_then_create(pending, name)
+        data, filename = pending
+        self._prompt_csv_mapping_then_create(data, filename, name)
 
     # ------------------------------------------------------------------
     # "Import CSV as new experiment…": file -> name -> mapping -> fill
@@ -186,14 +188,16 @@ class ValidationEmptyState(QWidget):
         if data.row_count == 0:
             self._show_import_message(f"{Path(path).name} has no data rows to import.")
             return
-        self._pending_import = data
+        self._pending_import = (data, Path(path).name)
         self._open_name_popup(self._import_button)
 
     def _show_import_message(self, message: str) -> None:
         self._import_message.setText(message)
         self._import_message.setVisible(bool(message))
 
-    def _prompt_csv_mapping_then_create(self, data: CsvData, name: str) -> None:
+    def _prompt_csv_mapping_then_create(
+        self, data: CsvData, filename: str, name: str
+    ) -> None:
         """Confirm the mapping, then write both commands back to back.
 
         The dialog runs first, while self is still guaranteed to be the
@@ -203,7 +207,7 @@ class ValidationEmptyState(QWidget):
         nothing is created at all, matching every other CSV import's
         "nothing is written until confirmed" contract.
         """
-        dialog = CsvImportDialog(data, KNOWN_ALIASES, self)
+        dialog = CsvImportDialog(data, KNOWN_ALIASES, self, filename=filename)
         dialog.exec()
         if dialog.accepted_mapping is None:
             return

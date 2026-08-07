@@ -169,7 +169,7 @@ def _qapp():
 def _dialog(text="time,voltage\n0,4.1\n100,4.0\n", targets=("Time [s]", "Voltage [V]"), **kwargs):
     from ui_qt.cards.csv_dialog import CsvImportDialog
 
-    return CsvImportDialog(read_csv_text(text), targets, **kwargs)
+    return CsvImportDialog(read_csv_text(text), targets, filename="data.csv", **kwargs)
 
 
 def test_dialog_preselects_the_auto_map():
@@ -241,7 +241,7 @@ def test_dialog_require_all_targets_names_the_files_column_shortfall():
     second column, so the reason instead says what is actually wrong."""
     dialog = _dialog(text="0\n1\n", targets=("x", "y"), require_all_targets=True)
     assert dialog._import_button.isEnabled() is False
-    assert dialog._reason.text() == "This file has 1 column; x and y each need one."
+    assert dialog._reason.text() == "data.csv has 1 column; x and y each need one."
 
 
 def test_default_construction_keeps_the_at_least_one_gate():

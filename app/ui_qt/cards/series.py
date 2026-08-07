@@ -17,6 +17,8 @@ first column is the card's value; ``value()`` never reads the context.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtWidgets import QFileDialog, QToolButton, QVBoxLayout
 
 from core.commands import SetValues
@@ -137,7 +139,12 @@ class SeriesCard(EditorCard):
         if data.row_count == 0:
             return
         targets = self._csv_targets()
-        dialog = CsvImportDialog(data, tuple(label for label, _ in targets), self)
+        dialog = CsvImportDialog(
+            data,
+            tuple(label for label, _ in targets),
+            self,
+            filename=Path(path).name,
+        )
         dialog.exec()
         if dialog.accepted_mapping is not None:
             self._apply_csv_import(data, dialog.accepted_mapping)

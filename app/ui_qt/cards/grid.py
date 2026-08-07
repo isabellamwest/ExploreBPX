@@ -48,6 +48,8 @@ double-click, which is how a cell is edited.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QKeySequence
 from PySide6.QtWidgets import (
@@ -670,6 +672,7 @@ class NumericGrid(QWidget):
             data,
             headers,
             self,
+            filename=Path(path).name,
             proposed=positional_map(data.column_count, len(headers)),
             require_all_targets=True,
             offer_append=True,
