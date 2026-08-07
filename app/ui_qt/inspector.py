@@ -78,6 +78,11 @@ class InspectorPanel(QWidget):
 
     committed = Signal()
     issue_activated = Signal(tuple)
+    #: The answer to :meth:`pending_draft_block` may have changed: the draft
+    #: was edited (debounced), reset, or the surface was swapped out. Lets
+    #: ``MainWindow`` retire its persistent blocked-write refusal the moment
+    #: the block it names stops existing, without polling.
+    draft_block_changed = Signal()
 
     def __init__(self, state: AppState) -> None:
         super().__init__()
@@ -217,6 +222,9 @@ class InspectorPanel(QWidget):
         self._clear_surface()
         self._surface_layout.addWidget(widget)
         self._set_surface_fills(fills)
+        # ``_card`` is cleared above, so any blocked draft is gone with it --
+        # a freshly installed card never starts dirty.
+        self.draft_block_changed.emit()
 
     def _set_surface_fills(self, fills: bool) -> None:
         # Only on a real change: ``setStretch`` invalidates the layout
@@ -622,6 +630,10 @@ class InspectorPanel(QWidget):
         return name, reason
 
     def _validate_draft(self) -> None:
+        # Every draft edit lands here (debounced), so this is where a block
+        # appears, changes reason, or clears -- announced before the blocked
+        # early-return below, which skips only the value preview.
+        self.draft_block_changed.emit()
         if self._card is None or self._state.active is None:
             return
         if self._card.commit_blocked_reason() is not None:
@@ -648,6 +660,8 @@ class InspectorPanel(QWidget):
         self._show_issue_rows(issues, self._card.parameter.path)
 
     def _on_reset(self) -> None:
+        # A discarded draft cannot block anything any more.
+        self.draft_block_changed.emit()
         if self._card is None:
             return
         self._debounce.stop()

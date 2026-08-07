@@ -543,6 +543,10 @@ QPushButton#SourceReloadLink {
 }
 QPushButton#SourceReloadLink:hover { color: #1a5fd0; }
 QStatusBar { background: #f6f8fa; border-top: 1px solid #d0d7de; font-size: ${meta}px; color: #57606a; }
+/* The persistent blocked-write refusal (MainWindow._refuse_blocked_write):
+   its ERROR colour lives on the label's own anchor markup, this rule only
+   keeps it clear of the window edge. */
+QLabel#BlockedWriteChip { padding: 0 8px; }
 QWidget#ActivityBar { background: #f6f8fa; border-right: 1px solid #d0d7de; }
 QToolButton#ActivityButton { background: transparent; border: none; border-left: 2px solid transparent; }
 QToolButton#ActivityButton:hover:!checked { background: #e8eaed; }

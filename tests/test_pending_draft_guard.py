@@ -14,6 +14,8 @@ The contract now matches what a spreadsheet or a form does:
   save instead of writing a file without it -- and the abort is spoken: a
   toast names the blocked edit, the reason, and offers the Editor page,
   because the card's inline reason is invisible from every other page.
+  The toast dismisses itself, so the refusal also persists as a status-bar
+  chip that stays until the blocked draft is fixed, discarded or replaced.
 """
 
 from __future__ import annotations
@@ -183,6 +185,100 @@ def test_the_guard_save_choice_refuses_out_loud(
 
 
 # ----------------------------------------------------------------------
+# The refusal persists: a status-bar chip outlives the toast and retires
+# itself when the block it names stops existing (MainWindow._blocked_chip)
+# ----------------------------------------------------------------------
+
+
+def test_a_blocked_save_leaves_a_persistent_status_chip(
+    app_driver, spm_workfile, monkeypatch
+):
+    """The toast auto-dismisses; the chip does not. It names the blocked
+    edit and the way back, and carries the reason as its tooltip."""
+    app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(6.5)
+    window = app_driver._w
+    monkeypatch.setattr(
+        window._inspector._card, "commit_blocked_reason", lambda: "unparseable"
+    )
+    app_driver.show_view("Workspace")
+
+    assert window._save() is False
+
+    assert app_driver.blocked_write_chip_text() == (
+        'Save blocked · fix or discard the edit to "Nominal cell capacity [A.h]"'
+    )
+    assert window._blocked_chip.toolTip() == "unparseable"
+
+
+def test_the_chip_links_back_to_the_editor(app_driver, spm_workfile, monkeypatch):
+    app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(6.5)
+    window = app_driver._w
+    monkeypatch.setattr(
+        window._inspector._card, "commit_blocked_reason", lambda: "unparseable"
+    )
+    app_driver.show_view("Workspace")
+    window._save()
+
+    app_driver.blocked_write_chip_click()
+
+    assert app_driver.current_view_name() == "Editor"
+    assert window._inspector.has_pending_draft()  # still there to repair
+
+
+def test_the_chip_retires_once_the_draft_is_writable(
+    app_driver, spm_workfile, monkeypatch
+):
+    """Editing the draft into something writable clears the refusal via the
+    debounced ``_validate_draft`` (fired directly here, the suite's usual
+    debounce bypass)."""
+    app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(6.5)
+    window = app_driver._w
+    card = window._inspector._card
+    monkeypatch.setattr(card, "commit_blocked_reason", lambda: "unparseable")
+    assert window._save() is False
+    assert app_driver.blocked_write_chip_text() is not None
+
+    monkeypatch.setattr(card, "commit_blocked_reason", lambda: None)
+    window._inspector._validate_draft()
+
+    assert app_driver.blocked_write_chip_text() is None
+
+
+def test_the_chip_retires_when_the_card_is_replaced(app_driver, spm_workfile, monkeypatch):
+    """Navigating away drops the draft with its card -- nothing blocks the
+    next save, so nothing may keep claiming to."""
+    app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(6.5)
+    window = app_driver._w
+    monkeypatch.setattr(
+        window._inspector._card, "commit_blocked_reason", lambda: "unparseable"
+    )
+    assert window._save() is False
+    assert app_driver.blocked_write_chip_text() is not None
+
+    app_driver.go_to(("Header", "BPX"))
+
+    assert app_driver.blocked_write_chip_text() is None
+
+
+def test_the_chip_retires_when_the_draft_is_discarded(
+    app_driver, spm_workfile, monkeypatch
+):
+    """Escape's ``_reset_draft`` clears ``_touched`` before ``draft_reset``
+    fires, so the chip's re-check already sees a clean card. Fired on the
+    inner editor, the widget Escape actually reaches."""
+    app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(6.5)
+    window = app_driver._w
+    card = window._inspector._card
+    monkeypatch.setattr(card, "commit_blocked_reason", lambda: "unparseable")
+    assert window._save() is False
+    assert app_driver.blocked_write_chip_text() is not None
+
+    card._editor._reset_draft()
+
+    assert app_driver.blocked_write_chip_text() is None
+
+
+# ----------------------------------------------------------------------
 # Export mirrors Save's own draft-flush semantics (see MainWindow._export_as)
 # ----------------------------------------------------------------------
 
@@ -237,3 +333,4 @@ def test_a_blocked_export_refuses_out_loud(app_driver, spm_workfile, monkeypatch
     window._export_as("json")
 
     assert app_driver.toast_text().startswith("Cannot export:")
+    assert app_driver.blocked_write_chip_text().startswith("Export blocked")

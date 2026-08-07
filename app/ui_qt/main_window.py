@@ -6,6 +6,7 @@ signals to state mutations, and refreshes views. No BPX logic lives here.
 
 from __future__ import annotations
 
+import html
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
@@ -63,7 +64,7 @@ from .reference_library_dialog import ReferenceLibraryDialog
 from .search import SearchBar
 from .source_page import SourcePage
 from . import typography
-from .style import STYLESHEET
+from .style import ERROR, STYLESHEET
 from .toast import Toast
 from .tree_panel import TreePanel
 from .diagnostics_panel import DiagnosticsPanel
@@ -205,6 +206,19 @@ class MainWindow(QMainWindow):
         self._activity_bar = ActivityBar()
         self._identity_label = _IdentityLabel()
         self._status_label = QLabel()
+        # The persistent half of a blocked Save/Export refusal (see
+        # _refuse_blocked_write): the toast speaks once and dismisses itself,
+        # this chip stays in the status bar until the blocked draft is fixed,
+        # discarded or replaced. Its whole text is one link back to the
+        # Editor page, where the card states the reason inline.
+        self._blocked_chip = QLabel()
+        self._blocked_chip.setObjectName("BlockedWriteChip")
+        self._blocked_chip.setTextFormat(Qt.RichText)
+        self._blocked_chip.setTextInteractionFlags(Qt.LinksAccessibleByMouse)
+        self._blocked_chip.linkActivated.connect(
+            lambda _href: self._show_page(_EDITOR_PAGE_INDEX)
+        )
+        self._blocked_chip.hide()
 
         self._build_toolbar()
         self._build_central()
@@ -394,6 +408,9 @@ class MainWindow(QMainWindow):
 
     def _build_statusbar(self) -> None:
         bar = QStatusBar()
+        # Leftmost, ahead of the file name: a refusal that must stay visible
+        # until resolved should be the first thing the bar says.
+        bar.addPermanentWidget(self._blocked_chip)
         bar.addPermanentWidget(self._status_label, 1)
         # The installed validator's version, permanently visible: every
         # verdict this app shows is that package's, and an environment that
@@ -430,6 +447,7 @@ class MainWindow(QMainWindow):
         self._search.navigation_requested.connect(self._navigation.navigate)
         self._search.dismissed.connect(self._tree.focus_tree)
         self._inspector.committed.connect(self._on_committed)
+        self._inspector.draft_block_changed.connect(self._refresh_blocked_write_chip)
         self._activity_bar.view_requested.connect(self._on_view_changed)
         self._workspace.open_requested.connect(self._open)
         self._workspace.new_requested.connect(self._new)
@@ -1601,6 +1619,35 @@ class MainWindow(QMainWindow):
             action_text="Show in Editor",
             action=lambda: self._show_page(_EDITOR_PAGE_INDEX),
         )
+        # The toast dismisses itself in seconds; the refusal must not. The
+        # chip repeats it in the status bar until the block stops existing
+        # (see _refresh_blocked_write_chip) -- otherwise a missed toast
+        # leaves Save looking silently broken on every further attempt.
+        self._blocked_chip.setText(
+            f'<a href="editor" style="color: {ERROR}; text-decoration: none;">'
+            f"{html.escape(verb.capitalize())} blocked "
+            f"· fix or discard {html.escape(target)}</a>"
+        )
+        self._blocked_chip.setToolTip(reason)
+        self._blocked_chip.show()
+
+    def _refresh_blocked_write_chip(self) -> None:
+        """Retire the blocked-write chip the moment its block is gone.
+
+        Driven by ``InspectorPanel.draft_block_changed`` -- draft edited,
+        discarded, or card swapped -- so the refusal lives exactly as long
+        as its reason does. While the draft stays blocked only the tooltip
+        is refreshed (the reason can change with further typing); the chip
+        never *appears* here, only on an actual refused write.
+        """
+        if self._blocked_chip.isHidden():
+            return
+        block = self._inspector.pending_draft_block()
+        if block is None:
+            self._blocked_chip.hide()
+            self._blocked_chip.setToolTip("")
+            return
+        self._blocked_chip.setToolTip(block[1])
 
     def _export_as(self, fmt: str) -> None:
         """Write a copy of the document to a user-chosen location in *fmt*

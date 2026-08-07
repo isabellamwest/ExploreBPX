@@ -24,7 +24,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import QMimeData, QPointF, QUrl, Qt
-from PySide6.QtGui import QDropEvent
+from PySide6.QtGui import QDropEvent, QTextDocument
 from PySide6.QtWidgets import QComboBox, QLineEdit, QPushButton, QSpinBox
 
 
@@ -829,6 +829,23 @@ class AppDriver:
         assert not toast.isHidden(), "no toast is showing"
         assert toast.action_text() is not None, "toast has no action"
         toast._on_link_activated("action")
+        return self
+
+    def blocked_write_chip_text(self) -> str | None:
+        """The status bar's blocked-write refusal chip, as plain text --
+        or None while no refusal is standing."""
+        chip = self._w._blocked_chip
+        if chip.isHidden():
+            return None
+        doc = QTextDocument()
+        doc.setHtml(chip.text())
+        return doc.toPlainText()
+
+    def blocked_write_chip_click(self) -> "AppDriver":
+        """Follow the visible refusal chip's link back to the Editor."""
+        chip = self._w._blocked_chip
+        assert not chip.isHidden(), "no blocked-write chip is showing"
+        chip.linkActivated.emit("editor")
         return self
 
     # ------------------------------------------------------------------
