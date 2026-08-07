@@ -89,9 +89,10 @@ def test_stream_lists_only_non_clean_buckets_with_the_clear_line_naming_the_rest
         "Negative electrode  1 error",
         "Positive electrode  1 error",
     ]
-    # "Not checked", not "clear": these Parameterisation errors abort bpx
-    # before State is judged, so the line must not vouch for it (H2).
-    assert d.diagnostics_clear_line_text() == "2 sections not checked"
+    # Split by what the run judged (H2, both directions): the abort happened
+    # in Parameterisation, so Header really was checked and stays "clear",
+    # while State was never reached and reads "not checked".
+    assert d.diagnostics_clear_line_text() == "1 section clear · 1 not checked"
 
 
 def test_clear_bucket_shows_no_header(app_driver, many_issues_path):
@@ -310,9 +311,9 @@ def test_one_error_in_one_section_leaves_the_rest_clear(app_driver, tmp_path, va
 
     assert d.diagnostics_stream_section_headers() == ["Cell  1 error"]
     total = len(d._w._diagnostics._buckets.buckets)
-    # The Cell error aborts bpx at Parameterisation, so the remaining
-    # buckets read "not checked" rather than "clear" (H2).
-    assert d.diagnostics_clear_line_text() == f"{total - 1} sections not checked"
+    # The Cell error aborts bpx at Parameterisation: every other bucket that
+    # stage judged stays "clear", while State was never reached (H2).
+    assert d.diagnostics_clear_line_text() == f"{total - 2} sections clear · 1 not checked"
 
 
 def test_clear_line_expands_to_one_row_per_clear_bucket(app_driver, many_issues_path):
@@ -368,13 +369,13 @@ def test_clear_row_is_html_based_muted_no_accent_and_compact(app_driver, tmp_pat
         assert style.ACCENT not in html
         assert style.MUTED in html
 
-    # Height check on the short, bare-label clear row ("State", whose
-    # required_total is 0 -- no ratio to append, see _clear_row_text)
-    # against the subhead's own height: both go through the identical
-    # HTML-document sizeHint path, so at comparable text length they must
-    # land on the same single-line height -- unlike a longer clear row's
-    # text, which may legitimately wrap.
-    state_row = next(item for item in clear_rows if item.text() == "State")
+    # Height check on the short State clear row (the None value aborts bpx
+    # at Parameterisation, so State reads "not checked" rather than a
+    # ratio) against the subhead's own height: both go through the
+    # identical HTML-document sizeHint path, so at comparable text length
+    # they must land on the same single-line height -- unlike a longer
+    # clear row's text, which may legitimately wrap.
+    state_row = next(item for item in clear_rows if item.text() == "State · not checked")
     subhead_height = delegate.sizeHint(option, lst.indexFromItem(subheads[0])).height()
     state_height = delegate.sizeHint(option, lst.indexFromItem(state_row)).height()
     assert state_height == subhead_height
@@ -777,17 +778,20 @@ def test_clear_row_text_absent_bucket():
 def test_clear_line_text_singular_and_plural():
     from ui_qt.diagnostics_panel import _clear_line_text
 
-    assert _clear_line_text(1) == "1 section clear"
-    assert _clear_line_text(2) == "2 sections clear"
+    assert _clear_line_text(1, 0) == "1 section clear"
+    assert _clear_line_text(2, 0) == "2 sections clear"
 
 
 def test_clear_line_never_says_clear_after_an_aborted_run():
-    """H2: a bucket with nothing to show after a staged abort may never have
-    been examined, so the line trades "clear" for the ladder word."""
+    """H2, both directions: a bucket beyond an aborted run's reach was never
+    examined and reads "not checked", while a bucket the run did judge keeps
+    its earned "clear" -- the line names both counts when they coexist."""
     from ui_qt.diagnostics_panel import _clear_line_text
 
-    assert _clear_line_text(1, completed=False) == "1 section not checked"
-    assert _clear_line_text(2, completed=False) == "2 sections not checked"
+    assert _clear_line_text(0, 1) == "1 section not checked"
+    assert _clear_line_text(0, 2) == "2 sections not checked"
+    assert _clear_line_text(2, 1) == "2 sections clear · 1 not checked"
+    assert _clear_line_text(1, 1) == "1 section clear · 1 not checked"
 
 
 # --- pinned regressions found by driving the real (non-offscreen) app ------

@@ -64,18 +64,10 @@ def test_legacy_fact_falls_back_when_the_file_declares_no_version():
 
 def test_reach_facts_apply_even_with_no_record():
     assert file_facts("untitled.json", None, CheckReach.HEADER, "") == (
-        FileFact(
-            "Checking stopped at Header",
-            "Nothing below it was checked · the Header names the model type"
-            " the rest is judged against",
-        ),
+        FileFact("Checking stopped at Header", "Nothing below it was checked"),
     )
     assert file_facts("untitled.json", None, CheckReach.PARAMETERISATION, "") == (
-        FileFact(
-            "Checking stopped at Parameterisation",
-            "State and Validation were not checked · bpx checks in stages"
-            " and stops at the first that fails",
-        ),
+        FileFact("Checking stopped at Parameterisation", "State and Validation were not checked"),
     )
     assert file_facts("untitled.json", None, CheckReach.NOT_RUN, "") == (
         FileFact("Checking did not run", "bpx stopped before judging anything"),
@@ -189,5 +181,4 @@ def test_new_scaffold_shows_the_parameterisation_reach_fact(app_driver):
     assert d.diagnostics_file_facts_header() == "untitled.json  1 note"
     assert d.diagnostics_file_fact_texts() == [
         "Checking stopped at Parameterisation\nState and Validation were not checked"
-        " · bpx checks in stages and stops at the first that fails"
     ]

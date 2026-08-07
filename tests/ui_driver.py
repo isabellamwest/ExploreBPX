@@ -1739,8 +1739,7 @@ class AppDriver:
 
     def validity(self) -> str:
         """The Inspector validity badge: '', 'Valid', 'Warning', 'Invalid'
-        or 'Not checked · checking stopped early' (bpx aborted before
-        judging this parameter)."""
+        or 'Not checked' (bpx aborted before judging this parameter)."""
         return self._w._inspector._card._badge.text()
 
     def field_value(self):

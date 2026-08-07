@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pytest
 
+from core.bpx_gateway import CheckReach, section_checked
 from core.parameter_types import ParameterKind
 from state.app_state import AppState
 
@@ -99,6 +100,19 @@ def test_preview_parameter_issues_excludes_document_level_diagnostics(
 
     # A genuinely invalid draft for this parameter is still reported on it.
     assert session.preview_parameter(_CAPACITY, "not-a-number").issues
+
+
+def test_preview_parameter_reach_travels_with_the_issues(spm_workfile):
+    """The preview carries how far the candidate's checking reached, so the
+    badge can judge per section: after a Parameterisation abort, State was
+    never examined while Parameterisation itself was (``section_checked``)."""
+    session = _open(spm_workfile).active
+    assert session.preview_parameter(_CAPACITY, 5.0).validation_reach is CheckReach.COMPLETE
+
+    reach = session.preview_parameter(_CAPACITY, "not-a-number").validation_reach
+    assert reach is CheckReach.PARAMETERISATION
+    assert section_checked("Parameterisation", reach)
+    assert not section_checked("State", reach)
 
 
 def test_committed_invalid_value_resolves_to_a_navigable_parameter(spm_workfile):

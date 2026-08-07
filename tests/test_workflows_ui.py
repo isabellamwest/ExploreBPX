@@ -409,12 +409,19 @@ def test_masked_section_badges_not_validated_instead_of_valid(
     assert d.validity() == "Invalid"
 
     d.go_to(_TEMPERATURE)
-    assert d.validity() == "Not checked · checking stopped early"
+    assert d.validity() == "Not checked"
+
+    # Judged per section, not blanket per document: the abort happened in
+    # Parameterisation, so bpx did judge that section, and a clean parameter
+    # there keeps its earned "Valid" while State reads "Not checked".
+    d.go_to(_VOLTAGE_LIMIT)
+    assert d.validity() == "Valid"
+    d.go_to(_TEMPERATURE)
 
     # The live preview of a draft is equally unjudged while the abort holds.
     d.edit_field("300")
     d.wait_for_live_validation()
-    assert d.validity() == "Not checked · checking stopped early"
+    assert d.validity() == "Not checked"
     d.escape()
 
     # Repair the Cell parameter: State is judged again and the badge returns.

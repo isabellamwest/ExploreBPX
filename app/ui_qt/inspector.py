@@ -13,9 +13,10 @@ The Inspector is one scrolling page, top to bottom:
     in both states -- on selection from ``ParameterItem.issues``, while
     typing from ``DocumentSession.preview_parameter`` -- so a document-level
     diagnostic elsewhere in the file never colours this parameter's mark.
-    When ``bpx`` aborted before judging this parameter's section
-    (``validation_completed`` is False), an issue-free parameter reads as
-    neutral "Not checked" rather than a false green "Valid".
+    When ``bpx``'s run never reached this parameter's section
+    (``core.bpx_gateway.section_checked``), an issue-free parameter reads
+    as neutral "Not checked" rather than a false green "Valid" -- while a
+    parameter in a section the run did judge keeps its earned "Valid".
   - **Issues section**: a full-bleed tinted section listing the shown
     parameter's validation issues, present only while it *has* issues
     (committed or live-preview) -- an issue-free parameter's page simply has
@@ -505,7 +506,7 @@ class InspectorPanel(QWidget):
         self._card = card
         self._apply_grid_fill()
         self._render_issues(
-            parameter.issues, parameter.has_errors, self._committed_validation_completed()
+            parameter.issues, parameter.has_errors, self._committed_checked(parameter.path)
         )
         self._card.set_cell_issues(parameter.issues)
 
@@ -634,7 +635,11 @@ class InspectorPanel(QWidget):
         )
         issues = preview.issues
         errors = [i for i in issues if i.severity == Severity.ERROR]
-        self._render_issues(issues, bool(errors), preview.validation_completed)
+        path = self._card.parameter.path
+        checked = bpx_gateway.section_checked(
+            path[0] if path else None, preview.validation_reach
+        )
+        self._render_issues(issues, bool(errors), checked)
         self._card.set_cell_issues(issues)
         # Live preview drives the Issues section like a commit would: rows,
         # count and visibility all rebuilt from the previewed issues, so the
@@ -649,7 +654,7 @@ class InspectorPanel(QWidget):
         self._render_issues(
             self._card.parameter.issues,
             self._card.parameter.has_errors,
-            self._committed_validation_completed(),
+            self._committed_checked(self._card.parameter.path),
         )
         self._card.set_cell_issues(self._card.parameter.issues)
         self._show_issue_rows(self._card.parameter.issues, self._card.parameter.path)
@@ -785,27 +790,27 @@ class InspectorPanel(QWidget):
         self._state.active.execute_command(command)
         self.committed.emit()
 
-    def _committed_validation_completed(self) -> bool:
-        """The committed document's word on whether ``bpx`` judged it fully."""
+    def _committed_checked(self, path: tuple[str, ...]) -> bool:
+        """Whether the committed run's reach covers this parameter's section
+        (``section_checked``): only then is an empty issue list a verdict."""
         session = self._state.active
         if session is None or session.document is None:
             return True
-        return session.document.validation_completed
+        return bpx_gateway.section_checked(
+            path[0] if path else None, session.document.validation_reach
+        )
 
-    def _render_issues(self, issues, has_errors: bool, completed: bool = True) -> None:
+    def _render_issues(self, issues, has_errors: bool, checked: bool = True) -> None:
         if not issues:
-            # No issue attached is only a clean bill of health if bpx actually
-            # ran to completion; after a staged abort (bad Header masking the
-            # body, bad Parameterisation masking State/Validation) this
-            # parameter was never judged, and claiming "Valid" would be false.
-            if completed:
+            # No issue attached is only a clean bill of health if bpx's run
+            # actually judged this parameter's section; after a staged abort
+            # an uncovered parameter was never examined, and claiming "Valid"
+            # would be false -- while a covered one really earned it (H2,
+            # both directions, same rule as the diagnostics clear line).
+            if checked:
                 self._card.set_validity("Valid", OK)
             else:
-                # The ladder word plus the why, composed the same way the
-                # Workspace badge already does ("Not checked · 1 incomplete")
-                # -- a bare "Not checked" invites "why would checking ever
-                # stop?" with no answer on screen.
-                self._card.set_validity("Not checked · checking stopped early", MUTED)
+                self._card.set_validity("Not checked", MUTED)
             return
         self._card.set_validity(
             "Invalid" if has_errors else "Warning", ERROR if has_errors else WARNING

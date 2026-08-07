@@ -41,14 +41,15 @@ class ParameterPreview:
     """A live-edit preview's verdict on one parameter (see
     :meth:`DocumentSession.preview_parameter`).
 
-    ``validation_completed`` mirrors the candidate document's
-    :attr:`core.document.BPXDocument.validation_completed`: when False,
-    ``bpx`` aborted before judging this parameter's section, so an empty
-    ``issues`` list means *unchecked*, not *clean* -- the badge must not
-    read "Valid"."""
+    ``validation_reach`` mirrors the candidate document's
+    :attr:`core.document.BPXDocument.validation_reach`: whether an empty
+    ``issues`` list means *clean* or *unchecked* is a per-section question
+    (``core.bpx_gateway.section_checked``), so the reach travels with the
+    issues rather than a blanket completed flag -- a staged abort leaves
+    the sections it did judge honestly "Valid"."""
 
     issues: list[ValidatorDiagnostic]
-    validation_completed: bool
+    validation_reach: bpx_gateway.CheckReach
 
 
 @dataclass(frozen=True)
@@ -303,7 +304,7 @@ class DocumentSession:
         suffix-matching the raw diagnostics here, so live preview attaches
         issues through exactly the same path-matching as the committed rebuild
         and the two can never disagree about what belongs to a parameter. The
-        candidate's ``validation_completed`` travels with the issues for the
+        candidate's ``validation_reach`` travels with the issues for the
         same reason: whether an empty issue list means *clean* or *unchecked*
         is the candidate document's verdict, not the caller's guess.
         """
@@ -316,7 +317,7 @@ class DocumentSession:
         parameter = preview.find_parameter(tuple(path))
         return ParameterPreview(
             issues=list(parameter.issues) if parameter is not None else [],
-            validation_completed=preview.validation_completed,
+            validation_reach=preview.validation_reach,
         )
 
     def apply_value(self, path: tuple[str, ...], value: object) -> None:

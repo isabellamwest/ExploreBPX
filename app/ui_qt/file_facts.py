@@ -61,25 +61,11 @@ def file_facts(
             )
         )
 
-    # Each stopped-fact's detail line says *why* bpx stopped, not just what
-    # it skipped -- "why would checking ever stop?" is the question this row
-    # exists to answer, and the stop is bpx's own staged design, never the
-    # app's choice.
     if reach is CheckReach.HEADER:
-        facts.append(
-            FileFact(
-                "Checking stopped at Header",
-                "Nothing below it was checked · the Header names the model type"
-                " the rest is judged against",
-            )
-        )
+        facts.append(FileFact("Checking stopped at Header", "Nothing below it was checked"))
     elif reach is CheckReach.PARAMETERISATION:
         facts.append(
-            FileFact(
-                "Checking stopped at Parameterisation",
-                "State and Validation were not checked · bpx checks in stages"
-                " and stops at the first that fails",
-            )
+            FileFact("Checking stopped at Parameterisation", "State and Validation were not checked")
         )
     elif reach is CheckReach.NOT_RUN:
         facts.append(FileFact("Checking did not run", "bpx stopped before judging anything"))
