@@ -117,6 +117,32 @@ _CHEVRON_EXPANDED = "▾"
 _CHEVRON_COLLAPSED = "▸"
 
 
+class _MeasureBoundVBox(QVBoxLayout):
+    """A :class:`TintedSection`'s outer column, height-computed at the width
+    its content is actually arranged at.
+
+    The section stretches full-bleed while its header and body are capped at
+    ``style.CONTENT_MEASURE`` -- and Qt asks this layout for height at the
+    *full* width (``QWidgetItem::heightForWidth`` consults a widget's layout
+    directly, bypassing any widget-level override). At a wide window that
+    computes label wrapping at a width the capped children never receive,
+    so a section whose wrapped content grows after first layout is handed
+    too few pixels and clips it (geometry-probed on screen: the record's
+    expanded fact details lost exactly the shortfall). Both height queries
+    therefore clamp to the measure plus this layout's own margins -- the
+    width the children genuinely see."""
+
+    def _bound(self, width: int) -> int:
+        margins = self.contentsMargins()
+        return min(width, style.CONTENT_MEASURE + margins.left() + margins.right())
+
+    def heightForWidth(self, width: int) -> int:  # noqa: N802 - Qt naming
+        return super().heightForWidth(self._bound(width))
+
+    def minimumHeightForWidth(self, width: int) -> int:  # noqa: N802 - Qt naming
+        return super().minimumHeightForWidth(self._bound(width))
+
+
 class _ClickableRow(QWidget):
     """A plain row widget that emits ``clicked`` on a left press -- the hit
     area for a collapsible :class:`TintedSection`'s whole title row (title,
@@ -181,7 +207,7 @@ class TintedSection(QWidget):
         self.setAttribute(Qt.WA_StyledBackground, True)
         self._collapsed = False
 
-        outer = QVBoxLayout(self)
+        outer = _MeasureBoundVBox(self)
         outer.setContentsMargins(_SECTION_GUTTER, 12, _SECTION_GUTTER, 12)
         outer.setSpacing(8)
 
