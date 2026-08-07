@@ -76,6 +76,7 @@ from .function import table_is_representable
 from .page import page_content, page_header
 from .reference_block import ReferenceLedger
 from .registry import create_card
+from .unknown import ReadOnlyCard
 from .spread_scale import scale_for
 from .table_preview import ReferenceCurve
 
@@ -96,12 +97,24 @@ class ParameterCard(QWidget):
     #: naming that reference.
     pull_requested = Signal(int)
 
-    def __init__(self, parameter: ParameterItem, meta: FieldMeta | None) -> None:
+    def __init__(
+        self,
+        parameter: ParameterItem,
+        meta: FieldMeta | None,
+        *,
+        read_only: bool = False,
+    ) -> None:
         super().__init__()
         self.parameter = parameter
         self._meta = meta
         self._popover: ParameterInfoPopover | None = None
-        self._renamable = structure.can_rename_parameter(parameter.path, parameter.value)
+        #: A read-only card (D3's "Open as-is") swaps the typed editor for
+        #: the ReadOnlyCard view, drops the rename pencil, and builds its
+        #: ledger without "Use this value" -- the same anatomy, no writes.
+        self._read_only = read_only
+        self._renamable = not read_only and structure.can_rename_parameter(
+            parameter.path, parameter.value
+        )
         # Resolved once and reused by the ( i ) popover: the symbol shown in the
         # header comes from the same source, so both render identical maths and
         # neither invents anything the dataset does not carry.
@@ -197,7 +210,9 @@ class ParameterCard(QWidget):
         # share one label column and their values start at the same x.
         self._main_file_heading: QLabel | None = None
 
-        self._editor = create_card(parameter, meta)
+        self._editor = (
+            ReadOnlyCard(parameter, meta) if read_only else create_card(parameter, meta)
+        )
         self._editor.draft_changed.connect(self.draft_changed)
         self._editor.draft_reset.connect(self.draft_reset)
         self._editor.commit_requested.connect(self.commit_requested)
@@ -260,7 +275,7 @@ class ParameterCard(QWidget):
             # editor with the reference values below.
             self._main_file_heading.setFixedWidth(style.ROLE_LABEL_WIDTH)
             self._value_row.insertWidget(0, self._main_file_heading, 0, Qt.AlignTop)
-            self._ledger = ReferenceLedger()
+            self._ledger = ReferenceLedger(pull_enabled=not self._read_only)
             self._ledger.pull_requested.connect(self.pull_requested)
             self._body_layout.addWidget(self._ledger)
 

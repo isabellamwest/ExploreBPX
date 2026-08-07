@@ -372,7 +372,9 @@ class InspectorPanel(QWidget):
             return
         meta = bpx_gateway.field_meta(section_path + (key,))
         kind = classify(groups[0].value, meta)
-        card = GhostParameterCard(section_path, key, groups, self._pins, kind)
+        card = GhostParameterCard(
+            section_path, key, groups, self._pins, kind, read_only=self._read_only
+        )
         card.pull_requested.connect(self._on_ghost_pull)
         self._set_surface(card, fills=False)
         self._card = card
@@ -400,7 +402,9 @@ class InspectorPanel(QWidget):
             self._show_experiment(run_path, parameter)
         elif parameter is not None:
             self.show_parameter(parameter)
-        elif self._is_empty_validation_container():
+        elif self._is_empty_validation_container() and not self._read_only:
+            # The guided empty state is one long invitation to add a run;
+            # a read-only session gets the plain placeholder instead.
             self._show_validation_empty_state()
         else:
             self.show_placeholder()
@@ -454,7 +458,9 @@ class InspectorPanel(QWidget):
         document_name = (
             session.backing_file.name if session.backing_file else session.document.filename
         )
-        card = ExperimentCard(node, focused_alias, document_name=document_name)
+        card = ExperimentCard(
+            node, focused_alias, document_name=document_name, read_only=self._read_only
+        )
         card.bulk_commit_requested.connect(self._on_bulk_commit)
         self._set_surface(card, fills=False)
         self._card = card
@@ -486,7 +492,7 @@ class InspectorPanel(QWidget):
     def show_parameter(self, parameter: ParameterItem) -> None:
         meta = bpx_gateway.field_meta(parameter.path)
 
-        card = ParameterCard(parameter, meta)
+        card = ParameterCard(parameter, meta, read_only=self._read_only)
         card.draft_changed.connect(self._debounce.start)
         card.draft_reset.connect(self._on_reset)
         card.commit_requested.connect(self._on_commit)
@@ -648,8 +654,30 @@ class InspectorPanel(QWidget):
         self._card.set_cell_issues(self._card.parameter.issues)
         self._show_issue_rows(self._card.parameter.issues, self._card.parameter.path)
 
+    @property
+    def _read_only(self) -> bool:
+        """Whether the active session refuses edits (D3's "Open as-is").
+
+        Read from the session on every use, never cached: the flag is the
+        session's own fact, and the Inspector rebuilds its cards per reveal
+        anyway."""
+        session = self._state.active
+        return session is not None and session.read_only
+
+    def _mutable_session(self):
+        """The active session when it accepts edits, else ``None``.
+
+        The belt behind read-only cards: those offer no committing
+        affordance at all, so a mutation signal reaching a handler on a
+        read-only session is a bug upstream -- refused here rather than
+        crashing through ``ReadOnlyDocumentError``."""
+        session = self._state.active
+        if session is None or session.read_only:
+            return None
+        return session
+
     def _on_commit(self) -> None:
-        if self._card is None or self._state.active is None:
+        if self._card is None or self._mutable_session() is None:
             return
         if self._card.commit_blocked_reason() is not None:
             # The draft has no representation at all (unparseable Raw JSON,
@@ -676,7 +704,7 @@ class InspectorPanel(QWidget):
         of a dialog, the same convention other cards use for a blocked
         commit; nothing here duplicates the command service's own gating.
         """
-        if self._state.active is None:
+        if self._mutable_session() is None:
             return
         try:
             self._state.active.execute_command(RenameKey(tuple(path), new_key))
@@ -705,7 +733,7 @@ class InspectorPanel(QWidget):
         signal so ``MainWindow`` runs its standard post-commit refresh, which
         recomputes the comparison from the new document.
         """
-        if self._card is None or self._state.active is None:
+        if self._card is None or self._mutable_session() is None:
             return
         pin = self._pull_source(index)
         if pin is None or pin.comparison is None:
@@ -728,7 +756,7 @@ class InspectorPanel(QWidget):
         ``_on_pull``, the value is re-resolved from the stored comparison
         rather than the card's own cached copy.
         """
-        if not isinstance(self._card, GhostParameterCard) or self._state.active is None:
+        if not isinstance(self._card, GhostParameterCard) or self._mutable_session() is None:
             return
         pin = self._pull_source(index)
         if pin is None or pin.comparison is None:
@@ -752,7 +780,7 @@ class InspectorPanel(QWidget):
         is confirm-gated by its own dialog and independent of this card's
         draft state.
         """
-        if self._state.active is None:
+        if self._mutable_session() is None:
             return
         self._state.active.execute_command(command)
         self.committed.emit()

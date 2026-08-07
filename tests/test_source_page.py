@@ -20,7 +20,7 @@ from ui_qt import style
 from ui_qt.source_page import SourcePage
 
 _DOC = {
-    "Header": {"BPX": "0.1.0", "Title": "Test cell", "Model": "SPM"},
+    "Header": {"BPX": "1.0.0", "Title": "Test cell", "Model": "SPM"},
     "Parameterisation": {
         "Cell": {
             "Reference temperature [K]": 298.15,
@@ -84,7 +84,7 @@ def test_lines_follow_document_order(qtbot):
     texts = page._view.line_texts()
     assert texts == [
         "Header  ·  3 parameters",
-        '"BPX": "0.1.0"',
+        '"BPX": "1.0.0"',
         '"Title": "Test cell"',
         '"Model": "SPM"',
         "Parameterisation  ·  2 parameters",
@@ -102,10 +102,10 @@ def test_section_fold_hides_children_and_unfold_restores(qtbot):
     page._view.toggle_fold(("Header",))
     folded = page._view.line_texts()
     assert "Header  ·  3 parameters" in folded
-    assert '"BPX": "0.1.0"' not in folded
+    assert '"BPX": "1.0.0"' not in folded
 
     page._view.toggle_fold(("Header",))
-    assert '"BPX": "0.1.0"' in page._view.line_texts()
+    assert '"BPX": "1.0.0"' in page._view.line_texts()
 
 
 def test_folding_a_parent_hides_nested_sections_too(qtbot):
@@ -147,13 +147,13 @@ def test_fold_state_survives_refresh_but_prunes_removed_paths(qtbot):
 
     # A re-render (same shape) keeps the fold.
     page.refresh(_DOC)
-    assert '"BPX": "0.1.0"' not in page._view.line_texts()
+    assert '"BPX": "1.0.0"' not in page._view.line_texts()
 
     # The folded section disappearing prunes its entry: when it comes back
     # it renders open, not haunted by stale state.
     page.refresh({"Other": {"K": 1}})
     page.refresh(_DOC)
-    assert '"BPX": "0.1.0"' in page._view.line_texts()
+    assert '"BPX": "1.0.0"' in page._view.line_texts()
 
 
 def _sized(page, width: int, height: int = 320):
@@ -307,7 +307,7 @@ def test_page_contains_no_input_widget(qtbot):
 # ---------------------------------------------------------------------------
 
 _REF = {
-    "Header": {"BPX": "0.1.0", "Title": "Ref cell", "Model": "SPM"},
+    "Header": {"BPX": "1.0.0", "Title": "Ref cell", "Model": "SPM"},
     "Parameterisation": {
         "Cell": {
             "Reference temperature [K]": 298.15,
@@ -408,11 +408,11 @@ def test_shared_fold_folds_both_panes(qtbot):
     page = _two_pane(qtbot, _DOC_MAIN_ONLY, _REF)
 
     page._view.toggle_fold(("Header",))
-    assert '"BPX": "0.1.0"' not in page._view.line_texts()
-    assert '"BPX": "0.1.0"' not in page._view.ref_line_texts()
+    assert '"BPX": "1.0.0"' not in page._view.line_texts()
+    assert '"BPX": "1.0.0"' not in page._view.ref_line_texts()
 
     page._view.toggle_fold(("Header",))
-    assert '"BPX": "0.1.0"' in page._view.ref_line_texts()
+    assert '"BPX": "1.0.0"' in page._view.ref_line_texts()
 
 
 def test_two_pane_table_pads_shorter_side_with_gaps(qtbot):
@@ -615,7 +615,7 @@ def test_single_pane_never_chips(qtbot):
 
 def test_pull_chip_presence_follows_the_frames_rules(qtbot):
     main = {
-        "Header": {"BPX": "0.1.0", "Model": "SPM"},
+        "Header": {"BPX": "1.0.0", "Model": "SPM"},
         "Parameterisation": {
             "Cell": {
                 "Equal": 1.0,
@@ -627,7 +627,7 @@ def test_pull_chip_presence_follows_the_frames_rules(qtbot):
         },
     }
     ref = {
-        "Header": {"BPX": "0.1.0", "Model": "SPM"},
+        "Header": {"BPX": "1.0.0", "Model": "SPM"},
         "Parameterisation": {
             "Cell": {
                 "Equal": 1.0,
@@ -969,7 +969,7 @@ def test_single_pane_label_omits_a_missing_model(qtbot):
 
 
 _DOC_WITH_TABLE = {
-    "Header": {"BPX": "0.1.0"},
+    "Header": {"BPX": "1.0.0"},
     "Section": {
         "T": {"x": [1.0, 2.0], "y": [3.0, 4.0]},
         "Scalar": 5.0,
@@ -1027,7 +1027,7 @@ def test_fold_button_ignores_section_folds(qtbot):
     page._fold_button.click()
     texts = page._view.line_texts()
     assert '"T": table' in texts
-    assert '"BPX": "0.1.0"' not in texts
+    assert '"BPX": "1.0.0"' not in texts
 
 
 def test_pane_click_places_the_selection(qtbot):
@@ -1050,7 +1050,7 @@ def test_selection_prunes_when_its_row_vanishes(qtbot):
     assert page._view.selected_path() == ("Header", "Title")
 
     without_title = {
-        "Header": {"BPX": "0.1.0", "Model": "SPM"},
+        "Header": {"BPX": "1.0.0", "Model": "SPM"},
         "Parameterisation": _DOC_MAIN_ONLY["Parameterisation"],
     }
     page.refresh(without_title, pins=[_RefStub(without_title)])

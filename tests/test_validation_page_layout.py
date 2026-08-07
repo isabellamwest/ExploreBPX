@@ -133,7 +133,7 @@ def test_document_bucket_appears_only_when_occupied(app_driver, valid_spm_path, 
     d.open(valid_spm_path)
     assert not any(header.startswith("Document") for header in d.diagnostics_stream_section_headers())
 
-    d.open(fixtures_dir / "nmc_pouch_cell_BPX.json")
+    d.open_as_is(fixtures_dir / "nmc_pouch_cell_BPX.json")
     headers = d.diagnostics_stream_section_headers()
     assert any(header.startswith("Document") for header in headers)
     # Document sits first among SECTION buckets, occupied buckets in
@@ -150,7 +150,7 @@ def test_document_bucket_issue_with_no_attachment_point_is_a_no_op(app_driver, f
     navigate`` already no-ops on an empty path, so activation must not
     raise or change the current selection."""
     d = app_driver
-    d.open(fixtures_dir / "nmc_pouch_cell_BPX.json")
+    d.open_as_is(fixtures_dir / "nmc_pouch_cell_BPX.json")
     document_bucket = d.diagnostics_bucket("Document")
     assert document_bucket is not None
     diagnostic, nav_path = document_bucket.issues[0]

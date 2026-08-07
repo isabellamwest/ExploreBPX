@@ -10,7 +10,7 @@ from __future__ import annotations
 from enum import Enum
 from pathlib import Path
 
-from core import document_factory
+from core import bpx_gateway, document_factory
 from core.document import BPXDocument
 from core.load_record import LoadRecord
 from state.document_session import DocumentSession
@@ -96,6 +96,57 @@ class AppState:
         # Captured from the same bytes the document was built from, so the
         # record states what this load actually did (format, legacy, reach,
         # comments, disk facts) -- never a second look at the file.
+        session.load_record = LoadRecord.capture(data, document, path=path)
+        self.active = session
+
+    def legacy_version(self, path: Path) -> str | None:
+        """The file's own ``Header.BPX`` version when *path* holds a
+        detectably legacy v0.x object, else ``None`` -- the cheap look the
+        D3 open prompt decides from. No session is touched and nothing is
+        validated; the chosen open re-reads the file, and that read is the
+        one that counts.
+
+        Raises ``core.bpx_gateway.LoadError`` / ``OSError`` exactly like
+        :meth:`open`, so a caller's error handling covers both.
+        """
+        raw, _fmt = bpx_gateway.load_raw(path.read_bytes(), path.name)
+        return bpx_gateway.legacy_version(raw)
+
+    def open_read_only(self, path: Path) -> None:
+        """Open *path* as-is, read-only (decision D3's second path).
+
+        The raw content is installed unconverted, ``read_only`` is set so
+        no command can execute, and no backing file is adopted -- this
+        session never writes *path*. For a legacy object ``bpx`` still
+        checks a converted copy internally; the record's Read as / Checked
+        rows state that, verbatim Phase 4.
+        """
+        data = path.read_bytes()
+        document = BPXDocument.from_bytes(data, path.name)
+        session = DocumentSession(document)
+        session.read_only = True
+        session.load_record = LoadRecord.capture(data, document, path=path)
+        self.active = session
+
+    def open_converted_copy(self, path: Path) -> None:
+        """Open a converted v1.x copy of legacy *path* as a new unsaved
+        document (decision D3's primary path).
+
+        The copy is named "{stem} (converted){suffix}", keeps the source's
+        format, and has no backing file with ``dirty`` set -- the
+        never-saved shape ``new_document`` creates, so the first Save
+        routes through Save As and *path* itself is never written. The
+        record keeps the source's provenance (From facts, YAML-comment
+        fact), the ``new_from_file`` convention; ``is_legacy`` is judged
+        on the converted content, so the record truthfully reads v1.x.
+        """
+        data = path.read_bytes()
+        raw, fmt = bpx_gateway.load_raw(data, path.name)
+        converted = bpx_gateway.convert_legacy(raw)
+        name = f"{path.stem} (converted){path.suffix}"
+        document = BPXDocument.from_raw(converted, filename=name, fmt=fmt)
+        session = DocumentSession(document)
+        session.dirty = True
         session.load_record = LoadRecord.capture(data, document, path=path)
         self.active = session
 

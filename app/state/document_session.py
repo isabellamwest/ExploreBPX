@@ -22,6 +22,12 @@ from core.tree_model import ParameterItem, TreeNode
 from core.validation import ValidatorDiagnostic
 
 
+class ReadOnlyDocumentError(RuntimeError):
+    """Raised when a mutation reaches a read-only session (decision D3's
+    "Open as-is, read-only"). The UI disables every editing affordance
+    first; this refusal is the guarantee behind them."""
+
+
 @dataclass(frozen=True)
 class _Selection:
     """Which object and, if any, which parameter were showing."""
@@ -108,6 +114,11 @@ class DocumentSession:
         #: from source content (a New scaffold) -- the record states what the
         #: load did, and a scaffold had no load.
         self.load_record: LoadRecord | None = None
+        #: True for a session that shows a file without ever changing it
+        #: (decision D3's "Open as-is, read-only"). ``execute_command`` and
+        #: ``save`` refuse outright -- the state-layer guarantee behind
+        #: every disabled affordance in the UI.
+        self.read_only: bool = False
 
     @property
     def dirty(self) -> bool:
@@ -171,7 +182,14 @@ class DocumentSession:
         (``result.select_path`` / ``result.select_parameter_path``), which is
         what a later redo must land on regardless of where the user has
         navigated to since.
+
+        Raises :class:`ReadOnlyDocumentError` on a read-only session: the
+        refusal is the guarantee, whatever the UI forgot to disable.
         """
+        if self.read_only:
+            raise ReadOnlyDocumentError(
+                "The session is read-only: no command can execute."
+            )
         raw = {} if self.document is None else self.document.raw
         result = command_service.execute(raw, command)
         previous_document = self.document
@@ -336,6 +354,11 @@ class DocumentSession:
         """
         if self.document is None:
             raise ValueError("No document loaded")
+        if self.read_only:
+            # Even writing identical content back would normalise the file
+            # (H3); a read-only session never has a backing file, but the
+            # refusal must not depend on that staying true.
+            raise ReadOnlyDocumentError("The session is read-only: it is never saved.")
         if self.backing_file is None:
             raise ValueError("No backing file set; use export to save to a new location")
         fmt = bpx_gateway.format_for_filename(self.backing_file.name)
@@ -353,3 +376,26 @@ class DocumentSession:
             record = dataclasses.replace(record, fmt=fmt)
         self.load_record = record
         self.dirty = False
+
+    def stale_mtime(self) -> float | None:
+        """The backing file's current on-disk mtime when it no longer
+        matches the recorded one -- the fact behind the stale-on-disk Save
+        block (transparency plan H6).
+
+        ``None`` when there is nothing to compare: no backing file, no load
+        record, a record without disk facts, or a backing file gone from
+        disk (a save there can destroy nothing, so it is not blocked). The
+        recorded side is refreshed by every load and save, so a stale
+        answer always means "changed since this session last read or wrote
+        the file".
+        """
+        if self.backing_file is None or self.load_record is None:
+            return None
+        recorded = self.load_record.mtime
+        if recorded is None:
+            return None
+        try:
+            current = self.backing_file.stat().st_mtime
+        except OSError:
+            return None
+        return current if current != recorded else None

@@ -98,7 +98,7 @@ def test_facts_render_in_signed_order_legacy_then_reach_then_comments():
 
 def test_legacy_file_shows_the_group_first_with_the_legacy_fact(app_driver, fixtures_dir):
     d = app_driver
-    d.open(fixtures_dir / "nmc_pouch_cell_BPX.json")
+    d.open_as_is(fixtures_dir / "nmc_pouch_cell_BPX.json")
 
     headers = d.diagnostics_stream_headers()
     assert headers[0] == "nmc_pouch_cell_BPX.json  1 note"
@@ -139,7 +139,7 @@ def test_group_survives_every_chip_toggled_off(app_driver, fixtures_dir):
     """The group is exempt from the three filter chips (like the clear
     line/all-clear row) -- it renders regardless of chip state."""
     d = app_driver
-    d.open(fixtures_dir / "nmc_pouch_cell_BPX.json")
+    d.open_as_is(fixtures_dir / "nmc_pouch_cell_BPX.json")
 
     d.diagnostics_toggle_chip("errors")
     d.diagnostics_toggle_chip("warnings")
@@ -155,7 +155,7 @@ def test_group_folds_on_click_and_survives_a_refresh(app_driver, fixtures_dir):
     fold state persists across an ordinary refresh like any other
     section's."""
     d = app_driver
-    d.open(fixtures_dir / "nmc_pouch_cell_BPX.json")
+    d.open_as_is(fixtures_dir / "nmc_pouch_cell_BPX.json")
     assert d.diagnostics_file_fact_texts() != []
 
     d.diagnostics_fold_section("nmc_pouch_cell_BPX.json")
@@ -163,7 +163,8 @@ def test_group_folds_on_click_and_survives_a_refresh(app_driver, fixtures_dir):
     assert d.diagnostics_file_facts_header() == "nmc_pouch_cell_BPX.json  1 note"
     assert d.diagnostics_file_fact_texts() == []
 
-    d._w._state.active.apply_value(("Header", "Title"), "still folded")
+    # An as-is legacy session is read-only, so the "ordinary refresh" is
+    # driven directly rather than by an edit.
     d._w._refresh_all()
 
     assert d.diagnostics_file_facts_header() == "nmc_pouch_cell_BPX.json  1 note"

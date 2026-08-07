@@ -56,6 +56,8 @@ class GhostParameterCard(QWidget):
         groups: tuple[ValueGroup, ...],
         pins: list[ReferencePin],
         kind: ParameterKind,
+        *,
+        read_only: bool = False,
     ) -> None:
         super().__init__()
         #: Retained so a caller handling ``pull_requested`` can resolve the
@@ -81,7 +83,9 @@ class GhostParameterCard(QWidget):
         layout.addWidget(header_frame)
 
         body, body_layout = page_content()
-        self._ledger = ReferenceLedger()
+        # On a read-only main the reference value stays a visible fact, but
+        # "Use this value" would write to the document, so it is not offered.
+        self._ledger = ReferenceLedger(pull_enabled=not read_only)
         self._ledger.pull_requested.connect(self.pull_requested)
         body_layout.addWidget(self._ledger)
         layout.addWidget(body)

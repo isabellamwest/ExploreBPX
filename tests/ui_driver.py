@@ -60,8 +60,26 @@ class AppDriver:
     # ------------------------------------------------------------------
 
     def open(self, path: Path | str) -> "AppDriver":
-        """Open a document by path (equivalent to File > Open)."""
+        """Open a document by path (equivalent to File > Open).
+
+        A detectably legacy v0.x *path* raises the real (blocking) D3
+        prompt -- a legacy test must use :meth:`open_as_is` or stub
+        ``_ask_legacy_intent`` itself."""
         self._w.open_document(Path(path))
+        return self
+
+    def open_as_is(self, path: Path | str) -> "AppDriver":
+        """Open a legacy v0.x file as the main document, answering the D3
+        prompt with "Open as-is, read-only" -- the state Phase 4's legacy
+        record/stream facts describe. The prompt seam is stubbed for this
+        one call (the ``_ask_open_intent`` monkeypatch convention)."""
+        from ui_qt.main_window import LegacyIntent
+
+        self._w._ask_legacy_intent = lambda *args: LegacyIntent.AS_IS_READ_ONLY
+        try:
+            self._w.open_document(Path(path))
+        finally:
+            del self._w._ask_legacy_intent
         return self
 
     def select_object(self, path: tuple[str, ...]) -> "AppDriver":

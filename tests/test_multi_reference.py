@@ -26,7 +26,7 @@ _CAPACITY = _CELL_PATH + ("Nominal cell capacity [A.h]",)
 
 def _document(cell: dict) -> dict:
     return {
-        "Header": {"BPX": "0.1.0", "Title": "Test cell", "Model": "SPM"},
+        "Header": {"BPX": "1.0.0", "Title": "Test cell", "Model": "SPM"},
         "Parameterisation": {"Cell": dict(cell)},
     }
 
@@ -539,7 +539,7 @@ def test_stale_band_names_a_reference_that_is_not_the_one_shown(
 # ---------------------------------------------------------------------------
 
 _TABLE_MAIN = {
-    "Header": {"BPX": "0.1.0", "Title": "T", "Model": "SPM"},
+    "Header": {"BPX": "1.0.0", "Title": "T", "Model": "SPM"},
     "Parameterisation": {
         "Negative electrode": {"OCP [V]": {"x": [0.0, 0.5, 1.0], "y": [1.0, 0.5, 0.1]}}
     },
@@ -548,7 +548,7 @@ _TABLE_MAIN = {
 
 def _table_doc(x, y):
     return {
-        "Header": {"BPX": "0.1.0", "Title": "T", "Model": "SPM"},
+        "Header": {"BPX": "1.0.0", "Title": "T", "Model": "SPM"},
         "Parameterisation": {"Negative electrode": {"OCP [V]": {"x": x, "y": y}}},
     }
 

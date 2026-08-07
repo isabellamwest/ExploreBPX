@@ -210,7 +210,7 @@ def test_document_card_badge_matches_partitioned_count_not_raw_diagnostics(
     workfile = tmp_path / "union_pair.json"
     workfile.write_text(json.dumps(raw), encoding="utf-8")
 
-    app_driver.open(workfile)
+    app_driver.open_as_is(workfile)  # the base fixture is legacy BPX 0.1
     ws = app_driver._w._workspace
     doc = app_driver._w._state.active.document
     assert (doc.error_count, doc.warning_count) == (4, 1), "premise: raw counts are 4/1"
@@ -687,7 +687,7 @@ def test_record_states_legacy_conversion_fact(app_driver, fixtures_dir):
     from core.bpx_gateway import BPX_VERSION
 
     d = app_driver
-    d.open(fixtures_dir / "nmc_pouch_cell_BPX.json")
+    d.open_as_is(fixtures_dir / "nmc_pouch_cell_BPX.json")
     ws = d._w._workspace
 
     assert f"Checked: As a BPX {BPX_VERSION} conversion" in d.workspace_info_text()

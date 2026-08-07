@@ -267,6 +267,7 @@ class _EditableText(QWidget):
         self._seed = ""
         self._placeholder = placeholder
         self._cancelling = False
+        self._editable = True
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
@@ -304,6 +305,23 @@ class _EditableText(QWidget):
     def text(self) -> str:
         return self._seed
 
+    def set_editable(self, editable: bool) -> None:
+        """Close or reopen the click-to-edit path (a read-only main's
+        record, D3). While not editable the row is the reference record's
+        own shape: a plain label, absence shown as "-" rather than an
+        invitation to type. A session swap mid-edit drops the draft
+        uncommitted."""
+        if self._editable == editable:
+            return
+        self._editable = editable
+        if not editable and not self._editor.isHidden():
+            self._cancelling = True
+            self._editor.hide()
+            self._display.show()
+            self._cancelling = False
+        self._display.setCursor(Qt.IBeamCursor if editable else Qt.ArrowCursor)
+        self._apply_display()
+
     def begin_edit(self) -> None:
         """Open the editor, seeded with the committed value (populated
         before it can see focus or keys -- the card rule)."""
@@ -314,7 +332,7 @@ class _EditableText(QWidget):
         self._editor.selectAll()
 
     def mousePressEvent(self, event) -> None:  # noqa: N802 - Qt naming
-        if event.button() == Qt.LeftButton and self._editor.isHidden():
+        if event.button() == Qt.LeftButton and self._editor.isHidden() and self._editable:
             self.begin_edit()
             event.accept()
             return
@@ -352,7 +370,8 @@ class _EditableText(QWidget):
 
     def _apply_display(self) -> None:
         ghosted = not self._seed
-        self._display.setText(self._seed or self._placeholder)
+        placeholder = self._placeholder if self._editable else "-"
+        self._display.setText(self._seed or placeholder)
         if self._display.property("ghosted") != ghosted:
             self._display.setProperty("ghosted", ghosted)
             style = self._display.style()
@@ -792,6 +811,13 @@ class WorkspacePanel(QWidget):
         row = QHBoxLayout(widget)
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(6)
+        # The same small light tag a reference wears, shown only for a
+        # read-only main (D3's "Open as-is") -- one mode, one word, both
+        # record shapes.
+        self._main_read_only_tag = QLabel("Read-only")
+        self._main_read_only_tag.setObjectName("ReferenceReadOnlyTag")
+        self._main_read_only_tag.hide()
+        row.addWidget(self._main_read_only_tag, 0, Qt.AlignVCenter)
         dot = _validity_dot_label()
         text = QLabel()
         text.setObjectName("DocInfoBadge")
@@ -1025,6 +1051,7 @@ class WorkspacePanel(QWidget):
         references: list[ReferenceSnapshot] | None = None,
         load_record: LoadRecord | None = None,
         never_saved: bool = False,
+        read_only: bool = False,
     ) -> None:
         """Update the main-document and reference sections from current state.
 
@@ -1052,14 +1079,21 @@ class WorkspacePanel(QWidget):
             self._fact_band.hide()
             self._info_dot.hide()
             self._info_badge.hide()
+            self._main_read_only_tag.hide()
             return
 
         self._info_empty.hide()
         self._info_title.show()
         self._set_form_rows_visible(self._identity_form, True)
         self._fact_band.show()
+        self._main_read_only_tag.setVisible(read_only)
 
         identity = document.identity
+        # D6 gives the main record its editable rows; a read-only main gets
+        # the reference record's shape instead -- plain values, "-" for
+        # absence, no click-to-edit.
+        for row in (self._info_title, self._info_description, self._info_citation):
+            row.set_editable(not read_only)
         self._info_title.set_text(identity.title)
         self._info_description.set_text(identity.description)
         self._info_citation.set_text(identity.references)
@@ -1097,7 +1131,12 @@ class WorkspacePanel(QWidget):
                 )
             self._fact_from_meta.setVisible(has_disk_facts)
 
-        if never_saved:
+        if read_only:
+            # Not the D8 saved-state pair: a read-only session will never
+            # write, so its status is its mode. (It also has no backing
+            # file, which must not read as "never saved".)
+            status = "Read-only"
+        elif never_saved:
             status = "Unsaved changes · never saved"
         else:
             status = "Unsaved changes" if dirty else "Saved"

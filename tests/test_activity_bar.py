@@ -67,7 +67,7 @@ def test_badge_is_clear_with_no_issues(app_driver, valid_spm_path):
 
 def test_badge_is_warning_only_for_a_warnings_only_document(app_driver, warning_only_bpx_path):
     d = app_driver
-    d.open(warning_only_bpx_path)
+    d.open_as_is(warning_only_bpx_path)  # the fixture is legacy BPX 0.1
 
     assert d.validation_badge_count() == 1
     assert d.validation_badge_severity() == "warning"

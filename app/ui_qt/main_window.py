@@ -6,6 +6,7 @@ signals to state mutations, and refreshes views. No BPX logic lives here.
 
 from __future__ import annotations
 
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 
@@ -83,6 +84,37 @@ class OpenIntent(Enum):
     REPLACE_MAIN = "replace_main"
     ADD_REFERENCE = "add_reference"
     CANCEL = "cancel"
+
+
+class StaleChoice(Enum):
+    """How to resolve a Save onto a backing file that changed on disk
+    (the stale-on-disk block, transparency plan H6)."""
+
+    RELOAD = "reload"
+    SAVE_AS_COPY = "save_as_copy"
+    OVERWRITE = "overwrite"
+    CANCEL = "cancel"
+
+
+class LegacyIntent(Enum):
+    """How to open a detectably legacy BPX v0.x file as the main document
+    (decision D3's prompt)."""
+
+    CONVERTED_COPY = "converted_copy"
+    AS_IS_READ_ONLY = "as_is_read_only"
+    CANCEL = "cancel"
+
+
+def _format_disk_time(mtime: float) -> str:
+    """Render a disk mtime for the stale-save sentence: "at 14:22" the
+    same day, "on 6 Aug 2026 at 14:22" any other day. Local time; the day
+    is spelled without strftime so it is never zero-padded (%-d/%#d is
+    platform-specific)."""
+    moment = datetime.fromtimestamp(mtime)
+    time_part = f"at {moment:%H:%M}"
+    if moment.date() == datetime.now().date():
+        return time_part
+    return f"on {moment.day} {moment:%b %Y} {time_part}"
 
 
 class _IdentityLabel(QLabel):
@@ -768,12 +800,82 @@ class MainWindow(QMainWindow):
         automation. Raises :class:`core.bpx_gateway.LoadError` for unparseable
         files and ``OSError`` if the file cannot be read; callers arriving via
         a dialog surface these as a message box.
+
+        A detectably legacy v0.x file routes through the D3 prompt before
+        anything is installed, whatever brought it here -- the Open dialog,
+        drag-and-drop, or the stale dialog's Reload.
         """
-        self._state.open(Path(path))
+        path = Path(path)
+        if self._route_legacy(path):
+            return
+        self._state.open(path)
+        self._finish_open()
+
+    def _finish_open(self) -> None:
+        """The post-install half of every open: reset per-document view
+        state, refresh, land on the Editor page."""
         self._params.reset_expansion_state()
         self._diagnostics.reset_view_state()
         self._refresh_all()
         self._show_page(_EDITOR_PAGE_INDEX)
+
+    def _route_legacy(self, path: Path) -> bool:
+        """Route *path* through the D3 prompt when it is detectably legacy.
+
+        Returns True when the file was legacy and this method handled it
+        (opened a converted copy, opened it as-is read-only, or the user
+        cancelled); False means not legacy and the caller proceeds with its
+        own open. Raises ``LoadError``/``OSError`` exactly like an open, so
+        callers' error handling covers the probe too.
+        """
+        version = self._state.legacy_version(path)
+        if version is None:
+            return False
+        intent = self._ask_legacy_intent(path.name, version)
+        if intent is LegacyIntent.CONVERTED_COPY:
+            self._state.open_converted_copy(path)
+            self._finish_open()
+            # Control and echo share a verb; the dialog already named the
+            # consequences, the toast confirms which one happened.
+            self._toast.show_message(f"Opened a converted copy of {path.name}")
+        elif intent is LegacyIntent.AS_IS_READ_ONLY:
+            self._state.open_read_only(path)
+            self._finish_open()
+        return True
+
+    def _ask_legacy_intent(self, filename: str, file_version: str) -> LegacyIntent:
+        """The decision-D3 prompt for a legacy v0.x file.
+
+        Overridable seam: headless tests monkeypatch this method directly,
+        the ``_ask_open_intent`` convention. Open converted copy is the
+        default (D3 names it primary); every choice leaves *filename*
+        itself unmodified, and the words say so before the click.
+        """
+        box = QMessageBox(self)
+        box.setWindowTitle(f"Open {filename}")
+        box.setText(
+            f"{filename} is BPX {file_version}. Editing and checking here "
+            f"use BPX {BPX_VERSION}."
+        )
+        box.setInformativeText(
+            f"Open converted copy starts a new unsaved document in BPX "
+            f"{BPX_VERSION}. The conversion is approximate: State "
+            "synthesised, initial SOC set to 1, lumped thermal conductivity "
+            f"dropped. {filename} is not changed.\n\n"
+            "Open as-is shows the file exactly as it is on disk, read-only. "
+            "bpx checks a converted copy."
+        )
+        converted = box.addButton("Open converted copy", QMessageBox.AcceptRole)
+        as_is = box.addButton("Open as-is, read-only", QMessageBox.ActionRole)
+        box.addButton("Cancel", QMessageBox.RejectRole)
+        box.setDefaultButton(converted)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked is converted:
+            return LegacyIntent.CONVERTED_COPY
+        if clicked is as_is:
+            return LegacyIntent.AS_IS_READ_ONLY
+        return LegacyIntent.CANCEL
 
     def _has_unsaved_work(self) -> bool:
         """Whether anything would be lost by replacing the active document.
@@ -1046,6 +1148,7 @@ class MainWindow(QMainWindow):
             main_name=self._fallback_filename(session) if session is not None else "",
             main_model=document.identity.model if document is not None else None,
             selected=self._source_reference_index,
+            pull_enabled=session is None or not session.read_only,
         )
 
     def _check_reference_stale(self) -> None:
@@ -1141,7 +1244,7 @@ class MainWindow(QMainWindow):
         references = self._state.references
         reference = references[index] if 0 <= index < len(references) else None
         session = self._state.active
-        if reference is None or session is None:
+        if reference is None or session is None or session.read_only:
             return
         value = reference.raw
         for key in path:
@@ -1220,6 +1323,13 @@ class MainWindow(QMainWindow):
             return
         path = Path(name)
         try:
+            # A legacy source gets the same D3 prompt as Open: a clone of a
+            # v0.x object would inherit the tree/diagnostics mismatch the
+            # prompt exists to prevent, so the choice is identical here --
+            # converted copy, as-is read-only, or nothing. The v1 pin-the-
+            # origin contract below applies to non-legacy sources only.
+            if self._route_legacy(path):
+                return
             outcome = self._state.new_from_file(path)
         except (LoadError, OSError) as exc:
             QMessageBox.critical(self, "Cannot open file", str(exc))
@@ -1251,6 +1361,12 @@ class MainWindow(QMainWindow):
         first, the way every spreadsheet and form commits its active editor
         on save: what is on screen is what reaches the file. The apply is an
         ordinary command, so Ctrl+Z takes it back.
+
+        Two transparency gates run before anything is written: a backing
+        file that changed on disk since this session last touched it stops
+        the save (Reload / Save as copy / Overwrite / Cancel, plan H6), and
+        a source that carried YAML comments is confirmed once before the
+        document's first save (decision D4).
         """
         if self._state.active is None:
             return False
@@ -1260,6 +1376,30 @@ class MainWindow(QMainWindow):
             self._refuse_blocked_write("save")
             return False
         session = self._state.active
+        if session.read_only:
+            # Unreachable through the UI (the Save action is disabled for a
+            # read-only session); refused rather than normalising a file the
+            # user never edited.
+            return False
+        if session.backing_file is not None:
+            disk_mtime = session.stale_mtime()
+            if disk_mtime is not None:
+                choice = self._ask_stale_resolution(
+                    session.backing_file.name, disk_mtime
+                )
+                if choice is StaleChoice.CANCEL:
+                    return False
+                if choice is StaleChoice.RELOAD:
+                    # The dialog itself was the unsaved-changes decision --
+                    # Reload's stated meaning is "discard my changes" -- so
+                    # no second guard runs.
+                    self._open_path(session.backing_file)
+                    return False
+                if choice is StaleChoice.SAVE_AS_COPY:
+                    return self._save_as_copy(session)
+                # OVERWRITE falls through to the ordinary write below.
+        if not self._confirm_comment_loss(session):
+            return False
         adopted_backing = False
         if session.backing_file is None:
             # A never-saved main's Save As starts in the last Save As folder
@@ -1291,13 +1431,126 @@ class MainWindow(QMainWindow):
                 session.backing_file = None
             QMessageBox.critical(self, "Save failed", str(exc))
             return False
+        self._refresh_after_save()
+        return True
+
+    def _refresh_after_save(self) -> None:
+        """Refresh every surface a save can rename or re-date: the title,
+        the identity label, the Workspace record, and -- because a first
+        Save As gives the session its backing file -- the Source page's
+        pane header/file label via the comparison."""
         self._update_title()
         self._update_identity_label()
         self._update_workspace_info()
-        # A first Save As gives the session its backing file, which renames
-        # the Source page's pane header/file label too.
         self._apply_comparison()
+
+    def _ask_stale_resolution(self, filename: str, disk_mtime: float) -> StaleChoice:
+        """Ask how to resolve a Save onto *filename* after it changed on disk.
+
+        Overridable seam: headless tests monkeypatch this method directly,
+        the ``_ask_open_intent`` convention. Save as copy is the default
+        deliberately: it is the one loss-free exit, and its Enter only
+        opens a file dialog, so nothing is ever written by reflex.
+        """
+        box = QMessageBox(self)
+        box.setWindowTitle("Cannot save")
+        box.setText(
+            f"{filename} changed on disk {_format_disk_time(disk_mtime)}, "
+            "after it was opened here. Saving now would replace that version."
+        )
+        box.setInformativeText(
+            "Reload discards your unsaved changes and opens the disk "
+            "version. Save as copy writes your version to a new file and "
+            "leaves the disk version alone. Overwrite replaces the disk "
+            "version with your version."
+        )
+        reload_button = box.addButton("Reload", QMessageBox.DestructiveRole)
+        copy_button = box.addButton("Save as copy…", QMessageBox.AcceptRole)
+        overwrite_button = box.addButton("Overwrite", QMessageBox.DestructiveRole)
+        box.addButton("Cancel", QMessageBox.RejectRole)
+        box.setDefaultButton(copy_button)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked is reload_button:
+            return StaleChoice.RELOAD
+        if clicked is copy_button:
+            return StaleChoice.SAVE_AS_COPY
+        if clicked is overwrite_button:
+            return StaleChoice.OVERWRITE
+        return StaleChoice.CANCEL
+
+    def _save_as_copy(self, session: DocumentSession) -> bool:
+        """The stale dialog's loss-free exit: write to a new file, retarget.
+
+        Proposes "{stem} (copy){suffix}" beside the backing file (the
+        Export naming). On success the session is backed by the copy, and
+        the changed disk version keeps its file untouched. A failed write
+        restores the original backing path -- unlike a failed first Save
+        As there is a valid path to fall back to, and detaching the
+        document from its file would discard the stale fact with it.
+        """
+        if not self._confirm_comment_loss(session):
+            return False
+        backing = session.backing_file
+        suggested = f"{backing.stem} (copy){backing.suffix}"
+        name, _ = QFileDialog.getSaveFileName(
+            self, "Save BPX", str(backing.parent / suggested), BPX_FILTER
+        )
+        if not name:
+            return False
+        session.backing_file = Path(name)
+        try:
+            session.save()
+        except OSError as exc:
+            session.backing_file = backing
+            QMessageBox.critical(self, "Save failed", str(exc))
+            return False
+        self._save_dialog_dir = Path(name).parent
+        self._refresh_after_save()
         return True
+
+    def _confirm_comment_loss(self, session: DocumentSession) -> bool:
+        """Gate a save behind decision D4 when the source carried YAML
+        comments; True means proceed.
+
+        Asked at most once per document by construction, with no stored
+        flag: ``session.save()`` re-captures the load record from the
+        written bytes, which carry no comments, so a confirmed save clears
+        the fact itself. A cancelled save clears nothing and the next Save
+        asks again. The first sentence names the file the comments live in
+        (the record's source), which for a clone is its origin rather than
+        the document; the asked-once sentence names the document.
+        """
+        record = session.load_record
+        if record is None or not record.has_yaml_comments:
+            return True
+        source_name = (
+            Path(record.source).name if record.source else session.document.filename
+        )
+        return self._ask_comment_loss(source_name, session.document.filename)
+
+    def _ask_comment_loss(self, source_name: str, document_name: str) -> bool:
+        """The decision-D4 dialog; True means "Save without comments".
+
+        Overridable seam: headless tests monkeypatch this method directly,
+        the ``_ask_open_intent`` convention. Cancel is the default -- the
+        Remove-section precedent for irreversible loss.
+        """
+        box = QMessageBox(self)
+        box.setWindowTitle("Comments will not survive saving")
+        box.setText(
+            f"{source_name} contains comments. Saving rewrites the whole "
+            "file: comments and formatting will not survive."
+        )
+        box.setInformativeText(
+            f"This is asked once for {document_name}. The file record "
+            "keeps the note either way."
+        )
+        save_button = box.addButton("Save without comments", QMessageBox.AcceptRole)
+        cancel_button = box.addButton("Cancel", QMessageBox.RejectRole)
+        box.setDefaultButton(cancel_button)
+        box.exec()
+        return box.clickedButton() is save_button
 
     def _refuse_blocked_write(self, verb: str) -> None:
         """Refuse a Save/Export over an unwritable draft *out loud*.
@@ -1371,7 +1624,12 @@ class MainWindow(QMainWindow):
         name = session.backing_file.name if session.backing_file else session.document.filename
         prefix = "* " if session.dirty else ""
         self.setWindowTitle(f"{prefix}{name} \u2014 ExploreBPX")
-        state_text = "Unsaved changes" if session.dirty else "Saved"
+        if session.read_only:
+            # Not the D8 saved-state pair: a read-only session has no saved
+            # state to report, only its mode.
+            state_text = "Read-only"
+        else:
+            state_text = "Unsaved changes" if session.dirty else "Saved"
         self._status_label.setText(f"{name}  |  {state_text}")
 
     def _fallback_filename(self, session: DocumentSession) -> str:
@@ -1394,6 +1652,8 @@ class MainWindow(QMainWindow):
         segments = [segment for segment in (title,) if segment]
         if identity.bpx_version:
             segments.append(f"BPX v{identity.bpx_version}")
+        if session.read_only:
+            segments.append("Read-only")
         return " \u00b7 ".join(segments) if segments else _NO_DOCUMENT_TEXT
 
     def _update_identity_label(self) -> None:
@@ -1423,6 +1683,7 @@ class MainWindow(QMainWindow):
             references=self._state.references,
             load_record=session.load_record if session else None,
             never_saved=session is not None and session.backing_file is None,
+            read_only=session is not None and session.read_only,
         )
 
     def _on_identity_edited(self, field: str, text: str) -> None:
@@ -1432,7 +1693,7 @@ class MainWindow(QMainWindow):
         standard post-commit refresh, so undo and every surface behave
         identically wherever the user typed (D6)."""
         session = self._state.active
-        if session is None or session.document is None:
+        if session is None or session.document is None or session.read_only:
             return
         session.apply_value(("Header", field), text)
         self._on_committed()
@@ -1444,10 +1705,16 @@ class MainWindow(QMainWindow):
 
         The ``Ctrl+Z``/``Ctrl+Y``/``Ctrl+Shift+Z`` shortcuts stay live
         regardless: with an empty document history they still have a focused
-        text field's typing to undo/redo."""
+        text field's typing to undo/redo.
+
+        A read-only session (D3's "Open as-is") disables Save -- even
+        identical bytes written back would normalise the file -- while
+        Export stays available: an exported copy is explicitly a new file.
+        """
         session = self._state.active
         has_document = session is not None and session.document is not None
-        self._save_action.setEnabled(has_document)
+        read_only = session is not None and session.read_only
+        self._save_action.setEnabled(has_document and not read_only)
         self._export_action.setEnabled(has_document)
         self._undo_action.setEnabled(has_document and session.can_undo)
         self._redo_action.setEnabled(has_document and session.can_redo)
@@ -1489,6 +1756,11 @@ class MainWindow(QMainWindow):
         partition = completion.partition_issues(document, tasks) if document is not None else None
 
         self._editor_page.set_has_document(document is not None)
+        # Before any row or menu renders: the tree and list gate their
+        # editing affordances on the session's read-only fact (D3).
+        read_only = session is not None and session.read_only
+        self._tree.set_read_only(read_only)
+        self._params.set_read_only(read_only)
         if document is not None:
             self._tree.set_root(
                 document.tree, completion.visible_error_section_paths(document, partition)

@@ -51,7 +51,7 @@ def _document(cell: dict) -> dict:
     # Title) so the intended Cell-only diffs are the *only* diffs -- a
     # differing Title would otherwise add its own DIFFERS row at Header.
     return {
-        "Header": {"BPX": "0.1.0", "Title": "Test cell", "Model": "SPM"},
+        "Header": {"BPX": "1.0.0", "Title": "Test cell", "Model": "SPM"},
         "Parameterisation": {"Cell": dict(cell)},
     }
 
@@ -867,12 +867,12 @@ def test_bare_enter_after_a_pull_commits_nothing(app_driver, main_and_ref, monke
 
 
 _SHAPE_MAIN = {
-    "Header": {"BPX": "0.1.0", "Title": "Shape cell", "Model": "SPM", "Custom Note": 5.0},
+    "Header": {"BPX": "1.0.0", "Title": "Shape cell", "Model": "SPM", "Custom Note": 5.0},
     "Parameterisation": {"Cell": {}},
 }
 _SHAPE_REF = {
     "Header": {
-        "BPX": "0.1.0",
+        "BPX": "1.0.0",
         "Title": "Shape cell",
         "Model": "SPM",
         "Custom Note": {"x": [0, 1], "y": [2, 3]},

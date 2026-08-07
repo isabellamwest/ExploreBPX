@@ -158,6 +158,7 @@ class _LedgerRow(QWidget):
         *,
         width: int | None = None,
         monospace: bool = False,
+        pull_enabled: bool = True,
     ) -> None:
         super().__init__()
         self.setObjectName("LedgerRow")
@@ -211,13 +212,16 @@ class _LedgerRow(QWidget):
             same = QLabel("same")
             same.setObjectName("LedgerSameLabel")
             row.addWidget(same, 0, Qt.AlignTop)
-        else:
+        elif pull_enabled:
             pull = QPushButton("Use this value")
             pull.setObjectName("PullButton")
             pull.setCursor(Qt.PointingHandCursor)
             pull.setToolTip(f"Use this value from {pins[self._source_index].name}")
             pull.clicked.connect(self._emit_pull)
             row.addWidget(pull, 0, Qt.AlignTop)
+        # A read-only card (pull_enabled False) shows the differing value
+        # with no affordance at all: the comparison is still a fact, the
+        # write it invites is not on offer.
 
         # Zero-stretch spacer: inert while the (stretch-1) value box may grow,
         # but when the box is capped (*width*) it soaks up the slack so the
@@ -237,9 +241,12 @@ class ReferenceLedger(QFrame):
     #: clicked. The owning card re-exposes it verbatim.
     pull_requested = Signal(int)
 
-    def __init__(self) -> None:
+    def __init__(self, *, pull_enabled: bool = True) -> None:
         super().__init__()
         self.setObjectName("ReferenceLedger")
+        #: False on a read-only card: rows show differing values without the
+        #: "Use this value" button (the write it invites is not on offer).
+        self._pull_enabled = pull_enabled
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(0, 0, 0, 0)
         self._layout.setSpacing(2)
@@ -327,6 +334,7 @@ class ReferenceLedger(QFrame):
                 value_texts[position],
                 width=width,
                 monospace=monospace,
+                pull_enabled=self._pull_enabled,
             )
             row.pull_requested.connect(self.pull_requested)
             self._rows.append(row)

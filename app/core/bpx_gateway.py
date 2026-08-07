@@ -231,6 +231,24 @@ def convert_legacy(raw: dict) -> dict:
     return _bpx_migrations.convert_v0_to_v1(raw)
 
 
+def legacy_version(raw: dict) -> str | None:
+    """``Header.BPX`` as the file spells it when *raw* is detectably
+    legacy (:func:`is_legacy`), else ``None``.
+
+    The same field ``core.document``'s identity reads; spelled here too so
+    the D3 open prompt can name the version from a cheap parse, without
+    building a document. :func:`is_legacy` accepting *raw* implies the
+    field parsed, so the ``"0.x"`` fallback is a belt for a ``bpx``
+    upgrade loosening that rule, mirroring the record's own fallback
+    wording ("a BPX 0.x file").
+    """
+    if not is_legacy(raw):
+        return None
+    header = raw.get("Header")
+    version = header.get("BPX") if isinstance(header, dict) else None
+    return str(version) if version is not None else "0.x"
+
+
 #: bpx's model-type dispatch abort (``schema.py`` ``_dispatch_param_subclasses``
 #: raising ``ValueError("[Valid|Valid SPM] parameter set does not correspond
 #: with the model type ...")``) surfaces as a pydantic error with ``loc == ()``,

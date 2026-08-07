@@ -372,7 +372,10 @@ def _align_panes(
 
 
 def _build_lines(
-    rows: list[SourceRow], closed: set[tuple[str, ...]], two_pane: bool
+    rows: list[SourceRow],
+    closed: set[tuple[str, ...]],
+    two_pane: bool,
+    pull_enabled: bool = True,
 ) -> list[_Line]:
     counts_main = _param_counts(rows, lambda row: row.in_main)
     counts_ref = (
@@ -438,11 +441,12 @@ def _build_lines(
                     toggle_path=row.path,
                     # ← on a section header only when the whole section is
                     # ref-only: its pull copies the full subtree as one undo
-                    # entry; shared headers carry no ←.
+                    # entry; shared headers carry no ← -- and a read-only
+                    # main (pull_enabled False) offers none anywhere.
                     pull_path=row.path
-                    if two_pane and row.is_difference
+                    if pull_enabled and two_pane and row.is_difference
                     else None,
-                    pull_section=two_pane and row.is_difference,
+                    pull_section=pull_enabled and two_pane and row.is_difference,
                     row_path=row.path,
                 )
             )
@@ -504,7 +508,7 @@ def _build_lines(
                             # ← on the parameter's key line; its pull always
                             # copies the whole value, table or scalar.
                             pull_path=row.path
-                            if index == 0 and row.is_difference
+                            if pull_enabled and index == 0 and row.is_difference
                             else None,
                             row_path=row.path if index == 0 else None,
                         )
@@ -559,6 +563,9 @@ class SourceView(QAbstractScrollArea):
         #: line index, so it survives re-renders, folds and edits; arrow
         #: keys move it and a row click places it directly.
         self._selected: tuple[str, ...] | None = None
+        #: False while the main document is read-only (D3): rows render
+        #: without their ← pull affordance. Refreshed by every set_rows.
+        self._pull_enabled = True
         #: The just-pulled row's path while its gutter "Used" tag shows
         #: (the stay-put confirmation after a pull); cleared by the
         #: single-shot timer, or by ``set_rows`` if the row itself vanishes
@@ -589,11 +596,19 @@ class SourceView(QAbstractScrollArea):
 
     # -- content ---------------------------------------------------------
 
-    def set_rows(self, rows: list[SourceRow], two_pane: bool = False) -> None:
+    def set_rows(
+        self,
+        rows: list[SourceRow],
+        two_pane: bool = False,
+        pull_enabled: bool = True,
+    ) -> None:
         """Replace the rendered rows, pruning fold state for paths that no
-        longer exist (a removed section must not haunt the closed set)."""
+        longer exist (a removed section must not haunt the closed set).
+        ``pull_enabled`` False (a read-only main, D3) renders every row
+        without its ← pull affordance."""
         self._rows = rows
         self._two_pane = two_pane
+        self._pull_enabled = pull_enabled
         foldable = {
             row.path
             for row in rows
@@ -867,7 +882,9 @@ class SourceView(QAbstractScrollArea):
         return tuple(rows)
 
     def _rebuild(self) -> None:
-        self._lines = _build_lines(self._rows, self._closed, self._two_pane)
+        self._lines = _build_lines(
+            self._rows, self._closed, self._two_pane, self._pull_enabled
+        )
         self._relayout()
         self.viewport().update()
         self.fold_state_changed.emit()
@@ -1282,6 +1299,7 @@ class SourcePage(QWidget):
         main_name: str = "",
         main_model: str | None = None,
         selected: int = 0,
+        pull_enabled: bool = True,
     ) -> None:
         """Re-render from the current document and the pinned references.
 
@@ -1327,7 +1345,7 @@ class SourcePage(QWidget):
             rows = build_rows(main_raw, reference.raw)
         else:
             rows = build_rows(main_raw) if main_raw is not None else []
-        self._view.set_rows(rows, two_pane=two_pane)
+        self._view.set_rows(rows, two_pane=two_pane, pull_enabled=pull_enabled)
 
     def selected_reference_index(self) -> int:
         """The pin index the reference pane is currently showing."""

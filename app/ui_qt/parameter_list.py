@@ -184,6 +184,10 @@ class ParameterListPanel(QWidget):
         #: aggregate across all of them (``core.compare.merged_row_state`` /
         #: ``merged_ghost_keys``), never the first pin's opinion alone.
         self._pins: list[ReferencePin] = []
+        #: True while the active session refuses edits (D3's "Open as-is"):
+        #: the add button hides, rows offer no menu or Delete, and the
+        #: "fields to add" invitations are not appended.
+        self._read_only = False
 
         self._count_label = QLabel()
         self._count_label.setObjectName("ParameterListHeaderCount")
@@ -295,10 +299,17 @@ class ParameterListPanel(QWidget):
             lines.append(f"{names}: {parameter_row.value_tooltip(group.value)}")
         return lines
 
+    def set_read_only(self, read_only: bool) -> None:
+        """Whether the session refuses edits. Takes effect on the next
+        ``show_node`` -- ``MainWindow._refresh_all`` sets it before any row
+        renders, so no stale affordance survives a session change."""
+        self._read_only = read_only
+
     def show_node(self, node: TreeNode | None, model: str | None = None) -> None:
         self._node = node
         self._model = model
-        self._add_button.setEnabled(node is not None)
+        self._add_button.setVisible(not self._read_only)
+        self._add_button.setEnabled(node is not None and not self._read_only)
         self._list.clear()
         if node is None:
             # No section selected: hide the header entirely rather than show
@@ -346,7 +357,10 @@ class ParameterListPanel(QWidget):
                     item.setToolTip("\n".join(lines))
             self._list.addItem(item)
         self._append_ghost_rows(node)
-        self._append_missing_fields_group(node, model)
+        if not self._read_only:
+            # The group is one long invitation to add fields; a read-only
+            # session offers no adds, so it is not appended at all.
+            self._append_missing_fields_group(node, model)
 
     def _append_ghost_rows(self, node: TreeNode) -> None:
         """Append REF_ONLY ghost rows for this section, per the merge rule:
@@ -547,7 +561,7 @@ class ParameterListPanel(QWidget):
             self._toggle_missing_fields_group()
             return
         if kind == "suggestion":
-            if self._node is not None:
+            if self._node is not None and not self._read_only:
                 alias = item.data(self._GROUP_ROW_ALIAS_ROLE)
                 self.add_parameter_requested.emit(self._node.path, alias, None)
             return
@@ -570,6 +584,8 @@ class ParameterListPanel(QWidget):
         is ``None``) is not an existing parameter either, so it offers no
         menu.
         """
+        if self._read_only:
+            return
         item = self._list.itemAt(pos)
         path = item.data(256) if item is not None else None
         if path is None:
@@ -638,6 +654,8 @@ class ParameterListPanel(QWidget):
         (role 256 is ``None`` there -- it names no existing parameter to
         remove).
         """
+        if self._read_only:
+            return
         item = self._list.currentItem()
         if item is None:
             return

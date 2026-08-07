@@ -132,6 +132,9 @@ class TreePanel(QWidget):
 
     def __init__(self) -> None:
         super().__init__()
+        #: True while the active session refuses edits (D3's "Open as-is"):
+        #: the context menu is structural mutation only, so it opens empty.
+        self._read_only = False
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         self._view = QTreeView()
@@ -246,6 +249,11 @@ class TreePanel(QWidget):
             return
         menu.exec(self._view.viewport().mapToGlobal(pos))
 
+    def set_read_only(self, read_only: bool) -> None:
+        """Whether the session refuses edits; a read-only tree offers no
+        structural menu at all (the "no disabled placeholders" rule)."""
+        self._read_only = read_only
+
     def _build_menu(self, node: TreeNode) -> QMenu:
         """The legal structural actions for *node*, in a fresh menu.
 
@@ -254,6 +262,8 @@ class TreePanel(QWidget):
         refuse and nothing the schema does not declare.
         """
         menu = QMenu(self)
+        if self._read_only:
+            return menu
         declared_model = (
             structure.infer_model(self._root.value) if self._root is not None else None
         )
