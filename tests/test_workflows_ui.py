@@ -409,12 +409,12 @@ def test_masked_section_badges_not_validated_instead_of_valid(
     assert d.validity() == "Invalid"
 
     d.go_to(_TEMPERATURE)
-    assert d.validity() == "Not checked"
+    assert d.validity() == "Not checked · checking stopped early"
 
     # The live preview of a draft is equally unjudged while the abort holds.
     d.edit_field("300")
     d.wait_for_live_validation()
-    assert d.validity() == "Not checked"
+    assert d.validity() == "Not checked · checking stopped early"
     d.escape()
 
     # Repair the Cell parameter: State is judged again and the badge returns.

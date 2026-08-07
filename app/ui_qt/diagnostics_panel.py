@@ -91,6 +91,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from core.bpx_gateway import CheckReach, section_checked
 from core.completion import CompletionTask, PartitionedIssues, TaskKind
 from core.page_buckets import (
     DOCUMENT_BUCKET_PATH,
@@ -495,31 +496,52 @@ def _page_is_clear(buckets: PageBuckets) -> bool:
     return buckets.error_count == 0 and buckets.warning_count == 0 and buckets.outstanding_count == 0
 
 
-def _clear_line_text(count: int) -> str:
-    return f"{count} section{'s' if count != 1 else ''} clear"
+def _clear_line_text(checked: int, unchecked: int) -> str:
+    """The clear line's words, split by what ``bpx`` actually judged.
+
+    "Clear" is a verdict, so it may only cover buckets whose stage the run
+    reached; a bucket beyond an aborted run's reach was never examined and
+    reads "not checked" instead (H2). Both words come from the D7 ladder --
+    the line never vouches for an unexamined section and never disowns a
+    judged one.
+    """
+    if not unchecked:
+        return f"{checked} section{'s' if checked != 1 else ''} clear"
+    if not checked:
+        return f"{unchecked} section{'s' if unchecked != 1 else ''} not checked"
+    return f"{checked} section{'s' if checked != 1 else ''} clear · {unchecked} not checked"
 
 
-def _add_clear_summary_row(list_widget: QListWidget, count: int, expanded: bool) -> None:
+def _add_clear_summary_row(
+    list_widget: QListWidget, checked: int, unchecked: int, expanded: bool
+) -> None:
     """The clear line (D4): one collapsed/expanded footer row naming every
     clear bucket at once. Its own single-click fold is independent of any
     per-section fold state -- toggled by :meth:`_StreamView._on_clicked`,
     tracked on :attr:`_StreamView._clear_expanded`, not per-row data."""
     chevron = "▾" if expanded else "▸"
-    item = QListWidgetItem(f"{chevron} {_clear_line_text(count)}")
+    item = QListWidgetItem(f"{chevron} {_clear_line_text(checked, unchecked)}")
     item.setFlags(Qt.ItemIsEnabled)  # visible + clickable, never selectable
     item.setData(_KIND_ROLE, "clear_summary")
     list_widget.addItem(item)
 
 
-def _clear_row_text(bucket: SectionBucket) -> str:
+def _clear_row_text(bucket: SectionBucket, checked: bool = True) -> str:
+    # Absence is the stronger fact (visible in the file itself); after it,
+    # an unexamined bucket states so instead of its filled count -- a
+    # completion tally next to no verdict would read as one.
     if bucket.absent:
         return f"{bucket.label} · section absent"
+    if not checked:
+        return f"{bucket.label} · not checked"
     if bucket.required_total:
         return f"{bucket.label} · {bucket.required_total} of {bucket.required_total} filled"
     return bucket.label
 
 
-def _add_clear_row(list_widget: QListWidget, bucket: SectionBucket) -> None:
+def _add_clear_row(
+    list_widget: QListWidget, bucket: SectionBucket, checked: bool = True
+) -> None:
     """One quiet, non-activatable row per clear bucket, shown only while
     the clear line is expanded (D4) -- the positive completion signal the
     old rail's quiet, badge-less entries used to carry.
@@ -532,7 +554,7 @@ def _add_clear_row(list_widget: QListWidget, bucket: SectionBucket) -> None:
     keeps this row's height and colour identical to every other single-line
     row on the page, rather than a bespoke custom paint that a review found
     rendering tall with accent-tinted digits."""
-    text = _clear_row_text(bucket)
+    text = _clear_row_text(bucket, checked)
     item = QListWidgetItem(text)
     item.setFlags(Qt.ItemIsEnabled)  # visible, never selectable/activatable
     item.setData(_KIND_ROLE, "clear_row")
@@ -843,6 +865,7 @@ class _StreamView(QWidget):
         self._last_filters = _FilterState()
         self._last_filename = ""
         self._last_facts: tuple[FileFact, ...] = ()
+        self._last_reach = CheckReach.COMPLETE
         self._file_facts_rendered = False
 
     def reset_fold_state(self) -> None:
@@ -859,6 +882,7 @@ class _StreamView(QWidget):
         filters: _FilterState,
         filename: str = "",
         facts: tuple[FileFact, ...] = (),
+        reach: CheckReach = CheckReach.COMPLETE,
     ) -> None:
         self._last_buckets = buckets
         self._last_partition = partition
@@ -866,6 +890,7 @@ class _StreamView(QWidget):
         self._last_filters = filters
         self._last_filename = filename
         self._last_facts = facts
+        self._last_reach = reach
         self._list.clear()
 
         # Tracked separately from ``_rendered_section_paths`` -- D15's own
@@ -889,16 +914,32 @@ class _StreamView(QWidget):
                 rendered_paths.append(bucket.path)
         self._rendered_section_paths = rendered_paths
 
-        if _page_is_clear(buckets):
+        # The all-clear row states "No issues" as a verdict, so it also needs
+        # the run to have finished -- unreachable today (an aborted run always
+        # carries the error that aborted it), but the guard keeps a future
+        # bpx's abort shape from turning silence into a clean bill of health.
+        if _page_is_clear(buckets) and reach is CheckReach.COMPLETE:
             _add_all_clear_row(self._list, len(buckets.buckets), model=model)
         elif model == "Partial" and buckets.outstanding_count == 0:
             _add_message_row(self._list, _MSG_PARTIAL_NO_TARGET)
 
         if clear_buckets:
-            _add_clear_summary_row(self._list, len(clear_buckets), self._clear_expanded)
+            # Judged per bucket, not blanket per page: after an abort at
+            # Parameterisation a clean Header really was checked while State
+            # never was, and the line must say both truthfully (H2, both
+            # directions). The Document bucket's empty path asks about the
+            # document level itself.
+            judged = {
+                bucket.path: section_checked(bucket.path[0] if bucket.path else None, reach)
+                for bucket in clear_buckets
+            }
+            checked_count = sum(1 for was in judged.values() if was)
+            _add_clear_summary_row(
+                self._list, checked_count, len(clear_buckets) - checked_count, self._clear_expanded
+            )
             if self._clear_expanded:
                 for bucket in clear_buckets:
-                    _add_clear_row(self._list, bucket)
+                    _add_clear_row(self._list, bucket, judged[bucket.path])
 
     def collapse_all_label(self) -> str | None:
         """D15's strip affordance label -- ``None`` hides it (fewer than two
@@ -955,6 +996,7 @@ class _StreamView(QWidget):
                 self._last_filters,
                 self._last_filename,
                 self._last_facts,
+                self._last_reach,
             )
         if kind == "fold_header":
             self.folds_changed.emit()
@@ -1230,6 +1272,7 @@ class DiagnosticsPanel(QWidget):
         self._model: str | None = None
         self._filename = ""
         self._facts: tuple[FileFact, ...] = ()
+        self._reach = CheckReach.COMPLETE
 
     def reset_view_state(self) -> None:
         self._stream.reset_fold_state()
@@ -1242,6 +1285,7 @@ class DiagnosticsPanel(QWidget):
         model: str | None,
         filename: str = "",
         facts: tuple[FileFact, ...] = (),
+        reach: CheckReach = CheckReach.COMPLETE,
     ) -> None:
         """Rebuild the strip and stream from one derivation point's output.
 
@@ -1255,13 +1299,17 @@ class DiagnosticsPanel(QWidget):
         *facts* feed the file-facts group (S1, :mod:`ui_qt.file_facts`) --
         both default empty so every existing caller that never mentions them
         (e.g. the keyboard-navigation fixture) renders no such group, exactly
-        the pre-S1 behaviour.
+        the pre-S1 behaviour. *reach* is the document's ``validation_reach``:
+        the clear line consults it per bucket, so a section beyond an aborted
+        run's reach reads "not checked" while a genuinely judged one keeps
+        "clear", and the all-clear row only renders for a completed run (H2).
         """
         self._buckets = buckets
         self._partition = partition
         self._model = model
         self._filename = filename
         self._facts = facts
+        self._reach = reach
         if buckets is None:
             self._placeholder.setText(_MSG_NO_DOCUMENT)
             self._stack.setCurrentIndex(1)
@@ -1294,6 +1342,12 @@ class DiagnosticsPanel(QWidget):
             return
         filters = self._strip.filter_state()
         self._stream.render(
-            self._buckets, self._partition, self._model, filters, self._filename, self._facts
+            self._buckets,
+            self._partition,
+            self._model,
+            filters,
+            self._filename,
+            self._facts,
+            self._reach,
         )
         self._strip.set_collapse_all_label(self._stream.collapse_all_label())

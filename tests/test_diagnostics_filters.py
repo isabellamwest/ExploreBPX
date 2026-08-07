@@ -118,9 +118,11 @@ def test_outstanding_chip_off_hides_required_and_optional_task_rows(app_driver, 
     assert d.diagnostics_stream_subhead_texts() == []
     # A filtered-empty section leaves no trace at all (amended D10): Cell/
     # Negative electrode/Positive electrode are entirely task-only, so all
-    # three headers disappear too, leaving only clean Header on the clear line.
+    # three headers disappear too, leaving only Header on the clear line --
+    # which reads "not checked", not "clear", because the scaffold's
+    # missing required values abort bpx's run at Parameterisation.
     assert d.diagnostics_stream_section_headers() == []
-    assert d.diagnostics_clear_line_text() == "1 section clear"
+    assert d.diagnostics_clear_line_text() == "1 section not checked"
     bucket = d.diagnostics_bucket("Cell")
     assert bucket.outstanding_count == 6
 
@@ -193,7 +195,10 @@ def test_all_chips_off_no_sections_render_but_the_clear_line_still_holds(app_dri
     d.diagnostics_toggle_chip("warnings")
 
     assert d.diagnostics_stream_section_headers() == []
-    assert d.diagnostics_clear_line_text() == "2 sections clear"  # Header, State -- unaffected by filters
+    # Header, State -- unaffected by filters. "Not checked", not "clear":
+    # the Cell errors abort bpx at Parameterisation, so State was never
+    # judged and the line must not vouch for it (H2).
+    assert d.diagnostics_clear_line_text() == "2 sections not checked"
 
 
 # ---------------------------------------------------------------------------

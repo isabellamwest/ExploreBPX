@@ -89,7 +89,9 @@ def test_stream_lists_only_non_clean_buckets_with_the_clear_line_naming_the_rest
         "Negative electrode  1 error",
         "Positive electrode  1 error",
     ]
-    assert d.diagnostics_clear_line_text() == "2 sections clear"
+    # "Not checked", not "clear": these Parameterisation errors abort bpx
+    # before State is judged, so the line must not vouch for it (H2).
+    assert d.diagnostics_clear_line_text() == "2 sections not checked"
 
 
 def test_clear_bucket_shows_no_header(app_driver, many_issues_path):
@@ -308,7 +310,9 @@ def test_one_error_in_one_section_leaves_the_rest_clear(app_driver, tmp_path, va
 
     assert d.diagnostics_stream_section_headers() == ["Cell  1 error"]
     total = len(d._w._diagnostics._buckets.buckets)
-    assert d.diagnostics_clear_line_text() == f"{total - 1} sections clear"
+    # The Cell error aborts bpx at Parameterisation, so the remaining
+    # buckets read "not checked" rather than "clear" (H2).
+    assert d.diagnostics_clear_line_text() == f"{total - 1} sections not checked"
 
 
 def test_clear_line_expands_to_one_row_per_clear_bucket(app_driver, many_issues_path):
@@ -775,6 +779,15 @@ def test_clear_line_text_singular_and_plural():
 
     assert _clear_line_text(1) == "1 section clear"
     assert _clear_line_text(2) == "2 sections clear"
+
+
+def test_clear_line_never_says_clear_after_an_aborted_run():
+    """H2: a bucket with nothing to show after a staged abort may never have
+    been examined, so the line trades "clear" for the ladder word."""
+    from ui_qt.diagnostics_panel import _clear_line_text
+
+    assert _clear_line_text(1, completed=False) == "1 section not checked"
+    assert _clear_line_text(2, completed=False) == "2 sections not checked"
 
 
 # --- pinned regressions found by driving the real (non-offscreen) app ------

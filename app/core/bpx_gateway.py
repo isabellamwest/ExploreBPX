@@ -303,6 +303,43 @@ def _checking_reach(errors: list[dict]) -> CheckReach:
     return CheckReach.COMPLETE
 
 
+#: Stage order for :func:`section_checked` -- how far each reach extends.
+_REACH_RANK = {
+    CheckReach.NOT_RUN: 0,
+    CheckReach.HEADER: 1,
+    CheckReach.PARAMETERISATION: 2,
+    CheckReach.COMPLETE: 3,
+}
+
+
+def section_checked(section: str | None, reach: CheckReach) -> bool:
+    """True when a run that got as far as *reach* actually judged the
+    top-level BPX property *section* (``"Header"``, ``"Parameterisation"``,
+    ``"State"``, ...); ``None`` asks about the document level itself.
+
+    Stage attribution mirrors :func:`_checking_reach`'s reading of bpx's
+    staged dispatch: the Header stage judges ``Header``, the
+    Parameterisation stage judges ``Parameterisation``, and everything
+    else -- ``State``, ``Validation``, the document-level cross-checks,
+    and any property a future schema adds -- is only judged by a run that
+    completes. An unrecognised name therefore claims the least, exactly
+    like :func:`_checking_reach`'s own fallback: sections this gateway
+    cannot place are never presented as examined.
+
+    This is the one place the app may ask "was this section checked":
+    surfaces that soften an absent diagnostic into "clear"/"Valid" must
+    consult it so an aborted run's unexamined sections are never dressed
+    as judged ones (H2), and judged ones never dressed as unexamined.
+    """
+    if section == "Header":
+        required = CheckReach.HEADER
+    elif section == "Parameterisation":
+        required = CheckReach.PARAMETERISATION
+    else:
+        required = CheckReach.COMPLETE
+    return _REACH_RANK[reach] >= _REACH_RANK[required]
+
+
 def validate(raw: dict, v_tol: float = 0.001) -> ValidationResult:
     """Validate a raw BPX dict by attempting to parse it with ``bpx``.
 

@@ -32,7 +32,7 @@ from PySide6.QtWidgets import (
 )
 
 from core import completion, export, page_buckets, structure
-from core.bpx_gateway import BPX_VERSION, LoadError
+from core.bpx_gateway import BPX_VERSION, CheckReach, LoadError
 from core.commands import (
     AddParameter,
     AddSection,
@@ -1816,7 +1816,14 @@ class MainWindow(QMainWindow):
             if document is not None
             else ()
         )
-        self._diagnostics.refresh(buckets, partition, model, filename, facts)
+        self._diagnostics.refresh(
+            buckets,
+            partition,
+            model,
+            filename,
+            facts,
+            reach=document.validation_reach if document is not None else CheckReach.COMPLETE,
+        )
         self._search.index_document(document)
         errors = partition.error_count if partition is not None else 0
         warnings = partition.warning_count if partition is not None else 0

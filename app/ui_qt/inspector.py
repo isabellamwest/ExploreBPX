@@ -801,7 +801,11 @@ class InspectorPanel(QWidget):
             if completed:
                 self._card.set_validity("Valid", OK)
             else:
-                self._card.set_validity("Not checked", MUTED)
+                # The ladder word plus the why, composed the same way the
+                # Workspace badge already does ("Not checked · 1 incomplete")
+                # -- a bare "Not checked" invites "why would checking ever
+                # stop?" with no answer on screen.
+                self._card.set_validity("Not checked · checking stopped early", MUTED)
             return
         self._card.set_validity(
             "Invalid" if has_errors else "Warning", ERROR if has_errors else WARNING
