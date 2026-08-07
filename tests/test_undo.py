@@ -528,10 +528,11 @@ def test_redo_action_carries_the_platform_redo_shortcut(app_driver):
     assert app_driver.redo_shortcut() == QKeySequence(QKeySequence.Redo).toString()
 
 
-def test_no_two_window_shortcuts_answer_the_same_key_press(main_window, qtbot):
+def test_every_registered_shortcut_key_still_dispatches(spm_workfile):
     """Regression test for the dead Ctrl+Shift+Z: two ``WindowShortcut``s
     registered with the same key sequence make Qt emit
-    ``activatedAmbiguously`` and fire *neither* handler's ``activated``.
+    ``activatedAmbiguously`` and fire *neither* handler's ``activated``, so
+    the key goes silently dead.
 
     This bit even on Windows: ``QKeySequence.keyBindings(QKeySequence.Redo)``
     already includes Ctrl+Shift+Z there, and ``QShortcut(QKeySequence.Redo,
@@ -540,35 +541,43 @@ def test_no_two_window_shortcuts_answer_the_same_key_press(main_window, qtbot):
     ("Ctrl+Y"). Registering a second, explicit "Ctrl+Shift+Z" ``QShortcut``
     alongside it therefore collided on every platform, not only macOS/X11.
 
-    A text comparison of each shortcut's own ``.key()`` would not have caught
-    this (no shortcut reports "Ctrl+Shift+Z" as its own key once the fix
-    aliases the alternate to the primary), so this drives a real
-    ``QKeySequence`` through the window via ``QTest.keySequence`` for every
-    key any registered shortcut answers to -- unlike
-    ``press_redo_shortcut*``, which emits ``QShortcut.activated`` directly
-    and bypasses Qt's shortcut-matching machinery entirely.
+    Comparing each shortcut's own ``.key()`` would not catch it (no shortcut
+    reports "Ctrl+Shift+Z" as its own key once the fix aliases the alternate
+    to the primary), so this has to drive real key presses. It runs in a
+    subprocess because it cannot be done from inside the suite at all: under
+    pytest-qt the window never activates offscreen -- ``isActiveWindow()``
+    stays False, ``focusWidget()`` stays None, and ``qtbot.waitActive``
+    returns anyway -- so ``QTest.keySequence`` matches nothing and an in-suite
+    version of this test passes no matter what. See
+    ``tests/shortcut_dispatch_probe.py``.
     """
-    from PySide6.QtGui import QShortcut
-    from PySide6.QtTest import QTest
+    import json
+    import subprocess
+    import sys
+    from pathlib import Path
 
-    main_window.show()
-    main_window.raise_()
-    main_window.activateWindow()
-    qtbot.waitActive(main_window)
+    probe = Path(__file__).with_name("shortcut_dispatch_probe.py")
+    result = subprocess.run(
+        [sys.executable, str(probe), str(spm_workfile)],
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
+    assert result.returncode == 0, result.stderr
 
-    shortcuts = main_window.findChildren(QShortcut)
-    keys = {sc.key().toString() for sc in shortcuts if not sc.key().isEmpty()}
+    # The probe prints one JSON line; bpx's pyparsing warnings share stdout.
+    report = json.loads(
+        next(line for line in result.stdout.splitlines() if line.startswith("{"))
+    )
 
-    ambiguous: list[str] = []
-    for shortcut in shortcuts:
-        shortcut.activatedAmbiguously.connect(
-            lambda sc=shortcut: ambiguous.append(sc.key().toString())
-        )
-
-    for key_text in keys:
-        QTest.keySequence(main_window, QKeySequence(key_text))
-
-    assert ambiguous == [], f"ambiguously-registered key sequence(s): {ambiguous}"
+    # Without a genuinely active window nothing dispatches and every later
+    # assertion would hold vacuously -- the exact failure this test replaced.
+    assert report["active"] is True, "probe window never activated; result is void"
+    assert report["keys"], "no shortcut keys were found to test"
+    assert report["dead"] == [], (
+        f"registered key(s) that fired no handler: {report['dead']} -- "
+        f"claims: {report['claims']}"
+    )
 
 
 def test_redo_disabled_with_no_document(app_driver):
