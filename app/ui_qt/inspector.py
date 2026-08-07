@@ -69,7 +69,7 @@ from .documentation_view import DocumentationView
 from .group_box import TintedSection
 from .issues_view import IssuesView
 from .reference_identity import ReferencePin
-from .style import ERROR, MUTED, OK, WARNING
+from .style import ERROR, MUTED, OK, WARNING, not_checked_tooltip
 from .validation_empty_state import ValidationEmptyState
 
 
@@ -804,14 +804,20 @@ class InspectorPanel(QWidget):
         self._state.active.execute_command(command)
         self.committed.emit()
 
+    def _committed_reach(self) -> bpx_gateway.CheckReach:
+        """How far the committed run got. No document means nothing has been
+        checked in the sense that matters here, but no abort to explain
+        either, so ``COMPLETE`` keeps the callers' optimistic default."""
+        session = self._state.active
+        if session is None or session.document is None:
+            return bpx_gateway.CheckReach.COMPLETE
+        return session.document.validation_reach
+
     def _committed_checked(self, path: tuple[str, ...]) -> bool:
         """Whether the committed run's reach covers this parameter's section
         (``section_checked``): only then is an empty issue list a verdict."""
-        session = self._state.active
-        if session is None or session.document is None:
-            return True
         return bpx_gateway.section_checked(
-            path[0] if path else None, session.document.validation_reach
+            path[0] if path else None, self._committed_reach()
         )
 
     def _render_issues(self, issues, has_errors: bool, checked: bool = True) -> None:
@@ -824,7 +830,12 @@ class InspectorPanel(QWidget):
             if checked:
                 self._card.set_validity("Valid", OK)
             else:
-                self._card.set_validity("Not checked", MUTED)
+                # The badge states the absence of a verdict; the hover states
+                # why there is none, in the same words the diagnostics
+                # stream's file-facts row uses for the same abort.
+                self._card.set_validity(
+                    "Not checked", MUTED, not_checked_tooltip(self._committed_reach())
+                )
             return
         self._card.set_validity(
             "Invalid" if has_errors else "Warning", ERROR if has_errors else WARNING

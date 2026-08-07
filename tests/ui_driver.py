@@ -379,6 +379,12 @@ class AppDriver:
         item = self._diagnostics_clear_summary_item()
         return _strip_chevron(item.text()) if item is not None else None
 
+    def diagnostics_clear_line_tooltip(self) -> str:
+        """The clear line's hover: why its "not checked" half reads that way.
+        Empty when nothing on the line is unchecked."""
+        item = self._diagnostics_clear_summary_item()
+        return item.toolTip() if item is not None else ""
+
     def diagnostics_toggle_clear_line(self) -> "AppDriver":
         """Click the clear line, as a single click on it does."""
         item = self._diagnostics_clear_summary_item()
@@ -1758,6 +1764,11 @@ class AppDriver:
         """The Inspector validity badge: '', 'Valid', 'Warning', 'Invalid'
         or 'Not checked' (bpx aborted before judging this parameter)."""
         return self._w._inspector._card._badge.text()
+
+    def validity_tooltip(self) -> str:
+        """The Inspector validity badge's hover: why "Not checked" reads that
+        way. Empty for every verdict whose own word says it."""
+        return self._w._inspector._card._badge.toolTip()
 
     def field_value(self):
         return self._w._inspector._card.value()

@@ -9,10 +9,11 @@ from __future__ import annotations
 
 from string import Template
 
+from core.bpx_gateway import CheckReach
 from core.completion import TaskKind
 from core.validation import Severity
 
-from . import typography
+from . import file_facts, typography
 
 # ---------------------------------------------------------------------------
 # Spacing scale: shared step values so new layout code picks a rung on the
@@ -175,6 +176,21 @@ _TASK_KIND_TOOLTIPS: dict[TaskKind, str] = {
     TaskKind.NULL_FIELD: "Added, but no value yet",
     TaskKind.DECLARE_MODEL: "Model not yet declared",
 }
+
+
+def not_checked_tooltip(reach: CheckReach) -> str:
+    """Why a mark reads "not checked" (H2), chosen by the ``CheckReach`` enum
+    alone -- never by a validator message, exactly like the severity and task
+    tooltips above.
+
+    The words are ``file_facts.REACH_FACTS``'s, verbatim and in its own
+    headline/detail order: the diagnostics stream already states this fact in
+    those words, so the hover repeats them rather than inventing a second
+    explanation that could drift. Empty for ``COMPLETE``, which never produces
+    the phrase; callers set an empty tooltip harmlessly.
+    """
+    fact = file_facts.REACH_FACTS.get(reach)
+    return f"{fact.headline}\n{fact.sub}" if fact is not None else ""
 
 
 def severity_tooltip(severity: Severity) -> str:

@@ -399,11 +399,18 @@ class ParameterCard(QWidget):
         """Pass the validator's per-cell diagnostics to the inner editor."""
         self._editor.set_cell_issues(issues)
 
-    def set_validity(self, text: str, colour: str) -> None:
+    def set_validity(self, text: str, colour: str, tooltip: str = "") -> None:
         """Drive the header's validity dot and text; validity decisions stay
-        in the Inspector."""
+        in the Inspector.
+
+        *tooltip* explains a verdict whose words alone do not (today only
+        "Not checked", whose reason lives in ``style.not_checked_tooltip``).
+        It sits on both dot and text so the whole mark is one hover target;
+        empty clears it, so a later Valid never keeps a stale sentence."""
         self._dot.setText(html_img(DOT, color=colour))
         self._badge.setText(text)
+        self._dot.setToolTip(tooltip)
+        self._badge.setToolTip(tooltip)
 
     def _toggle_info_popover(self) -> None:
         """Open the info popover on the first click, close it on the second."""

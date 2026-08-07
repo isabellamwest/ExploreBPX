@@ -14,6 +14,9 @@ from __future__ import annotations
 
 import pytest
 
+from core.bpx_gateway import CheckReach
+from ui_qt import file_facts
+
 pytest.importorskip("PySide6")
 
 _MODEL = ("Header", "Model")
@@ -427,5 +430,31 @@ def test_masked_section_badges_not_validated_instead_of_valid(
     # Repair the Cell parameter: State is judged again and the badge returns.
     d.go_to(_CAPACITY).edit_field("5").commit()
     assert d.validity() == "Valid"
+
+
+def test_not_checked_badge_says_why_on_hover(app_driver, spm_workfile):
+    """"Not checked" states the absence of a verdict but not its cause. The
+    hover supplies it in the diagnostics stream's own words for the same
+    abort, so the two surfaces can never explain it differently."""
+    d = app_driver
+    d.open(spm_workfile).go_to(_TEMPERATURE)
+    # A verdict whose own word says it carries no hover.
+    assert d.validity() == "Valid"
+    assert d.validity_tooltip() == ""
+
+    d.go_to(_CAPACITY).edit_field("nonsense").commit()
+    d.go_to(_TEMPERATURE)
+    assert d.validity() == "Not checked"
+    fact = file_facts.REACH_FACTS[CheckReach.PARAMETERISATION]
+    assert d.validity_tooltip() == f"{fact.headline}\n{fact.sub}"
+    # The same sentence, on the same abort, on the stream's clear line.
+    assert "not checked" in (d.diagnostics_clear_line_text() or "")
+    assert d.diagnostics_clear_line_tooltip() == d.validity_tooltip()
+
+    # Repairing the file removes the cause, so it removes the hover too.
+    d.go_to(_CAPACITY).edit_field("5").commit()
+    d.go_to(_TEMPERATURE)
+    assert d.validity() == "Valid"
+    assert d.validity_tooltip() == ""
     d.go_to(_TEMPERATURE)
     assert d.validity() == "Valid"

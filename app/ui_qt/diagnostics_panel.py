@@ -513,7 +513,11 @@ def _clear_line_text(checked: int, unchecked: int) -> str:
 
 
 def _add_clear_summary_row(
-    list_widget: QListWidget, checked: int, unchecked: int, expanded: bool
+    list_widget: QListWidget,
+    checked: int,
+    unchecked: int,
+    expanded: bool,
+    reach: CheckReach = CheckReach.COMPLETE,
 ) -> None:
     """The clear line (D4): one collapsed/expanded footer row naming every
     clear bucket at once. Its own single-click fold is independent of any
@@ -523,6 +527,10 @@ def _add_clear_summary_row(
     item = QListWidgetItem(f"{chevron} {_clear_line_text(checked, unchecked)}")
     item.setFlags(Qt.ItemIsEnabled)  # visible + clickable, never selectable
     item.setData(_KIND_ROLE, "clear_summary")
+    # Only the "not checked" half of the line needs explaining; a line that is
+    # all clear says everything already.
+    if unchecked:
+        item.setToolTip(style.not_checked_tooltip(reach))
     list_widget.addItem(item)
 
 
@@ -540,7 +548,10 @@ def _clear_row_text(bucket: SectionBucket, checked: bool = True) -> str:
 
 
 def _add_clear_row(
-    list_widget: QListWidget, bucket: SectionBucket, checked: bool = True
+    list_widget: QListWidget,
+    bucket: SectionBucket,
+    checked: bool = True,
+    reach: CheckReach = CheckReach.COMPLETE,
 ) -> None:
     """One quiet, non-activatable row per clear bucket, shown only while
     the clear line is expanded (D4) -- the positive completion signal the
@@ -558,6 +569,8 @@ def _add_clear_row(
     item = QListWidgetItem(text)
     item.setFlags(Qt.ItemIsEnabled)  # visible, never selectable/activatable
     item.setData(_KIND_ROLE, "clear_row")
+    if not checked:
+        item.setToolTip(style.not_checked_tooltip(reach))
     fragment = parameter_row.compose_row_html(text, [], name_color=style.MUTED)
     if bucket.absent:
         fragment = f"<i>{fragment}</i>"
@@ -935,11 +948,15 @@ class _StreamView(QWidget):
             }
             checked_count = sum(1 for was in judged.values() if was)
             _add_clear_summary_row(
-                self._list, checked_count, len(clear_buckets) - checked_count, self._clear_expanded
+                self._list,
+                checked_count,
+                len(clear_buckets) - checked_count,
+                self._clear_expanded,
+                reach,
             )
             if self._clear_expanded:
                 for bucket in clear_buckets:
-                    _add_clear_row(self._list, bucket, judged[bucket.path])
+                    _add_clear_row(self._list, bucket, judged[bucket.path], reach)
 
     def collapse_all_label(self) -> str | None:
         """D15's strip affordance label -- ``None`` hides it (fewer than two

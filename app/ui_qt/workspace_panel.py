@@ -51,7 +51,7 @@ from . import badges, icons
 from .group_box import TintedSection
 from .reference_identity import badge_colour, badge_letters
 from . import typography
-from .style import ERROR, MUTED, OK, WARNING
+from .style import ERROR, MUTED, OK, WARNING, not_checked_tooltip
 from .typography import panel_title
 
 _INFO_PANEL_EMPTY_STATE_TEXT = "No document open"
@@ -1146,7 +1146,7 @@ class WorkspacePanel(QWidget):
             error_count,
             warning_count,
             outstanding_count,
-            completed=document.validation_completed,
+            reach=document.validation_reach,
         )
 
     def _set_references(self, references: list[ReferenceSnapshot]) -> None:
@@ -1189,7 +1189,11 @@ class WorkspacePanel(QWidget):
             button.setToolTip(AT_CAP_MESSAGE if at_cap else "")
 
     def _set_validity_badge(
-        self, errors: int, warnings: int, outstanding: int = 0, completed: bool = True
+        self,
+        errors: int,
+        warnings: int,
+        outstanding: int = 0,
+        reach: CheckReach = CheckReach.COMPLETE,
     ) -> None:
         """The main document's dot-and-text mark: what the validator says,
         plus what is still missing.
@@ -1201,15 +1205,21 @@ class WorkspacePanel(QWidget):
         green "Valid" beside a title reading "(incomplete)" told the user
         the file was ready when 35 required fields were still empty.
 
-        *completed* is ``validation_completed`` (H2): when ``bpx`` aborted
-        its staged run, every abort error can be absence-shaped and absorbed
-        into the incomplete count, leaving zero errors to show -- but zero
-        errors from an aborted run is not a verdict, and "Valid" would claim
-        a check that never finished. The badge says "Not checked" instead,
-        exactly the word the Inspector uses for a parameter in that state.
+        *reach* is ``validation_reach`` (H2): when ``bpx`` aborted its staged
+        run, every abort error can be absence-shaped and absorbed into the
+        incomplete count, leaving zero errors to show -- but zero errors from
+        an aborted run is not a verdict, and "Valid" would claim a check that
+        never finished. The badge says "Not checked" instead, exactly the word
+        the Inspector uses for a parameter in that state, and carries the same
+        hover sentence naming the stage the run stopped at.
         """
+        tooltip = ""
         if not errors and not warnings:
-            text, colour = ("Valid", OK) if completed else ("Not checked", MUTED)
+            if reach is CheckReach.COMPLETE:
+                text, colour = "Valid", OK
+            else:
+                text, colour = "Not checked", MUTED
+                tooltip = not_checked_tooltip(reach)
         elif errors:
             parts = [f"{errors} error" + ("s" if errors != 1 else "")]
             if warnings:
@@ -1223,6 +1233,8 @@ class WorkspacePanel(QWidget):
         if outstanding:
             text = f"{text} · {outstanding} incomplete"
         self._info_badge.setText(text)
+        self._info_badge.setToolTip(tooltip)
+        self._info_dot.setToolTip(tooltip)
         self._info_dot.setText(icons.html_img(icons.DOT, color=colour))
         self._info_dot.show()
         self._info_badge.show()
