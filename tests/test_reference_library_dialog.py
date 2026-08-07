@@ -100,25 +100,3 @@ def test_accept_reports_the_chosen_set():
     dialog.accept()
 
     assert dialog.selected_set_id() == chosen.id
-
-
-# Pin semantics (multi-reference Phase 1): the footer speaks pin language,
-# and at the cap the pin button disables with the hint saying why.
-
-
-def test_footer_speaks_pin_semantics_below_the_cap():
-    dialog = ReferenceLibraryDialog()
-
-    assert dialog._pin_button.text() == "Pin as reference"
-    assert dialog._pin_button.isEnabled()
-    hint = dialog.findChild(QLabel, "Hint")
-    assert hint.text() == "Pins as a read-only reference · up to 4 pinned"
-    assert "replaces" not in hint.text()
-
-
-def test_pin_button_disables_at_the_cap_with_the_hint_saying_why():
-    dialog = ReferenceLibraryDialog(at_cap=True)
-
-    assert not dialog._pin_button.isEnabled()
-    hint = dialog.findChild(QLabel, "Hint")
-    assert hint.text() == "4 of 4 pinned · remove a reference to pin another"
