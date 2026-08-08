@@ -514,7 +514,7 @@ class InspectorPanel(QWidget):
         self._card = card
         self._apply_grid_fill()
         self._render_issues(
-            parameter.issues, parameter.has_errors, self._committed_checked(parameter.path)
+            parameter.issues, parameter.has_errors, self._committed_reach()
         )
         self._card.set_cell_issues(parameter.issues)
 
@@ -647,11 +647,7 @@ class InspectorPanel(QWidget):
         )
         issues = preview.issues
         errors = [i for i in issues if i.severity == Severity.ERROR]
-        path = self._card.parameter.path
-        checked = bpx_gateway.section_checked(
-            path[0] if path else None, preview.validation_reach
-        )
-        self._render_issues(issues, bool(errors), checked)
+        self._render_issues(issues, bool(errors), preview.validation_reach)
         self._card.set_cell_issues(issues)
         # Live preview drives the Issues section like a commit would: rows,
         # count and visibility all rebuilt from the previewed issues, so the
@@ -668,7 +664,7 @@ class InspectorPanel(QWidget):
         self._render_issues(
             self._card.parameter.issues,
             self._card.parameter.has_errors,
-            self._committed_checked(self._card.parameter.path),
+            self._committed_reach(),
         )
         self._card.set_cell_issues(self._card.parameter.issues)
         self._show_issue_rows(self._card.parameter.issues, self._card.parameter.path)
@@ -813,28 +809,32 @@ class InspectorPanel(QWidget):
             return bpx_gateway.CheckReach.COMPLETE
         return session.document.validation_reach
 
-    def _committed_checked(self, path: tuple[str, ...]) -> bool:
-        """Whether the committed run's reach covers this parameter's section
-        (``section_checked``): only then is an empty issue list a verdict."""
-        return bpx_gateway.section_checked(
-            path[0] if path else None, self._committed_reach()
-        )
+    def _render_issues(
+        self, issues, has_errors: bool, reach: bpx_gateway.CheckReach
+    ) -> None:
+        """Drive the card's validity badge from one validation run.
 
-    def _render_issues(self, issues, has_errors: bool, checked: bool = True) -> None:
+        *reach* is how far the run that produced *issues* got: the committed
+        run's (``_committed_reach``) or the live preview's
+        (``ParameterPreview.validation_reach``). Both the "was this section
+        judged" question and the "Not checked" hover derive from it here, so
+        the badge and its explanation can never describe different runs.
+        """
         if not issues:
             # No issue attached is only a clean bill of health if bpx's run
             # actually judged this parameter's section; after a staged abort
             # an uncovered parameter was never examined, and claiming "Valid"
             # would be false -- while a covered one really earned it (H2,
             # both directions, same rule as the diagnostics clear line).
-            if checked:
+            path = self._card.parameter.path
+            if bpx_gateway.section_checked(path[0] if path else None, reach):
                 self._card.set_validity("Valid", OK)
             else:
                 # The badge states the absence of a verdict; the hover states
                 # why there is none, in the same words the diagnostics
                 # stream's file-facts row uses for the same abort.
                 self._card.set_validity(
-                    "Not checked", MUTED, not_checked_tooltip(self._committed_reach())
+                    "Not checked", MUTED, not_checked_tooltip(reach)
                 )
             return
         self._card.set_validity(

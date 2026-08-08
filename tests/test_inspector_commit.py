@@ -11,8 +11,11 @@ import pytest
 
 pytest.importorskip("PySide6")
 
+from core.bpx_gateway import CheckReach
 from state.app_state import AppState
+from state.document_session import ParameterPreview
 from ui_qt.inspector import InspectorPanel
+from ui_qt.style import not_checked_tooltip
 
 _CAPACITY = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
 _MODEL = ("Header", "Model")
@@ -286,7 +289,7 @@ def test_a_blocked_draft_holds_the_badge_instead_of_previewing_its_value(
     badge must hold, not report on a value the editor is not showing."""
     state, panel = _panel_on(qtbot, spm_workfile, _CAPACITY)
     card = panel._card
-    panel._render_issues([], False)
+    panel._render_issues([], False, CheckReach.COMPLETE)
     assert card._badge.text() == "Valid"
 
     card._editor._edit.setText("not-a-number")   # would preview as Invalid
@@ -295,6 +298,33 @@ def test_a_blocked_draft_holds_the_badge_instead_of_previewing_its_value(
     panel._validate_draft()
 
     assert card._badge.text() == "Valid"         # held, not re-validated
+
+
+def test_live_preview_not_checked_hover_names_the_previews_own_abort(
+    qtbot, spm_workfile
+):
+    """The draft badge and its hover must describe the same validation run.
+
+    A draft can change where bpx's staged run stops (most starkly, a value
+    that kills the run outright: reach ``NOT_RUN``). The badge follows the
+    preview's reach, so the "Not checked" hover must explain the *preview's*
+    abort -- not the last committed run's, which here completed and would
+    leave the badge unexplained (an empty hover).
+    """
+    state, panel = _panel_on(qtbot, spm_workfile, _CAPACITY)
+    card = panel._card
+    assert state.active.document.validation_reach is CheckReach.COMPLETE
+
+    card._editor._edit.setText("999.0")          # representable draft
+    state.active.preview_parameter = lambda path, value: ParameterPreview(
+        issues=[], validation_reach=CheckReach.NOT_RUN
+    )
+
+    panel._validate_draft()
+
+    assert card._badge.text() == "Not checked"
+    assert card._badge.toolTip() == not_checked_tooltip(CheckReach.NOT_RUN)
+    assert card._badge.toolTip() != ""
 
 
 def test_empty_state_names_the_section_when_only_a_section_is_selected(qtbot, spm_workfile):
