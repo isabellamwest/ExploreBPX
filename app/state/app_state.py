@@ -15,6 +15,12 @@ from core.document import BPXDocument
 from core.load_record import LoadRecord
 from state.document_session import DocumentSession
 from state.reference_snapshot import ReferenceSnapshot
+from state.workspace_history import (
+    MainRecord,
+    ReferenceRecord,
+    WorkspaceHistory,
+    WorkspaceRecord,
+)
 
 
 #: The hard cap on pinned references. Four is what the comparison surfaces
@@ -46,9 +52,22 @@ class AppState:
     ``PLAN-multi-reference.md``). Nothing here knows about badges.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, history: WorkspaceHistory | None = None) -> None:
         self.active: DocumentSession | None = None
         self.references: list[ReferenceSnapshot] = []
+        #: Optional persistent workspace history. Recording happens here at
+        #: the open/pin funnel -- not in the UI layer -- so every UI path
+        #: that changes the workspace is recorded without remembering to.
+        #: ``None`` (the default, and what most tests construct) records
+        #: nothing.
+        self.history = history
+        #: What the history should call the current main document: set by
+        #: the three real opens (path + D3 mode), cleared when the session
+        #: has no on-disk identity (scaffolds, clones, closed). While
+        #: ``None``, reference changes leave the last-workspace record
+        #: untouched -- a scaffold session must not erase the last
+        #: restorable workspace.
+        self._last_main: MainRecord | None = None
 
     @property
     def reference(self) -> ReferenceSnapshot | None:
@@ -98,6 +117,7 @@ class AppState:
         # comments, disk facts) -- never a second look at the file.
         session.load_record = LoadRecord.capture(data, document, path=path)
         self.active = session
+        self._note_main_opened(path, "normal")
 
     def legacy_version(self, path: Path) -> str | None:
         """The file's own ``Header.BPX`` version when *path* holds a
@@ -127,6 +147,7 @@ class AppState:
         session.read_only = True
         session.load_record = LoadRecord.capture(data, document, path=path)
         self.active = session
+        self._note_main_opened(path, "read_only")
 
     def open_converted_copy(self, path: Path) -> None:
         """Open a converted v1.x copy of legacy *path* as a new unsaved
@@ -149,6 +170,7 @@ class AppState:
         session.dirty = True
         session.load_record = LoadRecord.capture(data, document, path=path)
         self.active = session
+        self._note_main_opened(path, "converted_copy")
 
     def new_document(self, model: str) -> None:
         """Create a fresh incomplete document scaffold, replacing the active session.
@@ -164,6 +186,9 @@ class AppState:
         session = DocumentSession(document)
         session.dirty = True
         self.active = session
+        # A scaffold has no on-disk identity yet; it joins the history only
+        # once saved (note_main_saved).
+        self._last_main = None
 
     def new_from_file(self, path: Path) -> PinReferenceOutcome:
         """Clone *path* into a fresh unsaved session and pin *path* itself
@@ -189,6 +214,12 @@ class AppState:
         clone_name = f"{path.stem} (copy){path.suffix}"
         data = path.read_bytes()
         document = BPXDocument.from_bytes(data, clone_name)
+        # The clone is never-saved like a scaffold, so the last-workspace
+        # record is left alone -- but the source is a file the user reached
+        # for, so it earns a recent-files row.
+        self._last_main = None
+        if self.history is not None:
+            self.history.add_recent(str(path))
         existing = self._pinned_at(path)
         outcome = PinReferenceOutcome.ADDED
         reference: ReferenceSnapshot | None = None
@@ -215,6 +246,9 @@ class AppState:
         the main file, never a prompt about the docked reference.
         """
         self.active = None
+        # The recorded last workspace survives the close -- that is the
+        # point of it -- but later pin changes no longer belong to it.
+        self._last_main = None
 
     def pin_reference(self, path: Path) -> PinReferenceOutcome:
         """Pin *path* as a reference, appending it after those already pinned.
@@ -240,6 +274,7 @@ class AppState:
         if self.at_reference_cap:
             return PinReferenceOutcome.AT_CAP
         self.references.append(ReferenceSnapshot.load(path))
+        self._sync_last_workspace()
         return PinReferenceOutcome.ADDED
 
     def pin_reference_set(self, set_id: str) -> PinReferenceOutcome:
@@ -260,6 +295,7 @@ class AppState:
         if self.at_reference_cap:
             return PinReferenceOutcome.AT_CAP
         self.references.append(ReferenceSnapshot.from_library(set_id))
+        self._sync_last_workspace()
         return PinReferenceOutcome.ADDED
 
     def remove_reference(self, reference: ReferenceSnapshot) -> None:
@@ -273,6 +309,7 @@ class AppState:
         for index, pinned in enumerate(self.references):
             if pinned is reference:
                 del self.references[index]
+                self._sync_last_workspace()
                 return
 
     def reload_reference(self, index: int = 0) -> None:
@@ -299,3 +336,58 @@ class AppState:
         if existing.path is None:
             return
         self.references[index] = ReferenceSnapshot.load(existing.path)
+
+    # ------------------------------------------------------------------
+    # workspace history recording
+
+    def note_main_saved(self) -> None:
+        """Record that the active session was saved to its backing file.
+
+        Called by the shell after a successful save: a Save As gives a
+        never-saved scaffold/clone/converted-copy its on-disk identity (and
+        a saved converted copy is from then on an ordinary v1.x file, so
+        the mode resets to ``normal``). A no-op without a backing file.
+        """
+        session = self.active
+        if session is None or session.backing_file is None:
+            return
+        self._note_main_opened(session.backing_file, "normal")
+
+    def current_workspace_record(self) -> WorkspaceRecord | None:
+        """The current workspace as a history record, or ``None`` when the
+        main document has no on-disk identity to remember (the seam the
+        "Save current workspace as…" action enables itself from)."""
+        if self._last_main is None:
+            return None
+        return WorkspaceRecord(
+            main=self._last_main, references=self._reference_records()
+        )
+
+    def _note_main_opened(self, path: Path, mode: str) -> None:
+        self._last_main = MainRecord(path=str(path), mode=mode)
+        if self.history is None:
+            return
+        self.history.add_recent(str(path))
+        self._sync_last_workspace()
+
+    def _sync_last_workspace(self) -> None:
+        """Rewrite the automatic last-workspace record from current state.
+
+        Runs at every reference change; while the main document has no
+        recorded identity (``_last_main`` is None) it leaves the store
+        alone, so a scaffold session never erases the last restorable
+        workspace.
+        """
+        if self.history is None or self._last_main is None:
+            return
+        self.history.set_last_workspace(
+            WorkspaceRecord(main=self._last_main, references=self._reference_records())
+        )
+
+    def _reference_records(self) -> tuple[ReferenceRecord, ...]:
+        return tuple(
+            ReferenceRecord(kind="library", set_id=reference.set_id)
+            if reference.set_id is not None
+            else ReferenceRecord(kind="file", path=str(reference.path))
+            for reference in self.references
+        )
