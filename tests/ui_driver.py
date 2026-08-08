@@ -726,6 +726,135 @@ class AppDriver:
         self._qtbot.mouseClick(self._reference_row(index)._remove, Qt.LeftButton)
         return self
 
+    # --- Workspace rail history: the Recent group -------------------------
+
+    def _history_rows(self) -> list:
+        return self._w._workspace._history_rows
+
+    def _history_row_named(self, name: str):
+        """The *Recent* row named *name*. The resume row is excluded on
+        purpose -- it carries the same filename as the newest recent, and
+        it has its own accessors below."""
+        from PySide6.QtWidgets import QLabel
+
+        for row in self._history_rows():
+            if row.objectName() != "RecentRow":
+                continue
+            label = row.findChild(QLabel, "HistoryRowName")
+            if label is not None and label.text() == name:
+                return row
+        raise AssertionError(f"No history row named {name!r}")
+
+    def history_row_names(self) -> list[str]:
+        """Name labels of every Recent-group row in display order (the
+        resume row first when shown)."""
+        from PySide6.QtWidgets import QLabel
+
+        return [
+            row.findChild(QLabel, "HistoryRowName").text()
+            for row in self._history_rows()
+        ]
+
+    def recent_row_names(self) -> list[str]:
+        """Name labels of the plain Recent rows only, resume row excluded."""
+        from PySide6.QtWidgets import QLabel
+
+        return [
+            row.findChild(QLabel, "HistoryRowName").text()
+            for row in self._history_rows()
+            if row.objectName() == "RecentRow"
+        ]
+
+    def resume_row_present(self) -> bool:
+        """Whether the emphasised reopen-last-workspace row is shown."""
+        return any(row.objectName() == "ResumeRow" for row in self._history_rows())
+
+    def click_resume_row(self) -> "AppDriver":
+        for row in self._history_rows():
+            if row.objectName() == "ResumeRow":
+                self._qtbot.mouseClick(row, Qt.LeftButton)
+                return self
+        raise AssertionError("No resume row shown")
+
+    def click_history_row(self, name: str) -> "AppDriver":
+        """Click the row named *name* (opens the file for a Recent row)."""
+        self._qtbot.mouseClick(self._history_row_named(name), Qt.LeftButton)
+        return self
+
+    def history_row_is_missing(self, name: str) -> bool:
+        """Whether the row named *name* carries the "Not found" chip."""
+        from PySide6.QtWidgets import QLabel
+
+        row = self._history_row_named(name)
+        return row.findChild(QLabel, "HistoryRowChip") is not None
+
+    def click_history_row_button(self, name: str, text: str) -> "AppDriver":
+        """Click an inline button ("Pin", "✕") on the row named *name*."""
+        from PySide6.QtWidgets import QPushButton
+
+        row = self._history_row_named(name)
+        for button in row.findChildren(QPushButton):
+            if button.text() == text:
+                self._qtbot.mouseClick(button, Qt.LeftButton)
+                return self
+        raise AssertionError(f"No {text!r} button on history row {name!r}")
+
+    # --- Workspace rail history: the named Workspaces group ---------------
+
+    def _workspace_row_named(self, name: str):
+        from PySide6.QtWidgets import QLabel
+
+        for row in self._history_rows():
+            if row.objectName() != "WorkspaceNamedRow":
+                continue
+            label = row.findChild(QLabel, "HistoryRowName")
+            if label is not None and label.text() == name:
+                return row
+        raise AssertionError(f"No named workspace row {name!r}")
+
+    def workspace_row_names(self) -> list[str]:
+        from PySide6.QtWidgets import QLabel
+
+        return [
+            row.findChild(QLabel, "HistoryRowName").text()
+            for row in self._history_rows()
+            if row.objectName() == "WorkspaceNamedRow"
+        ]
+
+    def click_workspace_row(self, name: str) -> "AppDriver":
+        """Click the named workspace row (opens the whole bundle)."""
+        self._qtbot.mouseClick(self._workspace_row_named(name), Qt.LeftButton)
+        return self
+
+    def workspace_row_is_missing(self, name: str) -> bool:
+        from PySide6.QtWidgets import QLabel
+
+        row = self._workspace_row_named(name)
+        return row.findChild(QLabel, "HistoryRowChip") is not None
+
+    def click_workspace_row_button(self, name: str, text: str) -> "AppDriver":
+        """Hover the named row (revealing Rename/Remove) and click *text*."""
+        from PySide6.QtWidgets import QPushButton
+
+        row = self._workspace_row_named(name)
+        row.set_hovered(True)
+        for button in row.findChildren(QPushButton):
+            if button.text() == text:
+                self._qtbot.mouseClick(button, Qt.LeftButton)
+                return self
+        raise AssertionError(f"No {text!r} button on workspace row {name!r}")
+
+    def workspace_save_button_enabled(self) -> bool:
+        return self._w._workspace._save_workspace_button.isEnabled()
+
+    def click_workspace_save(self) -> "AppDriver":
+        """Click "Save current workspace as…" (tests stub the name dialog
+        via the ``_ask_workspace_name`` seam)."""
+        self._qtbot.mouseClick(
+            self._w._workspace._save_workspace_button, Qt.LeftButton
+        )
+        return self
+
     def click_reference_row(self, index: int = 0) -> "AppDriver":
         """Click the pinned reference row at *index*, toggling its detail."""
         row = self._reference_row(index)

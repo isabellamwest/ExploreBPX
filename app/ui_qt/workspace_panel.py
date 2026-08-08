@@ -25,6 +25,7 @@ pill).
 from __future__ import annotations
 
 from datetime import datetime
+from dataclasses import dataclass
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, QMimeData, Qt, Signal
@@ -74,6 +75,37 @@ _RAIL_WIDTH = 340
 
 #: The white gap between the main and reference tinted sections.
 _SECTION_GAP = 16
+
+
+@dataclass(frozen=True)
+class RecentEntryView:
+    """One recent-files row, pre-digested by the shell: the panel renders
+    and emits, it never touches the filesystem or the history store."""
+
+    path: str
+    name: str
+    folder: str
+    exists: bool
+
+
+@dataclass(frozen=True)
+class LastWorkspaceView:
+    """The automatic resume row: the last workspace's main filename, how
+    many references come back with it, and whether the main still exists."""
+
+    label: str
+    reference_count: int
+    main_exists: bool
+
+
+@dataclass(frozen=True)
+class WorkspaceEntryView:
+    """One named-workspace row: the user's own name for the bundle, how
+    many references it carries, and whether its main still exists."""
+
+    name: str
+    reference_count: int
+    main_exists: bool
 
 
 def _first_supported_local_file(mime_data: QMimeData) -> Path | None:
@@ -226,6 +258,14 @@ def _read_as_fact(record: LoadRecord | None, fmt: str) -> tuple[str, str]:
         )
         return value, _COMMENTS_DETAIL
     return shown, ""
+
+
+def _strike(label: QLabel) -> None:
+    """Strike a row's name label through: the missing-file mark, stated in
+    the type itself so it survives palette changes."""
+    font = label.font()
+    font.setStrikeOut(True)
+    label.setFont(font)
 
 
 def _validity_dot_label() -> QLabel:
@@ -661,6 +701,50 @@ class _PathLabel(QLabel):
         self.setText(metrics.elidedText(self._full_text, Qt.ElideLeft, max(self.width(), 1)))
 
 
+class _HistoryRow(QFrame):
+    """One rail row of the Recent (and later Workspaces) group: a white chip
+    whose whole surface is the click target, with any inner buttons taking
+    their clicks for themselves (a pressed QPushButton never forwards to the
+    row). Non-clickable rows -- a missing file -- keep the chip shape but
+    answer nothing, matching the struck-through label beside them."""
+
+    clicked = Signal()
+
+    def __init__(self, clickable: bool = True) -> None:
+        super().__init__()
+        self._clickable = clickable
+        #: Widgets shown only while the pointer is over the row (a named
+        #: workspace's Rename/Remove) -- the wireframe's hover reveal.
+        self._hover_widgets: list[QWidget] = []
+        if clickable:
+            self.setCursor(Qt.PointingHandCursor)
+
+    def add_hover_action(self, widget: QWidget) -> None:
+        widget.hide()
+        self._hover_widgets.append(widget)
+
+    def set_hovered(self, hovered: bool) -> None:
+        """Show/hide the hover-only actions. Public on purpose: the test
+        driver simulates the pointer through this, the same path
+        enter/leaveEvent take."""
+        for widget in self._hover_widgets:
+            widget.setVisible(hovered)
+
+    def enterEvent(self, event) -> None:  # noqa: N802 - Qt naming
+        self.set_hovered(True)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event) -> None:  # noqa: N802 - Qt naming
+        self.set_hovered(False)
+        super().leaveEvent(event)
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802 - Qt naming
+        if self._clickable and event.button() == Qt.LeftButton:
+            self.clicked.emit()
+            return
+        super().mousePressEvent(event)
+
+
 class WorkspacePanel(QWidget):
     """Workspace-level actions (Open, New) plus current-document identity/state."""
 
@@ -677,6 +761,18 @@ class WorkspacePanel(QWidget):
     #: text). MainWindow routes it through the session's ``SetValue`` --
     #: decision D6, the same command and undo the Header cards use.
     identity_edited = Signal(str, str)
+    #: The Recent group's requests, each carrying the row's stored path
+    #: spelling. Restore/open/pin/remove all happen in MainWindow -- the
+    #: rows are shortcuts to the same guarded doors, never side doors.
+    resume_last_requested = Signal()
+    recent_open_requested = Signal(str)
+    recent_pin_requested = Signal(str)
+    recent_remove_requested = Signal(str)
+    #: The named Workspaces group's requests, carrying the workspace name.
+    workspace_open_requested = Signal(str)
+    workspace_save_requested = Signal()
+    workspace_rename_requested = Signal(str)
+    workspace_remove_requested = Signal(str)
 
     def __init__(self) -> None:
         super().__init__()
@@ -720,6 +816,14 @@ class WorkspacePanel(QWidget):
         self._open_button.clicked.connect(self.open_requested)
         rail_layout.addWidget(self._open_button)
 
+        self._workspaces_group = self._build_workspaces_group()
+        rail_layout.addSpacing(6)
+        rail_layout.addWidget(self._workspaces_group)
+
+        self._recent_group = self._build_recent_group()
+        rail_layout.addSpacing(6)
+        rail_layout.addWidget(self._recent_group)
+
         divider = QFrame()
         divider.setObjectName("WorkspaceRailDivider")
         divider.setFixedHeight(1)
@@ -730,6 +834,221 @@ class WorkspacePanel(QWidget):
         rail_layout.addWidget(self._build_new_chooser())
         rail_layout.addStretch(1)
         return rail
+
+    def _build_recent_group(self) -> QWidget:
+        """The rail's Recent group: the resume-last-workspace row over the
+        recent files. Content is rebuilt by :meth:`set_history`; the group
+        hides itself entirely while there is no history to show, so a first
+        launch looks exactly as it did before this feature existed."""
+        container = QWidget()
+        container.setObjectName("RecentGroup")
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+        layout.addWidget(panel_title("Recent"))
+        self._history_rows: list[_HistoryRow] = []
+        self._recent_rows_layout = layout
+        container.hide()
+        return container
+
+    def _build_workspaces_group(self) -> QWidget:
+        """The rail's named Workspaces group: the user's saved bundles over
+        the "Save current workspace as…" action. Hidden until there is
+        either a saved workspace to show or a workspace worth saving, so a
+        first launch stays as spare as it always was."""
+        container = QWidget()
+        container.setObjectName("WorkspacesGroup")
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+        layout.addWidget(panel_title("Workspaces"))
+        self._workspace_rows_layout = layout
+
+        self._save_workspace_button = QPushButton("Save current workspace as…")
+        self._save_workspace_button.setObjectName("SaveWorkspaceAs")
+        self._save_workspace_button.setProperty("modelOption", True)
+        self._save_workspace_button.clicked.connect(self.workspace_save_requested)
+        layout.addWidget(self._save_workspace_button)
+
+        container.hide()
+        return container
+
+    def set_history(
+        self,
+        last: LastWorkspaceView | None,
+        recents: list[RecentEntryView],
+        document_open: bool,
+        workspaces: list[WorkspaceEntryView] = (),
+        save_enabled: bool = False,
+    ) -> None:
+        """Rebuild the Workspaces and Recent groups from pre-digested views.
+
+        The resume row shows only while nothing is open: with a document on
+        screen the last workspace *is* the current one (or the user has
+        already replaced it on purpose), and "Reopen" would be noise. The
+        shell decides existence (``exists``/``main_exists``) and
+        saveability; rows only render the verdicts.
+        """
+        for row in self._history_rows:
+            # setParent(None) now, not just deleteLater: a merely-scheduled
+            # widget stays a visible child until the event loop unwinds, so
+            # successive rebuilds would stack ghost rows (same gotcha as the
+            # Inspector's _clear_surface).
+            row.setParent(None)
+            row.deleteLater()
+        self._history_rows = []
+
+        for entry in workspaces:
+            self._add_history_row(
+                self._build_workspace_row(entry), self._workspace_rows_layout
+            )
+        self._save_workspace_button.setEnabled(save_enabled)
+        self._save_workspace_button.setToolTip(
+            "" if save_enabled else "Save the document first"
+        )
+        self._workspaces_group.setVisible(bool(workspaces) or save_enabled)
+
+        if last is not None and not document_open:
+            self._add_history_row(self._build_resume_row(last))
+        for entry in recents:
+            self._add_history_row(self._build_recent_row(entry))
+        recent_count = len(recents) + (
+            1 if last is not None and not document_open else 0
+        )
+        self._recent_group.setVisible(recent_count > 0)
+
+    def _add_history_row(self, row: _HistoryRow, layout: QVBoxLayout | None = None) -> None:
+        target = layout if layout is not None else self._recent_rows_layout
+        if target is self._workspace_rows_layout:
+            # Keep the save action last in its group.
+            target.insertWidget(target.count() - 1, row)
+        else:
+            target.addWidget(row)
+        self._history_rows.append(row)
+
+    def _build_workspace_row(self, entry: WorkspaceEntryView) -> _HistoryRow:
+        row = _HistoryRow(clickable=entry.main_exists)
+        row.setObjectName("WorkspaceNamedRow")
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(8, 5, 8, 5)
+        layout.setSpacing(6)
+
+        name = QLabel(entry.name)
+        name.setObjectName("HistoryRowName")
+        layout.addWidget(name)
+        if entry.reference_count:
+            plural = "s" if entry.reference_count != 1 else ""
+            refs = QLabel(f"+ {entry.reference_count} ref{plural}")
+            refs.setObjectName("HistoryRowDetail")
+            layout.addWidget(refs)
+        layout.addStretch(1)
+
+        if entry.main_exists:
+            action = QLabel("Open ▸")
+            action.setObjectName("HistoryRowAction")
+            layout.addWidget(action)
+            row.setToolTip(
+                "Open this workspace: main document + references"
+            )
+            row.clicked.connect(
+                lambda name=entry.name: self.workspace_open_requested.emit(name)
+            )
+        else:
+            chip = QLabel("Main not found")
+            chip.setObjectName("HistoryRowChip")
+            layout.addWidget(chip)
+            row.setToolTip("This workspace's main document is gone from disk")
+
+        rename = QPushButton("Rename")
+        rename.setObjectName("HistoryRowButton")
+        rename.clicked.connect(
+            lambda _=False, name=entry.name: self.workspace_rename_requested.emit(name)
+        )
+        layout.addWidget(rename)
+        row.add_hover_action(rename)
+        remove = QPushButton("Remove")
+        remove.setObjectName("HistoryRowButton")
+        remove.setToolTip("Remove this workspace (its files are not touched)")
+        remove.clicked.connect(
+            lambda _=False, name=entry.name: self.workspace_remove_requested.emit(name)
+        )
+        layout.addWidget(remove)
+        row.add_hover_action(remove)
+        return row
+
+    def _build_resume_row(self, last: LastWorkspaceView) -> _HistoryRow:
+        row = _HistoryRow(clickable=last.main_exists)
+        row.setObjectName("ResumeRow")
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(8, 5, 8, 5)
+        layout.setSpacing(6)
+
+        name = QLabel(last.label)
+        name.setObjectName("HistoryRowName")
+        layout.addWidget(name)
+        if last.reference_count:
+            plural = "s" if last.reference_count != 1 else ""
+            refs = QLabel(f"+ {last.reference_count} ref{plural}")
+            refs.setObjectName("HistoryRowDetail")
+            layout.addWidget(refs)
+        layout.addStretch(1)
+
+        if last.main_exists:
+            action = QLabel("Reopen ▸")
+            action.setObjectName("HistoryRowAction")
+            layout.addWidget(action)
+            row.setToolTip("Reopen the last workspace: main document + references")
+            row.clicked.connect(self.resume_last_requested)
+        else:
+            _strike(name)
+            chip = QLabel("Not found")
+            chip.setObjectName("HistoryRowChip")
+            layout.addWidget(chip)
+            row.setToolTip("The last workspace's main document is gone from disk")
+        return row
+
+    def _build_recent_row(self, entry: RecentEntryView) -> _HistoryRow:
+        row = _HistoryRow(clickable=entry.exists)
+        row.setObjectName("RecentRow")
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(8, 4, 8, 4)
+        layout.setSpacing(6)
+
+        name = QLabel(entry.name)
+        name.setObjectName("HistoryRowName")
+        layout.addWidget(name)
+        # _PathLabel, not a bare QLabel: a long folder must elide with an
+        # ellipsis rather than clip mid-character against the Pin button.
+        folder = _PathLabel(entry.folder)
+        folder.setObjectName("HistoryRowDetail")
+        layout.addWidget(folder, 1)
+
+        if entry.exists:
+            row.setToolTip(entry.path)
+            row.clicked.connect(
+                lambda path=entry.path: self.recent_open_requested.emit(path)
+            )
+            pin = QPushButton("Pin")
+            pin.setObjectName("HistoryRowButton")
+            pin.setToolTip("Pin as reference")
+            pin.clicked.connect(
+                lambda _=False, path=entry.path: self.recent_pin_requested.emit(path)
+            )
+            layout.addWidget(pin)
+        else:
+            _strike(name)
+            row.setToolTip(f"{entry.path} — not found on disk")
+            chip = QLabel("Not found")
+            chip.setObjectName("HistoryRowChip")
+            layout.addWidget(chip)
+            remove = QPushButton("✕")
+            remove.setObjectName("HistoryRowButton")
+            remove.setToolTip("Remove from Recent")
+            remove.clicked.connect(
+                lambda _=False, path=entry.path: self.recent_remove_requested.emit(path)
+            )
+            layout.addWidget(remove)
+        return row
 
     def _build_pane(self) -> QWidget:
         """The white pane: the main-document and reference tinted sections,

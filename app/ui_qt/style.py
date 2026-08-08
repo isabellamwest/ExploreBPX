@@ -402,6 +402,31 @@ QPushButton#WorkspaceOpen {
     padding: 5px 10px; text-align: left;
 }
 QPushButton#WorkspaceOpen:hover { background: #eef1f4; }
+/* Recent / Workspaces history rows: white chips like the Open button, the
+   whole row a click target. The resume row is the group's one emphasised
+   chip -- stronger border, accent "Reopen ▸" -- everything else stays
+   quiet. Missing files keep the chip shape but fade and go dashed; their
+   struck-through name is set in the font, not here. */
+QFrame#RecentRow, QFrame#ResumeRow, QFrame#WorkspaceNamedRow {
+    background: #ffffff; border: 1px solid #d0d7de; border-radius: 6px;
+}
+QFrame#ResumeRow, QFrame#WorkspaceNamedRow { border-color: #9aa7b4; }
+QFrame#RecentRow:hover, QFrame#ResumeRow:hover,
+QFrame#WorkspaceNamedRow:hover { background: #eef1f4; }
+/* The Workspaces group's save action shares the New chooser's flat-row
+   language; disabled states its reason in the tooltip, quietly here. */
+QPushButton[modelOption="true"]:disabled { color: #8c959f; }
+/* The save-workspace dialog's what-is-remembered note. */
+QLabel#WorkspaceSaveNote { color: #57606a; font-size: ${meta}px; }
+QLabel#HistoryRowName { font-weight: ${semibold}; }
+QLabel#HistoryRowDetail { color: #57606a; font-size: ${meta}px; }
+QLabel#HistoryRowAction { color: #1f6feb; font-size: ${meta}px; }
+QLabel#HistoryRowChip { color: #8c959f; font-size: ${micro}px; }
+QPushButton#HistoryRowButton {
+    background: transparent; border: none; padding: 1px 4px;
+    color: #57606a; font-size: ${meta}px;
+}
+QPushButton#HistoryRowButton:hover { background: #e8eaed; border-radius: 4px; }
 /* One New-chooser model row: flat bold name button over a muted descriptor
    (list-row language). Property selector on purpose -- the buttons keep
    their per-model NewButton_{model} objectNames as the test/driver seam,
