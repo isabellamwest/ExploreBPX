@@ -170,24 +170,27 @@ def test_opening_from_workspace_page_goes_through_discard_guard(
     assert d.status_text() == original_status
 
 
-def test_document_card_shows_validity_and_contents(app_driver, valid_spm_path):
+def test_main_card_shows_validity_and_contents(app_driver, valid_spm_path):
     app_driver.open(valid_spm_path)
-    ws = app_driver._w._workspace
-    assert ws._info_badge.text() == "Valid"
-    assert not ws._info_badge.isHidden()
+    assert app_driver.workspace_validity_text() == "Valid"
+    assert app_driver.workspace_main_name() == valid_spm_path.name
     # section/parameter counts come straight from the document, not invented.
     doc = app_driver._w._state.active.document
-    assert ws._fact_contents.text() == (
-        f"{doc.section_count} sections · {doc.parameter_count} parameters"
+    assert (
+        f"Contents: {doc.section_count} sections · {doc.parameter_count} parameters"
+        in app_driver.workspace_info_text()
     )
 
 
-def test_document_card_badge_reports_errors(app_driver, invalid_bpx_path):
+def test_main_card_reports_errors_and_offers_the_route_to_them(
+    app_driver, invalid_bpx_path
+):
     app_driver.open(invalid_bpx_path)
-    ws = app_driver._w._workspace
     doc = app_driver._w._state.active.document
     assert not doc.is_valid
-    assert ws._info_badge.text() == "1 error"
+    assert app_driver.workspace_validity_text() == "1 error"
+    # The page is not a dead end: the errors carry their own way to read them.
+    assert app_driver.issue_route_text() == "1 error · why? ▸"
 
 
 def test_document_card_badge_matches_partitioned_count_not_raw_diagnostics(
@@ -211,18 +214,18 @@ def test_document_card_badge_matches_partitioned_count_not_raw_diagnostics(
     workfile.write_text(json.dumps(raw), encoding="utf-8")
 
     app_driver.open_as_is(workfile)  # the base fixture is legacy BPX 0.1
-    ws = app_driver._w._workspace
     doc = app_driver._w._state.active.document
     assert (doc.error_count, doc.warning_count) == (4, 1), "premise: raw counts are 4/1"
-    assert ws._info_badge.text() == "3 errors, 1 warning"
+    assert app_driver.workspace_validity_text() == "3 errors, 1 warning"
 
 
-def test_document_card_is_blank_with_no_document(app_driver):
-    ws = app_driver._w._workspace
-    assert not ws._info_empty.isHidden()
-    assert ws._info_empty.text() == "No document open"
-    assert ws._info_badge.isHidden()
-    assert ws._fact_band.isHidden()
+def test_board_and_strip_are_blank_with_no_document(app_driver):
+    d = app_driver
+    assert d.workspace_info_text() == "No document open"
+    assert d.workspace_main_name() == "No document open"
+    assert d.workspace_validity_text() == ""
+    assert d.issue_route_text() == ""
+    assert not d.workspace_record_visible()
 
 
 def test_new_chooser_offers_exactly_the_supported_models(app_driver):
@@ -539,9 +542,8 @@ def test_document_card_names_what_is_still_outstanding(app_driver):
     Inspector uses for a parameter in that state."""
     app_driver._w._new("DFN")
     assert app_driver._w._state.active.document.validation_completed is False
-    ws = app_driver._w._workspace
 
-    text = ws._info_badge.text()
+    text = app_driver.workspace_validity_text()
     assert text.startswith("Not checked · ")
     assert text.endswith(" incomplete")
 
@@ -564,13 +566,13 @@ def test_an_aborted_run_badges_not_checked_never_valid(
     d = app_driver.open(path)
 
     assert d._w._state.active.document.validation_completed is False
-    assert d._w._workspace._info_badge.text() == "Not checked · 1 incomplete"
+    assert d.workspace_validity_text() == "Not checked · 1 incomplete"
 
 
 def test_a_complete_document_says_only_valid(app_driver, valid_spm_path):
     app_driver.open(valid_spm_path)
 
-    assert "incomplete" not in app_driver._w._workspace._info_badge.text()
+    assert "incomplete" not in app_driver.workspace_validity_text()
 
 
 # --- the Phase 4 record: editable identity rows + the fact plaque ----------

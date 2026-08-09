@@ -73,10 +73,11 @@ from .diagnostics_panel import DiagnosticsPanel
 from .file_facts import file_facts
 from .workspace_panel import (
     AT_CAP_MESSAGE,
-    LastWorkspaceView,
+    UNTITLED_WORKSPACE,
+    MissingFileView,
     RecentEntryView,
-    WorkspaceEntryView,
     WorkspacePanel,
+    WorkspaceRowView,
 )
 
 _NO_DOCUMENT_TEXT = "No document"
@@ -211,11 +212,12 @@ class MainWindow(QMainWindow):
         #: test teardown and by shutdown paths that already decided the
         #: document's fate; never set by user-facing code.
         self._suppress_close_guard = False
-        #: Which named workspace the current session was opened from, if
-        #: any -- only the Save-workspace dialog's name prefill, so saving
-        #: an opened workspace again is one step. Cleared by every ordinary
-        #: open (``_finish_open``), set back by a named restore.
-        self._opened_workspace_name: str | None = None
+        #: Files the current workspace remembers but could not open -- the
+        #: missing-file banner's contents, recomputed on every restore and
+        #: cleared by every ordinary open. Held here rather than in the
+        #: store: a file that is missing now may be back next launch, so it
+        #: is a fact about this session, not about the workspace.
+        self._missing_files: list[MissingFileView] = []
 
         self._tree = TreePanel()
         self._params = ParameterListPanel()
@@ -435,11 +437,11 @@ class MainWindow(QMainWindow):
         else:
             self._show_page(_EDITOR_PAGE_INDEX)
 
-        # First paint of the rail's Recent group, and the one-time notice
+        # First paint of the rail's workspace groups, and the one-time notice
         # when the persistent history could not be read (honesty rule: the
         # reset is announced, not silent). Deferred a tick so the toast
         # positions against a shown window.
-        self._refresh_workspace_history()
+        self._refresh_workspace_rail()
         history = self._state.history
         if history is not None and history.load_failed:
             QTimer.singleShot(
@@ -500,14 +502,25 @@ class MainWindow(QMainWindow):
         self._workspace.new_from_file_requested.connect(self._new_from_file)
         self._workspace.remove_reference_requested.connect(self._on_remove_reference_requested)
         self._workspace.identity_edited.connect(self._on_identity_edited)
-        self._workspace.resume_last_requested.connect(self._on_resume_last)
-        self._workspace.recent_open_requested.connect(self._on_recent_open)
         self._workspace.recent_pin_requested.connect(self._on_recent_pin)
-        self._workspace.recent_remove_requested.connect(self._on_recent_remove)
         self._workspace.workspace_open_requested.connect(self._on_workspace_open)
-        self._workspace.workspace_save_requested.connect(self._on_workspace_save)
-        self._workspace.workspace_rename_requested.connect(self._on_workspace_rename)
+        self._workspace.workspace_name_requested.connect(self._on_workspace_name)
+        self._workspace.workspace_duplicate_requested.connect(
+            self._on_workspace_duplicate
+        )
         self._workspace.workspace_remove_requested.connect(self._on_workspace_remove)
+        self._workspace.workspace_locate_requested.connect(self._on_workspace_locate)
+        self._workspace.new_workspace_requested.connect(self._on_new_workspace)
+        self._workspace.workspace_renamed.connect(self._on_workspace_renamed)
+        self._workspace.edit_requested.connect(
+            lambda: self._show_page(_EDITOR_PAGE_INDEX)
+        )
+        self._workspace.diagnostics_requested.connect(
+            lambda: self._show_page(_DIAGNOSTICS_PAGE_INDEX)
+        )
+        self._workspace.diff_requested.connect(self._on_diff_requested)
+        self._workspace.locate_requested.connect(self._on_locate_missing)
+        self._workspace.forget_missing_requested.connect(self._on_forget_missing)
 
     # --- navigation -----------------------------------------------------
     def _on_view_changed(self, page_index: int) -> None:
@@ -906,9 +919,9 @@ class MainWindow(QMainWindow):
     def _finish_open(self) -> None:
         """The post-install half of every open: reset per-document view
         state, refresh, land on the Editor page."""
-        # An ordinary open leaves any named-workspace association behind; a
-        # named restore reasserts it right after this runs.
-        self._opened_workspace_name = None
+        # An ordinary open answers whatever the banner was reporting: the
+        # board now holds a document that did open.
+        self._missing_files = []
         self._params.reset_expansion_state()
         self._diagnostics.reset_view_state()
         self._refresh_all()
@@ -1116,67 +1129,67 @@ class MainWindow(QMainWindow):
             return OpenIntent.ADD_REFERENCE
         return OpenIntent.CANCEL
 
-    def _on_recent_open(self, path_text: str) -> None:
-        """A Recent row was clicked: the same guarded route as the Open
-        dialog and drag-and-drop (replace-or-pin intent, dirty guard, legacy
-        prompt). History rows are shortcuts to the same doors, never side
-        doors."""
+    def _on_recent_pin(self, path_text: str) -> None:
+        """A recent file picked from the board's ＋ menu: dock it as a
+        reference, with the same outcome toasts as every other pin route."""
         path = Path(path_text)
         if not path.exists():
-            # The click raced a deletion; answer it, then repaint the row
-            # struck-through.
+            # The click raced a deletion; answer it, then drop the dead row
+            # so the menu cannot offer it again.
             self._toast.show_message(f"{path.name} is gone from disk")
-            self._refresh_workspace_history()
+            if self._state.history is not None:
+                self._state.history.remove_recent(path_text)
+            self._refresh_workspace_rail()
             return
-        self._open_chosen_path(path)
-
-    def _on_recent_pin(self, path_text: str) -> None:
-        """A Recent row's Pin: dock the file as a reference, with the same
-        outcome toasts as every other pin route."""
-        self._open_reference_path(Path(path_text))
-
-    def _on_recent_remove(self, path_text: str) -> None:
-        """The missing row's explicit ✕ -- rows are never pruned silently,
-        so this is the one way a dead path leaves the list."""
-        if self._state.history is not None:
-            self._state.history.remove_recent(path_text)
-        self._refresh_workspace_history()
-
-    def _on_resume_last(self) -> None:
-        history = self._state.history
-        if history is None or history.last_workspace is None:
-            return
-        self._restore_workspace(history.last_workspace)
+        self._open_reference_path(path)
 
     def _restore_workspace(self, record: WorkspaceRecord) -> None:
         """Reopen a remembered workspace whole: main document first, then
         its references, replacing the pinned set.
 
-        Partial restores are reported, never hidden: whatever exists opens,
-        and a toast names what did not come back. A cancelled prompt along
-        the way (unsaved-work guard, legacy prompt) stops the whole restore
-        with the current workspace untouched.
+        Partial restores are reported, never hidden. What exists opens, and
+        what does not is named in the banner with Locate…/Remove beside it
+        -- including the main document, which used to make the whole
+        workspace refuse to open. Refusing threw away the arrangement the
+        record exists to protect over one moved file.
+
+        A cancelled prompt along the way (unsaved-work guard, legacy
+        prompt) stops the whole restore with the current workspace
+        untouched.
         """
         if not self._confirm_discard_if_dirty():
             return
-        try:
-            if not self._open_recorded_main(record.main):
+        main_path = Path(record.main.path)
+        # Entering first is what makes the opens below land *in* this
+        # workspace instead of starting another, and it leaves the record
+        # pointing at its main even when that main never opens.
+        self._state.enter_workspace(record.id)
+        missing: list[MissingFileView] = []
+        if main_path.exists():
+            try:
+                if not self._open_recorded_main(record.main):
+                    return
+            except (LoadError, OSError) as exc:
+                QMessageBox.critical(self, "Cannot open file", str(exc))
                 return
-        except (LoadError, OSError) as exc:
-            QMessageBox.critical(self, "Cannot open file", str(exc))
-            return
-        if record.name is not None:
-            self._opened_workspace_name = record.name
-        skipped = self._restore_references(record.references)
+        else:
+            self._state.close()
+            self._state.enter_workspace(record.id)
+            missing.append(
+                MissingFileView(
+                    label=main_path.name, path=str(main_path), reference_index=None
+                )
+            )
+        missing.extend(self._restore_references(record.references))
+        self._missing_files = missing
         # _finish_open already refreshed, but the reference swap happened
         # after it -- refresh again so every surface shows the restored set.
         self._refresh_all()
-        if skipped:
-            plural = "s" if len(skipped) != 1 else ""
-            self._toast.show_message(
-                f"{len(skipped)} reference{plural} not restored: "
-                + ", ".join(skipped)
-            )
+        if missing:
+            # The banner is the report, so the page carrying it is where the
+            # restore has to land -- a toast would be gone before the user
+            # could act on Locate….
+            self._show_page(_WORKSPACE_PAGE_INDEX)
 
     def _open_recorded_main(self, main: MainRecord) -> bool:
         """Open a workspace's recorded main document, honouring its recorded
@@ -1202,100 +1215,231 @@ class MainWindow(QMainWindow):
             self.open_document(path)
         return self._state.active is not before
 
-    def _restore_references(self, records: tuple) -> list[str]:
+    def _restore_references(self, records: tuple) -> list[MissingFileView]:
         """Replace the pinned references with a workspace's recorded ones,
         in saved order. Removal goes through ``remove_reference`` (not a
-        bare list clear) so the history record tracks every step. Returns
-        display names of what did not come back -- missing files, unknown
-        library ids, refused pins -- for the caller to announce."""
+        bare list clear) so the workspace record tracks every step. Returns
+        one view per reference that did not come back -- missing files,
+        unknown library ids, refused pins -- carrying the index the record
+        holds it at, which is what Locate… and Remove act on."""
         for reference in list(self._state.references):
             self._state.remove_reference(reference)
-        skipped: list[str] = []
-        for ref in records:
+        missing: list[MissingFileView] = []
+        for index, ref in enumerate(records):
             if ref.kind == "library":
-                label = ref.set_id
                 try:
                     outcome = self._state.pin_reference_set(ref.set_id)
                 except KeyError:
-                    skipped.append(label)
+                    missing.append(
+                        MissingFileView(
+                            label=ref.set_id, path=ref.set_id, reference_index=index
+                        )
+                    )
                     continue
             else:
-                label = Path(ref.path).name
                 try:
                     outcome = self._state.pin_reference(Path(ref.path))
                 except (LoadError, OSError):
-                    skipped.append(label)
+                    missing.append(
+                        MissingFileView(
+                            label=Path(ref.path).name,
+                            path=ref.path,
+                            reference_index=index,
+                        )
+                    )
                     continue
             if outcome is not PinReferenceOutcome.ADDED:
-                skipped.append(label)
-        return skipped
+                label = ref.set_id if ref.kind == "library" else Path(ref.path).name
+                missing.append(
+                    MissingFileView(
+                        label=label,
+                        path=ref.path or ref.set_id,
+                        reference_index=index,
+                    )
+                )
+        return missing
 
-    def _on_workspace_open(self, name: str) -> None:
+    def _on_new_workspace(self) -> None:
+        """New workspace: a separate line of work, on an empty board.
+
+        The workspace being left is not discarded -- it is already under
+        Recent (or in Workspaces if named) -- so there is nothing to confirm
+        about the workspace itself. The document's own unsaved changes are a
+        different question, and the existing guard asks it first.
+        """
+        if not self._confirm_discard_if_dirty():
+            return
+        self._state.new_workspace()
+        self._missing_files = []
+        self._refresh_all()
+        self._show_page(_WORKSPACE_PAGE_INDEX)
+
+    def _on_workspace_open(self, workspace_id: str) -> None:
         history = self._state.history
-        record = history.named(name) if history is not None else None
+        record = history.by_id(workspace_id) if history is not None else None
         if record is None:
             return
         self._restore_workspace(record)
 
-    def _on_workspace_save(self) -> None:
-        """Save the current workspace under a name (snapshot semantics:
-        later reference changes touch only the automatic record until the
-        user saves again). The dialog names exactly what is remembered."""
+    def _on_workspace_name(self, workspace_id: str) -> None:
+        """The rail row's Name/Rename. Naming an untitled workspace promotes
+        it out of Recent for good; renaming a named one is the same act on a
+        workspace that has already been promoted, so it is the same dialog."""
         history = self._state.history
-        record = self._state.current_workspace_record()
-        if history is None or record is None:
+        record = history.by_id(workspace_id) if history is not None else None
+        if record is None:
             return
-        session = self._state.active
-        prefill = self._opened_workspace_name or (
-            Path(record.main.path).stem if session is not None else ""
-        )
-        name = self._ask_workspace_name(
-            "Save workspace", prefill, self._workspace_summary_text(record)
-        )
-        if name is None:
-            return
-        if history.named(name) is not None and not self._confirm_replace_workspace(
-            name
-        ):
-            return
-        history.save_named(
-            WorkspaceRecord(
-                main=record.main,
-                references=record.references,
-                name=name,
-                saved_at=datetime.now().isoformat(timespec="seconds"),
+        prefill = record.name or Path(record.main.path).stem
+        while True:
+            name = self._ask_workspace_name(
+                "Rename workspace" if record.is_named else "Name workspace",
+                prefill,
+                self._workspace_summary_text(record),
             )
-        )
-        self._opened_workspace_name = name
-        self._refresh_workspace_history()
-        self._toast.show_message(f"Saved workspace '{name}'")
+            if name is None or name == record.name:
+                return
+            if not history.name_in_use(name, excluding=workspace_id):
+                break
+            QMessageBox.warning(
+                self,
+                "Name in use",
+                f"Another workspace is already called '{name}'.",
+            )
+            prefill = name
+        history.keep(workspace_id, name)
+        self._refresh_workspace_rail()
+        self._update_workspace_name()
 
-    def _on_workspace_rename(self, name: str) -> None:
+    def _on_workspace_renamed(self, name: str) -> None:
+        """The board header's click-to-rename. Same rule as the rail's, said
+        inline instead of in a dialog: the field itself carries the refusal
+        and hands the draft back."""
         history = self._state.history
-        if history is None or history.named(name) is None:
+        workspace_id = self._state.workspace_id
+        if history is None or workspace_id is None:
             return
-        new = self._ask_workspace_name(
-            "Rename workspace", name, "The workspace itself is unchanged."
-        )
-        if new is None or new == name:
+        name = name.strip()
+        if not name:
+            # Clearing the field is not a request to un-name a workspace;
+            # there is no such act, and Remove is a different thing entirely.
+            self._update_workspace_name()
             return
-        if history.named(new) is not None and not self._confirm_replace_workspace(new):
+        if history.name_in_use(name, excluding=workspace_id):
+            self._workspace.reject_workspace_name("That name is in use", name)
             return
-        history.rename_named(name, new)
-        if self._opened_workspace_name == name:
-            self._opened_workspace_name = new
-        self._refresh_workspace_history()
+        history.keep(workspace_id, name)
+        self._refresh_workspace_rail()
+        self._update_workspace_name()
 
-    def _on_workspace_remove(self, name: str) -> None:
+    def _on_workspace_duplicate(self, workspace_id: str) -> None:
+        """Fork a workspace, leaving the original exactly as it is -- the
+        escape hatch for experimenting when the workspace itself is live."""
         history = self._state.history
-        if history is None or not self._confirm_remove_workspace(name):
+        if history is None or history.by_id(workspace_id) is None:
             return
-        history.remove_named(name)
-        self._refresh_workspace_history()
+        copy = history.duplicate(workspace_id)
+        self._refresh_workspace_rail()
+        self._toast.show_message(f"Duplicated as '{copy.name or UNTITLED_WORKSPACE}'")
+
+    def _on_workspace_remove(self, workspace_id: str) -> None:
+        history = self._state.history
+        record = history.by_id(workspace_id) if history is not None else None
+        if record is None:
+            return
+        label = record.name or Path(record.main.path).name
+        if not self._confirm_remove_workspace(label):
+            return
+        was_current = self._state.workspace_id == workspace_id
+        history.remove(workspace_id)
+        if was_current:
+            # Its board would otherwise keep showing a workspace that no
+            # longer exists anywhere.
+            self._state.new_workspace()
+            self._missing_files = []
+        self._refresh_all()
+
+    def _on_workspace_locate(self, workspace_id: str) -> None:
+        """The rail row's Locate…: repoint a workspace whose main has moved,
+        without making the user rebuild the arrangement by hand."""
+        history = self._state.history
+        record = history.by_id(workspace_id) if history is not None else None
+        if record is None:
+            return
+        path = self._ask_locate_path(Path(record.main.path).name)
+        if path is None:
+            return
+        history.relocate_main(workspace_id, str(path))
+        self._refresh_workspace_rail()
+
+    def _on_locate_missing(self, reference_index: object) -> None:
+        """The banner's Locate…: the same repointing, for whichever file the
+        row names -- the main document or one reference."""
+        history = self._state.history
+        workspace_id = self._state.workspace_id
+        if history is None or workspace_id is None:
+            return
+        entry = self._missing_entry(reference_index)
+        if entry is None:
+            return
+        path = self._ask_locate_path(entry.label)
+        if path is None:
+            return
+        if reference_index is None:
+            history.relocate_main(workspace_id, str(path))
+        else:
+            history.relocate_reference(workspace_id, reference_index, str(path))
+        record = history.by_id(workspace_id)
+        if record is not None:
+            self._restore_workspace(record)
+
+    def _on_forget_missing(self, reference_index: object) -> None:
+        """The banner's Remove: forget a file the workspace can no longer
+        find. The file itself is never touched -- only the pointer to it."""
+        history = self._state.history
+        workspace_id = self._state.workspace_id
+        if history is None or workspace_id is None:
+            return
+        if reference_index is None:
+            # Forgetting the main leaves a workspace with nothing to be
+            # about, so this forgets the whole workspace instead of leaving
+            # a record that can never open.
+            self._on_workspace_remove(workspace_id)
+            return
+        history.remove_reference(workspace_id, reference_index)
+        self._missing_files = [
+            entry for entry in self._missing_files
+            if entry.reference_index != reference_index
+        ]
+        self._refresh_all()
+
+    def _missing_entry(self, reference_index: object) -> MissingFileView | None:
+        for entry in self._missing_files:
+            if entry.reference_index == reference_index:
+                return entry
+        return None
+
+    def _ask_locate_path(self, label: str) -> Path | None:
+        """Where is *label* now? Overridable seam: headless tests
+        monkeypatch this method directly, the ``_ask_open_intent``
+        convention."""
+        name, _ = QFileDialog.getOpenFileName(
+            self, f"Locate {label}", "", BPX_FILTER
+        )
+        return Path(name) if name else None
+
+    def _on_diff_requested(self, reference: ReferenceSnapshot) -> None:
+        """A slot's differ count: show this reference's diff against the
+        main, on the page that exists to read it."""
+        for index, pinned in enumerate(self._state.references):
+            if pinned is reference:
+                self._source_reference_index = index
+                break
+        self._apply_comparison()
+        self._show_page(_SOURCE_PAGE_INDEX)
 
     def _workspace_summary_text(self, record: WorkspaceRecord) -> str:
-        """The save dialog's note: exactly what the entry will remember --
-        and, honesty rule 2 verbatim, what it never stores."""
+        """The name dialog's note: exactly what the entry remembers -- and,
+        honesty rule 2 verbatim, what it never stores."""
         main_name = Path(record.main.path).name
         labels = [
             ref.set_id if ref.kind == "library" else Path(ref.path).name
@@ -1309,13 +1453,13 @@ class MainWindow(QMainWindow):
             remembered = main_name
         return (
             f"Remembers {remembered}. Paths only — no file content, "
-            "no validation results."
+            "no validation results. Naming it keeps it for good."
         )
 
     def _ask_workspace_name(
         self, title: str, prefill: str, summary: str
     ) -> str | None:
-        """The one small workspace-name dialog (save and rename alike).
+        """The one small workspace-name dialog (naming and renaming alike).
 
         Overridable seam: headless tests monkeypatch this method directly,
         the ``_ask_open_intent`` convention. Returns the stripped name, or
@@ -1341,25 +1485,12 @@ class MainWindow(QMainWindow):
         name = edit.text().strip()
         return name or None
 
-    def _confirm_replace_workspace(self, name: str) -> bool:
-        """Overwriting a named workspace is explicit, never silent."""
-        return (
-            QMessageBox.question(
-                self,
-                "Replace workspace",
-                f"Replace workspace '{name}'?",
-                QMessageBox.Yes | QMessageBox.Cancel,
-                QMessageBox.Cancel,
-            )
-            == QMessageBox.Yes
-        )
-
-    def _confirm_remove_workspace(self, name: str) -> bool:
+    def _confirm_remove_workspace(self, label: str) -> bool:
         return (
             QMessageBox.question(
                 self,
                 "Remove workspace",
-                f"Remove workspace '{name}'? The files themselves are "
+                f"Remove workspace '{label}'? The files themselves are "
                 "not touched.",
                 QMessageBox.Yes | QMessageBox.Cancel,
                 QMessageBox.Cancel,
@@ -2058,6 +2189,9 @@ class MainWindow(QMainWindow):
         document = session.document if session else None
         filename = self._fallback_filename(session) if document is not None else None
         dirty = session.dirty if session else False
+        # The banner has to be set before refresh(): the main card asks it
+        # whether an absent document is missing or merely not opened yet.
+        self._workspace.set_missing_files(self._missing_files)
         self._workspace.refresh(
             document,
             filename,
@@ -2069,54 +2203,70 @@ class MainWindow(QMainWindow):
             load_record=session.load_record if session else None,
             never_saved=session is not None and session.backing_file is None,
             read_only=session is not None and session.read_only,
+            differ_counts=self._differ_counts(),
         )
-        self._refresh_workspace_history()
+        self._update_workspace_name()
+        self._refresh_workspace_rail()
 
-    def _refresh_workspace_history(self) -> None:
-        """Sync the rail's Recent group with the persistent history.
+    def _differ_counts(self) -> list[int]:
+        """How many values differ between the main and each pinned
+        reference, in pin order -- the count ``core.compare`` already
+        computes for every comparison and which, until the board's per-slot
+        route existed, was only ever a tooltip."""
+        return [comparison.differ_count for comparison in self._comparisons]
+
+    def _update_workspace_name(self) -> None:
+        record = (
+            self._state.history.current() if self._state.history is not None else None
+        )
+        self._workspace.set_workspace_name(record.name if record is not None else None)
+
+    def _refresh_workspace_rail(self) -> None:
+        """Sync the rail's two workspace groups with the persistent store.
 
         Existence is probed here, at render time (each refresh of the
         Workspace page, not a timer) -- the panel receives pre-digested
-        views and only shows the verdict. With no store injected the group
-        simply stays hidden.
+        views and only shows the verdict. With no store injected both
+        groups render their empty states, which is the truth: there is no
+        history to show.
         """
         history = self._state.history
-        document_open = self._state.active is not None
         if history is None:
-            self._workspace.set_history(None, [], document_open)
+            self._workspace.set_workspaces([], [])
             return
-        last_view = None
-        last = history.last_workspace
-        if last is not None:
-            main_path = Path(last.main.path)
-            last_view = LastWorkspaceView(
-                label=main_path.name,
-                reference_count=len(last.references),
-                main_exists=main_path.exists(),
-            )
-        recents = [
-            RecentEntryView(
-                path=text,
-                name=Path(text).name,
-                folder=_folder_display(text),
-                exists=Path(text).exists(),
-            )
-            for text in history.recent_files
-        ]
-        workspaces = [
-            WorkspaceEntryView(
-                name=workspace.name,
+        # "open now" means "this is what the board is showing", so it is
+        # earned by the board and not merely by the stored current id: on a
+        # launch that has not restored anything the board is empty, and no
+        # row should claim otherwise.
+        board_showing = (
+            self._state.active is not None
+            or bool(self._state.references)
+            or bool(self._missing_files)
+        )
+        current_id = history.current_id if board_showing else None
+
+        def view(workspace) -> WorkspaceRowView:
+            return WorkspaceRowView(
+                id=workspace.id,
+                label=workspace.name or Path(workspace.main.path).name,
+                named=workspace.is_named,
                 reference_count=len(workspace.references),
                 main_exists=Path(workspace.main.path).exists(),
+                is_current=workspace.id == current_id,
             )
-            for workspace in history.workspaces
-        ]
-        self._workspace.set_history(
-            last_view,
-            recents,
-            document_open,
-            workspaces=workspaces,
-            save_enabled=self._state.current_workspace_record() is not None,
+
+        self._workspace.set_workspaces(
+            [view(workspace) for workspace in history.workspaces],
+            [view(workspace) for workspace in history.recent_workspaces],
+            recent_files=[
+                RecentEntryView(
+                    path=text,
+                    name=Path(text).name,
+                    folder=_folder_display(text),
+                    exists=Path(text).exists(),
+                )
+                for text in history.recent_files
+            ],
         )
 
     def _on_identity_edited(self, field: str, text: str) -> None:

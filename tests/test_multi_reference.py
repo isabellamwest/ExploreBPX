@@ -109,7 +109,9 @@ def test_one_row_per_pin_in_pin_order(three_pins):
     d = three_pins
     assert d.pinned_reference_names() == ["chen.json", "marquis.json", "okane.json"]
     assert d.reference_row_badges() == ["Ch", "Ma", "Ok"]
-    assert d.reference_cap_text() == f"3 of {MAX_PINNED_REFERENCES} pinned"
+    # The slots are the drawn cap, so "how many are left" is a count of
+    # empty slots rather than a counter that has to be read.
+    assert d.empty_slot_count() == MAX_PINNED_REFERENCES - 3
 
 
 def test_rows_start_collapsed_and_click_expands_the_full_record(three_pins):
@@ -141,21 +143,25 @@ def test_removing_a_pin_shifts_the_later_badges(three_pins):
 
     assert d.pinned_reference_names() == ["marquis.json", "okane.json"]
     assert d.reference_row_badges() == ["Ma", "Ok"]
-    assert d.reference_cap_text() == f"2 of {MAX_PINNED_REFERENCES} pinned"
+    assert d.empty_slot_count() == MAX_PINNED_REFERENCES - 2
 
 
-def test_entry_buttons_disable_at_the_cap(app_driver, tmp_path, monkeypatch):
+def test_the_last_slot_fills_and_there_is_no_plus_left_to_click(
+    app_driver, tmp_path, monkeypatch
+):
+    """At the cap the ＋ simply is not there. Nothing has to explain itself,
+    because nothing looks available -- the slots *are* the limit."""
     d = app_driver
     d.open(_write(tmp_path, "main.json", _MAIN))
     for index in range(MAX_PINNED_REFERENCES):
         _pin(d, monkeypatch, _write(tmp_path, f"ref{index}.json", _REF_A))
 
-    assert d.reference_cap_text() == f"4 of {MAX_PINNED_REFERENCES} pinned"
-    assert not d.reference_entry_buttons_enabled()
+    assert d.empty_slot_count() == 0
+    assert not d.can_add_reference()
 
     d.click_reference_remove(0)
 
-    assert d.reference_entry_buttons_enabled()
+    assert d.can_add_reference()
 
 
 def test_pinning_beyond_the_cap_is_refused_with_a_message(app_driver, tmp_path, monkeypatch):

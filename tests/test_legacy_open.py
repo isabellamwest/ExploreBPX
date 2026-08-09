@@ -160,7 +160,7 @@ def test_as_is_read_only_disables_every_editing_affordance(
 
     ws = w._workspace
     assert ws._fact_status.text() == "Read-only"
-    assert not ws._main_read_only_tag.isHidden()
+    assert not ws._main_card._read_only_tag.isHidden()
     assert ws._info_title._editable is False
     assert ws._info_description._editable is False
     assert ws._info_citation._editable is False

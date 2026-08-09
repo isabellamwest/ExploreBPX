@@ -390,9 +390,66 @@ QWidget#WorkspacePage, QWidget#WorkspacePane { background: #ffffff; }
 /* style.NEUTRAL_WASH / style.REFERENCE_WASH, spelled as literals (see each
    constant's comment for why). */
 QWidget#WorkspaceMainSection { background: #f6f8fa; }
+QWidget#WorkspaceBoardSection { background: #f6f8fa; }
 QWidget#WorkspaceReferenceSection { background: #f8f5fc; }
 QWidget#WorkspaceRail { background: #f3f4f6; border-right: 1px solid #c4cdd5; }
 QFrame#WorkspaceRailDivider { background: #d0d7de; border: none; }
+/* The board: the main card beside four reference slots. The main card is
+   white and solid -- it is the one editable file -- while a slot carries
+   the reference purple's palest tint, so which side of the ⇄ a card is on
+   is legible before a word is read. An empty slot is a dashed outline with
+   nothing in it but its ＋: an invitation, not a control that might fail. */
+QFrame#BoardMainCard {
+    background: #ffffff; border: 1px solid #c4cdd5; border-radius: 6px;
+}
+QFrame#BoardSlotFilled {
+    background: #f8f5fc; border: 1px solid #d5cde6; border-radius: 6px;
+}
+QFrame#BoardSlotFilled:hover { background: #f2ecfa; }
+QFrame#BoardSlotFilled[selected="true"] { border-color: #6f42c1; }
+QFrame#BoardSlotEmpty {
+    background: transparent; border: 1px dashed #c4cdd5; border-radius: 6px;
+}
+QFrame#BoardSlotEmpty:hover { border-color: #9aa7b4; }
+QPushButton#BoardSlotAdd {
+    background: transparent; border: none; color: #8c959f;
+    font-size: ${title}px; padding: 2px 8px;
+}
+QPushButton#BoardSlotAdd:hover { color: #1f6feb; }
+QPushButton#BoardSlotRemove {
+    background: transparent; border: none; color: #8c959f;
+    font-size: ${micro}px; padding: 0 3px;
+}
+QPushButton#BoardSlotRemove:hover { color: #cf222e; }
+QLabel#BoardSlotRole { color: #57606a; font-size: ${micro}px; }
+QLabel#BoardMainName { font-size: ${title}px; font-weight: ${semibold}; }
+QLabel#BoardMainName[ghosted="true"] { color: #8c959f; font-weight: ${regular}; }
+QLabel#BoardSlotName { font-weight: ${semibold}; font-size: ${meta}px; }
+QLabel#BoardSlotModel { color: #57606a; font-size: ${micro}px; }
+QLabel#BoardArrow { color: #8c959f; font-size: ${title}px; }
+/* The page's routes out: link-coloured flat text, never buttons. The page
+   must not be a dead end, but a route is a way on -- not an action. */
+QPushButton#BoardRoute {
+    background: transparent; border: none; padding: 1px 0;
+    color: #1f6feb; font-size: ${meta}px; text-align: left;
+}
+QPushButton#BoardRoute:hover { text-decoration: underline; }
+/* The selected reference's record, beneath the board: the reference wash
+   again, so it reads as belonging to the slot it came from. */
+QWidget#ReferenceRecordPanel { background: #f8f5fc; }
+QLabel#ReferenceRecordTitle { font-weight: ${semibold}; }
+/* The workspace's own name: a page-title rung, click to rename, with the
+   uniqueness refusal inline beneath it rather than in a dialog. */
+QLabel#WorkspaceNameDisplay { font-size: ${title}px; font-weight: ${semibold}; }
+QLabel#WorkspaceNameDisplay[ghosted="true"] { color: #8c959f; font-weight: ${regular}; }
+QLineEdit#WorkspaceNameEditor { font-size: ${title}px; font-weight: ${semibold}; }
+QLabel#WorkspaceNameError { color: #cf222e; font-size: ${meta}px; }
+/* What a workspace remembered but could not open: a warning-tinted band
+   naming each file with Locate…/Remove beside it. */
+QFrame#WorkspaceMissingBanner {
+    background: #fff8e5; border: 1px solid #e8d9a8; border-radius: 6px;
+}
+QLabel#WorkspaceMissingText { color: #6b5b1f; font-size: ${meta}px; }
 /* Rail action buttons: white chips on the shaded rail, the Diagnostics
    strip-chip treatment (never native grey widgets). The old
    Open-as-reference chip moved onto the reference card and takes the
@@ -402,26 +459,36 @@ QPushButton#WorkspaceOpen {
     padding: 5px 10px; text-align: left;
 }
 QPushButton#WorkspaceOpen:hover { background: #eef1f4; }
-/* Recent / Workspaces history rows: white chips like the Open button, the
-   whole row a click target. The resume row is the group's one emphasised
-   chip -- stronger border, accent "Reopen ▸" -- everything else stays
-   quiet. Missing files keep the chip shape but fade and go dashed; their
-   struck-through name is set in the font, not here. */
-QFrame#RecentRow, QFrame#ResumeRow, QFrame#WorkspaceNamedRow {
+/* Workspace rows: white chips like the Open button, the whole row a click
+   target. A named row wears the stronger border -- naming is what makes a
+   workspace permanent, so it is what the rail shows first. The row on the
+   board is the one emphasised chip and answers no click, because it is
+   already open. A missing main keeps the chip shape; its struck-through
+   name is set in the font, not here. */
+QFrame#RecentRow, QFrame#WorkspaceNamedRow {
     background: #ffffff; border: 1px solid #d0d7de; border-radius: 6px;
 }
-QFrame#ResumeRow, QFrame#WorkspaceNamedRow { border-color: #9aa7b4; }
-QFrame#RecentRow:hover, QFrame#ResumeRow:hover,
-QFrame#WorkspaceNamedRow:hover { background: #eef1f4; }
-/* The Workspaces group's save action shares the New chooser's flat-row
-   language; disabled states its reason in the tooltip, quietly here. */
+QFrame#WorkspaceNamedRow { border-color: #9aa7b4; }
+QFrame#RecentRow:hover, QFrame#WorkspaceNamedRow:hover { background: #eef1f4; }
+QFrame#RecentRow[current="true"], QFrame#WorkspaceNamedRow[current="true"] {
+    background: #eef4ff; border-color: #1f6feb;
+}
+/* The rail's flat-row actions share the New chooser's language; disabled
+   states its reason in the tooltip, quietly here. */
 QPushButton[modelOption="true"]:disabled { color: #8c959f; }
-/* The save-workspace dialog's what-is-remembered note. */
+/* The name dialog's what-is-remembered note. */
 QLabel#WorkspaceSaveNote { color: #57606a; font-size: ${meta}px; }
 QLabel#HistoryRowName { font-weight: ${semibold}; }
 QLabel#HistoryRowDetail { color: #57606a; font-size: ${meta}px; }
 QLabel#HistoryRowAction { color: #1f6feb; font-size: ${meta}px; }
 QLabel#HistoryRowChip { color: #8c959f; font-size: ${micro}px; }
+QLabel#HistoryRowPill { color: #1f6feb; font-size: ${micro}px; font-weight: ${semibold}; }
+/* The row glyph: a bar for the main, a dot per reference. Two workspaces
+   over one file but different references are told apart without reading
+   either label. */
+QLabel#WorkspaceGlyph { color: #8c959f; }
+/* Both rail groups stay visible when empty and name the concept instead. */
+QLabel#RailEmptyState { color: #8c959f; font-size: ${meta}px; padding: 0 2px 2px 2px; }
 QPushButton#HistoryRowButton {
     background: transparent; border: none; padding: 1px 4px;
     color: #57606a; font-size: ${meta}px;

@@ -690,18 +690,62 @@ class AppDriver:
         self._qtbot.mouseClick(self._w._workspace._open_button, Qt.LeftButton)
         return self
 
+    def _trigger_add_route(self, text: str) -> "AppDriver":
+        """Pick one route from an empty slot's ＋ menu.
+
+        The menu is built and its action triggered rather than shown: a
+        modal ``exec`` cannot be driven headlessly, and the route's own flow
+        (which is what these tests are about) starts at the action."""
+        menu = self._w._workspace.build_add_menu()
+        for action in menu.actions():
+            if action.text() == text:
+                action.trigger()
+                menu.deleteLater()
+                return self
+        menu.deleteLater()
+        raise AssertionError(f"No {text!r} route in the ＋ menu")
+
     def click_workspace_open_reference(self) -> "AppDriver":
-        """Click the "Open BPX file…" button on the reference card (the
-        old rail "Open File as Reference…" moved onto the card; same
-        objectName/flow, so this seam is stable)."""
-        self._qtbot.mouseClick(self._w._workspace._open_reference_button, Qt.LeftButton)
-        return self
+        """Take the ＋ menu's "Open a BPX file…" route (the old dock button;
+        same flow, so this seam is stable)."""
+        return self._trigger_add_route("Open a BPX file…")
 
     def click_reference_from_library(self) -> "AppDriver":
-        """Click the reference card's "From the reference library…" button
-        (opens the modal ReferenceLibraryDialog -- tests stub its ``exec``)."""
-        self._qtbot.mouseClick(self._w._workspace._reference_library_button, Qt.LeftButton)
-        return self
+        """Take the ＋ menu's reference-library route (opens the modal
+        ReferenceLibraryDialog -- tests stub its ``exec``)."""
+        return self._trigger_add_route("From the reference library…")
+
+    def add_menu_routes(self) -> list[str]:
+        """Every route the ＋ menu currently offers, submenus included by
+        title."""
+        menu = self._w._workspace.build_add_menu()
+        routes = [action.text() for action in menu.actions() if action.text()]
+        menu.deleteLater()
+        return routes
+
+    def add_menu_recent_files(self) -> list[str]:
+        """File names on the ＋ menu's Recent files submenu."""
+        menu = self._w._workspace.build_add_menu()
+        names: list[str] = []
+        for action in menu.actions():
+            if action.menu() is not None:
+                names = [entry.text() for entry in action.menu().actions()]
+        menu.deleteLater()
+        return names
+
+    def pin_recent_file(self, name: str) -> "AppDriver":
+        """Pick *name* from the ＋ menu's Recent files submenu."""
+        menu = self._w._workspace.build_add_menu()
+        for action in menu.actions():
+            if action.menu() is None:
+                continue
+            for entry in action.menu().actions():
+                if entry.text() == name:
+                    entry.trigger()
+                    menu.deleteLater()
+                    return self
+        menu.deleteLater()
+        raise AssertionError(f"No recent file {name!r} in the ＋ menu")
 
     def dock_library_reference(self, set_id: str) -> "AppDriver":
         """Dock bundled reference set *set_id* ("pybamm/chen2020"), driving
@@ -710,173 +754,253 @@ class AppDriver:
         self._w._dock_reference_set(set_id)
         return self
 
-    # --- Workspace References section (multi-reference) ------------------
+    # --- the board's reference slots (multi-reference) --------------------
 
     def _reference_rows(self) -> list:
-        return self._w._workspace._reference_rows
+        """The filled reference slots, in pin order."""
+        return [
+            slot for slot in self._w._workspace._slots if slot.snapshot is not None
+        ]
 
     def _reference_row(self, index: int = 0):
         rows = self._reference_rows()
         if index >= len(rows):
-            raise AssertionError(f"No pinned reference row at index {index} (have {len(rows)})")
+            raise AssertionError(f"No pinned reference at slot {index} (have {len(rows)})")
         return rows[index]
 
     def click_reference_remove(self, index: int = 0) -> "AppDriver":
-        """Click the Remove button on the pinned reference row at *index*."""
+        """Click the ✕ on the reference slot at *index*."""
         self._qtbot.mouseClick(self._reference_row(index)._remove, Qt.LeftButton)
         return self
 
-    # --- Workspace rail history: the Recent group -------------------------
+    def empty_slot_count(self) -> int:
+        """How many reference slots are still free. The slots are the drawn
+        cap, so this replaced the old "n of 4 pinned" counter."""
+        return sum(
+            1 for slot in self._w._workspace._slots if slot.snapshot is None
+        )
 
-    def _history_rows(self) -> list:
-        return self._w._workspace._history_rows
+    def can_add_reference(self) -> bool:
+        """Whether the board still offers a ＋ to click."""
+        return self.empty_slot_count() > 0
 
-    def _history_row_named(self, name: str):
-        """The *Recent* row named *name*. The resume row is excluded on
-        purpose -- it carries the same filename as the newest recent, and
-        it has its own accessors below."""
-        from PySide6.QtWidgets import QLabel
-
-        for row in self._history_rows():
-            if row.objectName() != "RecentRow":
-                continue
-            label = row.findChild(QLabel, "HistoryRowName")
-            if label is not None and label.text() == name:
-                return row
-        raise AssertionError(f"No history row named {name!r}")
-
-    def history_row_names(self) -> list[str]:
-        """Name labels of every Recent-group row in display order (the
-        resume row first when shown)."""
-        from PySide6.QtWidgets import QLabel
-
-        return [
-            row.findChild(QLabel, "HistoryRowName").text()
-            for row in self._history_rows()
-        ]
-
-    def recent_row_names(self) -> list[str]:
-        """Name labels of the plain Recent rows only, resume row excluded."""
-        from PySide6.QtWidgets import QLabel
-
-        return [
-            row.findChild(QLabel, "HistoryRowName").text()
-            for row in self._history_rows()
-            if row.objectName() == "RecentRow"
-        ]
-
-    def resume_row_present(self) -> bool:
-        """Whether the emphasised reopen-last-workspace row is shown."""
-        return any(row.objectName() == "ResumeRow" for row in self._history_rows())
-
-    def click_resume_row(self) -> "AppDriver":
-        for row in self._history_rows():
-            if row.objectName() == "ResumeRow":
-                self._qtbot.mouseClick(row, Qt.LeftButton)
-                return self
-        raise AssertionError("No resume row shown")
-
-    def click_history_row(self, name: str) -> "AppDriver":
-        """Click the row named *name* (opens the file for a Recent row)."""
-        self._qtbot.mouseClick(self._history_row_named(name), Qt.LeftButton)
+    def click_reference_diff(self, index: int = 0) -> "AppDriver":
+        """Click the differ-count route on the reference slot at *index*."""
+        self._qtbot.mouseClick(self._reference_row(index)._diff_route, Qt.LeftButton)
         return self
 
-    def history_row_is_missing(self, name: str) -> bool:
-        """Whether the row named *name* carries the "Not found" chip."""
+    def reference_diff_text(self, index: int = 0) -> str:
+        """The slot's differ-count route text ("3 values differ ▸")."""
+        return self._reference_row(index)._diff_route.text()
+
+    # --- the Workspace rail: named Workspaces above untitled Recent -------
+
+    def _workspace_rows(self) -> list:
+        return self._w._workspace._workspace_rows
+
+    def _workspace_row_named(self, label: str, object_name: str | None = None):
         from PySide6.QtWidgets import QLabel
 
-        row = self._history_row_named(name)
-        return row.findChild(QLabel, "HistoryRowChip") is not None
-
-    def click_history_row_button(self, name: str, text: str) -> "AppDriver":
-        """Click an inline button ("Pin", "✕") on the row named *name*."""
-        from PySide6.QtWidgets import QPushButton
-
-        row = self._history_row_named(name)
-        for button in row.findChildren(QPushButton):
-            if button.text() == text:
-                self._qtbot.mouseClick(button, Qt.LeftButton)
-                return self
-        raise AssertionError(f"No {text!r} button on history row {name!r}")
-
-    # --- Workspace rail history: the named Workspaces group ---------------
-
-    def _workspace_row_named(self, name: str):
-        from PySide6.QtWidgets import QLabel
-
-        for row in self._history_rows():
-            if row.objectName() != "WorkspaceNamedRow":
+        for row in self._workspace_rows():
+            if object_name is not None and row.objectName() != object_name:
                 continue
-            label = row.findChild(QLabel, "HistoryRowName")
-            if label is not None and label.text() == name:
+            name = row.findChild(QLabel, "HistoryRowName")
+            if name is not None and name.text() == label:
                 return row
-        raise AssertionError(f"No named workspace row {name!r}")
+        raise AssertionError(f"No workspace row labelled {label!r}")
 
-    def workspace_row_names(self) -> list[str]:
+    def _row_labels(self, object_name: str | None = None) -> list[str]:
         from PySide6.QtWidgets import QLabel
 
         return [
             row.findChild(QLabel, "HistoryRowName").text()
-            for row in self._history_rows()
-            if row.objectName() == "WorkspaceNamedRow"
+            for row in self._workspace_rows()
+            if object_name is None or row.objectName() == object_name
         ]
 
-    def click_workspace_row(self, name: str) -> "AppDriver":
-        """Click the named workspace row (opens the whole bundle)."""
-        self._qtbot.mouseClick(self._workspace_row_named(name), Qt.LeftButton)
-        return self
+    def workspace_row_labels(self) -> list[str]:
+        """Every rail row's label in display order: named workspaces first,
+        then the untitled Recent ones."""
+        return self._row_labels()
 
-    def workspace_row_is_missing(self, name: str) -> bool:
+    def named_workspace_labels(self) -> list[str]:
+        """Labels in the Workspaces group (named, never decaying)."""
+        return self._row_labels("WorkspaceNamedRow")
+
+    def recent_workspace_labels(self) -> list[str]:
+        """Labels in the Recent group (untitled, capped)."""
+        return self._row_labels("RecentRow")
+
+    def current_workspace_row_label(self) -> str | None:
+        """The label of the row wearing the "open now" pill, if any."""
         from PySide6.QtWidgets import QLabel
 
-        row = self._workspace_row_named(name)
-        return row.findChild(QLabel, "HistoryRowChip") is not None
+        for row in self._workspace_rows():
+            if row.findChild(QLabel, "HistoryRowPill") is not None:
+                return row.findChild(QLabel, "HistoryRowName").text()
+        return None
 
-    def click_workspace_row_button(self, name: str, text: str) -> "AppDriver":
-        """Hover the named row (revealing Rename/Remove) and click *text*."""
+    def click_workspace_row(self, label: str) -> "AppDriver":
+        """Click a rail row, opening that workspace whole."""
+        self._qtbot.mouseClick(self._workspace_row_named(label), Qt.LeftButton)
+        return self
+
+    def workspace_row_is_missing(self, label: str) -> bool:
+        """Whether the row carries the "Not found" chip (its main is gone)."""
+        from PySide6.QtWidgets import QLabel
+
+        return (
+            self._workspace_row_named(label).findChild(QLabel, "HistoryRowChip")
+            is not None
+        )
+
+    def workspace_row_reference_count(self, label: str) -> int:
+        """How many reference dots the row's glyph draws."""
+        from PySide6.QtWidgets import QLabel
+
+        glyph = self._workspace_row_named(label).findChild(QLabel, "WorkspaceGlyph")
+        return glyph.text().count("·")
+
+    def workspace_row_actions(self, label: str) -> list[str]:
+        """The hover-revealed actions on a rail row, in order."""
         from PySide6.QtWidgets import QPushButton
 
-        row = self._workspace_row_named(name)
+        row = self._workspace_row_named(label)
+        row.set_hovered(True)
+        return [button.text() for button in row.findChildren(QPushButton)]
+
+    def click_workspace_row_button(self, label: str, text: str) -> "AppDriver":
+        """Hover a rail row (revealing its actions) and click one."""
+        from PySide6.QtWidgets import QPushButton
+
+        row = self._workspace_row_named(label)
         row.set_hovered(True)
         for button in row.findChildren(QPushButton):
             if button.text() == text:
                 self._qtbot.mouseClick(button, Qt.LeftButton)
                 return self
-        raise AssertionError(f"No {text!r} button on workspace row {name!r}")
+        raise AssertionError(f"No {text!r} action on workspace row {label!r}")
 
-    def workspace_save_button_enabled(self) -> bool:
-        return self._w._workspace._save_workspace_button.isEnabled()
-
-    def click_workspace_save(self) -> "AppDriver":
-        """Click "Save current workspace as…" (tests stub the name dialog
-        via the ``_ask_workspace_name`` seam)."""
+    def click_new_workspace(self) -> "AppDriver":
+        """Click "New workspace" -- a separate line of work, empty board."""
         self._qtbot.mouseClick(
-            self._w._workspace._save_workspace_button, Qt.LeftButton
+            self._w._workspace._new_workspace_button, Qt.LeftButton
         )
         return self
 
+    def rail_empty_state_texts(self) -> list[str]:
+        """The one-line empty states currently shown by the two rail groups
+        (both groups are always visible, empty or not)."""
+        ws = self._w._workspace
+        return [
+            label.text()
+            for label in (ws._workspaces_empty, ws._recent_empty)
+            if not label.isHidden()
+        ]
+
+    # --- the board's header and banner ------------------------------------
+
+    def workspace_name_text(self) -> str:
+        """What the board header shows: the workspace's name, or the ghosted
+        invitation when it has none."""
+        return self._w._workspace._name_field._display.text()
+
+    def rename_workspace(self, name: str) -> "AppDriver":
+        """Type a new name into the board header and commit it."""
+        field = self._w._workspace._name_field
+        field.begin_edit()
+        field._editor.setText(name)
+        self._qtbot.keyClick(field._editor, Qt.Key_Return)
+        return self
+
+    def workspace_name_error(self) -> str:
+        """The inline refusal under the header ("That name is in use")."""
+        return self._w._workspace._name_field.error_text()
+
+    def missing_file_messages(self) -> list[str]:
+        """What the missing-file banner is naming, one line per file."""
+        return self._w._workspace._missing_banner.missing_labels()
+
+    def click_missing_file_button(self, label: str, text: str) -> "AppDriver":
+        """Click Locate…/Remove on the banner row naming *label*."""
+        from PySide6.QtWidgets import QLabel, QPushButton
+
+        banner = self._w._workspace._missing_banner
+        for row in banner._rows:
+            message = row.findChild(QLabel, "WorkspaceMissingText")
+            if message is None or label not in message.text():
+                continue
+            for button in row.findChildren(QPushButton):
+                if button.text() == text:
+                    self._qtbot.mouseClick(button, Qt.LeftButton)
+                    return self
+        raise AssertionError(f"No {text!r} button for missing file {label!r}")
+
+    # --- the board's routes out -------------------------------------------
+
+    def workspace_validity_text(self) -> str:
+        """The main card's validity mark ("Valid", "3 errors, 1 warning",
+        "Not checked · 2 incomplete"), or "" when nothing is open."""
+        card = self._w._workspace._main_card
+        return "" if card._badge.isHidden() else card.validity_text()
+
+    def workspace_main_name(self) -> str:
+        """What the board's main card is naming."""
+        return self._w._workspace._main_card.name_text()
+
+    def workspace_record_visible(self) -> bool:
+        """Whether the main document's fact plaque is showing (it is not,
+        with nothing open)."""
+        return not self._w._workspace._fact_band.isHidden()
+
+    def click_edit_route(self) -> "AppDriver":
+        """Click the main card's "Edit its parameters ▸"."""
+        self._qtbot.mouseClick(
+            self._w._workspace._main_card._edit_route, Qt.LeftButton
+        )
+        return self
+
+    def click_issue_route(self) -> "AppDriver":
+        """Click the main card's "N errors · why? ▸"."""
+        self._qtbot.mouseClick(
+            self._w._workspace._main_card._issue_route, Qt.LeftButton
+        )
+        return self
+
+    def issue_route_text(self) -> str:
+        """The main card's error route text, or "" when it is not offered."""
+        route = self._w._workspace._main_card._issue_route
+        return "" if route.isHidden() else route.text()
+
     def click_reference_row(self, index: int = 0) -> "AppDriver":
-        """Click the pinned reference row at *index*, toggling its detail."""
-        row = self._reference_row(index)
-        self._qtbot.mouseClick(row, Qt.LeftButton)
+        """Click the reference slot at *index*, toggling its record."""
+        self._qtbot.mouseClick(self._reference_row(index), Qt.LeftButton)
         return self
 
     def reference_row_expanded(self, index: int = 0) -> bool:
-        return self._reference_row(index).is_expanded()
+        """Whether the record beneath the board is showing this slot's
+        reference."""
+        record = self._w._workspace._reference_record
+        return (
+            not record.isHidden()
+            and record.snapshot is self._reference_row(index).snapshot
+        )
 
     def reference_row_badges(self) -> list[str]:
-        """Badge letters of the Workspace rows, in pin order."""
+        """Badge letters of the reference slots, in pin order."""
         from ui_qt.reference_identity import badge_letters
 
         return badge_letters(self.pinned_reference_names())
 
     def reference_row_detail_text(self, index: int = 0) -> str:
-        """The expanded record's key/value lines for the row at *index*, one
-        per line -- whether or not it is currently expanded."""
+        """The open record's key/value lines, one per line. The record is a
+        single panel beneath the board, so the slot at *index* must be the
+        one currently showing."""
         from PySide6.QtWidgets import QFormLayout, QLabel
 
-        row = self._reference_row(index)
-        form = row._detail.layout()
+        if not self.reference_row_expanded(index):
+            raise AssertionError(f"Reference slot {index} is not showing its record")
+        form = self._w._workspace._reference_record._form
         lines = []
         for position in range(form.rowCount()):
             label = form.itemAt(position, QFormLayout.LabelRole).widget()
@@ -891,15 +1015,6 @@ class AppDriver:
                 )
             lines.append(f"{label.text()} {text}".strip())
         return "\n".join(lines)
-
-    def reference_cap_text(self) -> str:
-        """The References footer's pin count ("3 of 4 pinned")."""
-        return self._w._workspace._reference_cap_label.text()
-
-    def reference_entry_buttons_enabled(self) -> bool:
-        """Whether the two entry buttons can still pin something."""
-        ws = self._w._workspace
-        return ws._reference_library_button.isEnabled() and ws._open_reference_button.isEnabled()
 
     def unpin_all_references(self) -> "AppDriver":
         """Unpin every pinned reference, through the same handler the
@@ -916,33 +1031,32 @@ class AppDriver:
         return [reference.filename for reference in self._w._state.references]
 
     def reference_tile_visible(self) -> bool:
-        """Whether the References section is showing at least one pinned
-        reference.
-
-        The section widget itself is always on screen (its empty state is the
-        reference library's front door), so pinned-ness is carried by the
-        rows."""
+        """Whether the board is holding at least one reference."""
         return bool(self._reference_rows())
 
     def reference_empty_state_visible(self) -> bool:
-        """Whether the References section is showing its empty-state front
-        door (the teaching line; the entry buttons are visible in both
-        states)."""
-        return not self._w._workspace._reference_empty_text.isHidden()
+        """Whether the board is holding no references at all -- every slot
+        an empty ＋, which is the board's own empty state."""
+        return not self._reference_rows()
 
     def reference_tile_text(self, index: int = 0) -> str:
-        """Text of the pinned reference row at *index*, flattened -- the
-        section's Read-only tag, the row's own name and model, then the
-        expanded record's lines (mirrors :meth:`workspace_info_text`)."""
-        row = self._reference_row(index)
+        """Text of the reference at slot *index*, flattened -- the slot's own
+        name and model plus its record's lines (mirrors
+        :meth:`workspace_info_text`).
+
+        Opens the record to read it, which is what a person does: the slot
+        stays compact and the record is one click beneath the board.
+        """
+        slot = self._reference_row(index)
+        if not self.reference_row_expanded(index):
+            self.click_reference_row(index)
+        record = self._w._workspace._reference_record
         lines = [
-            self._w._workspace._reference_tag.text(),
-            row.snapshot.filename,
-            f"Model: {row.snapshot.model or '-'}",
-            f"Contents: {row.snapshot.section_count} sections · "
-            f"{row.snapshot.parameter_count} parameters",
-            f"Checked: {row._validity_label.text()}",
+            record._read_only_tag.text(),
+            slot.snapshot.filename,
+            f"Model: {slot.snapshot.model or '-'}",
         ]
+        lines.extend(self.reference_row_detail_text(index).splitlines())
         return "\n".join(lines)
 
     def toast_text(self) -> str | None:
@@ -2105,8 +2219,8 @@ class AppDriver:
         if not ws._info_empty.isHidden():
             return ws._info_empty.text()
         lines = [f"Title: {ws._info_title.text()}"]
-        if ws._info_badge.text():
-            lines.append(f"Validity: {ws._info_badge.text()}")
+        if ws._main_card.validity_text():
+            lines.append(f"Validity: {ws._main_card.validity_text()}")
         lines.append(f"Description: {ws._info_description.text()}")
         lines.append(f"Citation: {ws._info_citation.text()}")
         lines.append(f"Model: {ws._fact_model.text()}")
