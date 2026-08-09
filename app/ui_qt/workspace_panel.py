@@ -122,13 +122,20 @@ class WorkspaceRowView:
 
 @dataclass(frozen=True)
 class MissingFileView:
-    """One file a workspace remembers but could not open. ``reference_index``
-    is ``None`` for the main document, else the reference's position in the
-    record -- what Locate… and Remove act on."""
+    """One file a workspace remembers but could not open.
+
+    ``reference_index`` is ``None`` for the main document, else the
+    reference's position in the record -- what Locate… and Remove act on.
+    ``message`` is composed by the shell, which is the only layer that knows
+    *why* the file did not open: a file that has moved and one that will not
+    parse are different problems, and the banner must not call the second
+    one "not found".
+    """
 
     label: str
     path: str
     reference_index: int | None
+    message: str
 
 
 def _first_supported_local_file(mime_data: QMimeData) -> Path | None:
@@ -1053,8 +1060,7 @@ class _MissingBanner(QFrame):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
 
-        what = "Main document" if entry.reference_index is None else "Reference"
-        label = QLabel(f"{what} not found: {entry.label}")
+        label = QLabel(entry.message)
         label.setObjectName("WorkspaceMissingText")
         label.setToolTip(entry.path)
         layout.addWidget(label)

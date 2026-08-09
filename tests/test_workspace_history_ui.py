@@ -118,8 +118,13 @@ def test_a_workspace_reopens_whole_from_its_rail_row(
     first.open(spm_workfile)
     first.dock_library_reference(CHEN2020)
     first._w._open_reference_path(second_workfile)
+    # Leave a different workspace on the board, so launch does not restore
+    # the one under test and the row is what does the work.
+    first.click_new_workspace()
+    first.open(second_workfile)
 
     fresh = relaunch()
+    assert fresh._w._state.active.backing_file == second_workfile
     fresh.click_workspace_row(spm_workfile.name)
 
     state = fresh._w._state
@@ -406,3 +411,109 @@ def test_corrupt_history_resets_and_announces_itself(relaunch, history_path, qtb
     qtbot.wait(10)  # the notice is deferred one tick
     assert fresh.toast_text() == "Workspace history was unreadable and has been reset"
     assert fresh.workspace_row_labels() == []
+    # Nothing to reopen, and above all nothing that refuses to launch.
+    assert fresh._w._state.active is None
+
+
+# ---------------------------------------------------------------------------
+# launch: the workspace is handed back whole
+
+
+def test_launch_reopens_the_workspace_that_was_on_the_board(
+    relaunch, spm_workfile, second_workfile
+):
+    """The workspace is the unit of work, so a relaunch hands it back whole
+    rather than an empty page and the job of finding everything again."""
+    first = relaunch()
+    first.open(spm_workfile)
+    first.dock_library_reference(CHEN2020)
+    first._w._open_reference_path(second_workfile)
+
+    fresh = relaunch()  # no clicks: this is what launching does
+
+    state = fresh._w._state
+    assert state.active.backing_file == spm_workfile
+    assert [ref.set_id for ref in state.references] == [CHEN2020, None]
+    assert fresh.current_workspace_row_label() == spm_workfile.name
+    assert fresh.current_view_index() == 0  # back where the work was
+
+
+def test_launch_reopens_a_named_workspace_by_its_name(relaunch, spm_workfile):
+    first = relaunch()
+    first.open(spm_workfile)
+    first.rename_workspace("LG M50 study")
+
+    fresh = relaunch()
+
+    assert fresh._w._state.active.backing_file == spm_workfile
+    assert fresh.workspace_name_text() == "LG M50 study"
+    assert fresh.current_workspace_row_label() == "LG M50 study"
+
+
+def test_launch_replays_the_recorded_open_mode(relaunch, fixtures_dir):
+    """A file opened as-is comes back as-is: the D3 prompt exists to learn
+    intent, and the record already holds the answer."""
+    first = relaunch()
+    first.open_as_is(fixtures_dir / "nmc_pouch_cell_BPX.json")
+    assert first._w._state.active.read_only is True
+
+    fresh = relaunch()
+
+    assert fresh._w._state.active is not None
+    assert fresh._w._state.active.read_only is True
+
+
+def test_launch_after_new_workspace_starts_on_an_empty_board(
+    relaunch, spm_workfile
+):
+    first = relaunch()
+    first.open(spm_workfile)
+    first.click_new_workspace()  # deliberately left nothing on the board
+
+    fresh = relaunch()
+
+    assert fresh._w._state.active is None
+    assert fresh.current_view_index() == 2
+    assert fresh.recent_workspace_labels() == [spm_workfile.name]
+
+
+def test_launch_with_a_missing_main_never_refuses(relaunch, spm_workfile):
+    first = relaunch()
+    first.open(spm_workfile)
+    first.dock_library_reference(CHEN2020)
+    spm_workfile.unlink()
+
+    fresh = relaunch()
+
+    assert fresh.missing_file_messages() == [
+        f"Main document not found: {spm_workfile.name}"
+    ]
+    assert [ref.set_id for ref in fresh._w._state.references] == [CHEN2020]
+    assert fresh.current_view_index() == 2  # landed where the banner is
+
+
+def test_launch_with_an_unreadable_main_says_so_without_a_modal(
+    relaunch, spm_workfile, monkeypatch
+):
+    """A file that will not parse is not a file that is missing, and the
+    banner must not call it one. Nor may it meet the user with a modal
+    error before the window has settled."""
+    import ui_qt.main_window as main_window_module
+
+    first = relaunch()
+    first.open(spm_workfile)
+    spm_workfile.write_text("{not valid json", encoding="utf-8")
+
+    monkeypatch.setattr(
+        main_window_module.QMessageBox, "critical", _fail_if_called
+    )
+    fresh = relaunch()
+
+    assert fresh.missing_file_messages() == [
+        f"Main document could not be read: {spm_workfile.name}"
+    ]
+    assert fresh._w._state.active is None
+
+
+def _fail_if_called(*args, **kwargs):
+    raise AssertionError("Launching must not show a modal error")

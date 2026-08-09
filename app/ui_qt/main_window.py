@@ -175,7 +175,9 @@ def _folder_display(path_text: str) -> str:
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, history: WorkspaceHistory | None = None) -> None:
+    def __init__(
+        self, history: WorkspaceHistory | None = None, restore_session: bool = True
+    ) -> None:
         super().__init__()
         self.setWindowTitle("ExploreBPX")
         # Type comes from ui_qt.typography: the family on the application
@@ -259,6 +261,12 @@ class MainWindow(QMainWindow):
         self._toast = Toast(self)
         self._connect()
         self._refresh_all()
+        # Last of all, and only once the whole window exists: launching
+        # hands back the workspace that was on the board. It reopens
+        # documents and switches pages, so nothing may run before every
+        # view it touches is built and wired.
+        if restore_session:
+            self._reopen_current_workspace()
 
     def _build_toolbar(self) -> None:
         """Build the fixed top bar: identity on the left, actions on the right.
@@ -450,6 +458,25 @@ class MainWindow(QMainWindow):
                     "Workspace history was unreadable and has been reset"
                 ),
             )
+
+    def _reopen_current_workspace(self) -> None:
+        """Launch straight back into the workspace that was on the board.
+
+        The workspace is the unit of work, so a relaunch should hand it back
+        whole -- main document and references, in the modes they were opened
+        in -- rather than an empty page and the job of finding everything
+        again. Nothing here can refuse to launch: a main that has moved or
+        will not parse degrades to the banner, which names it and offers
+        Locate…, exactly as a restore from the rail does.
+        """
+        history = self._state.history
+        # A history that failed to load has already announced itself and
+        # holds nothing; there is no workspace to hand back.
+        if history is None or history.load_failed:
+            return
+        record = history.current()
+        if record is not None:
+            self._restore_workspace(record, quiet=True)
 
     def _build_statusbar(self) -> None:
         bar = QStatusBar()
@@ -1143,7 +1170,9 @@ class MainWindow(QMainWindow):
             return
         self._open_reference_path(path)
 
-    def _restore_workspace(self, record: WorkspaceRecord) -> None:
+    def _restore_workspace(
+        self, record: WorkspaceRecord, quiet: bool = False
+    ) -> None:
         """Reopen a remembered workspace whole: main document first, then
         its references, replacing the pinned set.
 
@@ -1156,6 +1185,11 @@ class MainWindow(QMainWindow):
         A cancelled prompt along the way (unsaved-work guard, legacy
         prompt) stops the whole restore with the current workspace
         untouched.
+
+        *quiet* is the launch restore: a main that will not parse degrades
+        to the banner like a missing one instead of meeting the user with a
+        modal error before the window has even settled. A restore the user
+        asked for keeps the dialog, because they asked.
         """
         if not self._confirm_discard_if_dirty():
             return
@@ -1165,21 +1199,30 @@ class MainWindow(QMainWindow):
         # pointing at its main even when that main never opens.
         self._state.enter_workspace(record.id)
         missing: list[MissingFileView] = []
-        if main_path.exists():
-            try:
-                if not self._open_recorded_main(record.main):
-                    return
-            except (LoadError, OSError) as exc:
-                QMessageBox.critical(self, "Cannot open file", str(exc))
-                return
-        else:
+
+        def main_did_not_open(reason: str) -> None:
             self._state.close()
             self._state.enter_workspace(record.id)
             missing.append(
                 MissingFileView(
-                    label=main_path.name, path=str(main_path), reference_index=None
+                    label=main_path.name,
+                    path=str(main_path),
+                    reference_index=None,
+                    message=f"Main document {reason}: {main_path.name}",
                 )
             )
+
+        if not main_path.exists():
+            main_did_not_open("not found")
+        else:
+            try:
+                if not self._open_recorded_main(record.main):
+                    return
+            except (LoadError, OSError) as exc:
+                if not quiet:
+                    QMessageBox.critical(self, "Cannot open file", str(exc))
+                    return
+                main_did_not_open("could not be read")
         missing.extend(self._restore_references(record.references))
         self._missing_files = missing
         # _finish_open already refreshed, but the reference swap happened
@@ -1225,38 +1268,36 @@ class MainWindow(QMainWindow):
         for reference in list(self._state.references):
             self._state.remove_reference(reference)
         missing: list[MissingFileView] = []
+
+        def did_not_come_back(index: int, ref, reason: str) -> None:
+            label = ref.set_id if ref.kind == "library" else Path(ref.path).name
+            missing.append(
+                MissingFileView(
+                    label=label,
+                    path=ref.path or ref.set_id,
+                    reference_index=index,
+                    message=f"Reference {reason}: {label}",
+                )
+            )
+
         for index, ref in enumerate(records):
             if ref.kind == "library":
                 try:
                     outcome = self._state.pin_reference_set(ref.set_id)
                 except KeyError:
-                    missing.append(
-                        MissingFileView(
-                            label=ref.set_id, path=ref.set_id, reference_index=index
-                        )
-                    )
+                    did_not_come_back(index, ref, "is no longer in the library")
                     continue
             else:
+                if not Path(ref.path).exists():
+                    did_not_come_back(index, ref, "not found")
+                    continue
                 try:
                     outcome = self._state.pin_reference(Path(ref.path))
                 except (LoadError, OSError):
-                    missing.append(
-                        MissingFileView(
-                            label=Path(ref.path).name,
-                            path=ref.path,
-                            reference_index=index,
-                        )
-                    )
+                    did_not_come_back(index, ref, "could not be read")
                     continue
             if outcome is not PinReferenceOutcome.ADDED:
-                label = ref.set_id if ref.kind == "library" else Path(ref.path).name
-                missing.append(
-                    MissingFileView(
-                        label=label,
-                        path=ref.path or ref.set_id,
-                        reference_index=index,
-                    )
-                )
+                did_not_come_back(index, ref, "could not be pinned")
         return missing
 
     def _on_new_workspace(self) -> None:
