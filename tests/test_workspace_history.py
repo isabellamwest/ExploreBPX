@@ -1,13 +1,17 @@
 """Tests for state.workspace_history — the pure-Python store behind recent
-files, the last workspace, and named workspaces. No Qt anywhere here."""
+files and the workspaces themselves. No Qt anywhere here."""
 
 from __future__ import annotations
 
 import json
 
+import pytest
+
 from state.workspace_history import (
+    MAX_RECENT_WORKSPACES,
     RECENT_FILES_CAP,
     MainRecord,
+    NameInUse,
     ReferenceRecord,
     WorkspaceHistory,
     WorkspaceRecord,
@@ -18,36 +22,55 @@ def _store(tmp_path):
     return WorkspaceHistory(tmp_path / "history.json")
 
 
-def _workspace(name=None, path="/cells/lgm50.json", mode="normal"):
+def _workspace(path="/cells/lgm50.json", mode="normal", references=None):
     return WorkspaceRecord(
         main=MainRecord(path=path, mode=mode),
         references=(
-            ReferenceRecord(kind="library", set_id="chen2020"),
-            ReferenceRecord(kind="file", path="/cells/nmc.json"),
+            (
+                ReferenceRecord(kind="library", set_id="chen2020"),
+                ReferenceRecord(kind="file", path="/cells/nmc.json"),
+            )
+            if references is None
+            else references
         ),
-        name=name,
     )
+
+
+def _started(history, **kwargs):
+    """Start a workspace and hand back its stored record (with its id)."""
+    return history.start_workspace(_workspace(**kwargs))
+
+
+# ---------------------------------------------------------------------------
+# loading and round-tripping
 
 
 def test_first_launch_loads_empty_without_complaint(tmp_path):
     history = _store(tmp_path)
     assert history.recent_files == []
-    assert history.last_workspace is None
+    assert history.recent_workspaces == []
     assert history.workspaces == []
+    assert history.current_id is None
     assert history.load_failed is False
 
 
 def test_everything_round_trips_through_disk(tmp_path):
     history = _store(tmp_path)
     history.add_recent("/cells/lgm50.json")
-    history.set_last_workspace(_workspace())
-    history.save_named(_workspace(name="LG M50 study"))
+    started = _started(history)
+    kept = history.keep(started.id, "LG M50 study")
+    _started(history, path="/cells/other.json")
 
     reloaded = _store(tmp_path)
     assert reloaded.recent_files == ["/cells/lgm50.json"]
-    assert reloaded.last_workspace == _workspace()
-    assert reloaded.workspaces == [_workspace(name="LG M50 study")]
+    assert reloaded.workspaces == [kept]
+    assert [w.main.path for w in reloaded.recent_workspaces] == ["/cells/other.json"]
+    assert reloaded.current_id == reloaded.recent_workspaces[0].id
     assert reloaded.load_failed is False
+
+
+# ---------------------------------------------------------------------------
+# recent files (they feed the board's ＋ menu, not a rail group)
 
 
 def test_recents_are_newest_first_deduplicated_and_capped(tmp_path):
@@ -81,42 +104,359 @@ def test_remove_recent_drops_only_the_pointed_row(tmp_path):
     assert history.recent_files == ["/cells/b.json"]
 
 
-def test_last_workspace_never_keeps_a_name(tmp_path):
+# ---------------------------------------------------------------------------
+# starting, shelving, decaying
+
+
+def test_starting_a_workspace_gives_it_an_identity_and_the_board(tmp_path):
     history = _store(tmp_path)
-    history.set_last_workspace(_workspace(name="smuggled"))
-    assert history.last_workspace.name is None
-    assert history.last_workspace.saved_at is None
+    started = _started(history)
+
+    assert started.id
+    assert started.name is None
+    assert history.current_id == started.id
+    assert history.current() == started
+    assert history.recent_workspaces == [started]
 
 
-def test_save_named_overwrites_in_place_and_keeps_order(tmp_path):
+def test_identity_is_the_id_not_the_main_path(tmp_path):
+    """Two workspaces may point at one file, and a main swap does not make
+    a workspace into a different one."""
     history = _store(tmp_path)
-    history.save_named(_workspace(name="first"))
-    history.save_named(_workspace(name="second"))
-    history.save_named(_workspace(name="first", path="/cells/other.json"))
+    first = _started(history, references=())
+    second = _started(history, references=(ReferenceRecord(kind="library", set_id="x"),))
+    assert first.id != second.id
 
-    assert [workspace.name for workspace in history.workspaces] == ["first", "second"]
-    assert history.workspaces[0].main.path == "/cells/other.json"
+    history.update_current(MainRecord(path="/cells/moved.json"), ())
+    assert history.current_id == second.id  # same workspace, different main
 
 
-def test_rename_moves_the_entry_and_displaces_the_target_name(tmp_path):
+def test_switching_away_shelves_rather_than_discards(tmp_path):
     history = _store(tmp_path)
-    history.save_named(_workspace(name="old"))
-    history.save_named(_workspace(name="taken", path="/cells/other.json"))
-    history.rename_named("old", "taken")
+    first = _started(history, path="/cells/a.json")
+    second = _started(history, path="/cells/b.json")
 
-    assert [workspace.name for workspace in history.workspaces] == ["taken"]
-    assert history.named("taken").main.path == "/cells/lgm50.json"
-    history.rename_named("ghost", "anything")  # unknown old: quiet no-op
-    assert [workspace.name for workspace in history.workspaces] == ["taken"]
+    # Nothing was thrown away by starting the second, and switching back
+    # brings the first to the front.
+    assert {w.id for w in history.recent_workspaces} == {first.id, second.id}
+    history.set_current(first.id)
+    assert history.recent_workspaces[0].id == first.id
+    assert history.current_id == first.id
 
 
-def test_remove_named_deletes_only_that_entry(tmp_path):
+def test_recent_workspaces_decay_oldest_first(tmp_path):
     history = _store(tmp_path)
-    history.save_named(_workspace(name="keep"))
-    history.save_named(_workspace(name="drop"))
-    history.remove_named("drop")
-    history.remove_named("ghost")  # no-op
-    assert [workspace.name for workspace in history.workspaces] == ["keep"]
+    started = [
+        _started(history, path=f"/cells/file{index}.json")
+        for index in range(MAX_RECENT_WORKSPACES + 2)
+    ]
+
+    assert len(history.recent_workspaces) == MAX_RECENT_WORKSPACES
+    assert history.by_id(started[0].id) is None  # fell off the end
+    assert history.by_id(started[-1].id) is not None
+
+
+def test_the_workspace_on_the_board_never_decays(tmp_path):
+    """The cap drops the oldest *spare* entry: the current one is in use."""
+    history = _store(tmp_path)
+    current = _started(history, path="/cells/current.json")
+    for index in range(MAX_RECENT_WORKSPACES + 2):
+        forked = history.duplicate(current.id)  # piles up entries above it
+        assert forked.id != current.id
+
+    assert len(history.recent_workspaces) == MAX_RECENT_WORKSPACES
+    assert history.by_id(current.id) is not None
+    assert history.current_id == current.id
+
+
+def test_content_duplicate_recents_merge_into_the_newest(tmp_path):
+    history = _store(tmp_path)
+    first = _started(history)
+    _started(history, path="/cells/other.json")
+    second = _started(history)  # same main + refs as `first`
+
+    assert history.by_id(first.id) is None  # older merged away
+    assert history.by_id(second.id) is not None
+    assert len(history.recent_workspaces) == 2
+
+
+def test_different_references_are_a_different_arrangement(tmp_path):
+    history = _store(tmp_path)
+    plain = _started(history, references=())
+    with_ref = _started(history)  # same main, two references
+
+    assert history.by_id(plain.id) is not None
+    assert history.by_id(with_ref.id) is not None
+
+
+def test_named_workspaces_never_merge_or_decay(tmp_path):
+    history = _store(tmp_path)
+    kept = history.keep(_started(history).id, "study")
+    for index in range(MAX_RECENT_WORKSPACES + 2):
+        _started(history, path=f"/cells/file{index}.json")
+    _started(history)  # identical files to the named one
+
+    assert history.named("study") == kept
+    assert len(history.recent_workspaces) == MAX_RECENT_WORKSPACES
+
+
+# ---------------------------------------------------------------------------
+# live identity (rule 4): the record follows the workspace, with no save step
+
+
+def test_update_current_rewrites_an_untitled_workspace_in_place(tmp_path):
+    history = _store(tmp_path)
+    started = _started(history, references=())
+
+    history.update_current(
+        MainRecord(path="/cells/swapped.json"),
+        (ReferenceRecord(kind="library", set_id="chen2020"),),
+    )
+
+    current = history.current()
+    assert current.id == started.id  # identity survived the main swap
+    assert current.main.path == "/cells/swapped.json"
+    assert current.references == (ReferenceRecord(kind="library", set_id="chen2020"),)
+
+
+def test_a_named_workspace_is_live_not_a_snapshot(tmp_path):
+    """The deliberate reversal of the old snapshot semantics: a named
+    workspace looks after itself, so there is nothing to save and nothing
+    to go stale."""
+    history = _store(tmp_path)
+    kept = history.keep(_started(history, references=()).id, "study")
+
+    history.update_current(
+        kept.main, (ReferenceRecord(kind="file", path="/cells/nmc.json"),)
+    )
+
+    live = history.named("study")
+    assert live.id == kept.id
+    assert live.references == (ReferenceRecord(kind="file", path="/cells/nmc.json"),)
+    assert history.recent_workspaces == []  # naming took it out of Recent
+
+
+def test_updates_keep_their_place_in_both_lists(tmp_path):
+    history = _store(tmp_path)
+    first = history.keep(_started(history, path="/cells/a.json").id, "first")
+    second = history.keep(_started(history, path="/cells/b.json").id, "second")
+    history.set_current(first.id)
+    history.update_current(MainRecord(path="/cells/c.json"), ())
+
+    assert [w.name for w in history.workspaces] == ["first", "second"]
+    assert history.named("first").main.path == "/cells/c.json"
+    assert second.id == history.workspaces[1].id
+
+
+def test_update_without_a_current_workspace_is_a_no_op(tmp_path):
+    history = _store(tmp_path)
+    history.update_current(MainRecord(path="/cells/a.json"), ())
+    assert history.recent_workspaces == []
+    assert history.workspaces == []
+
+
+# ---------------------------------------------------------------------------
+# naming: a promotion, and never an overwrite
+
+
+def test_naming_promotes_out_of_recent_for_good(tmp_path):
+    history = _store(tmp_path)
+    started = _started(history)
+    kept = history.keep(started.id, "LG M50 study")
+
+    assert kept.id == started.id  # same workspace, now named
+    assert kept.name == "LG M50 study"
+    assert kept.saved_at is not None
+    assert history.recent_workspaces == []
+    assert history.workspaces == [kept]
+    assert history.current_id == kept.id  # it is still the one on the board
+
+
+def test_a_name_in_use_is_refused_never_overwritten(tmp_path):
+    history = _store(tmp_path)
+    first = history.keep(_started(history, path="/cells/a.json").id, "study")
+    second = _started(history, path="/cells/b.json")
+
+    assert history.name_in_use("study") is True
+    with pytest.raises(NameInUse):
+        history.keep(second.id, "study")
+
+    # Neither entry moved: the refusal changed nothing at all.
+    assert history.named("study").main.path == first.main.path
+    assert history.by_id(second.id) in history.recent_workspaces
+
+
+def test_renaming_to_its_own_name_is_allowed(tmp_path):
+    history = _store(tmp_path)
+    kept = history.keep(_started(history).id, "study")
+    assert history.name_in_use("study", excluding=kept.id) is False
+    assert history.rename(kept.id, "study").name == "study"
+    assert history.rename(kept.id, "renamed").name == "renamed"
+    assert [w.name for w in history.workspaces] == ["renamed"]
+
+
+def test_an_empty_name_is_not_a_name(tmp_path):
+    history = _store(tmp_path)
+    started = _started(history)
+    with pytest.raises(ValueError):
+        history.keep(started.id, "   ")
+
+
+def test_remove_forgets_the_entry_and_clears_the_board(tmp_path):
+    history = _store(tmp_path)
+    keeper = history.keep(_started(history, path="/cells/a.json").id, "keep")
+    doomed = _started(history, path="/cells/b.json")
+
+    history.remove(doomed.id)
+    history.remove("ghost-id")  # unknown: quiet no-op
+
+    assert history.current_id is None
+    assert history.recent_workspaces == []
+    assert history.workspaces == [keeper]
+
+
+# ---------------------------------------------------------------------------
+# duplicate: the fork escape hatch live identity costs us
+
+
+def test_duplicating_a_named_workspace_keeps_both_safe(tmp_path):
+    history = _store(tmp_path)
+    original = history.keep(_started(history).id, "study")
+    copy = history.duplicate(original.id)
+
+    assert copy.id != original.id
+    assert copy.name == "study copy"
+    assert copy.references == original.references
+    assert [w.name for w in history.workspaces] == ["study", "study copy"]
+    assert history.current_id == original.id  # duplicating is not switching
+
+    again = history.duplicate(original.id)
+    assert again.name == "study copy 2"  # names stay unique
+
+
+def test_duplicating_an_untitled_workspace_forks_it_within_recent(tmp_path):
+    history = _store(tmp_path)
+    original = _started(history)
+    copy = history.duplicate(original.id)
+
+    assert copy.name is None
+    assert copy.id != original.id
+    # Both survive: a fork must never be merged back into its own source.
+    assert history.by_id(original.id) is not None
+    assert history.recent_workspaces[0].id == copy.id
+
+
+# ---------------------------------------------------------------------------
+# relocate: the only path edit there is
+
+
+def test_relocate_main_repoints_the_path_and_keeps_the_mode(tmp_path):
+    history = _store(tmp_path)
+    started = _started(history, mode="read_only")
+    history.relocate_main(started.id, "/moved/lgm50.json")
+
+    current = history.current()
+    assert current.main.path == "/moved/lgm50.json"
+    assert current.main.mode == "read_only"
+    assert current.id == started.id
+
+
+def test_relocate_reference_repoints_only_that_file(tmp_path):
+    history = _store(tmp_path)
+    started = _started(history)
+    history.relocate_reference(started.id, 1, "/moved/nmc.json")
+
+    references = history.current().references
+    assert references[0] == ReferenceRecord(kind="library", set_id="chen2020")
+    assert references[1] == ReferenceRecord(kind="file", path="/moved/nmc.json")
+
+
+def test_relocate_ignores_library_sets_and_bad_indices(tmp_path):
+    history = _store(tmp_path)
+    started = _started(history)
+    before = history.current()
+
+    history.relocate_reference(started.id, 0, "/nowhere.json")  # a library set
+    history.relocate_reference(started.id, 9, "/nowhere.json")  # past the end
+    history.relocate_main("ghost-id", "/nowhere.json")
+
+    assert history.current() == before
+
+
+def test_removing_a_reference_edits_the_record(tmp_path):
+    history = _store(tmp_path)
+    started = _started(history)
+    history.remove_reference(started.id, 0)
+    history.remove_reference(started.id, 9)  # past the end: no-op
+
+    assert history.current().references == (
+        ReferenceRecord(kind="file", path="/cells/nmc.json"),
+    )
+
+
+# ---------------------------------------------------------------------------
+# migration and corruption
+
+
+def test_version_1_stores_migrate_without_losing_anything(tmp_path):
+    store_path = tmp_path / "history.json"
+    store_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "recent_files": [{"path": "/cells/lgm50.json"}],
+                "last_workspace": {
+                    "main": {"path": "/cells/lgm50.json", "mode": "read_only"},
+                    "references": [{"kind": "library", "set_id": "chen2020"}],
+                },
+                "workspaces": [
+                    {
+                        "name": "old study",
+                        "saved_at": "2026-01-01T00:00:00",
+                        "main": {"path": "/cells/nmc.json", "mode": "normal"},
+                        "references": [],
+                    }
+                ],
+            }
+        )
+    )
+    history = WorkspaceHistory(store_path)
+
+    assert history.load_failed is False
+    assert history.recent_files == ["/cells/lgm50.json"]
+    # The automatic last-workspace slot became the first Recent entry.
+    assert len(history.recent_workspaces) == 1
+    migrated = history.recent_workspaces[0]
+    assert migrated.main == MainRecord(path="/cells/lgm50.json", mode="read_only")
+    assert migrated.references == (ReferenceRecord(kind="library", set_id="chen2020"),)
+    assert migrated.id  # every record gains an identity
+    # Named workspaces carry over untouched but for their new id.
+    assert [w.name for w in history.workspaces] == ["old study"]
+    assert history.workspaces[0].id
+    # Version 1 never recorded which workspace was on the board.
+    assert history.current_id is None
+
+    # The migrated store rewrites itself at version 2 on the next mutation.
+    history.add_recent("/cells/new.json")
+    assert json.loads(store_path.read_text())["version"] == 2
+
+
+def test_a_current_id_pointing_nowhere_is_dropped_not_fatal(tmp_path):
+    store_path = tmp_path / "history.json"
+    store_path.write_text(
+        json.dumps(
+            {
+                "version": 2,
+                "recent_files": [],
+                "recent_workspaces": [],
+                "workspaces": [],
+                "current_id": "a workspace that is gone",
+            }
+        )
+    )
+    history = WorkspaceHistory(store_path)
+    assert history.load_failed is False
+    assert history.current_id is None
 
 
 def test_corrupt_file_resets_to_empty_and_says_so(tmp_path):
@@ -143,12 +483,15 @@ def test_unknown_mode_or_reference_kind_counts_as_corrupt(tmp_path):
     store_path.write_text(
         json.dumps(
             {
-                "version": 1,
+                "version": 2,
                 "recent_files": [],
-                "last_workspace": {
-                    "main": {"path": "/x.json", "mode": "telepathic"},
-                    "references": [],
-                },
+                "recent_workspaces": [
+                    {
+                        "id": "abc",
+                        "main": {"path": "/x.json", "mode": "telepathic"},
+                        "references": [],
+                    }
+                ],
                 "workspaces": [],
             }
         )
@@ -160,8 +503,8 @@ def test_store_never_contains_content_or_verdicts(tmp_path):
     """The written JSON holds paths, ids and modes — nothing else. Guards
     the honesty rule at the file level, not just in prose."""
     history = _store(tmp_path)
-    history.set_last_workspace(_workspace())
-    history.save_named(_workspace(name="study"))
+    _started(history, path="/cells/other.json")
+    history.keep(_started(history).id, "study")
     written = json.loads((tmp_path / "history.json").read_text())
 
     def keys_of(node):
@@ -174,7 +517,8 @@ def test_store_never_contains_content_or_verdicts(tmp_path):
                 yield from keys_of(item)
 
     allowed = {
-        "version", "recent_files", "last_workspace", "workspaces",
+        "version", "recent_files", "recent_workspaces", "workspaces",
+        "current_id", "id",
         "main", "path", "mode", "references", "kind", "set_id", "name", "saved_at",
     }
     assert set(keys_of(written)) <= allowed
