@@ -313,18 +313,32 @@ QToolBar > QToolButton:disabled { color: #8c959f; }
 /* Menu-carrying buttons (Export, the material map's "Material"): reserve
    room on the right and centre the caret in it, clear of the label. The
    material button sits in a card's grid button row, not the toolbar, so the
-   flat treatment its padding forfeits is restated for it here. */
-QToolButton#ExportButton { padding-right: 22px; }
+   flat treatment its padding forfeits is restated for it here.
+
+   The caret is pinned rather than left native, because native is neither
+   small enough nor the same across platforms. Left to itself Qt paints an
+   11px arrow whose ink butts straight against the label (measured gap: 0px
+   on the macOS, Windows and Fusion styles alike) -- chunky, and reading as
+   glued to the word. Pinning the subcontrol to 8px shrinks it and, more
+   importantly, makes the box identical everywhere, so the label-to-caret gap
+   no longer depends on which platform's PM_MenuButtonIndicator is in force
+   (7px on macOS, 12px on Windows/Fusion -- a gutter tuned to one collides on
+   the other). With a 20px gutter and a 5px inset the gap measures 4-5px on
+   all three styles. The vertical hang the rule originally fought is cured by
+   subcontrol-origin/position below, not by the gutter's width. */
+QToolButton#ExportButton { padding-right: 20px; }
 QToolButton#AddMaterialButton {
     background: transparent; border: none; border-radius: 4px;
-    padding: 3px 8px; padding-right: 22px;
+    padding: 3px 8px; padding-right: 20px;
 }
 QToolButton#AddMaterialButton:hover { background: #e8eaed; }
 QToolButton#ExportButton::menu-indicator,
 QToolButton#AddMaterialButton::menu-indicator {
     subcontrol-origin: padding;
     subcontrol-position: center right;
-    right: 6px;
+    width: 8px;
+    height: 8px;
+    right: 5px;
 }
 QTreeView, QListWidget { border: 1px solid #d0d7de; background: #ffffff; }
 QTreeView::item, QListWidget::item { padding: 3px 4px; }
