@@ -468,8 +468,14 @@ class WorkspaceHistory:
     def _load_v1(self, data: dict) -> None:
         """Migrate a version-1 store: the single automatic last-workspace
         slot becomes the first Recent entry, named workspaces carry over,
-        and every record gains an id. Nothing is current -- version 1 never
-        recorded which workspace was on the board."""
+        and every record gains an id.
+
+        The migrated last-workspace also becomes *current*, so the first
+        launch after an upgrade hands back what was open rather than
+        starting empty. Version 1 had no notion of a current workspace, but
+        its automatic slot meant exactly "what you had open" -- which is the
+        question ``current_id`` now answers.
+        """
         last = data.get("last_workspace")
         self.recent_workspaces = (
             [replace(_workspace_from_json(last), id=new_id())] if last else []
@@ -478,7 +484,9 @@ class WorkspaceHistory:
             replace(_workspace_from_json(entry), id=new_id())
             for entry in data.get("workspaces", [])
         ]
-        self.current_id = None
+        self.current_id = (
+            self.recent_workspaces[0].id if self.recent_workspaces else None
+        )
 
     def _load_v2(self, data: dict) -> None:
         self.recent_workspaces = [

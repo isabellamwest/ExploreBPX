@@ -31,10 +31,20 @@ package and implements none of the BPX specification itself.
 - **Never invent scientific values.** The app never writes placeholder values
   to make a document look complete or valid; exported BPX contains only data
   the user is prepared to claim.
-- **The unit of work is a Workspace** — one Primary document and optionally
-  one read-only Reference. How many documents are present is data, not an
-  application mode, so comparison is a capability of the editor rather than a
-  separate mode, and multi-document support is additive.
+- **The unit of work is a workspace** — one editable main document plus up to
+  four read-only references (`MAX_PINNED_REFERENCES`). How many documents are
+  present is data, not an application mode, so comparison is a capability of
+  the editor rather than a separate mode.
+- **A workspace is a live identity, not a snapshot.** Opening a file starts
+  one; adding a reference or swapping the main rewrites it in place. There is
+  no save step, nothing that can be "changed since saved", and nothing to go
+  stale. Identity is an internal id, not the main's path, so it survives a
+  main swap and two workspaces may point at one file.
+- **Nothing is discarded by a click.** Switching away shelves a workspace
+  under Recent (capped, newest first). *Naming* is the promotion that stops
+  one decaying — and the act that says "stop rewriting this", so an ordinary
+  open beside a named workspace starts a fresh untitled one rather than
+  overwriting it. `duplicate()` is the fork that live identity costs us.
 
 ## Scope
 
@@ -82,9 +92,23 @@ without app changes.
 `DocumentSession` owns everything per-document: the current document, the
 selected object and parameter paths, undo history, and dirty state with its
 backing file. `AppState` owns app-global state and exposes one active session
-as `state.active`. A read-only reference document is held beside it as a
-disposable `ReferenceSnapshot` — no session, no undo — docked from a file or
-from the bundled reference library.
+as `state.active`. Read-only reference documents are held beside it as
+disposable `ReferenceSnapshot`s — no session, no undo — pinned from a file or
+from the bundled reference library, up to `MAX_PINNED_REFERENCES`.
+
+`state/workspace_history.py` makes that arrangement durable. It is the only
+module that writes the store (one JSON file per OS user, atomic, immediate)
+and it holds **pointers only** — paths, ids and open modes, never file
+content and never validation results, so nothing stale can ever be presented
+as a current verdict. Every restore re-reads and re-validates.
+
+Workspaces live in one of two lists: `recent_workspaces` (untitled, newest
+first, capped) and `workspaces` (named, never decaying); `current_id` names
+the one on the board, which is what launch reopens. `AppState` records
+against it at the open/pin funnel rather than in the UI layer, so every path
+that changes the workspace is recorded without remembering to — see
+`_note_main_opened`, which is where "an ordinary open never rewrites a named
+workspace" lives.
 
 ## Domain model
 
@@ -163,6 +187,8 @@ by path and never drive widgets directly.
 | `core/parameter_types.py` | Parameter-kind classification and metadata. |
 | `core/example_library.py` / `reference_library.py` | Bundled data sources behind gateway-style adapters. |
 | `state/document_session.py` / `app_state.py` | Per-document session; app-global state. |
+| `state/workspace_history.py` | The persistent workspace store: pointers only, one JSON file per user. |
+| `ui_qt/workspace_panel.py` | The Workspace page: the workspaces rail and the board of files. |
 | `ui_qt/main_window.py` | Shell assembly and top-level wiring. |
 | `ui_qt/navigation.py` | `NavigationService`. |
 
@@ -179,10 +205,9 @@ navigate to locations rather than filtering or replacing the hierarchy.
 ```
 
 - **Activity bar** — a VS Code-style icon rail switching the content area
-  between top-level pages: **Workspace** (open or create documents, document
-  info, and the reference card for docking a reference from a file or the
-  bundled library), **Editor** (the three-pane view below) and
-  **Diagnostics**. It is reserved for major pages; parameter-centric tools go
+  between top-level pages: **Workspace** (the rail of workspaces beside the
+  board of files the current one holds, over the main document's own
+  record), **Editor** (the three-pane view below) and **Diagnostics**. It is reserved for major pages; parameter-centric tools go
   in the Inspector instead. The Diagnostics badge counts issues — red for
   errors, amber for warnings only, and no badge for a merely unfinished
   document: **red means wrong, never unstarted**.
@@ -215,6 +240,18 @@ navigate to locations rather than filtering or replacing the hierarchy.
   filters that never change any reported count. `core/page_buckets.py`
   supplies the one grouping that the strip and stream both render from, so
   they cannot disagree.
+- **Workspace page** — a shaded rail beside a white pane. The rail carries
+  Open File… and New workspace over two always-visible groups (Workspaces,
+  then Recent), each row showing a glyph for its shape, an "open now" pill
+  when the board is showing it, and hover-revealed actions — the app's idiom
+  in place of a ⋯ menu. The pane carries the workspace's name (click to
+  rename, refused inline if the name is in use), then the **board**: the main
+  card beside four reference slots. The slots *are* the drawn cap, so there
+  is no counter and no dock buttons — at four there is simply no ＋ left to
+  click. Each card offers a route out so the page is never a dead end
+  ("Edit its parameters ▸", "N errors · why? ▸", "N values differ ▸").
+  A workspace whose files have moved opens anyway, with a banner naming each
+  one and offering Locate…/Remove.
 - **Toolbar and status bar** — Save, Export (JSON/YAML), Undo, Redo and
   Search sit on the right of the top bar; opening files lives on the
   Workspace page. The status bar carries the file name and its

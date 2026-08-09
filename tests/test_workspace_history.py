@@ -433,8 +433,10 @@ def test_version_1_stores_migrate_without_losing_anything(tmp_path):
     # Named workspaces carry over untouched but for their new id.
     assert [w.name for w in history.workspaces] == ["old study"]
     assert history.workspaces[0].id
-    # Version 1 never recorded which workspace was on the board.
-    assert history.current_id is None
+    # The old automatic slot meant "what you had open", which is the
+    # question current_id now answers -- so the first launch after an
+    # upgrade hands it back rather than starting empty.
+    assert history.current_id == migrated.id
 
     # The migrated store rewrites itself at version 2 on the next mutation.
     history.add_recent("/cells/new.json")

@@ -21,16 +21,16 @@ Simulator hand-off (e.g. PyBOP, PyProBE) via target-specific writers behind
 
 ## Multi-document Workspace
 
-The accepted Workspace philosophy — one Primary, optionally one read-only
-Reference, comparison as an editor capability — is in
-[architecture.md](architecture.md). The interactive multi-document phase
-remains future work:
+The workspace model — one editable main plus up to four read-only
+references, live identity, shelving and naming, launch reopen — has landed;
+it is described in [architecture.md](architecture.md). What remains is the
+*interactive* multi-document phase:
 
-- a `Workspace` state object holding Primary and Reference sessions,
-  introduced only once a consumer exists;
-- comparison rendering: a shared tree with ownership indicators (never
-  filtering), dual inspectors, copying values between documents, difference
-  highlighting, old/new value review;
+- more than one **editable** document at once (today's references are
+  read-only snapshots with no session and no undo);
+- comparison rendering beyond the current gutter marks and Source diff: a
+  shared tree with ownership indicators (never filtering), dual inspectors,
+  old/new value review;
 - open design questions: adding and deleting parameters during comparison,
   copy semantics across incompatible structures, comparing different model
   types, validation behaviour while comparing, and nodes present on one side
