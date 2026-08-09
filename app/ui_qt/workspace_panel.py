@@ -302,8 +302,8 @@ def _validity_dot_label() -> QLabel:
     """The small filled dot beside a validity line -- the shared dot family
     (:mod:`ui_qt.icons`), rendered as a rich-text ``<img>`` exactly like the
     Diagnostics strip chips, so the two surfaces can never drift. The text
-    itself lives in a separate plain ``QLabel`` (the ``_info_badge``/
-    ``_reference_badge`` the tests and driver read via ``text()``)."""
+    itself lives in a separate plain ``QLabel`` beside it, which the tests
+    and driver read via ``text()``."""
     label = QLabel()
     label.setObjectName("ValidityDot")
     return label
