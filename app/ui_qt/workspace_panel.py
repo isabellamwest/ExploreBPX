@@ -571,6 +571,36 @@ class _ExpandableFact(QLabel):
         super().mousePressEvent(event)
 
 
+class _ElidedLabel(QLabel):
+    """A one-line label that elides on the right and keeps the whole text in
+    its tooltip. The sibling of :class:`_PathLabel`, which elides the other
+    way because a path's end is the part that identifies it."""
+
+    def __init__(self, object_name: str) -> None:
+        super().__init__()
+        self.setObjectName(object_name)
+        self._full_text = ""
+        self.setMinimumWidth(0)
+
+    def setText(self, text: str) -> None:  # noqa: N802 - Qt naming
+        self._full_text = text
+        self.setToolTip(text)
+        self._apply_elision()
+
+    def full_text(self) -> str:
+        return self._full_text
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 - Qt naming
+        super().resizeEvent(event)
+        self._apply_elision()
+
+    def _apply_elision(self) -> None:
+        metrics = QFontMetrics(self.font())
+        super().setText(
+            metrics.elidedText(self._full_text, Qt.ElideRight, max(self.width(), 1))
+        )
+
+
 class _PathLabel(QLabel):
     """A file path elided from the *left*, keeping the file name visible.
 
@@ -834,7 +864,7 @@ class _MainCard(QFrame):
         so. Either way the card states the absence and offers no route into
         a document that is not there."""
         self._name.setText("Main document not found" if missing else _INFO_PANEL_EMPTY_STATE_TEXT)
-        self._name.setProperty("ghosted", True)
+        self._set_ghosted(True)
         self._dot.hide()
         self._badge.hide()
         self._read_only_tag.hide()
@@ -846,7 +876,7 @@ class _MainCard(QFrame):
         errors: int, read_only: bool,
     ) -> None:
         self._name.setText(filename)
-        self._name.setProperty("ghosted", False)
+        self._set_ghosted(False)
         self._dot.setText(icons.html_img(icons.DOT, color=colour))
         self._dot.setToolTip(tooltip)
         self._dot.show()
@@ -861,6 +891,22 @@ class _MainCard(QFrame):
             self._issue_route.show()
         else:
             self._issue_route.hide()
+
+    def _set_ghosted(self, ghosted: bool) -> None:
+        """Swap the name between "a document" and "the absence of one".
+
+        The unpolish/polish is the whole point: a dynamic property that
+        changes after the widget has been styled does nothing until the
+        style is re-evaluated, so without this the card kept whichever look
+        it was born with -- an open document's name rendered in the ghost
+        grey meant for "No document open".
+        """
+        if self._name.property("ghosted") == ghosted:
+            return
+        self._name.setProperty("ghosted", ghosted)
+        style = self._name.style()
+        style.unpolish(self._name)
+        style.polish(self._name)
 
     def validity_text(self) -> str:
         return self._badge.text()
@@ -927,9 +973,11 @@ class _ReferenceSlot(QFrame):
         head.addWidget(self._remove, 0, Qt.AlignVCenter)
         filled.addLayout(head)
 
-        self._name = QLabel()
-        self._name.setObjectName("BoardSlotName")
-        self._name.setWordWrap(True)
+        # Elided, not wrapped: four slots side by side are narrow, and a
+        # long set name ("Chen2020 (LG M50 21700)") wrapped to three lines
+        # made one card twice the height of its neighbours. The full name is
+        # a hover away and spelled out in the record below.
+        self._name = _ElidedLabel("BoardSlotName")
         filled.addWidget(self._name)
 
         self._model = QLabel()
@@ -985,14 +1033,21 @@ class _ReferenceSlot(QFrame):
         )
         self._name.setText(snapshot.filename)
         self._model.setText(snapshot.model or "-")
+        self.set_differ(differ)
+
+    def set_differ(self, differ: int | None) -> None:
+        """The differ-count route. ``None`` while no comparison exists yet
+        (no main document open, or the comparison has not been recomputed):
+        an absent route is honest, a route reading "0 differ" would not be.
+        """
         if differ is None:
             self._diff_route.hide()
-        else:
-            plural = "s" if differ != 1 else ""
-            self._diff_route.setText(
-                f"{differ} value{plural} differ ▸" if differ else "Identical ▸"
-            )
-            self._diff_route.show()
+            return
+        plural = "s" if differ != 1 else ""
+        self._diff_route.setText(
+            f"{differ} value{plural} differ ▸" if differ else "Identical ▸"
+        )
+        self._diff_route.show()
 
     def set_selected(self, selected: bool) -> None:
         self.setProperty("selected", bool(selected))
@@ -1675,10 +1730,27 @@ class WorkspacePanel(QWidget):
 
     # --- refresh ----------------------------------------------------------
 
-    def set_workspace_name(self, name: str | None) -> None:
+    def set_workspace_name(self, name: str | None, exists: bool = True) -> None:
         """The board header's name. ``None`` is an untitled workspace, which
-        shows the ghosted invitation to name it."""
+        shows the ghosted invitation to name it; *exists* False means there
+        is no workspace at all, and the header hides rather than inviting a
+        name for something that is not there."""
+        self._name_field.setVisible(exists)
         self._name_field.set_text(name or "")
+
+    def set_differ_counts(self, counts: list[int]) -> None:
+        """Update the slots' differ routes for a freshly recomputed
+        comparison.
+
+        Its own entry point because comparisons are recomputed *after* the
+        page refreshes: the counts arrive a beat after the references they
+        belong to, so a slot that took them from ``refresh`` alone would
+        show the previous comparison's numbers -- or, on a restore, none at
+        all.
+        """
+        for index, slot in enumerate(self._slots):
+            if slot.snapshot is not None:
+                slot.set_differ(counts[index] if index < len(counts) else None)
 
     def reject_workspace_name(self, message: str, draft: str) -> None:
         self._name_field.reject(message, draft)

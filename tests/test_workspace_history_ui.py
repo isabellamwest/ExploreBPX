@@ -382,6 +382,76 @@ def test_dirty_guard_runs_before_a_restore(relaunch, spm_workfile, second_workfi
 
 
 # ---------------------------------------------------------------------------
+# the board's routes out: the page must never be a dead end
+
+
+def test_the_main_card_routes_to_the_editor_and_to_its_errors(
+    relaunch, spm_workfile, invalid_bpx_path
+):
+    d = relaunch()
+    d.open(spm_workfile)
+    d.show_view("Workspace")
+    # Nothing wrong: no route to a Diagnostics page with nothing on it.
+    assert d.issue_route_text() == ""
+    d.click_edit_route()
+    assert d.current_view_index() == 0
+
+    d.open(invalid_bpx_path)
+    d.show_view("Workspace")
+    assert d.issue_route_text() == "1 error · why? ▸"
+    d.click_issue_route()
+    assert d.current_view_index() == 1
+
+
+def test_each_slot_names_how_much_differs_and_routes_to_the_diff(
+    relaunch, spm_workfile, second_workfile
+):
+    """The count was already computed for every comparison and shown
+    nowhere but a tooltip. It is a route now -- and it must survive the
+    recompute that lands after the page has refreshed."""
+    d = relaunch()
+    d.open(spm_workfile)
+    d._w._open_reference_path(second_workfile)  # a byte-identical copy
+    d.dock_library_reference(CHEN2020)
+    d.show_view("Workspace")
+
+    assert d.reference_diff_text(0) == "Identical ▸"
+    assert d.reference_diff_text(1).endswith("values differ ▸")
+
+    d.click_reference_diff(1)
+
+    assert d.current_view_index() == 3  # the Source page
+    assert d._w._source_reference_index == 1
+
+
+def test_the_counts_survive_a_relaunch_restore(
+    relaunch, spm_workfile, second_workfile
+):
+    first = relaunch()
+    first.open(spm_workfile)
+    first._w._open_reference_path(second_workfile)
+
+    fresh = relaunch()
+    fresh.show_view("Workspace")
+
+    assert fresh.reference_diff_text(0) == "Identical ▸"
+
+
+def test_the_board_offers_no_name_when_there_is_no_workspace(
+    relaunch, spm_workfile
+):
+    """An invitation that would silently do nothing is worse than none."""
+    d = relaunch()
+    assert d.workspace_name_text() == ""
+
+    d.open(spm_workfile)
+    assert d.workspace_name_text() == "Untitled workspace — click to name it"
+
+    d.click_new_workspace()
+    assert d.workspace_name_text() == ""
+
+
+# ---------------------------------------------------------------------------
 # the board's ＋ menu, and the store's own honesty
 
 

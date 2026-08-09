@@ -1659,6 +1659,10 @@ class MainWindow(QMainWindow):
         self._tree.set_comparison(self._comparisons)
         self._params.set_comparison(pins)
         self._inspector.set_comparison(pins)
+        # The board's per-reference differ routes. Pushed from here, not
+        # from _update_workspace_info: comparisons are recomputed after the
+        # page refreshes, so the counts are only true once this runs.
+        self._workspace.set_differ_counts(self._differ_counts())
         # The Source page re-renders here too: every route that changes what
         # it must show (edit, undo/redo, open/new, reference pin/remove)
         # already funnels through this method.
@@ -2257,10 +2261,20 @@ class MainWindow(QMainWindow):
         return [comparison.differ_count for comparison in self._comparisons]
 
     def _update_workspace_name(self) -> None:
+        """The board header. With no workspace on the board there is nothing
+        to name, so the header hides rather than offering an invitation that
+        would silently do nothing."""
         record = (
             self._state.history.current() if self._state.history is not None else None
         )
-        self._workspace.set_workspace_name(record.name if record is not None else None)
+        on_the_board = record is not None and (
+            self._state.active is not None
+            or bool(self._state.references)
+            or bool(self._missing_files)
+        )
+        self._workspace.set_workspace_name(
+            record.name if record is not None else None, exists=on_the_board
+        )
 
     def _refresh_workspace_rail(self) -> None:
         """Sync the rail's two workspace groups with the persistent store.

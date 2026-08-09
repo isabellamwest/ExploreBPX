@@ -901,9 +901,11 @@ class AppDriver:
     # --- the board's header and banner ------------------------------------
 
     def workspace_name_text(self) -> str:
-        """What the board header shows: the workspace's name, or the ghosted
-        invitation when it has none."""
-        return self._w._workspace._name_field._display.text()
+        """What the board header shows: the workspace's name, the ghosted
+        invitation when it has none, or "" when there is no workspace on the
+        board and the header is not offered at all."""
+        field = self._w._workspace._name_field
+        return "" if field.isHidden() else field._display.text()
 
     def rename_workspace(self, name: str) -> "AppDriver":
         """Type a new name into the board header and commit it."""
