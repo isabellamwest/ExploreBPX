@@ -574,7 +574,6 @@ class SourceView(QAbstractScrollArea):
         self._flash_timer = QTimer(self)
         self._flash_timer.setSingleShot(True)
         self._flash_timer.timeout.connect(self._clear_flash)
-        self._font = typography.mono(typography.BODY)
         #: Font metrics per (bold, italic) variant of the fixed font -- text
         #: is measured for wrapping far more often than it is painted.
         self._metrics_cache: dict[tuple[bool, bool], QFontMetrics] = {}

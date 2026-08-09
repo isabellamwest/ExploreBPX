@@ -33,6 +33,7 @@ in ``app/ui_qt/`` outside this module.
 
 from __future__ import annotations
 
+import sys
 from functools import lru_cache
 
 from PySide6.QtGui import QFont
@@ -42,23 +43,58 @@ from PySide6.QtWidgets import QApplication, QLabel, QWidget
 # Families
 # ---------------------------------------------------------------------------
 
-#: The UI face, most-preferred first. ``Segoe UI Variable Text`` is Windows
-#: 11's own refreshed Segoe, optically sized for text rather than display, so
-#: it is the better face at the small sizes this app lives at; ``Segoe UI`` is
-#: the Windows 10 fallback (and what VS Code itself asks for). Pinning the
-#: family matters even though nothing set one before: the app was consistent
-#: only by luck, since anything constructing a bare ``QFont()`` picked up the
-#: *application* default rather than the widget's.
-UI_FAMILIES: tuple[str, ...] = ("Segoe UI Variable Text", "Segoe UI", "system-ui")
+#: True on macOS. The families below are the one part of this module that
+#: cannot be a single cross-platform list: Qt picks the first *installed*
+#: family, so a shared list would work -- but naming a family the machine does
+#: not have makes Qt populate its alias table to prove the absence, which it
+#: reports as ``Populating font family aliases took 54 ms``. Asking each
+#: platform only for faces it actually ships skips that entirely.
+_MACOS = sys.platform == "darwin"
 
-#: The monospace face, most-preferred first. ``QFontDatabase.systemFont(
-#: FixedFont)`` -- what nine call sites used to ask for -- resolves to Courier
-#: New on Windows, whose cap height at 13px is 7.4 against Segoe UI's 9.1, so
-#: mono text read as visibly weedier and older than everything beside it.
-#: Cascadia Mono measures 9.0 at the same size: near-exact, which is why
-#: monospace can now simply sit on :data:`BODY` with no optical fudge (the
-#: old code carried a ``-1px`` correction and a floor).
-MONO_FAMILIES: tuple[str, ...] = ("Cascadia Mono", "Consolas", "Courier New")
+#: The UI face, most-preferred first.
+#:
+#: On Windows, ``Segoe UI Variable Text`` is Windows 11's own refreshed Segoe,
+#: optically sized for text rather than display, so it is the better face at
+#: the small sizes this app lives at; ``Segoe UI`` is the Windows 10 fallback
+#: (and what VS Code itself asks for).
+#:
+#: On macOS the counterpart is the system UI face itself. ``.AppleSystemUIFont``
+#: is the name Qt resolves ``GeneralFont`` to, and naming it explicitly gives
+#: byte-identical metrics to letting the stack fall through (cap height 9.16 at
+#: 13px either way) while keeping the family pinned rather than accidental.
+#:
+#: Pinning the family matters even though nothing set one before: the app was
+#: consistent only by luck, since anything constructing a bare ``QFont()``
+#: picked up the *application* default rather than the widget's.
+UI_FAMILIES: tuple[str, ...] = (
+    (".AppleSystemUIFont", "Helvetica Neue")
+    if _MACOS
+    else ("Segoe UI Variable Text", "Segoe UI", "system-ui")
+)
+
+#: The monospace face, most-preferred first, chosen to *optically match*
+#: :data:`UI_FAMILIES` rather than merely to be fixed-width.
+#:
+#: ``QFontDatabase.systemFont(FixedFont)`` -- what nine call sites used to ask
+#: for -- resolves to Courier New on Windows, whose cap height at 13px is 7.4
+#: against Segoe UI's 9.1, so mono text read as visibly weedier and older than
+#: everything beside it. Cascadia Mono measures 9.0 at the same size.
+#:
+#: The same trap had swallowed macOS, where it was the *whole* list that missed:
+#: no Cascadia Mono, no Consolas, so every Source view fell through to Courier
+#: New at cap height 7.4 against the system face's 9.2 -- a 19% shortfall, and
+#: the reason mono text read as a different, older typeface than the rest of the
+#: app. Menlo measures 9.47 there: within 3%, the same near-exact match Cascadia
+#: gives on Windows. So monospace still simply sits on :data:`BODY` with no
+#: optical fudge (the old code carried a ``-1px`` correction and a floor).
+#: Menlo rather than SF Mono deliberately: SF Mono ships with macOS but is not
+#: registered under that name in Qt's font database, so naming it buys nothing
+#: and costs the alias-table scan described above. Menlo is on every macOS.
+MONO_FAMILIES: tuple[str, ...] = (
+    ("Menlo", "Courier New")
+    if _MACOS
+    else ("Cascadia Mono", "Consolas", "Courier New")
+)
 
 # ---------------------------------------------------------------------------
 # The scale
