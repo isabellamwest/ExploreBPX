@@ -64,9 +64,8 @@ class AppState:
         #: What the history should call the current main document: set by
         #: the three real opens (path + D3 mode), cleared when the session
         #: has no on-disk identity (scaffolds, clones, closed). While
-        #: ``None``, reference changes leave the last-workspace record
-        #: untouched -- a scaffold session must not erase the last
-        #: restorable workspace.
+        #: ``None``, reference changes leave the workspace record untouched
+        #: -- a scaffold session must not erase a restorable workspace.
         self._last_main: MainRecord | None = None
 
     @property
@@ -274,7 +273,7 @@ class AppState:
         if self.at_reference_cap:
             return PinReferenceOutcome.AT_CAP
         self.references.append(ReferenceSnapshot.load(path))
-        self._sync_last_workspace()
+        self._sync_workspace()
         return PinReferenceOutcome.ADDED
 
     def pin_reference_set(self, set_id: str) -> PinReferenceOutcome:
@@ -295,7 +294,7 @@ class AppState:
         if self.at_reference_cap:
             return PinReferenceOutcome.AT_CAP
         self.references.append(ReferenceSnapshot.from_library(set_id))
-        self._sync_last_workspace()
+        self._sync_workspace()
         return PinReferenceOutcome.ADDED
 
     def remove_reference(self, reference: ReferenceSnapshot) -> None:
@@ -309,7 +308,7 @@ class AppState:
         for index, pinned in enumerate(self.references):
             if pinned is reference:
                 del self.references[index]
-                self._sync_last_workspace()
+                self._sync_workspace()
                 return
 
     def reload_reference(self, index: int = 0) -> None:
@@ -338,6 +337,47 @@ class AppState:
         self.references[index] = ReferenceSnapshot.load(existing.path)
 
     # ------------------------------------------------------------------
+    # workspaces
+
+    @property
+    def workspace_id(self) -> str | None:
+        """The id of the workspace on the board, or ``None``.
+
+        Read straight from the store rather than mirrored here: one place
+        knows which workspace is current, so the two can never drift.
+        """
+        return self.history.current_id if self.history is not None else None
+
+    def new_workspace(self) -> None:
+        """Clear the board for a separate line of work.
+
+        The workspace being left is not discarded -- an untitled one is
+        already shelved under Recent and a named one lives in Workspaces --
+        so this only lets go of it. The session and its pins go with it:
+        a separate line of work starts empty, which is the whole difference
+        between this and opening a file (which swaps the main in place).
+        """
+        self.active = None
+        self.references = []
+        self._last_main = None
+        if self.history is not None:
+            self.history.set_current(None)
+
+    def enter_workspace(self, workspace_id: str) -> None:
+        """Make a remembered workspace current *before* its files reopen.
+
+        Ordering matters: the opens that follow must land in this workspace
+        rather than start another, and the recorded main is adopted up
+        front so that a main which no longer exists still leaves the
+        workspace pointing at where it was -- the pointer Locate… repoints.
+        """
+        if self.history is None:
+            return
+        self.history.set_current(workspace_id)
+        record = self.history.current()
+        self._last_main = record.main if record is not None else None
+
+    # ------------------------------------------------------------------
     # workspace history recording
 
     def note_main_saved(self) -> None:
@@ -354,35 +394,56 @@ class AppState:
         self._note_main_opened(session.backing_file, "normal")
 
     def current_workspace_record(self) -> WorkspaceRecord | None:
-        """The current workspace as a history record, or ``None`` when the
-        main document has no on-disk identity to remember (the seam the
-        "Save current workspace as…" action enables itself from)."""
+        """The current workspace's files as a record, or ``None`` when the
+        main document has no on-disk identity to remember (a scaffold or a
+        never-saved clone). Live by construction: it is read off the board,
+        not off a snapshot taken earlier."""
         if self._last_main is None:
             return None
         return WorkspaceRecord(
-            main=self._last_main, references=self._reference_records()
+            main=self._last_main,
+            references=self._reference_records(),
+            id=self.workspace_id or "",
         )
 
     def _note_main_opened(self, path: Path, mode: str) -> None:
-        self._last_main = MainRecord(path=str(path), mode=mode)
+        """Record *path* as the main document, in whichever workspace should
+        own it.
+
+        Opening a file *starts* a workspace when there is none, and
+        otherwise swaps into the Main slot of the one already on the board.
+        The exception is a **named** workspace, which an ordinary open never
+        rewrites: naming a workspace is the act that says "stop rewriting
+        this", so a plain open beside one starts a fresh untitled workspace
+        instead (carrying the references, which are still pinned) and leaves
+        the named entry exactly as it was. Reopening the same main in the
+        same mode is not a swap at all, so it stays put.
+        """
+        main = MainRecord(path=str(path), mode=mode)
+        self._last_main = main
         if self.history is None:
             return
         self.history.add_recent(str(path))
-        self._sync_last_workspace()
+        current = self.history.current()
+        if current is None or (current.is_named and current.main != main):
+            self.history.start_workspace(
+                WorkspaceRecord(main=main, references=self._reference_records())
+            )
+        else:
+            self.history.update_current(main, self._reference_records())
 
-    def _sync_last_workspace(self) -> None:
-        """Rewrite the automatic last-workspace record from current state.
+    def _sync_workspace(self) -> None:
+        """Rewrite the current workspace's record from current state.
 
-        Runs at every reference change; while the main document has no
-        recorded identity (``_last_main`` is None) it leaves the store
-        alone, so a scaffold session never erases the last restorable
-        workspace.
+        Runs at every reference change -- named or not, because a workspace
+        looks after itself and there is no save step to wait for. While the
+        main document has no recorded identity (``_last_main`` is None) it
+        leaves the store alone, so a scaffold session never rewrites the
+        workspace it was started from.
         """
         if self.history is None or self._last_main is None:
             return
-        self.history.set_last_workspace(
-            WorkspaceRecord(main=self._last_main, references=self._reference_records())
-        )
+        self.history.update_current(self._last_main, self._reference_records())
 
     def _reference_records(self) -> tuple[ReferenceRecord, ...]:
         return tuple(

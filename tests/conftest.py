@@ -127,6 +127,17 @@ def spm_workfile(valid_spm_path, tmp_path) -> Path:
 
 
 @pytest.fixture
+def second_workfile(valid_spm_path, tmp_path) -> Path:
+    """A second writable copy, for the many workspace tests that need two
+    distinct openable files to tell one arrangement from another."""
+    import shutil
+
+    work = tmp_path / "second_workfile.json"
+    shutil.copy(valid_spm_path, work)
+    return work
+
+
+@pytest.fixture
 def main_window(qtbot):
     """A live :class:`MainWindow` with no document open.
 
