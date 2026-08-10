@@ -18,6 +18,8 @@ pytest.importorskip("PySide6")
 
 import ui_qt.main_window as main_window_module
 
+from platform_facts import assert_alert_title
+
 _CAPACITY = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
 
 
@@ -280,7 +282,7 @@ def test_ask_open_intent_real_dialog_replace_main(app_driver, valid_spm_path):
     QTimer.singleShot(0, _click_replace_main)
     intent = d._w._ask_open_intent("incoming.json")
 
-    assert captured["title"] == "Open incoming.json"
+    assert_alert_title(captured["title"], "Open incoming.json")
     assert captured["text"] == (
         "spm_example_valid.json is already open. Open incoming.json as:"
     )

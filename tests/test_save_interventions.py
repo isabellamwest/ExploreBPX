@@ -27,6 +27,8 @@ import ui_qt.main_window as main_window_module
 from state.app_state import AppState
 from ui_qt.main_window import StaleChoice, _format_disk_time
 
+from platform_facts import assert_alert_title
+
 _CAPACITY = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
 
 
@@ -382,7 +384,7 @@ def test_stale_dialog_real_box_words_and_default(app_driver):
     choice = window._ask_stale_resolution("lgm50.json", moment.timestamp())
 
     assert choice is StaleChoice.CANCEL
-    assert captured["title"] == "Cannot save"
+    assert_alert_title(captured["title"], "Cannot save")
     assert captured["text"] == (
         "lgm50.json changed on disk on 5 Mar 2026 at 14:22, after it was "
         "opened here. Saving now would replace that version."
@@ -422,7 +424,7 @@ def test_comment_dialog_real_box_words_and_default(app_driver):
     answer = window._ask_comment_loss("nmc_pouch.yaml", "nmc_pouch.yaml")
 
     assert answer is True
-    assert captured["title"] == "Comments will not survive saving"
+    assert_alert_title(captured["title"], "Comments will not survive saving")
     assert captured["text"] == (
         "nmc_pouch.yaml contains comments. Saving rewrites the whole "
         "file: comments and formatting will not survive."

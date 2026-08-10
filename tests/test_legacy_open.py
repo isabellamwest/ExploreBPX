@@ -27,6 +27,8 @@ from state.app_state import AppState
 from state.document_session import ReadOnlyDocumentError
 from ui_qt.main_window import LegacyIntent
 
+from platform_facts import assert_alert_title
+
 _LEGACY = "warning_legacy_bpx_float.json"
 _CAPACITY = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
 
@@ -211,7 +213,7 @@ def test_legacy_prompt_real_box_words_and_default(app_driver):
     intent = window._ask_legacy_intent("lgm50_v0.json", "0.4")
 
     assert intent is LegacyIntent.CANCEL
-    assert captured["title"] == "Open lgm50_v0.json"
+    assert_alert_title(captured["title"], "Open lgm50_v0.json")
     assert captured["text"] == (
         f"lgm50_v0.json is BPX 0.4. Editing and checking here use BPX {BPX_VERSION}."
     )
