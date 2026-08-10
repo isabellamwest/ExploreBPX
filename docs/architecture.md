@@ -186,9 +186,13 @@ by path and never drive widgets directly.
 | `core/tree_model.py` | UI-neutral object tree, parameter rows, issue-path matching. |
 | `core/parameter_types.py` | Parameter-kind classification and metadata. |
 | `core/example_library.py` / `reference_library.py` | Bundled data sources behind gateway-style adapters. |
+| `core/compare.py` / `source_rows.py` | The one comparison engine: row states, and the raw-JSON row model the Source page paints. No surface recomputes either. |
+| `core/page_buckets.py` | The one grouping the Diagnostics strip and stream both render from. |
 | `state/document_session.py` / `app_state.py` | Per-document session; app-global state. |
 | `state/workspace_history.py` | The persistent workspace store: pointers only, one JSON file per user. |
 | `ui_qt/workspace_panel.py` | The Workspace page: the workspaces rail and the board of files. |
+| `ui_qt/source_page.py` | The Source page: two aligned raw-JSON panes and the pull gutter. |
+| `ui_qt/reference_identity.py` | One badge per pinned reference, shared by every surface that names one. |
 | `ui_qt/main_window.py` | Shell assembly and top-level wiring. |
 | `ui_qt/navigation.py` | `NavigationService`. |
 
@@ -205,11 +209,12 @@ navigate to locations rather than filtering or replacing the hierarchy.
 ```
 
 - **Activity bar** — a VS Code-style icon rail switching the content area
-  between top-level pages: **Workspace** (the rail of workspaces beside the
-  board of files the current one holds, over the main document's own
-  record), **Editor** (the three-pane view below) and **Diagnostics**. It is reserved for major pages; parameter-centric tools go
-  in the Inspector instead. The Diagnostics badge counts issues — red for
-  errors, amber for warnings only, and no badge for a merely unfinished
+  between four top-level pages: **Workspace** (the rail of workspaces beside
+  the board of files the current one holds, over the main document's own
+  record), **Editor** (the three-pane view below), **Source** (the raw JSON)
+  and **Diagnostics**. The rail is reserved for major pages; parameter-centric
+  tools go in the Inspector instead. The Diagnostics badge counts issues — red
+  for errors, amber for warnings only, and no badge for a merely unfinished
   document: **red means wrong, never unstarted**.
 - **Top context bar** — the document's identity (`Title · BPX vX.Y`); a
   context surface, not a clickable breadcrumb.
@@ -240,6 +245,22 @@ navigate to locations rather than filtering or replacing the hierarchy.
   filters that never change any reported count. `core/page_buckets.py`
   supplies the one grouping that the strip and stream both render from, so
   they cannot disagree.
+- **Source page** — the document's raw JSON, painted rather than edited: the
+  page holds no input widget, ever, and every mutation it offers goes through
+  the same commands the Editor uses. Sections fold under a `Key · N parameters`
+  header; a dict-valued parameter closes to a one-line stand-in. Docking a
+  reference splits it into two aligned panes — rows matched line by line, a key
+  missing on one side drawn as a grey gap the height of the taller side,
+  reference-only content in purple, differing values chipped. The gutter
+  between the panes belongs to one affordance: a `←` on every row whose value
+  could come from the reference, copying that raw value across as **one undo
+  entry** on the shared stack (a reference-only section pulls whole). It is
+  absent entirely when the main document is open read-only — pulling is made
+  impossible, not merely undoable. One reference shows at a time, chosen from
+  the badge strip in the reference pane's header; pull and Reload both act on
+  the selected badge, never on the first pin. A reference that changed on disk
+  is named in a slim band under the headers, checked when the page is entered
+  or the window activated — never watched, never silently refreshed.
 - **Workspace page** — a shaded rail beside a white pane. The rail carries
   Open File… and New workspace over two always-visible groups (Workspaces,
   then Recent), each row showing a glyph for its shape, an "open now" pill
@@ -261,6 +282,10 @@ navigate to locations rather than filtering or replacing the hierarchy.
 
 - All navigation goes through `NavigationService`; search and validation
   navigate, they never filter or hide the structure.
+- A pinned reference wears one identity everywhere — the same letters in the
+  same colour on the Source badge strip, the card ledger, the chart legend and
+  the spread scale (`ui_qt/reference_identity.py`). Colour is never the only
+  thing telling two references apart, so every badge carries its letters too.
 - Guidance informs, it does not lock: invalid edits may be committed.
 - Creation is offered by visible affordances; actions on an existing row or
   node live in its context menu.
