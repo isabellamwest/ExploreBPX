@@ -122,7 +122,7 @@ class _MeasureBoundVBox(QVBoxLayout):
     its content is actually arranged at.
 
     The section stretches full-bleed while its header and body are capped at
-    ``style.CONTENT_MEASURE`` -- and Qt asks this layout for height at the
+    the section's measure -- and Qt asks this layout for height at the
     *full* width (``QWidgetItem::heightForWidth`` consults a widget's layout
     directly, bypassing any widget-level override). At a wide window that
     computes label wrapping at a width the capped children never receive,
@@ -130,11 +130,17 @@ class _MeasureBoundVBox(QVBoxLayout):
     too few pixels and clips it (geometry-probed on screen: the record's
     expanded fact details lost exactly the shortfall). Both height queries
     therefore clamp to the measure plus this layout's own margins -- the
-    width the children genuinely see."""
+    width the children genuinely see. The measure is passed in, not read
+    back off the parent widget, so a section that takes a wider measure
+    keeps its height computed at the width its own children see."""
+
+    def __init__(self, parent: QWidget, measure: int) -> None:
+        super().__init__(parent)
+        self._measure = measure
 
     def _bound(self, width: int) -> int:
         margins = self.contentsMargins()
-        return min(width, style.CONTENT_MEASURE + margins.left() + margins.right())
+        return min(width, self._measure + margins.left() + margins.right())
 
     def heightForWidth(self, width: int) -> int:  # noqa: N802 - Qt naming
         return super().heightForWidth(self._bound(width))
@@ -182,8 +188,12 @@ class TintedSection(QWidget):
     colour literal, so pair one with a ``QWidget#<object_name>``
     background rule in style.py (see ``WorkspaceMainSection``/
     ``WorkspaceReferenceSection`` for the pattern). The body is capped at
-    ``style.CONTENT_MEASURE``, left-hugging the same gutter as the title,
-    the same left-unset/no-alignment idiom ``cards/page.py`` uses.
+    ``measure`` (``style.CONTENT_MEASURE`` by default), left-hugging the
+    same gutter as the title, the same left-unset/no-alignment idiom
+    ``cards/page.py`` uses. A section whose body is a horizontal row of
+    cards rather than running text passes a wider ``measure``: the reading
+    measure that keeps prose legible squeezes side-by-side cards until
+    their labels elide.
 
     ``collapsible=True`` puts a disclosure chevron before the title and
     makes the whole title row a click target that toggles the body
@@ -201,13 +211,14 @@ class TintedSection(QWidget):
         title_object_name: str = "PanelTitle",
         suffix: QWidget | None = None,
         collapsible: bool = False,
+        measure: int = style.CONTENT_MEASURE,
     ) -> None:
         super().__init__()
         self.setObjectName(object_name)
         self.setAttribute(Qt.WA_StyledBackground, True)
         self._collapsed = False
 
-        outer = _MeasureBoundVBox(self)
+        outer = _MeasureBoundVBox(self, measure)
         outer.setContentsMargins(_SECTION_GUTTER, 12, _SECTION_GUTTER, 12)
         outer.setSpacing(8)
 
@@ -237,11 +248,11 @@ class TintedSection(QWidget):
         # reference rows, "3 warnings" adrift of the document it counts);
         # capped, the title and its suffix are the bookends of the same
         # column the body fills.
-        self.header.setMaximumWidth(style.CONTENT_MEASURE)
+        self.header.setMaximumWidth(measure)
         outer.addWidget(self.header)
 
         self.body = QWidget()
-        self.body.setMaximumWidth(style.CONTENT_MEASURE)
+        self.body.setMaximumWidth(measure)
         self.body_layout = QVBoxLayout(self.body)
         self.body_layout.setContentsMargins(0, 0, 0, 0)
         self.body_layout.setSpacing(8)

@@ -91,8 +91,22 @@ _SECTION_GAP = 16
 #: stop reading as a place a reference goes.
 _EMPTY_SLOT_HEIGHT = 56
 
+#: The measure every section on this page is capped at -- one right edge for
+#: the whole page, so the board and the strip beneath it are bookends of the
+#: same column rather than two bands ending in different places. Wider than
+#: ``style.CONTENT_MEASURE`` because the page's widest content is a
+#: horizontal row of cards and a keyed record, neither of which is running
+#: text: at the reading measure the four reference slots got about 90 px
+#: each and their names elided to a few characters, and the From row could
+#: not show a path. The description is the one paragraph here and it does
+#: run to this measure -- capping that label alone re-clips it, because a
+#: word-wrapped label narrower than the form column it sits in is measured
+#: for height at the column's width and handed too few pixels (the same
+#: mismatch ``_MeasureBoundVBox`` guards at the section level).
+_PAGE_MEASURE = 960
+
 #: The Main slot's share of the board row, against 2 per reference slot.
-#: The row is capped at the page's content measure, so the two states want
+#: The row is capped at the page measure, so the two states want
 #: different splits: a main *card* is a filename and a mark, while the start
 #: surface is four model names each beside a descriptor, read side by side to
 #: choose between. A descriptor that elides cannot be compared, so the
@@ -840,6 +854,9 @@ class _MainCard(QFrame):
         super().__init__()
         self.setObjectName("BoardMainCard")
         self.setAttribute(Qt.WA_StyledBackground, True)
+        # A floor, not a width: the row's stretch decides the real size, but
+        # the main document's name must never be squeezed to initials.
+        self.setMinimumWidth(160)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 10, 12, 10)
         layout.setSpacing(4)
@@ -988,6 +1005,9 @@ class _ReferenceSlot(QFrame):
         # rather than by its neighbour. The floor keeps it a slot rather
         # than a button: it has to read as a place a reference goes.
         self.setMinimumHeight(_EMPTY_SLOT_HEIGHT)
+        # The matching floor across: a pinned reference's name still elides
+        # at narrow windows, but never past a few readable characters.
+        self.setMinimumWidth(100)
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(10, 10, 10, 10)
         self._layout.setSpacing(4)
@@ -1637,7 +1657,11 @@ class WorkspacePanel(QWidget):
     def _build_board(self) -> QWidget:
         """The board: the main card beside the four reference slots, inside
         the one frame that says what they are to each other."""
-        section = TintedSection("This workspace", object_name="WorkspaceBoardSection")
+        section = TintedSection(
+            "This workspace",
+            object_name="WorkspaceBoardSection",
+            measure=_PAGE_MEASURE,
+        )
         body = section.body_layout
 
         board = QHBoxLayout()
@@ -1686,7 +1710,9 @@ class WorkspacePanel(QWidget):
         edit in place -- over the *fact plaque*, a quieter wash carrying the
         file's own immutable facts. The split is the D6 rule made visible:
         the upper block is yours, the plaque is the file's."""
-        section = TintedSection("Main", object_name="WorkspaceMainSection")
+        section = TintedSection(
+            "Main", object_name="WorkspaceMainSection", measure=_PAGE_MEASURE
+        )
         body = section.body_layout
 
         self._info_title = _EditableText(
