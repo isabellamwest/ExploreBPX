@@ -98,7 +98,6 @@ class RecentEntryView:
 
     path: str
     name: str
-    folder: str
     exists: bool
 
 

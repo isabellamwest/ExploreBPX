@@ -162,18 +162,6 @@ class _IdentityLabel(QLabel):
         self.setText(metrics.elidedText(self._full_text, Qt.ElideRight, self.width()))
 
 
-def _folder_display(path_text: str) -> str:
-    """A recent row's quiet location hint: the file's folder with the home
-    directory abbreviated to ``~`` -- short enough for the rail, telling two
-    same-named files apart. The full path stays in the row's tooltip."""
-    parent = Path(path_text).parent
-    try:
-        relative = parent.relative_to(Path.home())
-    except ValueError:
-        return f"{parent}/"
-    return f"~/{relative}/" if str(relative) != "." else "~/"
-
-
 class MainWindow(QMainWindow):
     def __init__(
         self, history: WorkspaceHistory | None = None, restore_session: bool = True
@@ -2317,7 +2305,6 @@ class MainWindow(QMainWindow):
                 RecentEntryView(
                     path=text,
                     name=Path(text).name,
-                    folder=_folder_display(text),
                     exists=Path(text).exists(),
                 )
                 for text in history.recent_files
