@@ -17,11 +17,12 @@ count/height -- every caller does, right after populating.
 from __future__ import annotations
 
 from PySide6.QtCore import QSize
-from PySide6.QtWidgets import QListWidget
+
+from .activating_list import ActivatingList
 
 
-class ContentSizedList(QListWidget):
-    """See module docstring."""
+class ContentSizedList(ActivatingList):
+    """See module docstring. Return activates, per :class:`ActivatingList`."""
 
     def sizeHint(self) -> QSize:  # noqa: N802 (Qt override)
         width = super().sizeHint().width()

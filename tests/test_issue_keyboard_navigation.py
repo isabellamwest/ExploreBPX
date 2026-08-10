@@ -144,3 +144,96 @@ def test_issues_view_row_tooltip_is_severity_derived_not_message_derived(issues_
 
     item = issues_view._list.item(0)
     assert item.toolTip() == style.severity_tooltip(Severity.ERROR)
+
+
+# ----------------------------------------------------------------------
+# The activation key itself. Both lists above get Return from
+# ``ActivatingList`` rather than from ``QAbstractItemView``, because Qt takes
+# its activation key from the platform's binding scheme and macOS's reserves
+# Return for rename, mapping activation to Cmd+O. These pin the override so
+# the portable behaviour cannot quietly regress back to the platform's.
+# ----------------------------------------------------------------------
+
+
+@pytest.fixture
+def activating_list(qtbot):
+    from PySide6.QtWidgets import QListWidgetItem
+
+    from ui_qt.activating_list import ActivatingList
+
+    widget = ActivatingList()
+    qtbot.addWidget(widget)
+    for text in ("first", "second"):
+        widget.addItem(QListWidgetItem(text))
+    return widget
+
+
+def test_return_activates_the_current_row(qtbot, activating_list):
+    fired = []
+    activating_list.itemActivated.connect(lambda item: fired.append(item.text()))
+    activating_list.setCurrentRow(1)
+
+    qtbot.keyClick(activating_list, Qt.Key_Return)
+
+    assert fired == ["second"]
+
+
+def test_keypad_enter_activates_too(qtbot, activating_list):
+    fired = []
+    activating_list.itemActivated.connect(lambda item: fired.append(item.text()))
+    activating_list.setCurrentRow(0)
+
+    qtbot.keyClick(activating_list, Qt.Key_Enter, Qt.KeypadModifier)
+
+    assert fired == ["first"]
+
+
+def test_return_activates_exactly_once(qtbot, activating_list):
+    """The override consumes Return rather than passing it on, so Qt's own
+    activation cannot also fire on a platform whose scheme maps it."""
+    fired = []
+    activating_list.itemActivated.connect(fired.append)
+    activating_list.setCurrentRow(0)
+
+    qtbot.keyClick(activating_list, Qt.Key_Return)
+
+    assert len(fired) == 1
+
+
+def test_a_modified_return_is_handed_to_the_base_class(qtbot, activating_list):
+    """Only the bare chord is claimed by the override. What a *modified* Return
+    then does is Qt's own business and varies by platform (Windows activates on
+    Shift+Return, macOS does not), so the portable thing to pin is simply that
+    the override passes it down instead of swallowing it."""
+    from PySide6.QtWidgets import QListWidgetItem
+
+    from ui_qt.activating_list import ActivatingList
+
+    reached = []
+
+    class _Probe(ActivatingList):
+        def keyPressEvent(self, event):  # noqa: N802
+            ActivatingList.keyPressEvent(self, event)
+            reached.append(event.key())
+
+    widget = _Probe()
+    qtbot.addWidget(widget)
+    widget.addItem(QListWidgetItem("only"))
+    widget.setCurrentRow(0)
+
+    qtbot.keyClick(widget, Qt.Key_Return, Qt.ShiftModifier)
+
+    assert Qt.Key_Return in reached
+
+
+def test_return_on_an_empty_list_does_nothing(qtbot):
+    from ui_qt.activating_list import ActivatingList
+
+    widget = ActivatingList()
+    qtbot.addWidget(widget)
+    fired = []
+    widget.itemActivated.connect(fired.append)
+
+    qtbot.keyClick(widget, Qt.Key_Return)
+
+    assert fired == []

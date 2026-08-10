@@ -102,6 +102,7 @@ from core.page_buckets import (
 from core.validation import Severity, merge_union_pair
 
 from . import icons, parameter_row, style, typography
+from .activating_list import ActivatingList
 from .file_facts import FileFact
 from .parameter_row import ParameterRowDelegate
 
@@ -861,7 +862,7 @@ class _StreamView(QWidget):
         layout.setContentsMargins(0, 4, 0, 4)
         layout.setSpacing(0)
 
-        self._list = QListWidget()
+        self._list = ActivatingList()
         self._list.setObjectName("DiagnosticsStreamList")
         self._list.setWordWrap(True)
         self._list.setItemDelegate(_DiagnosticsRowDelegate(self._list))
