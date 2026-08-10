@@ -310,6 +310,20 @@ QToolBar { background: #f6f8fa; border-bottom: 1px solid #d0d7de; padding: 4px; 
 QToolBar > QToolButton { background: transparent; border: none; border-radius: 4px; padding: 3px 8px; }
 QToolBar > QToolButton:hover:!disabled { background: #e8eaed; }
 QToolBar > QToolButton:disabled { color: #8c959f; }
+/* The toolbar search, given the same box as the add-parameter input rather
+   than left to the platform: unstyled it took whatever inset the native line
+   edit happened to have (2px on Windows), so caret and placeholder sat on the
+   border, and the field was the one input in the app that looked different on
+   each OS. Vertical padding matches the buttons beside it so the toolbar keeps
+   its height. */
+QLineEdit#SearchBar {
+    border: 1px solid #d0d7de;
+    border-radius: 4px;
+    padding: 3px 8px;
+    background: #ffffff;
+    selection-background-color: #ddeeff;
+}
+QLineEdit#SearchBar:focus { border: 1px solid #1f6feb; }
 /* Menu-carrying buttons (Export, the material map's "Material"): reserve
    room on the right and centre the caret in it, clear of the label. The
    material button sits in a card's grid button row, not the toolbar, so the
@@ -665,10 +679,19 @@ QPushButton#SourceReloadLink {
 }
 QPushButton#SourceReloadLink:hover { color: #1a5fd0; }
 QStatusBar { background: #f6f8fa; border-top: 1px solid #d0d7de; font-size: ${meta}px; color: #57606a; }
-/* The persistent blocked-write refusal (MainWindow._refuse_blocked_write):
-   its ERROR colour lives on the label's own anchor markup, this rule only
-   keeps it clear of the window edge. */
-QLabel#BlockedWriteChip { padding: 0 8px; }
+/* Every permanent widget the bar carries is a label, so they are padded as a
+   family rather than one rule per chip -- the version label was flush against
+   the window edge because it had no rule of its own, and the next chip added
+   would have been too. The blocked-write refusal
+   (MainWindow._refuse_blocked_write) keeps its ERROR colour on its own anchor
+   markup; it needs nothing here beyond the shared inset. */
+QStatusBar QLabel { padding: 0 8px; }
+/* Windows draws PE_FrameStatusBarItem around each item and macOS draws
+   nothing, so the bar boxed every chip on one platform and not the other --
+   and with the inset above the text sat right on those lines. Dropping the
+   frame settles it the same way the menu caret was settled: take the platform
+   metric out of the sum rather than tune a value for one side. */
+QStatusBar::item { border: none; }
 QWidget#ActivityBar { background: #f6f8fa; border-right: 1px solid #d0d7de; }
 QToolButton#ActivityButton { background: transparent; border: none; border-left: 2px solid transparent; }
 QToolButton#ActivityButton:hover:!checked { background: #e8eaed; }

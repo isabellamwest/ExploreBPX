@@ -155,6 +155,7 @@ class SearchBar(QLineEdit):
 
     def __init__(self) -> None:
         super().__init__()
+        self.setObjectName("SearchBar")
         self.setPlaceholderText("Search objects and parameters…")
         self.setClearButtonEnabled(True)
         self._entries: list[_Entry] = []
