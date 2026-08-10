@@ -314,8 +314,9 @@ QToolBar > QToolButton:disabled { color: #8c959f; }
    than left to the platform: unstyled it took whatever inset the native line
    edit happened to have (2px on Windows), so caret and placeholder sat on the
    border, and the field was the one input in the app that looked different on
-   each OS. Vertical padding matches the buttons beside it so the toolbar keeps
-   its height. */
+   each OS. The 3px vertical padding holds the field to the buttons' own
+   height (measured 26px against their 25 on macOS, and top-aligned with them
+   -- against 21px and 2px low when it was native). */
 QLineEdit#SearchBar {
     border: 1px solid #d0d7de;
     border-radius: 4px;

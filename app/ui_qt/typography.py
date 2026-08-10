@@ -82,11 +82,12 @@ UI_FAMILIES: tuple[str, ...] = (
 #:
 #: The same trap had swallowed macOS, where it was the *whole* list that missed:
 #: no Cascadia Mono, no Consolas, so every Source view fell through to Courier
-#: New at cap height 7.4 against the system face's 9.2 -- a 19% shortfall, and
+#: New at cap height 7.4 against the system face's 9.16 -- a 19% shortfall, and
 #: the reason mono text read as a different, older typeface than the rest of the
-#: app. Menlo measures 9.47 there: within 3%, the same near-exact match Cascadia
-#: gives on Windows. So monospace still simply sits on :data:`BODY` with no
-#: optical fudge (the old code carried a ``-1px`` correction and a floor).
+#: app. Menlo measures 9.47, so it sits 3.4% over the system face -- the same
+#: near-exact match Cascadia gives on Windows, in the other direction. So
+#: monospace still simply sits on :data:`BODY` with no optical fudge (the old
+#: code carried a ``-1px`` correction and a floor).
 #: Menlo rather than SF Mono deliberately: SF Mono ships with macOS but is not
 #: registered under that name in Qt's font database, so naming it buys nothing
 #: and costs the alias-table scan described above. Menlo is on every macOS.
