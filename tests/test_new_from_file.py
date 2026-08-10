@@ -147,10 +147,10 @@ def test_new_from_file_origin_may_be_the_current_main(origin_path):
 # ---------------------------------------------------------------------------
 
 
-def test_rail_row_label_and_descriptor(app_driver):
-    label, descriptor = app_driver.workspace_new_from_file_texts()
+def test_rail_row_label_and_tooltip(app_driver):
+    label, tooltip = app_driver.workspace_new_from_file_texts()
     assert label == "From existing file…"
-    assert descriptor == "Start from a copy · the file is pinned as a reference"
+    assert tooltip == "Start from a copy of an existing file"
 
 
 def test_click_flow_clones_pins_and_stays_on_workspace(app_driver, origin_path, monkeypatch):

@@ -139,14 +139,10 @@ def test_the_current_workspace_wears_the_open_now_pill(relaunch, spm_workfile):
     assert d.current_workspace_row_label() == spm_workfile.name
 
 
-def test_both_rail_groups_teach_themselves_when_empty(relaunch):
-    """Always visible, empty or not -- a group that hides itself teaches
-    nothing on a first launch."""
+def test_both_rail_groups_hide_when_empty(relaunch):
+    """An empty group has nothing to teach, so it simply is not there."""
     d = relaunch()
-    assert d.rail_empty_state_texts() == [
-        "Name a workspace to keep it here for good.",
-        "Open a file and the workspace it starts appears here.",
-    ]
+    assert d.visible_rail_groups() == []
 
 
 # ---------------------------------------------------------------------------
@@ -197,7 +193,7 @@ def test_a_name_in_use_is_refused_inline_and_never_overwrites(
 def test_an_untitled_workspace_invites_a_name(relaunch, spm_workfile):
     d = relaunch()
     d.open(spm_workfile)
-    assert d.workspace_name_text() == "Untitled workspace — click to name it"
+    assert d.workspace_name_text() == "Untitled workspace"
 
 
 # ---------------------------------------------------------------------------
@@ -243,23 +239,6 @@ def test_opening_a_file_beside_a_named_workspace_leaves_it_alone(
     assert d.current_workspace_row_label() == second_workfile.name
 
 
-def test_duplicate_is_the_fork_that_live_identity_costs_us(
-    relaunch, spm_workfile, second_workfile
-):
-    d = relaunch()
-    d.open(spm_workfile)
-    d.rename_workspace("study")
-
-    d.click_workspace_row_button("study", "Duplicate")
-
-    assert d.named_workspace_labels() == ["study", "study copy"]
-    assert d.toast_text() == "Duplicated as 'study copy'"
-    # The fork is a real fork: changing the original leaves the copy alone.
-    d._w._open_reference_path(second_workfile)
-    assert d.workspace_row_reference_count("study") == 1
-    assert d.workspace_row_reference_count("study copy") == 0
-
-
 def test_rename_and_remove_touch_the_entry_not_the_files(relaunch, spm_workfile):
     d = relaunch()
     d.open(spm_workfile)
@@ -280,14 +259,10 @@ def test_every_row_offers_the_same_actions_on_hover(relaunch, spm_workfile):
     """Hover-revealed row actions, never a ⋯ menu -- the app's own idiom."""
     d = relaunch()
     d.open(spm_workfile)
-    assert d.workspace_row_actions(spm_workfile.name) == [
-        "Name",
-        "Duplicate",
-        "Remove",
-    ]
+    assert d.workspace_row_actions(spm_workfile.name) == ["Name", "Remove"]
 
     d.rename_workspace("study")
-    assert d.workspace_row_actions("study") == ["Rename", "Duplicate", "Remove"]
+    assert d.workspace_row_actions("study") == ["Rename", "Remove"]
 
 
 # ---------------------------------------------------------------------------
@@ -313,7 +288,7 @@ def test_a_missing_main_opens_the_rest_and_offers_locate(
     assert [ref.set_id for ref in fresh._w._state.references] == [CHEN2020]
     assert fresh._w._state.active is None
     assert fresh.missing_file_messages() == [
-        f"Main document not found: {spm_workfile.name}"
+        f"Main not found: {spm_workfile.name}"
     ]
     assert fresh.current_view_index() == 2  # landed where the banner is
 
@@ -445,7 +420,7 @@ def test_the_board_offers_no_name_when_there_is_no_workspace(
     assert d.workspace_name_text() == ""
 
     d.open(spm_workfile)
-    assert d.workspace_name_text() == "Untitled workspace — click to name it"
+    assert d.workspace_name_text() == "Untitled workspace"
 
     d.click_new_workspace()
     assert d.workspace_name_text() == ""
@@ -556,7 +531,7 @@ def test_launch_with_a_missing_main_never_refuses(relaunch, spm_workfile):
     fresh = relaunch()
 
     assert fresh.missing_file_messages() == [
-        f"Main document not found: {spm_workfile.name}"
+        f"Main not found: {spm_workfile.name}"
     ]
     assert [ref.set_id for ref in fresh._w._state.references] == [CHEN2020]
     assert fresh.current_view_index() == 2  # landed where the banner is
@@ -580,7 +555,7 @@ def test_launch_with_an_unreadable_main_says_so_without_a_modal(
     fresh = relaunch()
 
     assert fresh.missing_file_messages() == [
-        f"Main document could not be read: {spm_workfile.name}"
+        f"Main could not be read: {spm_workfile.name}"
     ]
     assert fresh._w._state.active is None
 

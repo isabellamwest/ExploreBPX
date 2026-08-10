@@ -4,6 +4,7 @@ files and the workspaces themselves. No Qt anywhere here."""
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 
 import pytest
 
@@ -15,6 +16,7 @@ from state.workspace_history import (
     ReferenceRecord,
     WorkspaceHistory,
     WorkspaceRecord,
+    new_id,
 )
 
 
@@ -160,9 +162,12 @@ def test_the_workspace_on_the_board_never_decays(tmp_path):
     """The cap drops the oldest *spare* entry: the current one is in use."""
     history = _store(tmp_path)
     current = _started(history, path="/cells/current.json")
-    for index in range(MAX_RECENT_WORKSPACES + 2):
-        forked = history.duplicate(current.id)  # piles up entries above it
-        assert forked.id != current.id
+    # Pile up distinct spare entries above it without disturbing current_id.
+    history.recent_workspaces[:0] = [
+        replace(current, id=new_id(), main=MainRecord(path=f"/cells/other{i}.json"))
+        for i in range(MAX_RECENT_WORKSPACES + 2)
+    ]
+    history.update_current(current.main, current.references)  # triggers the cap
 
     assert len(history.recent_workspaces) == MAX_RECENT_WORKSPACES
     assert history.by_id(current.id) is not None
@@ -313,37 +318,6 @@ def test_remove_forgets_the_entry_and_clears_the_board(tmp_path):
     assert history.current_id is None
     assert history.recent_workspaces == []
     assert history.workspaces == [keeper]
-
-
-# ---------------------------------------------------------------------------
-# duplicate: the fork escape hatch live identity costs us
-
-
-def test_duplicating_a_named_workspace_keeps_both_safe(tmp_path):
-    history = _store(tmp_path)
-    original = history.keep(_started(history).id, "study")
-    copy = history.duplicate(original.id)
-
-    assert copy.id != original.id
-    assert copy.name == "study copy"
-    assert copy.references == original.references
-    assert [w.name for w in history.workspaces] == ["study", "study copy"]
-    assert history.current_id == original.id  # duplicating is not switching
-
-    again = history.duplicate(original.id)
-    assert again.name == "study copy 2"  # names stay unique
-
-
-def test_duplicating_an_untitled_workspace_forks_it_within_recent(tmp_path):
-    history = _store(tmp_path)
-    original = _started(history)
-    copy = history.duplicate(original.id)
-
-    assert copy.name is None
-    assert copy.id != original.id
-    # Both survive: a fork must never be merged back into its own source.
-    assert history.by_id(original.id) is not None
-    assert history.recent_workspaces[0].id == copy.id
 
 
 # ---------------------------------------------------------------------------

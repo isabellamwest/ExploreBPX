@@ -73,7 +73,6 @@ from .diagnostics_panel import DiagnosticsPanel
 from .file_facts import file_facts
 from .workspace_panel import (
     AT_CAP_MESSAGE,
-    UNTITLED_WORKSPACE,
     MissingFileView,
     RecentEntryView,
     WorkspacePanel,
@@ -520,9 +519,6 @@ class MainWindow(QMainWindow):
         self._workspace.recent_pin_requested.connect(self._on_recent_pin)
         self._workspace.workspace_open_requested.connect(self._on_workspace_open)
         self._workspace.workspace_name_requested.connect(self._on_workspace_name)
-        self._workspace.workspace_duplicate_requested.connect(
-            self._on_workspace_duplicate
-        )
         self._workspace.workspace_remove_requested.connect(self._on_workspace_remove)
         self._workspace.workspace_locate_requested.connect(self._on_workspace_locate)
         self._workspace.new_workspace_requested.connect(self._on_new_workspace)
@@ -1196,7 +1192,7 @@ class MainWindow(QMainWindow):
                     label=main_path.name,
                     path=str(main_path),
                     reference_index=None,
-                    message=f"Main document {reason}: {main_path.name}",
+                    message=f"Main {reason}: {main_path.name}",
                 )
             )
 
@@ -1323,7 +1319,6 @@ class MainWindow(QMainWindow):
             name = self._ask_workspace_name(
                 "Rename workspace" if record.is_named else "Name workspace",
                 prefill,
-                self._workspace_summary_text(record),
             )
             if name is None or name == record.name:
                 return
@@ -1359,16 +1354,6 @@ class MainWindow(QMainWindow):
         history.keep(workspace_id, name)
         self._refresh_workspace_rail()
         self._update_workspace_name()
-
-    def _on_workspace_duplicate(self, workspace_id: str) -> None:
-        """Fork a workspace, leaving the original exactly as it is -- the
-        escape hatch for experimenting when the workspace itself is live."""
-        history = self._state.history
-        if history is None or history.by_id(workspace_id) is None:
-            return
-        copy = history.duplicate(workspace_id)
-        self._refresh_workspace_rail()
-        self._toast.show_message(f"Duplicated as '{copy.name or UNTITLED_WORKSPACE}'")
 
     def _on_workspace_remove(self, workspace_id: str) -> None:
         history = self._state.history
@@ -1466,28 +1451,7 @@ class MainWindow(QMainWindow):
         self._apply_comparison()
         self._show_page(_SOURCE_PAGE_INDEX)
 
-    def _workspace_summary_text(self, record: WorkspaceRecord) -> str:
-        """The name dialog's note: exactly what the entry remembers -- and,
-        honesty rule 2 verbatim, what it never stores."""
-        main_name = Path(record.main.path).name
-        labels = [
-            ref.set_id if ref.kind == "library" else Path(ref.path).name
-            for ref in record.references
-        ]
-        count = len(labels)
-        if count:
-            plural = "s" if count != 1 else ""
-            remembered = f"{main_name} + {count} reference{plural} ({', '.join(labels)})"
-        else:
-            remembered = main_name
-        return (
-            f"Remembers {remembered}. Paths only — no file content, "
-            "no validation results. Naming it keeps it for good."
-        )
-
-    def _ask_workspace_name(
-        self, title: str, prefill: str, summary: str
-    ) -> str | None:
+    def _ask_workspace_name(self, title: str, prefill: str) -> str | None:
         """The one small workspace-name dialog (naming and renaming alike).
 
         Overridable seam: headless tests monkeypatch this method directly,
@@ -1501,10 +1465,6 @@ class MainWindow(QMainWindow):
         edit = QLineEdit(prefill)
         edit.selectAll()
         layout.addWidget(edit)
-        note = QLabel(summary)
-        note.setWordWrap(True)
-        note.setObjectName("WorkspaceSaveNote")
-        layout.addWidget(note)
         buttons = QDialogButtonBox(QDialogButtonBox.Cancel | QDialogButtonBox.Save)
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)

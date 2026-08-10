@@ -8,9 +8,9 @@ wherever it refreshes the other views.
 The page is two surfaces edge to edge, the Diagnostics page's anatomy:
 
 * a shaded **rail** -- Open File…, New workspace, then the workspaces
-  themselves (named ones above, untitled Recent ones below, both groups
-  always visible so the concept is named even when empty), then the inline
-  New model chooser. Row actions are hover-revealed, never a ⋯ menu.
+  themselves (named ones above, untitled Recent ones below, each group
+  hidden whole whenever it has no rows), then the inline New document
+  chooser. Row actions are hover-revealed, never a ⋯ menu.
 * a white **pane** carrying the board: the workspace's own name at the top
   (click to rename), then a "This workspace" frame holding the main card
   beside four reference slots -- the slots *are* the drawn cap, so there is
@@ -68,12 +68,6 @@ AT_CAP_MESSAGE = f"{MAX_PINNED_REFERENCES} already pinned · remove one first"
 
 #: What an untitled workspace is called before anyone names it.
 UNTITLED_WORKSPACE = "Untitled workspace"
-
-#: The two rail groups' one-line empty states. They name the concept rather
-#: than apologising for the absence -- a first launch should teach what a
-#: workspace is, not read as a broken list.
-_WORKSPACES_EMPTY_TEXT = "Name a workspace to keep it here for good."
-_RECENT_EMPTY_TEXT = "Open a file and the workspace it starts appears here."
 
 #: What a drop on this panel is allowed to be. Re-exported from
 #: ``core.bpx_gateway`` rather than restated: the drop target and every file
@@ -469,7 +463,7 @@ class WorkspaceNameField(_EditableText):
     def __init__(self) -> None:
         super().__init__(
             "WorkspaceNameDisplay",
-            f"{UNTITLED_WORKSPACE} — click to name it",
+            UNTITLED_WORKSPACE,
             editor_object_name="WorkspaceNameEditor",
         )
         self._error = QLabel()
@@ -862,7 +856,7 @@ class _MainCard(QFrame):
         workspace's own main is missing from disk and the banner above says
         so. Either way the card states the absence and offers no route into
         a document that is not there."""
-        self._name.setText("Main document not found" if missing else _INFO_PANEL_EMPTY_STATE_TEXT)
+        self._name.setText("Main not found" if missing else _INFO_PANEL_EMPTY_STATE_TEXT)
         self._set_ghosted(True)
         self._dot.hide()
         self._badge.hide()
@@ -946,7 +940,7 @@ class _ReferenceSlot(QFrame):
         self._add_button = QPushButton("＋")
         self._add_button.setObjectName("BoardSlotAdd")
         self._add_button.setCursor(Qt.PointingHandCursor)
-        self._add_button.setToolTip("Add a reference to compare against")
+        self._add_button.setToolTip("Add a reference")
         self._add_button.clicked.connect(self.add_requested)
         self._layout.addWidget(self._add_button, 0, Qt.AlignCenter)
 
@@ -967,7 +961,6 @@ class _ReferenceSlot(QFrame):
         self._remove = QPushButton("✕")
         self._remove.setObjectName("BoardSlotRemove")
         self._remove.setCursor(Qt.PointingHandCursor)
-        self._remove.setToolTip("Remove this reference")
         self._remove.clicked.connect(self._emit_remove)
         head.addWidget(self._remove, 0, Qt.AlignVCenter)
         filled.addLayout(head)
@@ -1021,7 +1014,7 @@ class _ReferenceSlot(QFrame):
         self._add_button.hide()
         self._filled.show()
         self.setCursor(Qt.PointingHandCursor)
-        self.setToolTip(f"{snapshot.filename} — click for its record")
+        self.setToolTip(snapshot.filename)
 
         while self._badge_layout.count():
             item = self._badge_layout.takeAt(0)
@@ -1198,10 +1191,10 @@ def _workspace_glyph(reference_count: int) -> QLabel:
     label = QLabel("▌" + "".join(" ·" for _ in range(reference_count)))
     label.setObjectName("WorkspaceGlyph")
     label.setToolTip(
-        f"Main document + {reference_count} reference"
+        f"Main + {reference_count} reference"
         + ("s" if reference_count != 1 else "")
         if reference_count
-        else "Main document, no references"
+        else "Main, no references"
     )
     return label
 
@@ -1231,7 +1224,6 @@ class WorkspacePanel(QWidget):
     #: shortcuts to the same guarded doors, never side doors.
     workspace_open_requested = Signal(str)
     workspace_name_requested = Signal(str)
-    workspace_duplicate_requested = Signal(str)
     workspace_remove_requested = Signal(str)
     workspace_locate_requested = Signal(str)
     new_workspace_requested = Signal()
@@ -1295,21 +1287,16 @@ class WorkspacePanel(QWidget):
         self._new_workspace_button = QPushButton("New workspace")
         self._new_workspace_button.setObjectName("NewWorkspace")
         self._new_workspace_button.setProperty("modelOption", True)
-        self._new_workspace_button.setToolTip(
-            "Start a separate line of work · what is open now is kept under Recent"
-        )
         self._new_workspace_button.clicked.connect(self.new_workspace_requested)
         rail_layout.addWidget(self._new_workspace_button)
 
-        self._workspaces_group, self._workspace_rows_layout, self._workspaces_empty = (
-            self._build_group("Workspaces", _WORKSPACES_EMPTY_TEXT)
+        self._workspaces_group, self._workspace_rows_layout = self._build_group(
+            "Workspaces"
         )
         rail_layout.addSpacing(6)
         rail_layout.addWidget(self._workspaces_group)
 
-        self._recent_group, self._recent_rows_layout, self._recent_empty = (
-            self._build_group("Recent", _RECENT_EMPTY_TEXT)
-        )
+        self._recent_group, self._recent_rows_layout = self._build_group("Recent")
         rail_layout.addSpacing(6)
         rail_layout.addWidget(self._recent_group)
 
@@ -1325,12 +1312,11 @@ class WorkspacePanel(QWidget):
         return rail
 
     @staticmethod
-    def _build_group(title: str, empty_text: str) -> tuple[QWidget, QVBoxLayout, QLabel]:
-        """A rail group: a title, its rows, and a one-line empty state.
+    def _build_group(title: str) -> tuple[QWidget, QVBoxLayout]:
+        """A rail group: a title over its rows.
 
-        Always visible, empty or not. A group that hides itself teaches
-        nothing on a first launch and makes the rail jump about as rows
-        come and go; the empty line names the concept instead.
+        Hidden whole, title included, whenever it has no rows -- an empty
+        group has nothing to teach, so it simply is not there.
         """
         container = QWidget()
         container.setObjectName(f"{title}Group")
@@ -1338,11 +1324,7 @@ class WorkspacePanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
         layout.addWidget(panel_title(title))
-        empty = QLabel(empty_text)
-        empty.setObjectName("RailEmptyState")
-        empty.setWordWrap(True)
-        layout.addWidget(empty)
-        return container, layout, empty
+        return container, layout
 
     def set_workspaces(
         self,
@@ -1370,13 +1352,13 @@ class WorkspacePanel(QWidget):
             row = self._build_workspace_row(entry)
             self._workspace_rows_layout.addWidget(row)
             self._workspace_rows.append(row)
-        self._workspaces_empty.setVisible(not named)
+        self._workspaces_group.setVisible(bool(named))
 
         for entry in recent:
             row = self._build_workspace_row(entry)
             self._recent_rows_layout.addWidget(row)
             self._workspace_rows.append(row)
-        self._recent_empty.setVisible(not recent)
+        self._recent_group.setVisible(bool(recent))
 
     def _build_workspace_row(self, entry: WorkspaceRowView) -> _HistoryRow:
         row = _HistoryRow(clickable=not entry.is_current)
@@ -1399,18 +1381,11 @@ class WorkspacePanel(QWidget):
             pill = QLabel("open now")
             pill.setObjectName("HistoryRowPill")
             layout.addWidget(pill)
-            row.setToolTip("This workspace is the one on the board")
         else:
             if not entry.main_exists:
                 chip = QLabel("Not found")
                 chip.setObjectName("HistoryRowChip")
                 layout.addWidget(chip)
-                row.setToolTip(
-                    "This workspace's main document is gone from disk. "
-                    "Opening it brings back the rest and offers Locate…"
-                )
-            else:
-                row.setToolTip("Open this workspace: main document + references")
             # Clickable even with the main gone: opening it brings back
             # every reference that is still there and names what is not.
             # Refusing outright would throw away the arrangement.
@@ -1418,41 +1393,26 @@ class WorkspacePanel(QWidget):
                 lambda ws_id=entry.id: self.workspace_open_requested.emit(ws_id)
             )
 
-        def _action(text: str, tooltip: str, signal, ws_id: str = entry.id) -> None:
+        def _action(text: str, signal, ws_id: str = entry.id) -> None:
             button = QPushButton(text)
             button.setObjectName("HistoryRowButton")
-            button.setToolTip(tooltip)
             button.clicked.connect(lambda _=False: signal.emit(ws_id))
             layout.addWidget(button)
             row.add_hover_action(button)
 
         if not entry.main_exists:
-            _action(
-                "Locate…",
-                "Point this workspace at where its main document is now",
-                self.workspace_locate_requested,
-            )
+            _action("Locate…", self.workspace_locate_requested)
         _action(
             "Rename" if entry.named else "Name",
-            "Rename this workspace" if entry.named
-            else "Name it to keep it here for good",
             self.workspace_name_requested,
         )
-        _action(
-            "Duplicate",
-            "Fork this workspace, leaving this one as it is",
-            self.workspace_duplicate_requested,
-        )
-        _action(
-            "Remove",
-            "Forget this workspace (its files are not touched)",
-            self.workspace_remove_requested,
-        )
+        _action("Remove", self.workspace_remove_requested)
         return row
 
     def _build_new_chooser(self) -> QWidget:
-        """Inline "New" surface: one flat, name-first row per supported model
-        with its descriptor beneath -- list-row language, sized to the rail.
+        """Inline "New document" surface: one flat, name-first row per
+        supported model, its full name a tooltip away -- list-row language,
+        sized to the rail.
 
         Rendered directly on the page (not a dialog or dropdown) so the
         Workspace page's layout is used as intended.
@@ -1463,7 +1423,7 @@ class WorkspacePanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
 
-        layout.addWidget(panel_title("New"))
+        layout.addWidget(panel_title("New document"))
         for model in SUPPORTED_MODELS:
             layout.addWidget(self._build_model_option(model))
 
@@ -1477,51 +1437,29 @@ class WorkspacePanel(QWidget):
         return container
 
     def _build_model_option(self, model: str) -> QWidget:
-        """One chooser row: the model name as a flat bold button over a muted
-        descriptor label. The button keeps its plain ``text()`` (the model
+        """One chooser row: the model name as a flat bold button, its full
+        name a tooltip away. The button keeps its plain ``text()`` (the model
         name) and ``NewButton_{model}`` objectName -- the seam the tests and
         driver click -- while the ``modelOption`` dynamic property carries the
         shared flat-row styling (QSS cannot prefix-match objectNames)."""
-        row = QWidget()
-        row_layout = QVBoxLayout(row)
-        row_layout.setContentsMargins(0, 0, 0, 0)
-        row_layout.setSpacing(0)
-
         button = QPushButton(model)
         button.setObjectName(f"NewButton_{model}")
         button.setProperty("modelOption", True)
+        button.setToolTip(_MODEL_DESCRIPTORS.get(model, model))
         button.clicked.connect(lambda: self.new_requested.emit(model))
-        row_layout.addWidget(button)
-
-        descriptor = QLabel(_MODEL_DESCRIPTORS.get(model, model))
-        descriptor.setObjectName("NewChooserDescriptor")
-        descriptor.setWordWrap(True)
-        row_layout.addWidget(descriptor)
-        return row
+        return button
 
     def _build_new_from_file_option(self) -> QWidget:
         """The chooser's non-model row, below its own divider: clone an existing
         file into a fresh unsaved document with the origin docked as the
-        reference ("New from source"). Same row anatomy as the model options --
-        the ``modelOption`` property carries the shared flat-row styling."""
-        row = QWidget()
-        row_layout = QVBoxLayout(row)
-        row_layout.setContentsMargins(0, 0, 0, 0)
-        row_layout.setSpacing(0)
-
+        reference ("New from source"). Same flat-row styling as the model
+        options -- the ``modelOption`` property carries it."""
         self._new_from_file_button = QPushButton("From existing file…")
         self._new_from_file_button.setObjectName("NewFromFile")
         self._new_from_file_button.setProperty("modelOption", True)
+        self._new_from_file_button.setToolTip("Start from a copy of an existing file")
         self._new_from_file_button.clicked.connect(self.new_from_file_requested)
-        row_layout.addWidget(self._new_from_file_button)
-
-        self._new_from_file_descriptor = QLabel(
-            "Start from a copy · the file is pinned as a reference"
-        )
-        self._new_from_file_descriptor.setObjectName("NewChooserDescriptor")
-        self._new_from_file_descriptor.setWordWrap(True)
-        row_layout.addWidget(self._new_from_file_descriptor)
-        return row
+        return self._new_from_file_button
 
     # --- the pane ---------------------------------------------------------
 
@@ -1575,7 +1513,6 @@ class WorkspacePanel(QWidget):
 
         arrow = QLabel("⇄")
         arrow.setObjectName("BoardArrow")
-        arrow.setToolTip("The main document is compared against these references")
         board.addWidget(arrow, 0, Qt.AlignVCenter)
 
         for index in range(MAX_PINNED_REFERENCES):
@@ -1596,7 +1533,7 @@ class WorkspacePanel(QWidget):
         edit in place -- over the *fact plaque*, a quieter wash carrying the
         file's own immutable facts. The split is the D6 rule made visible:
         the upper block is yours, the plaque is the file's."""
-        section = TintedSection("Main document", object_name="WorkspaceMainSection")
+        section = TintedSection("Main", object_name="WorkspaceMainSection")
         body = section.body_layout
 
         self._info_empty = QLabel(_INFO_PANEL_EMPTY_STATE_TEXT)

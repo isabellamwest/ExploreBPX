@@ -505,8 +505,6 @@ QFrame#RecentRow[current="true"], QFrame#WorkspaceNamedRow[current="true"] {
 /* The rail's flat-row actions share the New chooser's language; disabled
    states its reason in the tooltip, quietly here. */
 QPushButton[modelOption="true"]:disabled { color: #8c959f; }
-/* The name dialog's what-is-remembered note. */
-QLabel#WorkspaceSaveNote { color: #57606a; font-size: ${meta}px; }
 QLabel#HistoryRowName { font-weight: ${semibold}; }
 QLabel#HistoryRowDetail { color: #57606a; font-size: ${meta}px; }
 QLabel#HistoryRowAction { color: #1f6feb; font-size: ${meta}px; }
@@ -516,23 +514,20 @@ QLabel#HistoryRowPill { color: #1f6feb; font-size: ${micro}px; font-weight: ${se
    over one file but different references are told apart without reading
    either label. */
 QLabel#WorkspaceGlyph { color: #8c959f; }
-/* Both rail groups stay visible when empty and name the concept instead. */
-QLabel#RailEmptyState { color: #8c959f; font-size: ${meta}px; padding: 0 2px 2px 2px; }
 QPushButton#HistoryRowButton {
     background: transparent; border: none; padding: 1px 4px;
     color: #57606a; font-size: ${meta}px;
 }
 QPushButton#HistoryRowButton:hover { background: #e8eaed; border-radius: 4px; }
-/* One New-chooser model row: flat bold name button over a muted descriptor
-   (list-row language). Property selector on purpose -- the buttons keep
-   their per-model NewButton_{model} objectNames as the test/driver seam,
-   which QSS cannot prefix-match. */
+/* One New-chooser model row: a flat bold name button, its full name a
+   tooltip away (list-row language). Property selector on purpose -- the
+   buttons keep their per-model NewButton_{model} objectNames as the
+   test/driver seam, which QSS cannot prefix-match. */
 QPushButton[modelOption="true"] {
     background: transparent; border: none; border-radius: 4px;
     padding: 3px 6px; font-weight: ${semibold}; text-align: left;
 }
 QPushButton[modelOption="true"]:hover { background: #e8eaed; }
-QLabel#NewChooserDescriptor { color: #57606a; font-size: ${meta}px; padding: 0 6px 2px 6px; }
 /* The shared banded group-box chrome (``ui_qt.group_box.GroupBox``):
    bordered rounded card, shaded banded header -- the Diagnostics Issues/
    Outstanding boxes and the reference-library dialog's detail card alike.

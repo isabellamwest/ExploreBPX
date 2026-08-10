@@ -290,38 +290,6 @@ class WorkspaceHistory:
             self.current_id = None
         self._persist()
 
-    def duplicate(self, workspace_id: str) -> WorkspaceRecord:
-        """Fork a workspace, leaving the original untouched.
-
-        The escape hatch live identity costs us: with no snapshot to
-        experiment against, Duplicate is how a person keeps the arrangement
-        they have while trying another. A named workspace forks to a named
-        copy ("Foo copy", uniquified) sitting beside it -- a fork of
-        something deliberately kept should be equally safe. An untitled one
-        forks to another untitled entry at the front of Recent. Neither
-        becomes current: duplicating is not switching.
-        """
-        workspace = self.by_id(workspace_id)
-        if workspace is None:
-            raise KeyError(workspace_id)
-        if workspace.is_named:
-            copy = replace(
-                workspace,
-                id=new_id(),
-                name=self._free_name(f"{workspace.name} copy"),
-                saved_at=_now_stamp(),
-            )
-            self.workspaces.insert(self.workspaces.index(workspace) + 1, copy)
-        else:
-            copy = replace(workspace, id=new_id(), name=None, saved_at=None)
-            self.recent_workspaces.insert(0, copy)
-            # Capped but not deduped: the fork is content-identical to its
-            # source by definition, and merging it back would defeat the
-            # whole action.
-            self._cap()
-        self._persist()
-        return copy
-
     def relocate_main(self, workspace_id: str, path: str) -> None:
         """Repoint a workspace's main at *path* (the Locate… action).
 
@@ -390,10 +358,8 @@ class WorkspaceHistory:
 
         Deliberately anchored on the *current* workspace rather than sweeping
         the whole list: it is the one that just moved, so it is the newer of
-        any colliding pair, and anchoring this way means a fork made by
-        :meth:`duplicate` can never swallow the workspace it was forked
-        from. Named workspaces are exempt on both sides -- two of them may
-        hold the same files, because someone said so twice.
+        any colliding pair. Named workspaces are exempt on both sides -- two
+        of them may hold the same files, because someone said so twice.
         """
         current = self.current()
         if current is None or current.is_named:

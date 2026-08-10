@@ -13,7 +13,7 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtCore import QMimeData, QPointF, QUrl, Qt
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
-from PySide6.QtWidgets import QLabel, QPushButton
+from PySide6.QtWidgets import QPushButton
 
 import ui_qt.main_window as main_window_module
 import ui_qt.workspace_panel as workspace_panel_module
@@ -232,9 +232,10 @@ def test_new_chooser_offers_exactly_the_supported_models(app_driver):
     assert sorted(app_driver.workspace_new_model_options()) == sorted(SUPPORTED_MODELS)
 
 
-def test_new_chooser_renders_name_only_for_a_model_with_no_descriptor(qtbot, monkeypatch):
-    """A model absent from ``_MODEL_DESCRIPTORS`` must still render (name-only),
-    never crash -- the documented graceful-degradation fallback."""
+def test_new_chooser_falls_back_to_the_model_name_with_no_descriptor(qtbot, monkeypatch):
+    """A model absent from ``_MODEL_DESCRIPTORS`` must still render (name-only,
+    tooltip name-only), never crash -- the documented graceful-degradation
+    fallback."""
     monkeypatch.setattr(workspace_panel_module, "SUPPORTED_MODELS", ("Mystery",))
 
     panel = workspace_panel_module.WorkspacePanel()
@@ -243,10 +244,7 @@ def test_new_chooser_renders_name_only_for_a_model_with_no_descriptor(qtbot, mon
     button = panel.findChild(QPushButton, "NewButton_Mystery")
     assert button is not None
     assert button.text() == "Mystery"
-
-    descriptor = button.parentWidget().findChild(QLabel, "NewChooserDescriptor")
-    assert descriptor is not None
-    assert descriptor.text() == "Mystery"
+    assert button.toolTip() == "Mystery"
 
 
 @pytest.mark.parametrize("model", SUPPORTED_MODELS)

@@ -44,7 +44,7 @@ package and implements none of the BPX specification itself.
   under Recent (capped, newest first). *Naming* is the promotion that stops
   one decaying — and the act that says "stop rewriting this", so an ordinary
   open beside a named workspace starts a fresh untitled one rather than
-  overwriting it. `duplicate()` is the fork that live identity costs us.
+  overwriting it.
 
 ## Scope
 
@@ -262,10 +262,11 @@ navigate to locations rather than filtering or replacing the hierarchy.
   is named in a slim band under the headers, checked when the page is entered
   or the window activated — never watched, never silently refreshed.
 - **Workspace page** — a shaded rail beside a white pane. The rail carries
-  Open File… and New workspace over two always-visible groups (Workspaces,
-  then Recent), each row showing a glyph for its shape, an "open now" pill
-  when the board is showing it, and hover-revealed actions — the app's idiom
-  in place of a ⋯ menu. The pane carries the workspace's name (click to
+  Open File… and New workspace over two groups (Workspaces, then Recent),
+  each hidden whole whenever it has no rows; a shown group's rows carry a
+  glyph for their shape, an "open now" pill when the board is showing it, and
+  hover-revealed actions — the app's idiom in place of a ⋯ menu. The pane
+  carries the workspace's name (click to
   rename, refused inline if the name is in use), then the **board**: the main
   card beside four reference slots. The slots *are* the drawn cap, so there
   is no counter and no dock buttons — at four there is simply no ＋ left to

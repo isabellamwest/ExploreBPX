@@ -888,15 +888,12 @@ class AppDriver:
         )
         return self
 
-    def rail_empty_state_texts(self) -> list[str]:
-        """The one-line empty states currently shown by the two rail groups
-        (both groups are always visible, empty or not)."""
+    def visible_rail_groups(self) -> list[str]:
+        """Which rail groups (Workspaces, Recent) are currently shown -- each
+        hides whole, title included, whenever it has no rows."""
         ws = self._w._workspace
-        return [
-            label.text()
-            for label in (ws._workspaces_empty, ws._recent_empty)
-            if not label.isHidden()
-        ]
+        groups = {"Workspaces": ws._workspaces_group, "Recent": ws._recent_group}
+        return [name for name, group in groups.items() if not group.isHidden()]
 
     # --- the board's header and banner ------------------------------------
 
@@ -1936,10 +1933,9 @@ class AppDriver:
         return self
 
     def workspace_new_from_file_texts(self) -> tuple[str, str]:
-        """The (label, descriptor) texts of the New chooser's
-        from-existing-file row."""
-        ws = self._w._workspace
-        return ws._new_from_file_button.text(), ws._new_from_file_descriptor.text()
+        """The (label, tooltip) of the New chooser's from-existing-file row."""
+        button = self._w._workspace._new_from_file_button
+        return button.text(), button.toolTip()
 
     # ------------------------------------------------------------------
     # Readers -- user-visible state only
