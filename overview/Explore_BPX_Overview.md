@@ -5,6 +5,15 @@ A desktop application for opening, inspecting, validating, comparing and editing
 > Python 3.12 · PySide6 (Qt) · Validator: official `bpx` package, v1.1.1 · 1,513 automated tests
 > Prepared by Isabella West · August 2026
 
+> **Snapshot of the app as it stood on 3 August 2026, not a current
+> description.** Several sections and screenshots have since been overtaken —
+> notably the single-reference limit, the unbounded undo history, the "Make
+> main" command and the Diagnostics section rail, all of which have changed or
+> gone. For what the app does now, read
+> [docs/architecture.md](../docs/architecture.md); this file is kept as the
+> report that was submitted. Regenerate it rather than patching it, because its
+> screenshots date with its prose.
+
 **Contents**
 
 1. [What the app is](#what-the-app-is)
