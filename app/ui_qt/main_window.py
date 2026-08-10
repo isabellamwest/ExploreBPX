@@ -73,6 +73,7 @@ from .diagnostics_panel import DiagnosticsPanel
 from .file_facts import file_facts
 from .workspace_panel import (
     AT_CAP_MESSAGE,
+    UNTITLED_WORKSPACE,
     MissingFileView,
     RecentEntryView,
     WorkspacePanel,
@@ -124,6 +125,24 @@ def _format_disk_time(mtime: float) -> str:
     if moment.date() == datetime.now().date():
         return time_part
     return f"on {moment.day} {moment:%b %Y} {time_part}"
+
+
+def _recent_entry(path_text: str) -> RecentEntryView:
+    """Digest one remembered path for the Workspace page: does it still
+    exist, and when was it last written. Probed here, at render time, so the
+    panel is handed verdicts rather than a filesystem to consult. A file
+    that vanishes between the two calls simply has no stamp."""
+    path = Path(path_text)
+    try:
+        mtime = path.stat().st_mtime
+    except OSError:
+        mtime = None
+    return RecentEntryView(
+        path=path_text,
+        name=path.name,
+        exists=mtime is not None,
+        mtime=mtime,
+    )
 
 
 class _IdentityLabel(QLabel):
@@ -258,11 +277,12 @@ class MainWindow(QMainWindow):
     def _build_toolbar(self) -> None:
         """Build the fixed top bar: identity on the left, actions on the right.
 
-        Opening a file lives on the Workspace page's "Open File" button now, so
+        Opening a file lives on the Workspace board's start surface now, so
         the top bar carries no Open action -- only document identity, Save,
-        Export and search. Open keeps a window-level shortcut all the same:
-        the button is unreachable from the Editor and Diagnostics pages, and a
-        key needs no chrome to exist.
+        Export and search. Open keeps a window-level shortcut all the same,
+        and it is more than a convenience: the start surface exists only
+        while the Main slot is empty, so the shortcut is the route that
+        swaps a main which is already filled.
         """
         bar = self.addToolBar("Main")
         # A stock QToolBar is movable, and right-clicking it opens
@@ -513,10 +533,12 @@ class MainWindow(QMainWindow):
         self._workspace.file_dropped.connect(self._on_file_dropped)
         self._workspace.open_reference_requested.connect(self._open_reference)
         self._workspace.open_library_requested.connect(self._open_reference_library)
-        self._workspace.new_from_file_requested.connect(self._new_from_file)
         self._workspace.remove_reference_requested.connect(self._on_remove_reference_requested)
         self._workspace.identity_edited.connect(self._on_identity_edited)
         self._workspace.recent_pin_requested.connect(self._on_recent_pin)
+        # The start surface's recent rows open a main document, so they go
+        # through the same guarded door a dropped file does.
+        self._workspace.recent_open_requested.connect(self._on_file_dropped)
         self._workspace.workspace_open_requested.connect(self._on_workspace_open)
         self._workspace.workspace_name_requested.connect(self._on_workspace_name)
         self._workspace.workspace_remove_requested.connect(self._on_workspace_remove)
@@ -1040,35 +1062,6 @@ class MainWindow(QMainWindow):
             return False
         return self._save()
 
-    def _confirm_new(self) -> bool:
-        """Guard for New: never replace an open document silently.
-
-        A dirty document goes through the same Save/Discard/Cancel guard as
-        Open. A clean one still gets a lightweight Ok/Cancel confirm: the
-        file on disk loses nothing, but a single click on a model button
-        would otherwise wipe the open document with no warning at all --
-        Open asks before replacing the main, so New must too. Returns True
-        when it is safe to replace the active session.
-        """
-        session = self._state.active
-        if session is None:
-            return True
-        if self._has_unsaved_work():
-            return self._confirm_discard_if_dirty()
-        filename = (
-            session.backing_file.name
-            if session.backing_file is not None
-            else session.document.filename
-        )
-        choice = QMessageBox.question(
-            self,
-            "New document",
-            f"This will replace {filename}. Continue?",
-            QMessageBox.Ok | QMessageBox.Cancel,
-            QMessageBox.Ok,
-        )
-        return choice == QMessageBox.Ok
-
     def _open(self) -> None:
         name, _ = QFileDialog.getOpenFileName(self, "Open BPX", "", BPX_FILTER)
         if not name:
@@ -1177,7 +1170,8 @@ class MainWindow(QMainWindow):
         """
         if not self._confirm_discard_if_dirty():
             return
-        main_path = Path(record.main.path)
+        recorded = record.main
+        main_path = Path(recorded.path) if recorded is not None else None
         # Entering first is what makes the opens below land *in* this
         # workspace instead of starting another, and it leaves the record
         # pointing at its main even when that main never opens.
@@ -1196,11 +1190,17 @@ class MainWindow(QMainWindow):
                 )
             )
 
-        if not main_path.exists():
+        if recorded is None:
+            # A workspace that records no main restores to an empty board.
+            # Nothing was recorded, so nothing is lost: this is not a
+            # missing file and the banner has nothing to say about it.
+            self._state.close()
+            self._state.enter_workspace(record.id)
+        elif not main_path.exists():
             main_did_not_open("not found")
         else:
             try:
-                if not self._open_recorded_main(record.main):
+                if not self._open_recorded_main(recorded):
                     return
             except (LoadError, OSError) as exc:
                 if not quiet:
@@ -1314,7 +1314,9 @@ class MainWindow(QMainWindow):
         record = history.by_id(workspace_id) if history is not None else None
         if record is None:
             return
-        prefill = record.name or Path(record.main.path).stem
+        prefill = record.name or (
+            Path(record.main.path).stem if record.main is not None else ""
+        )
         while True:
             name = self._ask_workspace_name(
                 "Rename workspace" if record.is_named else "Name workspace",
@@ -1360,7 +1362,11 @@ class MainWindow(QMainWindow):
         record = history.by_id(workspace_id) if history is not None else None
         if record is None:
             return
-        label = record.name or Path(record.main.path).name
+        label = record.name or (
+            Path(record.main.path).name
+            if record.main is not None
+            else UNTITLED_WORKSPACE
+        )
         if not self._confirm_remove_workspace(label):
             return
         was_current = self._state.workspace_id == workspace_id
@@ -1377,7 +1383,8 @@ class MainWindow(QMainWindow):
         without making the user rebuild the arrangement by hand."""
         history = self._state.history
         record = history.by_id(workspace_id) if history is not None else None
-        if record is None:
+        # A workspace that records no main has nothing to repoint.
+        if record is None or record.main is None:
             return
         path = self._ask_locate_path(Path(record.main.path).name)
         if path is None:
@@ -1765,63 +1772,17 @@ class MainWindow(QMainWindow):
     def _new(self, model: str) -> None:
         """Create a fresh incomplete document scaffold for *model*.
 
-        Goes through :meth:`_confirm_new` before replacing the active
-        session -- Save/Discard/Cancel when dirty, a replace confirm even
-        when clean -- then lands on the Editor page so the user can start
-        filling in the new document.
+        No replace guard: the only route here is the start surface, which
+        exists precisely when the Main slot is empty, so a scaffold can only
+        ever be born into an empty workspace. There is nothing to replace
+        and nothing to confirm. Lands on the Editor page so the user can
+        start filling the new document in.
         """
-        if not self._confirm_new():
-            return
         self._state.new_document(model)
         self._params.reset_expansion_state()
         self._diagnostics.reset_view_state()
         self._refresh_all()
         self._show_page(_EDITOR_PAGE_INDEX)
-
-    def _new_from_file(self) -> None:
-        """New from an existing file: clone it into a fresh unsaved session and
-        dock the origin as the read-only reference.
-
-        Picker first, then the same guard as New -- nobody should answer a
-        replace prompt before a file is even chosen. The state change is
-        atomic (``AppState.new_from_file`` loads both files before touching
-        state), so a load failure after the guard leaves the previous
-        session open and any docked reference in place. Unlike New, the
-        flow stays on the Workspace page: both role
-        cards confirm at a glance what was just set up.
-        """
-        name, _ = QFileDialog.getOpenFileName(
-            self, "New from Existing File", "", BPX_FILTER
-        )
-        if not name:
-            return
-        if not self._confirm_new():
-            return
-        path = Path(name)
-        try:
-            # A legacy source gets the same D3 prompt as Open: a clone of a
-            # v0.x object would inherit the tree/diagnostics mismatch the
-            # prompt exists to prevent, so the choice is identical here --
-            # converted copy, as-is read-only, or nothing. The v1 pin-the-
-            # origin contract below applies to non-legacy sources only.
-            if self._route_legacy(path):
-                return
-            outcome = self._state.new_from_file(path)
-        except (LoadError, OSError) as exc:
-            QMessageBox.critical(self, "Cannot open file", str(exc))
-            return
-        self._params.reset_expansion_state()
-        self._diagnostics.reset_view_state()
-        self._refresh_all()
-        # D2: the new document is created either way; only the pin can fail,
-        # and the toast says which of the two happened rather than claiming a
-        # pin that was refused.
-        if outcome is PinReferenceOutcome.AT_CAP:
-            self._toast.show_message(
-                f"New document from {path.name} · not pinned ({AT_CAP_MESSAGE})"
-            )
-        else:
-            self._toast.show_message(f"New document from {path.name} · pinned as reference")
 
     def _save(self) -> bool:
         """Write the document to its backing file.
@@ -2209,19 +2170,20 @@ class MainWindow(QMainWindow):
         return [comparison.differ_count for comparison in self._comparisons]
 
     def _update_workspace_name(self) -> None:
-        """The board header. With no workspace on the board there is nothing
-        to name, so the header hides rather than offering an invitation that
-        would silently do nothing."""
+        """The board header. With no workspace on the board at all there is
+        nothing to name, so the header hides rather than offering an
+        invitation that would silently do nothing.
+
+        An *empty* workspace is not that case: naming is what stops a
+        workspace decaying, and there is no reason to make someone fill one
+        before they may say what it is for. The header appears with the
+        workspace, ghosted, and answers a click from the first moment.
+        """
         record = (
             self._state.history.current() if self._state.history is not None else None
         )
-        on_the_board = record is not None and (
-            self._state.active is not None
-            or bool(self._state.references)
-            or bool(self._missing_files)
-        )
         self._workspace.set_workspace_name(
-            record.name if record is not None else None, exists=on_the_board
+            record.name if record is not None else None, exists=record is not None
         )
 
     def _refresh_workspace_rail(self) -> None:
@@ -2237,38 +2199,34 @@ class MainWindow(QMainWindow):
         if history is None:
             self._workspace.set_workspaces([], [])
             return
-        # "open now" means "this is what the board is showing", so it is
-        # earned by the board and not merely by the stored current id: on a
-        # launch that has not restored anything the board is empty, and no
-        # row should claim otherwise.
-        board_showing = (
-            self._state.active is not None
-            or bool(self._state.references)
-            or bool(self._missing_files)
-        )
-        current_id = history.current_id if board_showing else None
+        # "open now" marks whichever workspace is current, empty or not. It
+        # used to be earned by an open document instead, which was right
+        # while a workspace only existed once it held one -- now that
+        # creating a workspace is its own act, an empty board is a workspace
+        # on the board and the row has to say so.
+        current_id = history.current_id
 
         def view(workspace) -> WorkspaceRowView:
+            main = workspace.main
             return WorkspaceRowView(
                 id=workspace.id,
-                label=workspace.name or Path(workspace.main.path).name,
+                label=(
+                    workspace.name
+                    or (Path(main.path).name if main is not None else UNTITLED_WORKSPACE)
+                ),
                 named=workspace.is_named,
                 reference_count=len(workspace.references),
-                main_exists=Path(workspace.main.path).exists(),
+                # Nothing recorded is nothing missing: a workspace that
+                # holds no main yet is not a workspace whose main is gone.
+                main_exists=main is None or Path(main.path).exists(),
                 is_current=workspace.id == current_id,
+                has_main=main is not None,
             )
 
         self._workspace.set_workspaces(
             [view(workspace) for workspace in history.workspaces],
             [view(workspace) for workspace in history.recent_workspaces],
-            recent_files=[
-                RecentEntryView(
-                    path=text,
-                    name=Path(text).name,
-                    exists=Path(text).exists(),
-                )
-                for text in history.recent_files
-            ],
+            recent_files=[_recent_entry(text) for text in history.recent_files],
         )
 
     def _on_identity_edited(self, field: str, text: str) -> None:

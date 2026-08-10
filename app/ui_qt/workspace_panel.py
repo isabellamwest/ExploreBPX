@@ -7,17 +7,20 @@ wherever it refreshes the other views.
 
 The page is two surfaces edge to edge, the Diagnostics page's anatomy:
 
-* a shaded **rail** -- Open File…, New workspace, then the workspaces
-  themselves (named ones above, untitled Recent ones below, each group
-  hidden whole whenever it has no rows), then the inline New document
-  chooser. Row actions are hover-revealed, never a ⋯ menu.
+* a shaded **rail** -- New workspace, then the workspaces themselves (named
+  ones above, untitled Recent ones below, each group hidden whole whenever
+  it has no rows). Row actions are hover-revealed, never a ⋯ menu. Nothing
+  about *files* lives here: opening one and starting one are acts on the
+  workspace that is on the board, so they belong on the board.
 * a white **pane** carrying the board: the workspace's own name at the top
   (click to rename), then a "This workspace" frame holding the main card
   beside four reference slots -- the slots *are* the drawn cap, so there is
   no "n of 4 pinned" counter and no separate dock buttons. An empty slot's
   ＋ opens one menu with three routes (reference library, a file, a recent
-  file). Below the board sit the selected reference's record and the main
-  document's own strip: the editable identity rows over the fact plaque.
+  file). With no main open the card gives its place to the **start
+  surface**, which carries every way to fill it inline. Below the board sit
+  the selected reference's record and the main document's own strip: the
+  editable identity rows over the fact plaque.
 
 No lines anywhere in the pane -- no hairlines, borders, rounded corners or
 shadows beyond the tinted washes and the cards themselves; the bordered
@@ -83,26 +86,53 @@ _RAIL_WIDTH = 340
 #: The white gap between the board and the strip beneath it.
 _SECTION_GAP = 16
 
+#: How tall an empty reference slot stays. The slots are top-aligned, so
+#: without a floor a slot holding only its ＋ would shrink to the button and
+#: stop reading as a place a reference goes.
+_EMPTY_SLOT_HEIGHT = 56
+
+#: The Main slot's share of the board row, against 2 per reference slot.
+#: The row is capped at the page's content measure, so the two states want
+#: different splits: a main *card* is a filename and a mark, while the start
+#: surface is four model names each beside a descriptor, read side by side to
+#: choose between. A descriptor that elides cannot be compared, so the
+#: surface takes the width the empty slots are not using -- and gives it
+#: straight back the moment a reference is pinned, because a pinned
+#: reference's own name is real content and outranks a menu.
+_MAIN_CARD_STRETCH = 3
+_START_SURFACE_STRETCH = 8
+
 
 @dataclass(frozen=True)
 class RecentEntryView:
-    """One recent *file*, pre-digested by the shell. These no longer have
-    rows of their own -- they feed the board's ＋ menu, which is the one
-    place a file is reached for as a reference."""
+    """One recent *file*, pre-digested by the shell.
+
+    Two surfaces read these: the empty board's start surface, where a
+    recent file is the quickest route to a main document, and the ＋ menu,
+    where it is a reference. ``mtime`` is the file's modified time when the
+    shell probed it (``None`` when it could not be read) -- the panel turns
+    it into the stamp, because how a fact is spelled is the panel's business
+    and whether it is true is the shell's.
+    """
 
     path: str
     name: str
     exists: bool
+    mtime: float | None = None
 
 
 @dataclass(frozen=True)
 class WorkspaceRowView:
     """One rail row: a workspace as the rail needs to draw it.
 
-    ``label`` is the workspace's own name once it has one, and the main's
-    filename before that -- an untitled workspace still has to be
-    recognisable. The panel renders and emits; it never touches the
-    filesystem or the history store.
+    ``label`` is the workspace's own name once it has one, the main's
+    filename before that, and "Untitled workspace" when it holds neither --
+    a workspace exists before it holds anything, and still has to be
+    recognisable. ``has_main`` is whether one is *recorded*;
+    ``main_exists`` is whether that recording still points at a file, and
+    is True when there is nothing recorded (nothing recorded is nothing
+    lost). The panel renders and emits; it never touches the filesystem or
+    the history store.
     """
 
     id: str
@@ -111,6 +141,7 @@ class WorkspaceRowView:
     reference_count: int
     main_exists: bool
     is_current: bool
+    has_main: bool = True
 
 
 @dataclass(frozen=True)
@@ -148,12 +179,14 @@ def _first_supported_local_file(mime_data: QMimeData) -> Path | None:
 
 # Short, factual one-line descriptors. A model without an entry here still
 # renders correctly (name only) so this mapping can lag SUPPORTED_MODELS
-# without breaking the chooser.
+# without breaking the start surface. Short enough to sit whole beside the
+# longest model name at the board's width -- these are read side by side to
+# choose between, so one that elides is one that cannot be compared.
 _MODEL_DESCRIPTORS: dict[str, str] = {
     "SPM": "Single Particle Model",
     "SPMe": "Single Particle Model with electrolyte",
     "DFN": "Doyle-Fuller-Newman model",
-    "Partial": "Partial parameterisation; sections are all optional",
+    "Partial": "Sections are all optional",
 }
 
 
@@ -815,10 +848,22 @@ class _MainCard(QFrame):
         role.setObjectName("BoardSlotRole")
         layout.addWidget(role)
 
+        name_row = QHBoxLayout()
+        name_row.setContentsMargins(0, 0, 0, 0)
+        name_row.setSpacing(6)
         self._name = QLabel(_INFO_PANEL_EMPTY_STATE_TEXT)
         self._name.setObjectName("BoardMainName")
         self._name.setWordWrap(True)
-        layout.addWidget(self._name)
+        name_row.addWidget(self._name)
+        # A document that has never been written is a plain fact about where
+        # it lives, not a problem with it -- so a muted word, never a warning
+        # colour and never a mark.
+        self._unsaved_tag = QLabel("unsaved")
+        self._unsaved_tag.setObjectName("UnsavedTag")
+        self._unsaved_tag.hide()
+        name_row.addWidget(self._unsaved_tag, 0, Qt.AlignBottom)
+        name_row.addStretch(1)
+        layout.addLayout(name_row)
 
         validity = QHBoxLayout()
         validity.setContentsMargins(0, 0, 0, 0)
@@ -851,13 +896,18 @@ class _MainCard(QFrame):
         routes.addStretch(1)
         layout.addLayout(routes)
 
-    def set_empty(self, missing: bool) -> None:
-        """No document on the board: either nothing has been opened, or the
-        workspace's own main is missing from disk and the banner above says
-        so. Either way the card states the absence and offers no route into
-        a document that is not there."""
-        self._name.setText("Main not found" if missing else _INFO_PANEL_EMPTY_STATE_TEXT)
+    def set_missing(self) -> None:
+        """The workspace's recorded main is not on disk. The card states the
+        absence, the banner above names the file, and no route is offered
+        into a document that is not there.
+
+        This is the card's only empty state. A workspace that records *no*
+        main has lost nothing, so it shows the start surface instead -- the
+        two must never appear together.
+        """
+        self._name.setText("Main not found")
         self._set_ghosted(True)
+        self._unsaved_tag.hide()
         self._dot.hide()
         self._badge.hide()
         self._read_only_tag.hide()
@@ -866,10 +916,11 @@ class _MainCard(QFrame):
 
     def set_document(
         self, filename: str, validity: str, colour: str, tooltip: str,
-        errors: int, read_only: bool,
+        errors: int, read_only: bool, never_saved: bool = False,
     ) -> None:
         self._name.setText(filename)
         self._set_ghosted(False)
+        self._unsaved_tag.setVisible(never_saved)
         self._dot.setText(icons.html_img(icons.DOT, color=colour))
         self._dot.setToolTip(tooltip)
         self._dot.show()
@@ -933,6 +984,10 @@ class _ReferenceSlot(QFrame):
         self._colour = ""
         self.setObjectName("BoardSlotEmpty")
         self.setAttribute(Qt.WA_StyledBackground, True)
+        # Top-aligned on the board, so an empty slot is sized by its own ＋
+        # rather than by its neighbour. The floor keeps it a slot rather
+        # than a button: it has to read as a place a reference goes.
+        self.setMinimumHeight(_EMPTY_SLOT_HEIGHT)
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(10, 10, 10, 10)
         self._layout.setSpacing(4)
@@ -1184,18 +1239,157 @@ class _HistoryRow(QFrame):
         super().mousePressEvent(event)
 
 
-def _workspace_glyph(reference_count: int) -> QLabel:
+class _StartSurface(QWidget):
+    """The empty Main area: every way to fill it, visible at once.
+
+    Two acts in frequency order. **Open a file** leads, with the recent
+    files beneath it -- they are the same act, pre-filled. **New document**
+    follows, each model beside its own one-line descriptor, because
+    choosing between them is the decision this surface exists to support
+    and a tooltip cannot be compared with three others.
+
+    Nothing hides behind a click: with Open no longer in the rail, the only
+    route into a file must not be a menu. Flat white chips on the board
+    wash, in the rail rows' own language -- no dashed box, no popup, and no
+    line anywhere, which is the page's standing rule.
+    """
+
+    open_requested = Signal()
+    #: A recent file chosen as the main document, carrying its path.
+    recent_open_requested = Signal(str)
+    new_requested = Signal(str)  # model name
+
+    #: How many recent files the surface offers. Four keeps the two acts
+    #: about the same height; the rest are one Open away.
+    MAX_RECENT_ROWS = 4
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setObjectName("BoardStartSurface")
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(5)
+
+        role = QLabel("Main")
+        role.setObjectName("BoardSlotRole")
+        layout.addWidget(role)
+
+        self._open_button = QPushButton("Open a file…")
+        self._open_button.setObjectName("StartOpenButton")
+        self._open_button.setCursor(Qt.PointingHandCursor)
+        self._open_button.clicked.connect(self.open_requested)
+        layout.addWidget(self._open_button)
+
+        self._recent_rows: list[_HistoryRow] = []
+        self._recent_host = QWidget()
+        self._recent_layout = QVBoxLayout(self._recent_host)
+        self._recent_layout.setContentsMargins(0, 0, 0, 0)
+        self._recent_layout.setSpacing(4)
+        self._recent_host.hide()
+        layout.addWidget(self._recent_host)
+
+        new_label = QLabel("New document")
+        new_label.setObjectName("BoardSlotRole")
+        layout.addSpacing(4)
+        layout.addWidget(new_label)
+        for model in SUPPORTED_MODELS:
+            row = self._build_row(
+                model, _MODEL_DESCRIPTORS.get(model, ""), f"NewButton_{model}"
+            )
+            row.clicked.connect(lambda name=model: self.new_requested.emit(name))
+            layout.addWidget(row)
+        layout.addStretch(1)
+
+    def set_recent_files(self, entries: list[RecentEntryView]) -> None:
+        """Offer the newest files still on disk, newest first.
+
+        A file that has gone is left out rather than struck through: every
+        row here is a route, and a route that cannot be taken is not one.
+        """
+        for row in self._recent_rows:
+            # setParent(None) as well as deleteLater, for the same reason the
+            # rail rows do it: a merely-scheduled widget stays a visible child
+            # until the event loop unwinds, so rebuilds would stack ghosts.
+            row.setParent(None)
+            row.deleteLater()
+        self._recent_rows = []
+        for entry in [entry for entry in entries if entry.exists][
+            : self.MAX_RECENT_ROWS
+        ]:
+            row = self._build_row(
+                entry.name,
+                _stamp_text(entry.mtime) if entry.mtime is not None else "",
+                "StartRecentRow",
+            )
+            row.setToolTip(entry.path)
+            row.clicked.connect(
+                lambda path=entry.path: self.recent_open_requested.emit(path)
+            )
+            self._recent_layout.addWidget(row)
+            self._recent_rows.append(row)
+        self._recent_host.setVisible(bool(self._recent_rows))
+
+    def recent_row_labels(self) -> list[str]:
+        """The recent files this surface is offering -- the test seam."""
+        return [
+            row.findChild(QLabel, "StartRowName").text() for row in self._recent_rows
+        ]
+
+    @staticmethod
+    def _build_row(name: str, trailing: str, object_name: str) -> _HistoryRow:
+        """One start-surface chip: a name on the left, a muted fact on the
+        right, the whole row the click target. ``startRow`` carries the
+        shared styling because the model rows keep their per-model
+        ``NewButton_{model}`` objectNames -- the test and driver seam, which
+        QSS cannot prefix-match."""
+        row = _HistoryRow()
+        row.setObjectName(object_name)
+        row.setProperty("startRow", True)
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(10, 4, 10, 4)
+        layout.setSpacing(8)
+        label = QLabel(name)
+        label.setObjectName("StartRowName")
+        layout.addWidget(label, 0)
+        # Elided rather than wrapped: a long descriptor must not make one row
+        # twice the height of its neighbours (the reference slots' lesson).
+        detail = _ElidedLabel("StartRowDetail")
+        detail.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        # An explicit non-zero minimum is what makes the detail the side that
+        # gives way: without it the layout weighs two labels both demanding
+        # their whole text and squeezes the name, which clipped a filename
+        # mid-word on screen. The name identifies the row, so it goes last.
+        detail.setMinimumWidth(1)
+        detail.setText(trailing)
+        layout.addWidget(detail, 1)
+        return row
+
+
+def _workspace_glyph(reference_count: int, has_main: bool = True) -> QLabel:
     """The rail row's shape-at-a-glance: a bar for the main, a dot per
     reference. Two workspaces over the same file but different references
-    are told apart without reading either label."""
-    label = QLabel("▌" + "".join(" ·" for _ in range(reference_count)))
+    are told apart without reading either label.
+
+    A workspace with no main draws no bar -- the glyph says what is in the
+    workspace, so an empty one is empty. It keeps the label (blank) rather
+    than losing it, so every row's name still starts at the same x.
+    """
+    references = "".join(" ·" for _ in range(reference_count))
+    label = QLabel(("▌" if has_main else "") + references)
     label.setObjectName("WorkspaceGlyph")
-    label.setToolTip(
-        f"Main + {reference_count} reference"
-        + ("s" if reference_count != 1 else "")
-        if reference_count
-        else "Main, no references"
-    )
+    plural = "s" if reference_count != 1 else ""
+    if not has_main:
+        label.setToolTip(
+            f"{reference_count} reference{plural}, no main"
+            if reference_count
+            else "Nothing in this workspace yet"
+        )
+    else:
+        label.setToolTip(
+            f"Main + {reference_count} reference{plural}"
+            if reference_count
+            else "Main, no references"
+        )
     return label
 
 
@@ -1208,7 +1402,6 @@ class WorkspacePanel(QWidget):
     file_dropped = Signal(str)  # local file path
     open_reference_requested = Signal()
     open_library_requested = Signal()
-    new_from_file_requested = Signal()
     #: Carries the ``ReferenceSnapshot`` its slot points at -- with several
     #: references pinned, "Remove" has to say *which*.
     remove_reference_requested = Signal(object)
@@ -1218,6 +1411,9 @@ class WorkspacePanel(QWidget):
     identity_edited = Signal(str, str)
     #: Pin a recent file as a reference (the ＋ menu's third route).
     recent_pin_requested = Signal(str)
+    #: Open a recent file as the main document (the start surface's rows),
+    #: carrying its path.
+    recent_open_requested = Signal(str)
 
     #: The rail's workspace requests, each carrying the workspace's id.
     #: Opening, naming and removing all happen in MainWindow -- the rows are
@@ -1268,9 +1464,15 @@ class WorkspacePanel(QWidget):
     # --- the rail ---------------------------------------------------------
 
     def _build_rail(self) -> QWidget:
-        """The shaded rail: the two ways to start work, then the workspaces
-        themselves, then the New chooser. No heading over the buttons --
-        they name themselves."""
+        """The shaded rail: the one verb, then the two lists.
+
+        Nothing about *files* lives here any more. Opening is an act on the
+        workspace that is on the board, so it belongs on the board -- in the
+        rail it read as global and silently swapped the current workspace's
+        main. Starting a new document is the same story, and the start
+        surface says both plainly. No heading over the button: it names
+        itself.
+        """
         rail = QWidget()
         rail.setObjectName("WorkspaceRail")
         rail.setAttribute(Qt.WA_StyledBackground, True)
@@ -1279,14 +1481,8 @@ class WorkspacePanel(QWidget):
         rail_layout.setContentsMargins(12, 12, 12, 12)
         rail_layout.setSpacing(6)
 
-        self._open_button = QPushButton("Open File…")
-        self._open_button.setObjectName("WorkspaceOpen")
-        self._open_button.clicked.connect(self.open_requested)
-        rail_layout.addWidget(self._open_button)
-
         self._new_workspace_button = QPushButton("New workspace")
         self._new_workspace_button.setObjectName("NewWorkspace")
-        self._new_workspace_button.setProperty("modelOption", True)
         self._new_workspace_button.clicked.connect(self.new_workspace_requested)
         rail_layout.addWidget(self._new_workspace_button)
 
@@ -1299,15 +1495,6 @@ class WorkspacePanel(QWidget):
         self._recent_group, self._recent_rows_layout = self._build_group("Recent")
         rail_layout.addSpacing(6)
         rail_layout.addWidget(self._recent_group)
-
-        divider = QFrame()
-        divider.setObjectName("WorkspaceRailDivider")
-        divider.setFixedHeight(1)
-        rail_layout.addSpacing(6)
-        rail_layout.addWidget(divider)
-        rail_layout.addSpacing(6)
-
-        rail_layout.addWidget(self._build_new_chooser())
         rail_layout.addStretch(1)
         return rail
 
@@ -1335,10 +1522,12 @@ class WorkspacePanel(QWidget):
         """Rebuild both rail groups from pre-digested views.
 
         The shell decides existence (``main_exists``) and which row is
-        current; rows only render the verdicts. ``recent_files`` never gets
-        rows of its own -- it feeds the board's ＋ menu.
+        current; rows only render the verdicts. ``recent_files`` gets no
+        rows in the rail -- it feeds the start surface and the board's
+        ＋ menu, the two places a file is actually reached for.
         """
         self._recent_files = list(recent_files)
+        self._start_surface.set_recent_files(self._recent_files)
         for row in getattr(self, "_workspace_rows", []):
             # setParent(None) now, not just deleteLater: a merely-scheduled
             # widget stays a visible child until the event loop unwinds, so
@@ -1368,7 +1557,7 @@ class WorkspacePanel(QWidget):
         layout.setContentsMargins(8, 5, 8, 5)
         layout.setSpacing(6)
 
-        layout.addWidget(_workspace_glyph(entry.reference_count))
+        layout.addWidget(_workspace_glyph(entry.reference_count, entry.has_main))
 
         name = QLabel(entry.label)
         name.setObjectName("HistoryRowName")
@@ -1409,58 +1598,6 @@ class WorkspacePanel(QWidget):
         _action("Remove", self.workspace_remove_requested)
         return row
 
-    def _build_new_chooser(self) -> QWidget:
-        """Inline "New document" surface: one flat, name-first row per
-        supported model, its full name a tooltip away -- list-row language,
-        sized to the rail.
-
-        Rendered directly on the page (not a dialog or dropdown) so the
-        Workspace page's layout is used as intended.
-        """
-        container = QWidget()
-        container.setObjectName("NewChooser")
-        layout = QVBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(6)
-
-        layout.addWidget(panel_title("New document"))
-        for model in SUPPORTED_MODELS:
-            layout.addWidget(self._build_model_option(model))
-
-        divider = QFrame()
-        divider.setObjectName("WorkspaceRailDivider")
-        divider.setFixedHeight(1)
-        layout.addSpacing(2)
-        layout.addWidget(divider)
-        layout.addSpacing(2)
-        layout.addWidget(self._build_new_from_file_option())
-        return container
-
-    def _build_model_option(self, model: str) -> QWidget:
-        """One chooser row: the model name as a flat bold button, its full
-        name a tooltip away. The button keeps its plain ``text()`` (the model
-        name) and ``NewButton_{model}`` objectName -- the seam the tests and
-        driver click -- while the ``modelOption`` dynamic property carries the
-        shared flat-row styling (QSS cannot prefix-match objectNames)."""
-        button = QPushButton(model)
-        button.setObjectName(f"NewButton_{model}")
-        button.setProperty("modelOption", True)
-        button.setToolTip(_MODEL_DESCRIPTORS.get(model, model))
-        button.clicked.connect(lambda: self.new_requested.emit(model))
-        return button
-
-    def _build_new_from_file_option(self) -> QWidget:
-        """The chooser's non-model row, below its own divider: clone an existing
-        file into a fresh unsaved document with the origin docked as the
-        reference ("New from source"). Same flat-row styling as the model
-        options -- the ``modelOption`` property carries it."""
-        self._new_from_file_button = QPushButton("From existing file…")
-        self._new_from_file_button.setObjectName("NewFromFile")
-        self._new_from_file_button.setProperty("modelOption", True)
-        self._new_from_file_button.setToolTip("Start from a copy of an existing file")
-        self._new_from_file_button.clicked.connect(self.new_from_file_requested)
-        return self._new_from_file_button
-
     # --- the pane ---------------------------------------------------------
 
     def _build_pane(self) -> QWidget:
@@ -1492,7 +1629,8 @@ class WorkspacePanel(QWidget):
         pane_layout.addWidget(self._reference_record)
 
         pane_layout.addSpacing(_SECTION_GAP)
-        pane_layout.addWidget(self._build_strip())
+        self._main_section = self._build_strip()
+        pane_layout.addWidget(self._main_section)
         pane_layout.addStretch(1)
         return pane
 
@@ -1509,7 +1647,16 @@ class WorkspacePanel(QWidget):
         self._main_card = _MainCard()
         self._main_card.edit_requested.connect(self.edit_requested)
         self._main_card.diagnostics_requested.connect(self.diagnostics_requested)
-        board.addWidget(self._main_card, 3)
+        board.addWidget(self._main_card, _MAIN_CARD_STRETCH)
+
+        # The same flex slot, in the other state, and a wider share of the
+        # row while nothing is pinned (see the stretch constants, and
+        # _set_references, which is where the share is decided).
+        self._start_surface = _StartSurface()
+        self._start_surface.open_requested.connect(self.open_requested)
+        self._start_surface.recent_open_requested.connect(self.recent_open_requested)
+        self._start_surface.new_requested.connect(self.new_requested)
+        board.addWidget(self._start_surface, _START_SURFACE_STRETCH)
 
         arrow = QLabel("⇄")
         arrow.setObjectName("BoardArrow")
@@ -1522,8 +1669,14 @@ class WorkspacePanel(QWidget):
             slot.diff_requested.connect(self.diff_requested)
             slot.add_requested.connect(self._show_add_menu)
             self._slots.append(slot)
-            board.addWidget(slot, 2)
+            # Top-aligned, so a slot is the height of what is in it rather
+            # than of whatever stands beside it. Stretched, an empty slot
+            # became a tall dashed column next to the start surface -- an
+            # emphatic frame around nothing.
+            board.addWidget(slot, 2, Qt.AlignTop)
 
+        self._board_layout = board
+        self._start_surface_index = board.indexOf(self._start_surface)
         body.addLayout(board)
         return section
 
@@ -1535,11 +1688,6 @@ class WorkspacePanel(QWidget):
         the upper block is yours, the plaque is the file's."""
         section = TintedSection("Main", object_name="WorkspaceMainSection")
         body = section.body_layout
-
-        self._info_empty = QLabel(_INFO_PANEL_EMPTY_STATE_TEXT)
-        self._info_empty.setObjectName("WorkspaceCardTitle")
-        self._info_empty.setEnabled(False)
-        body.addWidget(self._info_empty)
 
         self._info_title = _EditableText(
             "WorkspaceCardTitle", "Add a title…",
@@ -1733,14 +1881,24 @@ class WorkspacePanel(QWidget):
         self._set_references(list(references or []), differ_counts or [])
 
         if document is None:
-            self._main_card.set_empty(getattr(self, "_main_missing", False))
-            self._info_empty.show()
-            self._info_title.hide()
-            self._set_form_rows_visible(self._identity_form, False)
-            self._fact_band.hide()
+            # Empty and missing are different states, and never both: with a
+            # recorded main that would not open the banner and the card say
+            # so, and with nothing recorded there is everything still to do.
+            missing = getattr(self, "_main_missing", False)
+            self._main_card.setVisible(missing)
+            self._start_surface.setVisible(not missing)
+            if missing:
+                self._main_card.set_missing()
+            # The strip is one document's record, so with no document there
+            # is no record: the section goes rather than standing there
+            # saying it has nothing to say. The board above already states
+            # the absence, and states it as an invitation.
+            self._main_section.hide()
             return
 
-        self._info_empty.hide()
+        self._main_card.setVisible(True)
+        self._start_surface.setVisible(False)
+        self._main_section.show()
         self._info_title.show()
         self._set_form_rows_visible(self._identity_form, True)
         self._fact_band.show()
@@ -1809,6 +1967,7 @@ class WorkspacePanel(QWidget):
             tooltip,
             error_count,
             read_only,
+            never_saved,
         )
 
     def _set_references(
@@ -1823,6 +1982,16 @@ class WorkspacePanel(QWidget):
         removing one does not close the record someone was reading on
         another.
         """
+        # Who gets the row's spare width. A pinned reference has to be
+        # readable by name -- an elided slot label cannot even be told from
+        # its neighbour -- and its own sizeHint cannot ask on its behalf,
+        # because the label reports the width of the text it has already
+        # elided to. So the share is set from what is pinned, not from what
+        # the widgets claim to want.
+        self._board_layout.setStretch(
+            self._start_surface_index,
+            _MAIN_CARD_STRETCH if references else _START_SURFACE_STRETCH,
+        )
         open_id = (
             id(self._reference_record.snapshot)
             if not self._reference_record.isHidden()

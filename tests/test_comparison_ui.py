@@ -744,7 +744,7 @@ def test_replacing_the_main_document_with_reference_docked_refreshes(
         app_driver._w, "_ask_open_intent", lambda filename: main_window_module.OpenIntent.REPLACE_MAIN
     )
     _stub_open_dialog(monkeypatch, matching_main_path)
-    app_driver.click_workspace_open()
+    app_driver.press_open_shortcut()
 
     assert app_driver.comparison_strip_chip_tooltips()[0].endswith("no differences")
     app_driver.go_to(("Parameterisation", "Cell"))

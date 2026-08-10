@@ -12,6 +12,8 @@ import pytest
 
 pytest.importorskip("PySide6")
 
+from ui_qt.workspace_panel import UNTITLED_WORKSPACE  # noqa: E402
+
 CHEN2020 = "pybamm/chen2020"
 
 
@@ -107,8 +109,99 @@ def test_new_workspace_clears_the_board_for_a_separate_line_of_work(
     assert d._w._state.active is None
     assert d._w._state.references == []
     assert d.current_view_index() == 2  # landed on the Workspace page
-    assert d.recent_workspace_labels() == [spm_workfile.name]  # kept, not lost
-    assert d.current_workspace_row_label() is None
+    # The new workspace is a visible row from the moment it is asked for,
+    # and it is the one on the board; the one left behind is kept, not lost.
+    assert d.recent_workspace_labels() == [UNTITLED_WORKSPACE, spm_workfile.name]
+    assert d.current_workspace_row_label() == UNTITLED_WORKSPACE
+
+
+def test_the_board_header_invites_a_name_on_an_empty_workspace(relaunch):
+    """The header appears with the workspace, not with its first document:
+    naming is what stops a workspace decaying, so nobody should have to
+    fill one before saying what it is for."""
+    d = relaunch()
+    assert d.workspace_name_text() == ""  # no workspace at all, no header
+
+    d.click_new_workspace()
+
+    assert d.workspace_name_text() == UNTITLED_WORKSPACE  # the ghost invites
+    d.rename_workspace("planning")
+    assert d.named_workspace_labels() == ["planning"]
+    assert d.workspace_name_text() == "planning"
+
+
+def test_a_new_workspace_can_be_named_before_it_holds_anything(
+    relaunch, spm_workfile
+):
+    """Creation is instant, so naming does not have to wait for a document:
+    the fresh row promotes out of Recent and survives a relaunch empty."""
+    d = relaunch()
+    d.open(spm_workfile)
+    d.click_new_workspace()
+
+    _name_workspace(d, UNTITLED_WORKSPACE, "planning")
+
+    assert d.named_workspace_labels() == ["planning"]
+    assert d.recent_workspace_labels() == [spm_workfile.name]
+    assert not d.workspace_row_has_main_bar("planning")
+
+    fresh = relaunch()
+    assert fresh.named_workspace_labels() == ["planning"]
+
+
+def test_an_empty_workspace_row_is_neither_missing_nor_barred(relaunch):
+    """Nothing recorded is nothing lost: no ▌ bar, no strike, no "Not
+    found" chip, and the row still answers a click."""
+    d = relaunch()
+    d.click_new_workspace()
+
+    assert not d.workspace_row_has_main_bar(UNTITLED_WORKSPACE)
+    assert d.workspace_row_reference_count(UNTITLED_WORKSPACE) == 0
+    assert not d.workspace_row_is_missing(UNTITLED_WORKSPACE)
+
+
+def test_a_scaffold_row_shows_its_filename_and_the_card_says_unsaved(relaunch):
+    d = relaunch()
+    d.click_new_workspace()
+
+    d.click_workspace_new("DFN")
+
+    assert d.workspace_main_name() == "untitled.json"
+    assert d.workspace_unsaved_tag_visible()
+    d.show_view("Workspace")
+    assert not d.start_surface_visible()
+
+
+def test_a_recent_row_opens_that_file_as_the_main(relaunch, spm_workfile):
+    """A recent row is the Open act pre-filled, so it lands exactly where
+    the dialog would: that file open as the main of this workspace."""
+    d = relaunch()
+    d.open(spm_workfile)
+    d.click_new_workspace()
+    created = d._w._state.workspace_id
+
+    assert d.start_recent_labels() == [spm_workfile.name]
+    d.click_start_recent(spm_workfile.name)
+
+    assert d._w._state.active.backing_file == spm_workfile
+    assert d._w._state.workspace_id == created  # filled in place, not branched
+
+
+def test_an_empty_workspace_restores_to_the_start_surface(relaunch, spm_workfile):
+    """A restored workspace with no recorded main lands on the start
+    surface, and the missing-files banner stays silent -- it is reserved
+    for a file that was recorded and would not open."""
+    first = relaunch()
+    first.open(spm_workfile)
+    first.click_new_workspace()
+    first.dock_library_reference(CHEN2020)  # gives the empty workspace a record
+    empty_id = first._w._state.workspace_id
+
+    fresh = relaunch()
+    assert fresh._w._state.workspace_id == empty_id  # restored on launch
+    assert fresh._w._state.active is None
+    assert fresh.start_surface_visible()
+    assert fresh.missing_file_messages() == []
 
 
 def test_a_workspace_reopens_whole_from_its_rail_row(
@@ -415,15 +508,17 @@ def test_the_counts_survive_a_relaunch_restore(
 def test_the_board_offers_no_name_when_there_is_no_workspace(
     relaunch, spm_workfile
 ):
-    """An invitation that would silently do nothing is worse than none."""
+    """An invitation that would silently do nothing is worse than none, so
+    the header waits for a workspace to exist -- but only for that. Once one
+    does, empty or not, it invites."""
     d = relaunch()
     assert d.workspace_name_text() == ""
 
     d.open(spm_workfile)
-    assert d.workspace_name_text() == "Untitled workspace"
+    assert d.workspace_name_text() == UNTITLED_WORKSPACE
 
     d.click_new_workspace()
-    assert d.workspace_name_text() == ""
+    assert d.workspace_name_text() == UNTITLED_WORKSPACE
 
 
 # ---------------------------------------------------------------------------

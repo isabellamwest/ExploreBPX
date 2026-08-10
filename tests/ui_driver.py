@@ -25,7 +25,14 @@ from pathlib import Path
 
 from PySide6.QtCore import QMimeData, QPointF, QUrl, Qt
 from PySide6.QtGui import QDropEvent, QTextDocument
-from PySide6.QtWidgets import QComboBox, QLineEdit, QPushButton, QSpinBox
+from PySide6.QtWidgets import (
+    QComboBox,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QSpinBox,
+    QWidget,
+)
 
 
 def _find_tree_node(root, path: tuple[str, ...]):
@@ -686,8 +693,16 @@ class AppDriver:
         return self
 
     def click_workspace_open(self) -> "AppDriver":
-        """Click the Open File button on the Workspace page."""
-        self._qtbot.mouseClick(self._w._workspace._open_button, Qt.LeftButton)
+        """Click "Open a file…" on the board's start surface.
+
+        Asserts the surface is actually on the board first: it exists only
+        while the Main slot is empty, so with a document open this route is
+        not offered at all and the shortcut (``press_open_shortcut``) is
+        what swaps a filled main.
+        """
+        surface = self._w._workspace._start_surface
+        assert not surface.isHidden(), "The start surface is not on the board"
+        self._qtbot.mouseClick(surface._open_button, Qt.LeftButton)
         return self
 
     def _trigger_add_route(self, text: str) -> "AppDriver":
@@ -861,6 +876,14 @@ class AppDriver:
         glyph = self._workspace_row_named(label).findChild(QLabel, "WorkspaceGlyph")
         return glyph.text().count("·")
 
+    def workspace_row_has_main_bar(self, label: str) -> bool:
+        """Whether the row's glyph draws the ▌ bar -- that is, whether the
+        workspace records a main document at all."""
+        from PySide6.QtWidgets import QLabel
+
+        glyph = self._workspace_row_named(label).findChild(QLabel, "WorkspaceGlyph")
+        return "▌" in glyph.text()
+
     def workspace_row_actions(self, label: str) -> list[str]:
         """The hover-revealed actions on a rail row, in order."""
         from PySide6.QtWidgets import QPushButton
@@ -944,13 +967,20 @@ class AppDriver:
         return "" if card._badge.isHidden() else card.validity_text()
 
     def workspace_main_name(self) -> str:
-        """What the board's main card is naming."""
-        return self._w._workspace._main_card.name_text()
+        """What the board's main card is naming, or "" when the card is not
+        on the board at all (the start surface has the slot)."""
+        card = self._w._workspace._main_card
+        return "" if card.isHidden() else card.name_text()
 
     def workspace_record_visible(self) -> bool:
-        """Whether the main document's fact plaque is showing (it is not,
-        with nothing open)."""
-        return not self._w._workspace._fact_band.isHidden()
+        """Whether the main document's fact plaque is on the page.
+
+        The section, not just the band: with nothing open the whole record
+        section leaves, so reading the band alone would report a plaque that
+        no longer has a page to sit on.
+        """
+        ws = self._w._workspace
+        return not ws._main_section.isHidden() and not ws._fact_band.isHidden()
 
     def click_edit_route(self) -> "AppDriver":
         """Click the main card's "Edit its parameters ▸"."""
@@ -1912,30 +1942,52 @@ class AppDriver:
         return widget.text()
 
     def click_workspace_new(self, model: str) -> "AppDriver":
-        """Click the New button for *model* on the Workspace page's inline chooser."""
-        button = self._w._workspace.findChild(QPushButton, f"NewButton_{model}")
-        assert button is not None, f"No New button for model {model!r}"
-        self._qtbot.mouseClick(button, Qt.LeftButton)
+        """Click the *model* row on the board's start surface. A QWidget
+        lookup, not a QPushButton one: the rows are whole-row click targets
+        now, and the objectName is the seam that survived the move."""
+        row = self._w._workspace.findChild(QWidget, f"NewButton_{model}")
+        assert row is not None, f"No New row for model {model!r}"
+        assert row.isVisibleTo(self._w._workspace), (
+            f"The New row for {model!r} is not on the board"
+        )
+        self._qtbot.mouseClick(row, Qt.LeftButton)
         return self
 
     def workspace_new_model_options(self) -> list[str]:
-        """The model names currently offered as buttons by the inline New chooser."""
+        """The model names the start surface is currently offering.
+
+        ``isVisibleTo`` rather than ``isHidden``: the rows are only ever
+        hidden by an *ancestor* (the surface leaves the board whole), and
+        offscreen nothing is truly visible, so neither of the simpler
+        readings would answer "is this on the board".
+        """
         prefix = "NewButton_"
         return [
-            button.objectName()[len(prefix):]
-            for button in self._w._workspace.findChildren(QPushButton)
-            if button.objectName().startswith(prefix)
+            row.objectName()[len(prefix):]
+            for row in self._w._workspace.findChildren(QWidget)
+            if row.objectName().startswith(prefix)
+            and row.isVisibleTo(self._w._workspace)
         ]
 
-    def click_workspace_new_from_file(self) -> "AppDriver":
-        """Click the New chooser's "From existing file…" row on the Workspace page."""
-        self._qtbot.mouseClick(self._w._workspace._new_from_file_button, Qt.LeftButton)
-        return self
+    def start_surface_visible(self) -> bool:
+        """Whether the board's Main slot is showing the start surface."""
+        return not self._w._workspace._start_surface.isHidden()
 
-    def workspace_new_from_file_texts(self) -> tuple[str, str]:
-        """The (label, tooltip) of the New chooser's from-existing-file row."""
-        button = self._w._workspace._new_from_file_button
-        return button.text(), button.toolTip()
+    def start_recent_labels(self) -> list[str]:
+        """The recent files the start surface is offering as a main."""
+        return self._w._workspace._start_surface.recent_row_labels()
+
+    def click_start_recent(self, name: str) -> "AppDriver":
+        """Click the start surface's recent row for *name*."""
+        for row in self._w._workspace._start_surface._recent_rows:
+            if row.findChild(QLabel, "StartRowName").text() == name:
+                self._qtbot.mouseClick(row, Qt.LeftButton)
+                return self
+        raise AssertionError(f"No recent row for {name!r}")
+
+    def workspace_unsaved_tag_visible(self) -> bool:
+        """Whether the main card is tagging its document as never saved."""
+        return not self._w._workspace._main_card._unsaved_tag.isHidden()
 
     # ------------------------------------------------------------------
     # Readers -- user-visible state only
@@ -2207,15 +2259,18 @@ class AppDriver:
         return None
 
     def workspace_info_text(self) -> str:
-        """Text of the Workspace page's current-document card, flattened.
+        """Text of the Workspace page's current-document record, flattened.
 
         Composed from the card's title, validity badge and field rows into the
         ``Key: value`` lines the workspace assertions read, so a layout change
         (single label -> formatted card) does not ripple into every test.
+
+        "" when no document is open: the record is one document's, so with
+        no document the whole section leaves the page.
         """
         ws = self._w._workspace
-        if not ws._info_empty.isHidden():
-            return ws._info_empty.text()
+        if ws._main_section.isHidden():
+            return ""
         lines = [f"Title: {ws._info_title.text()}"]
         if ws._main_card.validity_text():
             lines.append(f"Validity: {ws._main_card.validity_text()}")

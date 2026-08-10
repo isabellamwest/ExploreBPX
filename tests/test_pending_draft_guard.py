@@ -115,9 +115,15 @@ def test_open_guard_cancel_keeps_the_draft(app_driver, spm_workfile, monkeypatch
     assert window._has_unsaved_work() is True
 
 
-def test_new_guard_treats_a_draft_as_unsaved_work(app_driver, spm_workfile, monkeypatch):
+def test_new_workspace_treats_a_draft_as_unsaved_work(
+    app_driver, spm_workfile, monkeypatch
+):
+    """A pending draft is unsaved work wherever the discard guard runs.
+    New workspace is where that matters now: New document has no guard,
+    because it is only offered on a board with nothing to lose."""
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(6.5)
     window = app_driver._w
+    before = window._state.workspace_id
     asked = []
 
     def fake_question(*args, **kwargs):
@@ -126,9 +132,11 @@ def test_new_guard_treats_a_draft_as_unsaved_work(app_driver, spm_workfile, monk
 
     monkeypatch.setattr(main_window_module.QMessageBox, "question", fake_question)
 
-    assert window._confirm_new() is False
-    # The dirty path, not the lightweight "this will replace X" confirm.
+    app_driver.click_new_workspace()
+
     assert asked == ["Unsaved changes"]
+    assert window._state.workspace_id == before  # nothing was started
+    assert window._state.active is not None
 
 
 def test_a_blocked_draft_aborts_the_save(app_driver, spm_workfile, monkeypatch):

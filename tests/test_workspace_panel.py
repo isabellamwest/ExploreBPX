@@ -1,8 +1,9 @@
-"""Workspace page: activity-bar entry, default landing, info panel, New chooser
-and drag-and-drop file opening.
+"""Workspace page: activity-bar entry, default landing, info panel, the
+board's start surface and drag-and-drop file opening.
 
-Covers Step 7 (the Workspace page shell), Step 8 (the inline New
-model-chooser) and Step 9 (drag-and-drop) of the top-bar/workspace redesign.
+Covers Step 7 (the Workspace page shell), Step 8 (the New-document models,
+now rows on the start surface) and Step 9 (drag-and-drop) of the
+top-bar/workspace redesign.
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtCore import QMimeData, QPointF, QUrl, Qt
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
-from PySide6.QtWidgets import QPushButton
+from PySide6.QtWidgets import QLabel, QWidget
 
 import ui_qt.main_window as main_window_module
 import ui_qt.workspace_panel as workspace_panel_module
@@ -62,8 +63,10 @@ def test_app_launches_on_workspace_page_with_no_document(app_driver):
     assert app_driver.activity_bar_selected_label() == "Workspace"
 
 
-def test_workspace_info_shows_empty_state_with_no_document(app_driver):
-    assert app_driver.workspace_info_text() == "No document open"
+def test_the_record_section_is_absent_with_no_document(app_driver):
+    """The strip is one document's record, so with no document there is no
+    section -- not a section saying it has nothing to say."""
+    assert app_driver.workspace_info_text() == ""
 
 
 def test_workspace_info_shows_identity_and_file_state_once_opened(
@@ -165,7 +168,7 @@ def test_opening_from_workspace_page_goes_through_discard_guard(
         lambda *a, **k: (str(valid_spm_path), ""),
     )
 
-    d.click_workspace_open()
+    d.press_open_shortcut()
 
     assert d.status_text() == original_status
 
@@ -219,32 +222,82 @@ def test_document_card_badge_matches_partitioned_count_not_raw_diagnostics(
     assert app_driver.workspace_validity_text() == "3 errors, 1 warning"
 
 
-def test_board_and_strip_are_blank_with_no_document(app_driver):
+def test_an_empty_board_shows_the_start_surface_not_an_empty_card(app_driver):
+    """Nothing open is not a dead end: the Main slot carries every way to
+    fill it, and the main card is not on the board at all."""
     d = app_driver
-    assert d.workspace_info_text() == "No document open"
-    assert d.workspace_main_name() == "No document open"
+    assert d.start_surface_visible()
+    assert d.workspace_main_name() == ""
+    assert d.workspace_info_text() == ""
     assert d.workspace_validity_text() == ""
     assert d.issue_route_text() == ""
     assert not d.workspace_record_visible()
 
 
-def test_new_chooser_offers_exactly_the_supported_models(app_driver):
+def test_start_surface_offers_exactly_the_supported_models(app_driver):
     assert sorted(app_driver.workspace_new_model_options()) == sorted(SUPPORTED_MODELS)
 
 
-def test_new_chooser_falls_back_to_the_model_name_with_no_descriptor(qtbot, monkeypatch):
-    """A model absent from ``_MODEL_DESCRIPTORS`` must still render (name-only,
-    tooltip name-only), never crash -- the documented graceful-degradation
-    fallback."""
+def test_start_surface_offers_the_recent_files_that_still_exist(
+    qtbot, tmp_path, valid_spm_path
+):
+    """A route that cannot be taken is not one, so a recent file that has
+    gone is left out rather than shown struck through."""
+    panel = workspace_panel_module.WorkspacePanel()
+    qtbot.addWidget(panel)
+    gone = tmp_path / "gone.json"
+
+    panel.set_workspaces(
+        [],
+        [],
+        recent_files=[
+            workspace_panel_module.RecentEntryView(
+                path=str(valid_spm_path),
+                name=valid_spm_path.name,
+                exists=True,
+                mtime=valid_spm_path.stat().st_mtime,
+            ),
+            workspace_panel_module.RecentEntryView(
+                path=str(gone), name=gone.name, exists=False
+            ),
+        ],
+    )
+
+    surface = panel._start_surface
+    assert surface.recent_row_labels() == [valid_spm_path.name]
+
+
+def test_the_start_surface_opens_a_file_through_the_dialog(
+    app_driver, valid_spm_path, monkeypatch
+):
+    d = app_driver
+    monkeypatch.setattr(
+        main_window_module.QFileDialog,
+        "getOpenFileName",
+        lambda *a, **k: (str(valid_spm_path), ""),
+    )
+
+    d.click_workspace_open()
+
+    assert d._w._state.active.backing_file == valid_spm_path
+    assert not d.start_surface_visible()
+
+
+def test_start_surface_falls_back_to_the_model_name_with_no_descriptor(
+    qtbot, monkeypatch
+):
+    """A model absent from ``_MODEL_DESCRIPTORS`` must still render (name
+    only, blank descriptor), never crash -- the documented graceful-
+    degradation fallback."""
     monkeypatch.setattr(workspace_panel_module, "SUPPORTED_MODELS", ("Mystery",))
 
     panel = workspace_panel_module.WorkspacePanel()
     qtbot.addWidget(panel)
 
-    button = panel.findChild(QPushButton, "NewButton_Mystery")
-    assert button is not None
-    assert button.text() == "Mystery"
-    assert button.toolTip() == "Mystery"
+    row = panel.findChild(QWidget, "NewButton_Mystery")
+    assert row is not None
+    assert row.findChild(QLabel, "StartRowName").text() == "Mystery"
+    assert row.findChild(QLabel, "StartRowDetail").full_text() == ""
 
 
 @pytest.mark.parametrize("model", SUPPORTED_MODELS)
@@ -263,86 +316,37 @@ def test_choosing_new_model_creates_document_and_switches_to_editor(app_driver, 
     assert "From:" not in d.workspace_info_text()
 
 
-def test_new_from_workspace_page_goes_through_discard_guard_and_cancel_aborts(
+def test_a_new_document_is_never_offered_over_an_open_one(
     app_driver, spm_workfile, monkeypatch
 ):
-    d = app_driver
-    d.open(spm_workfile).go_to(_CAPACITY).edit_field(6.0).commit()
-    original_identity = d.identity_text()
-    original_status = d.status_text()
-    assert "Unsaved changes" in original_status
+    """New has no replace guard because it has nothing to replace: the
+    surface that offers it is the empty Main slot, so an open document
+    takes the whole route off the board rather than guarding it.
 
-    d.show_view("Workspace")  # starting off the Editor page so a wrongful
-    # switch-to-Editor on the abort path would actually move the index
-
-    monkeypatch.setattr(
-        main_window_module.QMessageBox, "question", lambda *a, **k: main_window_module.QMessageBox.Cancel
-    )
-
-    d.click_workspace_new("DFN")
-
-    assert d.current_view_index() == 2
-    assert d.activity_bar_selected_label() == "Workspace"
-    assert d.identity_text() == original_identity
-    assert d.status_text() == original_status  # dirty state retained, nothing created
-
-
-def test_new_from_workspace_page_discard_guard_proceeds_on_discard(
-    app_driver, spm_workfile, monkeypatch
-):
-    d = app_driver
-    d.open(spm_workfile).go_to(_CAPACITY).edit_field(6.0).commit()
-
-    monkeypatch.setattr(
-        main_window_module.QMessageBox, "question", lambda *a, **k: main_window_module.QMessageBox.Discard
-    )
-
-    d.click_workspace_new("DFN")
-
-    assert d._w._state.active.document.identity.model == "DFN"
-    assert d.current_view_index() == 0
-
-
-def test_new_with_a_clean_document_asks_before_replacing_and_cancel_aborts(
-    app_driver, spm_workfile, monkeypatch
-):
+    A guard that fired here would be a dialog nobody could reach, so the
+    test proves the absence of the route rather than the absence of the
+    dialog.
+    """
     d = app_driver
     d.open(spm_workfile)
-    assert d._w._state.active.dirty is False
-    original_identity = d.identity_text()
+    d.show_view("Workspace")
 
-    d.show_view("Workspace")  # a wrongful switch-to-Editor on abort would move the index
-    captured = {}
-
-    def fake_question(parent, title, text, *rest):
-        captured["text"] = text
-        return main_window_module.QMessageBox.Cancel
-
-    monkeypatch.setattr(main_window_module.QMessageBox, "question", fake_question)
-
-    d.click_workspace_new("DFN")
-
-    assert captured["text"] == "This will replace spm_workfile.json. Continue?"
-    assert d.current_view_index() == 2
-    assert d.identity_text() == original_identity
-    assert d._w._state.active.backing_file == spm_workfile  # untouched, still clean
-    assert d._w._state.active.dirty is False
-
-
-def test_new_with_a_clean_document_proceeds_on_ok(app_driver, spm_workfile, monkeypatch):
-    d = app_driver
-    d.open(spm_workfile)
     monkeypatch.setattr(
-        main_window_module.QMessageBox,
-        "question",
-        lambda *a, **k: main_window_module.QMessageBox.Ok,
+        main_window_module.QMessageBox, "question", _fail_if_called
     )
 
-    d.click_workspace_new("DFN")
+    assert not d.start_surface_visible()
+    assert d.workspace_new_model_options() == []
 
-    assert d._w._state.active.document.identity.model == "DFN"
-    assert d._w._state.active.backing_file is None
-    assert d.current_view_index() == 0
+
+def test_choosing_a_model_on_a_filled_workspace_is_impossible_to_reach(app_driver):
+    """The board never shows the start surface beside a document, so the
+    two states cannot both be on screen."""
+    d = app_driver
+    assert d.start_surface_visible()
+    d.click_workspace_new("DFN")
+    assert not d.start_surface_visible()
+    assert d.workspace_main_name() == "untitled.json"
 
 
 # --- panel-level drag/drop filtering ------------------------------------
@@ -511,7 +515,7 @@ def test_dropping_an_unsupported_extension_is_a_no_op(app_driver, tmp_path):
     d.drop_file_on_workspace(unsupported)
 
     assert d.current_view_index() == 2
-    assert d.workspace_info_text() == "No document open"
+    assert d.workspace_info_text() == ""
 
 
 def test_dropping_an_unparseable_file_shows_the_load_error_dialog(
@@ -530,7 +534,7 @@ def test_dropping_an_unparseable_file_shows_the_load_error_dialog(
 
     assert len(calls) == 1
     assert d.current_view_index() == 2  # stayed on Workspace, nothing opened
-    assert d.workspace_info_text() == "No document open"
+    assert d.workspace_info_text() == ""
 
 
 def test_document_card_names_what_is_still_outstanding(app_driver):

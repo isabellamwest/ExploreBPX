@@ -422,7 +422,6 @@ QWidget#WorkspaceMainSection { background: #f6f8fa; }
 QWidget#WorkspaceBoardSection { background: #f6f8fa; }
 QWidget#WorkspaceReferenceSection { background: #f8f5fc; }
 QWidget#WorkspaceRail { background: #f3f4f6; border-right: 1px solid #c4cdd5; }
-QFrame#WorkspaceRailDivider { background: #d0d7de; border: none; }
 /* The board: the main card beside four reference slots. The main card is
    white and solid -- it is the one editable file -- while a slot carries
    the reference purple's palest tint, so which side of the ⇄ a card is on
@@ -456,6 +455,28 @@ QLabel#BoardMainName[ghosted="true"] { color: #8c959f; font-weight: ${regular}; 
 QLabel#BoardSlotName { font-weight: ${semibold}; font-size: ${meta}px; }
 QLabel#BoardSlotModel { color: #57606a; font-size: ${micro}px; }
 QLabel#BoardArrow { color: #8c959f; font-size: ${title}px; }
+/* The start surface: the empty Main area carrying every way to fill it.
+   Flat white chips on the board wash, no border and no dashed outline --
+   these are routes, not controls that might refuse. "Open a file…" is the
+   one raised act on the page, so it gets the larger target and the accent
+   on hover; the rows beneath it are quieter because they are the same act
+   already answered, or a model already named. */
+QWidget#BoardStartSurface { background: transparent; }
+QPushButton#StartOpenButton {
+    background: #ffffff; border: none; border-radius: 5px;
+    padding: 9px 12px; font-size: ${body}px; font-weight: ${semibold};
+    text-align: left;
+}
+QPushButton#StartOpenButton:hover { background: #eef4ff; color: #1f6feb; }
+QFrame[startRow="true"] {
+    background: #ffffff; border: none; border-radius: 4px;
+}
+QFrame[startRow="true"]:hover { background: #eef4ff; }
+QLabel#StartRowName { font-weight: ${semibold}; }
+QLabel#StartRowDetail { color: #8c959f; font-size: ${meta}px; }
+/* Never saved anywhere yet -- a fact about where the document lives, not a
+   warning about it, so MUTED and never the amber a problem would wear. */
+QLabel#UnsavedTag { color: #8c959f; font-size: ${meta}px; }
 /* The page's routes out: link-coloured flat text, never buttons. The page
    must not be a dead end, but a route is a way on -- not an action. */
 QPushButton#BoardRoute {
@@ -479,15 +500,16 @@ QFrame#WorkspaceMissingBanner {
     background: #fff8e5; border: 1px solid #e8d9a8; border-radius: 6px;
 }
 QLabel#WorkspaceMissingText { color: #6b5b1f; font-size: ${meta}px; }
-/* Rail action buttons: white chips on the shaded rail, the Diagnostics
-   strip-chip treatment (never native grey widgets). The old
-   Open-as-reference chip moved onto the reference card and takes the
-   tile-button treatment below. */
-QPushButton#WorkspaceOpen {
+/* The rail's one verb: a white chip on the shaded rail, the Diagnostics
+   strip-chip treatment (never a native grey widget). Everything about
+   *files* left the rail for the board's start surface, so this is the only
+   button here and it takes the chip rather than the flat-row treatment the
+   departed chooser rows shared. */
+QPushButton#NewWorkspace {
     background: #ffffff; border: 1px solid #c4cdd5; border-radius: 6px;
     padding: 5px 10px; text-align: left;
 }
-QPushButton#WorkspaceOpen:hover { background: #eef1f4; }
+QPushButton#NewWorkspace:hover { background: #eef1f4; }
 /* Workspace rows: white chips like the Open button, the whole row a click
    target. A named row wears the stronger border -- naming is what makes a
    workspace permanent, so it is what the rail shows first. The row on the
@@ -502,9 +524,6 @@ QFrame#RecentRow:hover, QFrame#WorkspaceNamedRow:hover { background: #eef1f4; }
 QFrame#RecentRow[current="true"], QFrame#WorkspaceNamedRow[current="true"] {
     background: #eef4ff; border-color: #1f6feb;
 }
-/* The rail's flat-row actions share the New chooser's language; disabled
-   states its reason in the tooltip, quietly here. */
-QPushButton[modelOption="true"]:disabled { color: #8c959f; }
 QLabel#HistoryRowName { font-weight: ${semibold}; }
 QLabel#HistoryRowDetail { color: #57606a; font-size: ${meta}px; }
 QLabel#HistoryRowAction { color: #1f6feb; font-size: ${meta}px; }
@@ -519,15 +538,6 @@ QPushButton#HistoryRowButton {
     color: #57606a; font-size: ${meta}px;
 }
 QPushButton#HistoryRowButton:hover { background: #e8eaed; border-radius: 4px; }
-/* One New-chooser model row: a flat bold name button, its full name a
-   tooltip away (list-row language). Property selector on purpose -- the
-   buttons keep their per-model NewButton_{model} objectNames as the
-   test/driver seam, which QSS cannot prefix-match. */
-QPushButton[modelOption="true"] {
-    background: transparent; border: none; border-radius: 4px;
-    padding: 3px 6px; font-weight: ${semibold}; text-align: left;
-}
-QPushButton[modelOption="true"]:hover { background: #e8eaed; }
 /* The shared banded group-box chrome (``ui_qt.group_box.GroupBox``):
    bordered rounded card, shaded banded header -- the Diagnostics Issues/
    Outstanding boxes and the reference-library dialog's detail card alike.

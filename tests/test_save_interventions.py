@@ -24,7 +24,10 @@ from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication
 
 import ui_qt.main_window as main_window_module
+from core.document import BPXDocument
+from core.load_record import LoadRecord
 from state.app_state import AppState
+from state.document_session import DocumentSession
 from ui_qt.main_window import StaleChoice, _format_disk_time
 
 from platform_facts import assert_alert_title
@@ -307,12 +310,23 @@ def test_uncommented_yaml_never_asks(app_driver, plain_yaml_workfile, monkeypatc
 def test_clone_of_commented_source_names_both_files(
     app_driver, commented_yaml_workfile, monkeypatch
 ):
-    """A "From existing file" clone's comments live in its origin: the
-    dialog's first sentence names the origin, the asked-once sentence the
-    document."""
+    """A never-saved session whose content came from another file (the shape
+    a converted copy has) keeps its comments in that origin: the dialog's
+    first sentence names the origin, the asked-once sentence the document.
+
+    The session is built here rather than opened, because the one flow that
+    produced this shape from an ordinary file has been retired; the shape
+    itself is still reachable through the legacy converted-copy route.
+    """
     window = app_driver._w
-    window._state.new_from_file(commented_yaml_workfile)
-    session = window._state.active
+    data = commented_yaml_workfile.read_bytes()
+    document = BPXDocument.from_bytes(data, "cell (copy).yaml")
+    session = DocumentSession(document)
+    session.dirty = True
+    session.load_record = LoadRecord.capture(
+        data, document, path=commented_yaml_workfile
+    )
+    window._state.active = session
     calls = []
     _arm_comment(window, monkeypatch, False, calls)
     assert window._confirm_comment_loss(session) is False

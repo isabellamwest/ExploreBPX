@@ -155,7 +155,7 @@ def test_choice_replace_main_reaches_the_normal_open(
         d._w, "_ask_open_intent", lambda filename: main_window_module.OpenIntent.REPLACE_MAIN
     )
 
-    d.click_workspace_open()
+    d.press_open_shortcut()
 
     assert d._w._state.active.backing_file == other
     assert d._w._state.reference is None  # untouched
@@ -173,7 +173,7 @@ def test_choice_add_as_reference_docks_without_touching_the_session(
         d._w, "_ask_open_intent", lambda filename: main_window_module.OpenIntent.ADD_REFERENCE
     )
 
-    d.click_workspace_open()
+    d.press_open_shortcut()
 
     assert d._w._state.active is original_session  # untouched
     assert d._w._state.reference is not None
@@ -192,7 +192,7 @@ def test_choice_cancel_does_nothing(app_driver, valid_spm_path, nmc_pouch_cell_p
     )
     monkeypatch.setattr(main_window_module.QMessageBox, "question", _fail_if_called)
 
-    d.click_workspace_open()
+    d.press_open_shortcut()
 
     assert d._w._state.active is original_session
     assert d._w._state.reference is None

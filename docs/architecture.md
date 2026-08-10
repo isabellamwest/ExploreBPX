@@ -35,11 +35,13 @@ package and implements none of the BPX specification itself.
   four read-only references (`MAX_PINNED_REFERENCES`). How many documents are
   present is data, not an application mode, so comparison is a capability of
   the editor rather than a separate mode.
-- **A workspace is a live identity, not a snapshot.** Opening a file starts
-  one; adding a reference or swapping the main rewrites it in place. There is
-  no save step, nothing that can be "changed since saved", and nothing to go
-  stale. Identity is an internal id, not the main's path, so it survives a
-  main swap and two workspaces may point at one file.
+- **A workspace is a live identity, not a snapshot.** "New workspace" mints
+  one instantly and empty; opening a file starts one too, and adding a
+  reference or swapping the main rewrites it in place. There is no save step,
+  nothing that can be "changed since saved", and nothing to go stale.
+  Identity is an internal id, not the main's path, so it survives a main swap
+  and two workspaces may point at one file — and a workspace can exist,
+  be seen and be named before it holds any document at all.
 - **Nothing is discarded by a click.** Switching away shelves a workspace
   under Recent (capped, newest first). *Naming* is the promotion that stops
   one decaying — and the act that says "stop rewriting this", so an ordinary
@@ -108,7 +110,20 @@ the one on the board, which is what launch reopens. `AppState` records
 against it at the open/pin funnel rather than in the UI layer, so every path
 that changes the workspace is recorded without remembering to — see
 `_note_main_opened`, which is where "an ordinary open never rewrites a named
-workspace" lives.
+workspace" lives. Its one exception: filling a named workspace's *empty*
+Main slot updates in place, because there is no recorded main to guard.
+
+**Creation is instant; persistence is deferred.** `WorkspaceRecord.main` is
+optional (schema v3; a v2 store reads through the same path, since a v2
+record always has a main), so a workspace exists from the moment it is asked
+for. What reaches disk is filtered: a record is written only if it has a
+name, a main, or references, and if the current record was filtered out the
+store writes `current_id: null`. So an untouched empty board is real while
+the app runs and leaves nothing behind on the next launch, while repeated
+"New workspace" clicks collapse to one row through the existing
+content-key dedup. A workspace with no recorded main is **empty, not
+missing**: no strike, no "Not found" chip, no banner entry — nothing
+recorded is nothing lost.
 
 ## Domain model
 
@@ -262,21 +277,32 @@ navigate to locations rather than filtering or replacing the hierarchy.
   is named in a slim band under the headers, checked when the page is entered
   or the window activated — never watched, never silently refreshed.
 - **Workspace page** — a shaded rail beside a white pane. The rail carries
-  Open File… and New workspace over two groups (Workspaces, then Recent),
-  each hidden whole whenever it has no rows; a shown group's rows carry a
-  glyph for their shape, an "open now" pill when the board is showing it, and
-  hover-revealed actions — the app's idiom in place of a ⋯ menu. The pane
-  carries the workspace's name (click to
-  rename, refused inline if the name is in use), then the **board**: the main
-  card beside four reference slots. The slots *are* the drawn cap, so there
-  is no counter and no dock buttons — at four there is simply no ＋ left to
-  click. Each card offers a route out so the page is never a dead end
-  ("Edit its parameters ▸", "N errors · why? ▸", "N values differ ▸").
-  A workspace whose files have moved opens anyway, with a banner naming each
-  one and offering Locate…/Remove.
+  one verb, New workspace, over two groups (Workspaces, then Recent), each
+  hidden whole whenever it has no rows; a shown group's rows carry a glyph
+  for their shape (the ▌ bar only when a main is recorded), an "open now"
+  pill on whichever workspace is current, and hover-revealed actions — the
+  app's idiom in place of a ⋯ menu. Nothing about *files* is in the rail:
+  opening one and starting one are acts on the workspace that is on the
+  board, so they live on the board. The pane carries the workspace's name
+  (click to rename, refused inline if the name is in use), then the
+  **board**: the main card beside four reference slots. The slots *are* the
+  drawn cap, so there is no counter and no dock buttons — at four there is
+  simply no ＋ left to click. Each card offers a route out so the page is
+  never a dead end ("Edit its parameters ▸", "N errors · why? ▸", "N values
+  differ ▸"). A workspace whose files have moved opens anyway, with a banner
+  naming each one and offering Locate…/Remove.
+- **The start surface** — with no main open, the Main slot carries every way
+  to fill it inline: "Open a file…", the recent files that still exist
+  beneath it (the same act, pre-filled), then the New-document models each
+  beside its descriptor. Flat white chips, no popup and no dashed
+  placeholder. Because it exists only while the slot is empty, New document
+  has no replace guard — it can only ever be born into an empty workspace —
+  and Ctrl+O or a drop is what swaps a main that is already filled. A
+  scaffold, once created, shows its filename with a muted "unsaved" tag
+  (neutral, never amber). This is also the first-launch view.
 - **Toolbar and status bar** — Save, Export (JSON/YAML), Undo, Redo and
   Search sit on the right of the top bar; opening files lives on the
-  Workspace page. The status bar carries the file name and its
+  Workspace board. The status bar carries the file name and its
   Saved/Unsaved-changes state.
 
 ## Interaction conventions

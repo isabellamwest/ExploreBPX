@@ -123,26 +123,6 @@ def test_legacy_converted_copy_route(app_driver, fixtures_dir, monkeypatch):
     assert d._w._save_action.isEnabled()
 
 
-def test_new_from_file_routes_legacy_through_the_prompt(
-    app_driver, fixtures_dir, monkeypatch
-):
-    d = app_driver
-    calls = []
-    _arm_legacy(d._w, monkeypatch, LegacyIntent.CONVERTED_COPY, calls)
-    monkeypatch.setattr(
-        main_window_module.QFileDialog,
-        "getOpenFileName",
-        lambda *a, **k: (str(fixtures_dir / _LEGACY), ""),
-    )
-    d._w._new_from_file()
-    assert calls == [(_LEGACY, "0.1")]
-    session = d._w._state.active
-    assert "(converted)" in session.document.filename
-    # The pin-the-origin contract is the v1 flow's; the D3 outcomes are
-    # identical from every route, so nothing was pinned here.
-    assert d._w._state.references == []
-
-
 # ----------------------------------------------------------------------
 # the read-only main document
 # ----------------------------------------------------------------------

@@ -103,14 +103,13 @@ def test_reload_is_a_quiet_noop_for_a_library_set():
     assert state.reference is pinned
 
 
-def test_new_from_file_appends_beside_a_pinned_library_set():
+def test_a_file_pins_beside_a_pinned_library_set():
     state = AppState()
     state.pin_reference_set(_CHEN)
 
-    assert state.new_from_file(_SPM) is PinReferenceOutcome.ADDED
+    assert state.pin_reference(_SPM) is PinReferenceOutcome.ADDED
 
-    # The origin file is pinned after the library set, which survives; the
-    # guard means the path dedupe never crashed on the path-less snapshot.
+    # The file is pinned after the library set, which survives; the guard
+    # means the path dedupe never crashed on the path-less snapshot.
     assert [reference.set_id for reference in state.references] == [_CHEN, None]
     assert state.references[1].path == _SPM
-    assert state.active is not None and state.active.dirty
