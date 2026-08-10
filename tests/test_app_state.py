@@ -74,17 +74,6 @@ def test_new_document_has_no_load_record(valid_spm_path):
     assert state.active.load_record is None
 
 
-def test_new_from_file_records_the_source_provenance(spm_workfile):
-    """The clone's record states where its content came from, even though
-    nothing will ever be saved there (backing_file stays None)."""
-    state = AppState()
-    state.new_from_file(spm_workfile)
-    record = state.active.load_record
-    assert record is not None
-    assert record.size_bytes == spm_workfile.stat().st_size
-    assert state.active.backing_file is None
-
-
 def test_reference_snapshot_carries_the_record_shape(spm_workfile):
     """A pinned reference states the same facts as a main document: its
     Header identity and its own load record."""

@@ -157,8 +157,9 @@ class AppState:
         never-saved shape ``new_document`` creates, so the first Save
         routes through Save As and *path* itself is never written. The
         record keeps the source's provenance (From facts, YAML-comment
-        fact), the ``new_from_file`` convention; ``is_legacy`` is judged
-        on the converted content, so the record truthfully reads v1.x.
+        fact) even though nothing will be written there; ``is_legacy`` is
+        judged on the converted content, so the record truthfully reads
+        v1.x.
         """
         data = path.read_bytes()
         raw, fmt = bpx_gateway.load_raw(data, path.name)
@@ -188,55 +189,6 @@ class AppState:
         # A scaffold has no on-disk identity yet; it joins the history only
         # once saved (note_main_saved).
         self._last_main = None
-
-    def new_from_file(self, path: Path) -> PinReferenceOutcome:
-        """Clone *path* into a fresh unsaved session and pin *path* itself
-        as a read-only reference ("New from source").
-
-        The clone is built from the file's on-disk bytes under a derived
-        "{stem} (copy)" filename (the Export naming convention), keeping the
-        file's own format, with no backing file and ``dirty`` set -- exactly
-        the never-saved shape ``new_document`` creates, so the first Save
-        routes through Save As and the origin on disk is never at risk.
-
-        Loads the clone and the snapshot before touching either field: a
-        failure (``core.bpx_gateway.LoadError``/``OSError``) leaves the
-        state completely unchanged. Already-pinned references survive: the
-        source is *appended* to them, so a comparison set built up before
-        the clone is not thrown away by it.
-
-        The returned outcome describes the pin only -- the new document is
-        always created (decision D2). At the cap the source is not pinned
-        and ``AT_CAP`` says so; a source already pinned returns
-        ``ALREADY_REFERENCE`` and is left as-is.
-        """
-        clone_name = f"{path.stem} (copy){path.suffix}"
-        data = path.read_bytes()
-        document = BPXDocument.from_bytes(data, clone_name)
-        # The clone is never-saved like a scaffold, so the last-workspace
-        # record is left alone -- but the source is a file the user reached
-        # for, so it earns a recent-files row.
-        self._last_main = None
-        if self.history is not None:
-            self.history.add_recent(str(path))
-        existing = self._pinned_at(path)
-        outcome = PinReferenceOutcome.ADDED
-        reference: ReferenceSnapshot | None = None
-        if existing is not None:
-            outcome = PinReferenceOutcome.ALREADY_REFERENCE
-        elif self.at_reference_cap:
-            outcome = PinReferenceOutcome.AT_CAP
-        else:
-            reference = ReferenceSnapshot.load(path)
-        session = DocumentSession(document)
-        session.dirty = True
-        # The clone's content came from *path* even though nothing will be
-        # saved there -- the record's From facts state that provenance.
-        session.load_record = LoadRecord.capture(data, document, path=path)
-        self.active = session
-        if reference is not None:
-            self.references.append(reference)
-        return outcome
 
     def close(self) -> None:
         """Close the active session.
@@ -349,19 +301,24 @@ class AppState:
         return self.history.current_id if self.history is not None else None
 
     def new_workspace(self) -> None:
-        """Clear the board for a separate line of work.
+        """Start a separate line of work: a real, empty workspace.
 
         The workspace being left is not discarded -- an untitled one is
         already shelved under Recent and a named one lives in Workspaces --
         so this only lets go of it. The session and its pins go with it:
         a separate line of work starts empty, which is the whole difference
         between this and opening a file (which swaps the main in place).
+
+        The new workspace is created *now* rather than at the first save,
+        so it can be seen and named before it holds anything. Asking twice
+        in a row does not pile up rows: two empty boards are the same
+        arrangement, so the store's dedup merges them.
         """
         self.active = None
         self.references = []
         self._last_main = None
         if self.history is not None:
-            self.history.set_current(None)
+            self.history.start_workspace(WorkspaceRecord(main=None))
 
     def enter_workspace(self, workspace_id: str) -> None:
         """Make a remembered workspace current *before* its files reopen.
@@ -394,11 +351,16 @@ class AppState:
         self._note_main_opened(session.backing_file, "normal")
 
     def current_workspace_record(self) -> WorkspaceRecord | None:
-        """The current workspace's files as a record, or ``None`` when the
-        main document has no on-disk identity to remember (a scaffold or a
-        never-saved clone). Live by construction: it is read off the board,
-        not off a snapshot taken earlier."""
-        if self._last_main is None:
+        """The current workspace's files as a record, or ``None`` when no
+        workspace is current at all. Live by construction: it is read off
+        the board, not off a snapshot taken earlier.
+
+        ``main`` is ``None`` when the board holds nothing with an on-disk
+        identity -- an empty workspace, or a scaffold that has never been
+        saved. That is a workspace with nothing in it yet, not the absence
+        of a workspace.
+        """
+        if self.history is None or self.history.current() is None:
             return None
         return WorkspaceRecord(
             main=self._last_main,
@@ -418,6 +380,11 @@ class AppState:
         instead (carrying the references, which are still pinned) and leaves
         the named entry exactly as it was. Reopening the same main in the
         same mode is not a swap at all, so it stays put.
+
+        A named workspace with no main yet is the exception to the
+        exception: filling its empty Main slot is what it was named for, so
+        that fills it in place. Only swapping a main it already records
+        branches away.
         """
         main = MainRecord(path=str(path), mode=mode)
         self._last_main = main
@@ -425,7 +392,9 @@ class AppState:
             return
         self.history.add_recent(str(path))
         current = self.history.current()
-        if current is None or (current.is_named and current.main != main):
+        if current is None or (
+            current.is_named and current.main is not None and current.main != main
+        ):
             self.history.start_workspace(
                 WorkspaceRecord(main=main, references=self._reference_records())
             )
@@ -436,12 +405,19 @@ class AppState:
         """Rewrite the current workspace's record from current state.
 
         Runs at every reference change -- named or not, because a workspace
-        looks after itself and there is no save step to wait for. While the
-        main document has no recorded identity (``_last_main`` is None) it
-        leaves the store alone, so a scaffold session never rewrites the
-        workspace it was started from.
+        looks after itself and there is no save step to wait for.
+
+        The one thing a sync must never do is erase a *recorded* main: a
+        scaffold session has no on-disk identity of its own (``_last_main``
+        is None), and letting it write that emptiness over the workspace it
+        was started from would lose a restorable arrangement. A workspace
+        that records no main has nothing to lose, so it records its
+        references like any other.
         """
-        if self.history is None or self._last_main is None:
+        if self.history is None:
+            return
+        current = self.history.current()
+        if current is None or (self._last_main is None and current.main is not None):
             return
         self.history.update_current(self._last_main, self._reference_records())
 

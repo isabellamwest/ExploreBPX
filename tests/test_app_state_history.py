@@ -125,9 +125,7 @@ def test_a_named_workspace_still_tracks_its_references_live(tmp_path, spm_workfi
 # starting and entering workspaces
 
 
-def test_new_workspace_clears_the_board_without_discarding_anything(
-    tmp_path, spm_workfile
-):
+def test_new_workspace_creates_a_real_empty_one(tmp_path, spm_workfile):
     state = _state(tmp_path)
     state.open(spm_workfile)
     state.pin_reference_set(CHEN2020)
@@ -137,7 +135,11 @@ def test_new_workspace_clears_the_board_without_discarding_anything(
 
     assert state.active is None
     assert state.references == []
-    assert state.workspace_id is None
+    # The new workspace exists straight away, empty and current, so it can
+    # be seen and named before it holds anything.
+    assert state.workspace_id not in (None, shelved)
+    assert state.history.current().main is None
+    assert state.history.current().references == ()
     # Shelved, not discarded: it is still there to come back to.
     assert state.history.by_id(shelved) is not None
     assert state.history.by_id(shelved).references == (
@@ -195,15 +197,9 @@ def test_scaffold_does_not_rewrite_the_workspace_it_came_from(
     current = state.history.current()
     assert current.main.path == str(spm_workfile)
     assert current.references == (ReferenceRecord(kind="library", set_id=CHEN2020),)
-    assert state.current_workspace_record() is None  # nothing to name yet
-
-
-def test_new_from_file_earns_a_recent_row_but_not_a_workspace(tmp_path, spm_workfile):
-    state = _state(tmp_path)
-    state.new_from_file(spm_workfile)
-    assert state.history.recent_files == [str(spm_workfile)]
-    assert state.history.current() is None
-    assert state.history.recent_workspaces == []
+    # The board is a scaffold, so it has no main to name the workspace
+    # after -- but the workspace itself is still the one that is current.
+    assert state.current_workspace_record().main is None
 
 
 def test_saving_a_scaffold_gives_it_an_identity(tmp_path, spm_workfile):
@@ -231,6 +227,102 @@ def test_close_keeps_the_record_but_stops_tracking(tmp_path, spm_workfile):
     current = state.history.current()
     assert current.main.path == str(spm_workfile)
     assert current.references == ()  # the closed workspace's pins, not the new one
+
+
+# ---------------------------------------------------------------------------
+# workspaces created empty
+
+
+def test_asking_twice_leaves_one_empty_workspace(tmp_path):
+    state = _state(tmp_path)
+    state.new_workspace()
+    first = state.workspace_id
+    state.new_workspace()
+
+    assert len(state.history.recent_workspaces) == 1
+    assert state.workspace_id != first  # a fresh identity, one row
+
+
+def test_opening_a_file_fills_the_empty_workspace_in_place(tmp_path, spm_workfile):
+    state = _state(tmp_path)
+    state.new_workspace()
+    created = state.workspace_id
+
+    state.open(spm_workfile)
+
+    assert state.workspace_id == created
+    assert state.history.current().main.path == str(spm_workfile)
+    assert len(state.history.recent_workspaces) == 1
+
+
+def test_filling_a_named_empty_workspace_does_not_branch_away(
+    tmp_path, spm_workfile
+):
+    """A named workspace refuses to have its main *swapped*, but filling an
+    empty one is exactly what it was named for."""
+    state = _state(tmp_path)
+    state.new_workspace()
+    kept = state.history.keep(state.workspace_id, "planning")
+
+    state.open(spm_workfile)
+
+    assert state.workspace_id == kept.id
+    assert state.history.named("planning").main.path == str(spm_workfile)
+    assert state.history.recent_workspaces == []  # no stray untitled entry
+
+
+def test_swapping_a_named_workspaces_recorded_main_still_branches(
+    tmp_path, spm_workfile, second_workfile
+):
+    state = _state(tmp_path)
+    state.new_workspace()
+    kept = state.history.keep(state.workspace_id, "planning")
+    state.open(spm_workfile)
+
+    state.open(second_workfile)
+
+    assert state.history.named("planning").main.path == str(spm_workfile)
+    assert state.workspace_id != kept.id
+    assert state.history.current().main.path == str(second_workfile)
+
+
+def test_references_pinned_on_an_empty_workspace_are_recorded(
+    tmp_path, spm_workfile
+):
+    state = _state(tmp_path)
+    state.new_workspace()
+    created = state.workspace_id
+
+    state.pin_reference_set(CHEN2020)
+
+    current = state.history.current()
+    assert current.id == created
+    assert current.main is None
+    assert current.references == (ReferenceRecord(kind="library", set_id=CHEN2020),)
+
+
+def test_a_scaffold_beside_an_empty_workspace_still_records_its_pins(
+    tmp_path,
+):
+    """The sync rule protects a *recorded* main from a scaffold; a workspace
+    with nothing recorded has nothing to protect."""
+    state = _state(tmp_path)
+    state.new_workspace()
+    state.new_document("SPM")
+
+    state.pin_reference_set(CHEN2020)
+
+    assert state.history.current().main is None
+    assert state.history.current().references == (
+        ReferenceRecord(kind="library", set_id=CHEN2020),
+    )
+
+
+def test_no_workspace_current_means_no_record(tmp_path, spm_workfile):
+    state = _state(tmp_path)
+    state.open(spm_workfile)
+    state.history.remove(state.workspace_id)
+    assert state.current_workspace_record() is None
 
 
 def test_history_free_state_records_nothing_and_never_crashes(spm_workfile):

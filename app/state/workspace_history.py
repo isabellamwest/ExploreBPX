@@ -7,7 +7,9 @@ bundled library sets by id). A workspace is a **live identity, not a
 snapshot** -- swapping the main or adding a reference rewrites the stored
 record in place, so there is nothing to save and nothing to go stale. It is
 identified by an internal ``id`` rather than by its main's path, so identity
-survives a main swap and two workspaces may point at the same file.
+survives a main swap and two workspaces may point at the same file. A
+workspace exists from the moment it is created, so it may hold no main at
+all; filling it is a later act.
 
 Every workspace lives in exactly one of two lists:
 
@@ -49,8 +51,10 @@ MAX_RECENT_WORKSPACES = 8
 #: Bumped when the JSON shape changes incompatibly; a reader seeing a newer
 #: version than it understands resets rather than misreading it. Version 2
 #: replaced the single ``last_workspace`` slot with ``recent_workspaces``
-#: and gave every record an ``id``.
-SCHEMA_VERSION = 2
+#: and gave every record an ``id``. Version 3 made ``main`` optional, so a
+#: workspace can exist before it holds a document; versions 2 and 3 read
+#: through one path, because a version-2 record simply always has a main.
+SCHEMA_VERSION = 3
 
 #: How the main document was opened -- the D3 legacy intents plus the
 #: everyday default. Restoring replays the recorded mode instead of
@@ -96,9 +100,14 @@ class WorkspaceRecord:
     ``id`` is the identity and is assigned by the store, so a record built
     by a caller may leave it empty. ``name``/``saved_at`` are set only once
     the workspace has been named (kept); untitled ones have neither.
+
+    ``main`` is ``None`` while the workspace holds no document -- a
+    workspace exists from the moment it is created, and filling it is a
+    later act. That is different from a main which is recorded but missing
+    from disk: nothing recorded is nothing lost.
     """
 
-    main: MainRecord
+    main: MainRecord | None = None
     references: tuple[ReferenceRecord, ...] = ()
     name: str | None = None
     saved_at: str | None = None
@@ -216,7 +225,9 @@ class WorkspaceHistory:
         self._persist()
         return stored
 
-    def update_current(self, main: MainRecord, references: tuple[ReferenceRecord, ...]) -> None:
+    def update_current(
+        self, main: MainRecord | None, references: tuple[ReferenceRecord, ...]
+    ) -> None:
         """Rewrite the current workspace's files in place -- named or not.
 
         This is rule 4 made mechanical: a workspace looks after itself, so
@@ -296,9 +307,10 @@ class WorkspaceHistory:
         The only path edit that exists: a file that moved is still the same
         workspace, and re-finding it must not mean rebuilding the
         arrangement by hand. The recorded open mode is kept -- relocating
-        answers "where", never "how"."""
+        answers "where", never "how". A workspace with no recorded main has
+        nothing to repoint, so it is a quiet no-op."""
         workspace = self.by_id(workspace_id)
-        if workspace is None:
+        if workspace is None or workspace.main is None:
             return
         self._replace_record(
             replace(workspace, main=replace(workspace.main, path=path))
@@ -414,10 +426,10 @@ class WorkspaceHistory:
             self.recent_files = [
                 entry["path"] for entry in data.get("recent_files", [])
             ][:RECENT_FILES_CAP]
-            if version < SCHEMA_VERSION:
+            if version < 2:
                 self._load_v1(data)
             else:
-                self._load_v2(data)
+                self._load_current(data)
             if any(workspace.name is None for workspace in self.workspaces):
                 raise ValueError("named workspace without a name")
             if self.by_id(self.current_id) is None:
@@ -454,7 +466,10 @@ class WorkspaceHistory:
             self.recent_workspaces[0].id if self.recent_workspaces else None
         )
 
-    def _load_v2(self, data: dict) -> None:
+    def _load_current(self, data: dict) -> None:
+        """Read a version-2 or version-3 store. One path serves both: the
+        only difference is that a version-2 record always has a main, which
+        the version-3 reader accepts unchanged."""
         self.recent_workspaces = [
             _workspace_from_json(entry)
             for entry in data.get("recent_workspaces", [])
@@ -465,16 +480,22 @@ class WorkspaceHistory:
         self.current_id = data.get("current_id")
 
     def _persist(self) -> None:
+        # An empty untitled workspace -- no name, no main, no references --
+        # holds nothing to come back to, so it never reaches disk. It is
+        # real while the app runs (it is what "New workspace" creates, and
+        # what naming or opening a file fills), but a launch that restored
+        # one would hand back a blank row nobody asked for. If the current
+        # workspace is one of those, disk records no current workspace;
+        # the in-memory ``current_id`` is untouched.
+        recent = [w for w in self.recent_workspaces if _worth_writing(w)]
+        named = [w for w in self.workspaces if _worth_writing(w)]
+        written = {workspace.id for workspace in (*recent, *named)}
         data = {
             "version": SCHEMA_VERSION,
             "recent_files": [{"path": path} for path in self.recent_files],
-            "recent_workspaces": [
-                _workspace_to_json(workspace) for workspace in self.recent_workspaces
-            ],
-            "workspaces": [
-                _workspace_to_json(workspace) for workspace in self.workspaces
-            ],
-            "current_id": self.current_id,
+            "recent_workspaces": [_workspace_to_json(workspace) for workspace in recent],
+            "workspaces": [_workspace_to_json(workspace) for workspace in named],
+            "current_id": self.current_id if self.current_id in written else None,
         }
         self.store_path.parent.mkdir(parents=True, exist_ok=True)
         temp = self.store_path.with_name(self.store_path.name + ".tmp")
@@ -498,13 +519,28 @@ def _resolve(path: str) -> str:
         return path
 
 
+def _worth_writing(record: WorkspaceRecord) -> bool:
+    """Whether a workspace holds anything to come back to: a name, a main,
+    or references. A workspace with none of the three is an empty board."""
+    return (
+        record.name is not None
+        or record.main is not None
+        or bool(record.references)
+    )
+
+
 def _content_key(record: WorkspaceRecord) -> tuple:
     """What makes two untitled workspaces the same arrangement: the main
     (where and how) and the ordered references. Different references are a
-    different arrangement, so both entries stay."""
-    return (
+    different arrangement, so both entries stay. Two mainless boards share
+    the empty main key, so repeatedly asking for a new workspace collapses
+    to the one empty board rather than piling up rows."""
+    main = (None, None) if record.main is None else (
         _resolve(record.main.path),
         record.main.mode,
+    )
+    return (
+        *main,
         tuple(
             (reference.kind, reference.set_id)
             if reference.kind == "library"
@@ -517,7 +553,11 @@ def _content_key(record: WorkspaceRecord) -> tuple:
 def _workspace_to_json(record: WorkspaceRecord) -> dict:
     data: dict = {
         "id": record.id,
-        "main": {"path": record.main.path, "mode": record.main.mode},
+        "main": (
+            None
+            if record.main is None
+            else {"path": record.main.path, "mode": record.main.mode}
+        ),
         "references": [
             {"kind": ref.kind, "path": ref.path, "set_id": ref.set_id}
             for ref in record.references
@@ -531,10 +571,15 @@ def _workspace_to_json(record: WorkspaceRecord) -> dict:
 
 
 def _workspace_from_json(data: dict) -> WorkspaceRecord:
-    main = data["main"]
-    mode = main.get("mode", "normal")
-    if mode not in MAIN_MODES:
-        raise ValueError(f"unknown main mode: {mode!r}")
+    # Absent or null both mean "this workspace holds no document"; a
+    # version-2 record always carries one, so it reads through unchanged.
+    stored_main = data.get("main")
+    main = None
+    if stored_main is not None:
+        mode = stored_main.get("mode", "normal")
+        if mode not in MAIN_MODES:
+            raise ValueError(f"unknown main mode: {mode!r}")
+        main = MainRecord(path=stored_main["path"], mode=mode)
     references = []
     for ref in data.get("references", []):
         if ref.get("kind") not in ("file", "library"):
@@ -545,7 +590,7 @@ def _workspace_from_json(data: dict) -> WorkspaceRecord:
             )
         )
     return WorkspaceRecord(
-        main=MainRecord(path=main["path"], mode=mode),
+        main=main,
         references=tuple(references),
         name=data.get("name"),
         saved_at=data.get("saved_at"),

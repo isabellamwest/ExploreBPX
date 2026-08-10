@@ -11,6 +11,7 @@ import pytest
 from state.workspace_history import (
     MAX_RECENT_WORKSPACES,
     RECENT_FILES_CAP,
+    SCHEMA_VERSION,
     MainRecord,
     NameInUse,
     ReferenceRecord,
@@ -412,9 +413,10 @@ def test_version_1_stores_migrate_without_losing_anything(tmp_path):
     # upgrade hands it back rather than starting empty.
     assert history.current_id == migrated.id
 
-    # The migrated store rewrites itself at version 2 on the next mutation.
+    # The migrated store rewrites itself at the current version on the next
+    # mutation.
     history.add_recent("/cells/new.json")
-    assert json.loads(store_path.read_text())["version"] == 2
+    assert json.loads(store_path.read_text())["version"] == SCHEMA_VERSION
 
 
 def test_a_current_id_pointing_nowhere_is_dropped_not_fatal(tmp_path):
@@ -473,6 +475,99 @@ def test_unknown_mode_or_reference_kind_counts_as_corrupt(tmp_path):
         )
     )
     assert WorkspaceHistory(store_path).load_failed is True
+
+
+# ---------------------------------------------------------------------------
+# workspaces that hold no main
+
+
+def test_a_mainless_workspace_round_trips(tmp_path):
+    history = _store(tmp_path)
+    started = history.start_workspace(WorkspaceRecord(main=None))
+    kept = history.keep(started.id, "planning")
+
+    reloaded = _store(tmp_path)
+    assert reloaded.workspaces == [kept]
+    assert reloaded.workspaces[0].main is None
+    assert reloaded.load_failed is False
+
+
+def test_version_2_stores_load_unchanged(tmp_path):
+    """A version-2 record simply always has a main, so it reads through the
+    version-3 path untouched."""
+    store_path = tmp_path / "history.json"
+    store_path.write_text(
+        json.dumps(
+            {
+                "version": 2,
+                "recent_files": [{"path": "/cells/lgm50.json"}],
+                "recent_workspaces": [
+                    {
+                        "id": "abc",
+                        "main": {"path": "/cells/lgm50.json", "mode": "read_only"},
+                        "references": [{"kind": "library", "set_id": "chen2020"}],
+                    }
+                ],
+                "workspaces": [],
+                "current_id": "abc",
+            }
+        )
+    )
+    history = WorkspaceHistory(store_path)
+
+    assert history.load_failed is False
+    assert history.current().main == MainRecord("/cells/lgm50.json", "read_only")
+    assert history.current().references == (
+        ReferenceRecord(kind="library", set_id="chen2020"),
+    )
+
+
+def test_an_empty_untitled_workspace_is_never_written(tmp_path):
+    """No name, no main, no references: nothing to come back to, so the
+    next launch starts clean rather than restoring a blank row."""
+    history = _store(tmp_path)
+    history.start_workspace(WorkspaceRecord(main=None))
+
+    written = json.loads((tmp_path / "history.json").read_text())
+    assert written["recent_workspaces"] == []
+    # The workspace is real in memory even so -- it is the board.
+    assert history.current() is not None
+    assert _store(tmp_path).current_id is None
+
+
+def test_a_named_or_referenced_mainless_workspace_is_written(tmp_path):
+    history = _store(tmp_path)
+    named = history.keep(
+        history.start_workspace(WorkspaceRecord(main=None)).id, "planning"
+    )
+    referenced = history.start_workspace(
+        WorkspaceRecord(
+            main=None, references=(ReferenceRecord(kind="library", set_id="chen2020"),)
+        )
+    )
+
+    reloaded = _store(tmp_path)
+    assert [w.id for w in reloaded.workspaces] == [named.id]
+    assert [w.id for w in reloaded.recent_workspaces] == [referenced.id]
+    assert reloaded.current_id == referenced.id
+
+
+def test_repeated_empty_workspaces_collapse_to_one(tmp_path):
+    """Two empty boards are the same arrangement, so asking again heals to
+    the one row rather than piling them up."""
+    history = _store(tmp_path)
+    for _ in range(4):
+        history.start_workspace(WorkspaceRecord(main=None))
+
+    assert len(history.recent_workspaces) == 1
+    assert history.current_id == history.recent_workspaces[0].id
+
+
+def test_locating_a_workspace_with_no_main_is_a_no_op(tmp_path):
+    history = _store(tmp_path)
+    started = history.start_workspace(WorkspaceRecord(main=None))
+    history.relocate_main(started.id, "/cells/found.json")
+    assert history.current().main is None
 
 
 def test_store_never_contains_content_or_verdicts(tmp_path):
