@@ -681,7 +681,7 @@ def main() -> int:
             continue
 
         path = OUT_DIR / f"{meta.slug}.json"
-        with path.open("w", newline="\n") as handle:
+        with path.open("w", encoding="utf-8", newline="\n") as handle:
             json.dump(doc, handle, indent=1)
             handle.write("\n")
         written.append(path.name)
