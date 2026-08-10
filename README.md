@@ -30,10 +30,17 @@ the BPX specification itself: parsing, schema and validation all come from
 - **Author** - scaffold a new document for a chosen model (SPM, SPMe, DFN or
   Partial), see which fields the schema still expects, and add custom
   parameters and sections where the schema allows them.
-- **Compare** - dock a read-only reference document from a file or from the
-  bundled library of PyBaMM-derived parameter sets (Chen2020, Prada2013,
-  Ai2020, Mohtat2020), and compare validation runs against bundled example
-  data in overlaid charts.
+- **Compare** - pin up to four read-only reference documents, from your own
+  files or from the bundled library of PyBaMM-derived parameter sets
+  (Chen2020, Prada2013, Ai2020, Mohtat2020). Differences are marked where you
+  are already looking, and a single click copies a reference's value across as
+  one undo step. Validation runs overlay against bundled example data as
+  charts.
+- **Read the raw file** - a Source view of the document's own JSON, foldable
+  and, with a reference pinned, shown as two aligned panes.
+- **Keep your work together** - a workspace is the main document plus the
+  references pinned beside it. It is remembered as you go, reopens at launch,
+  and can be named to keep it for good.
 - **Save and export** - write back to the source file, or export a copy as
   JSON or YAML.
 
