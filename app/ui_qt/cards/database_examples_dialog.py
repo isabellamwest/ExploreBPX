@@ -297,6 +297,14 @@ class _LegendChip(QFrame):
         return self._selected
 
 
+#: A lower responsive-height ceiling than chart_axes.CHART_HEIGHT_CEILING's
+#: default 280: three of these stack in one dialog fixed at 760px tall
+#: (``DatabaseExamplesDialog.__init__``), above the key-numbers table, so
+#: each must stay short enough that all three still fit without outgrowing
+#: the dialog.
+_STACKED_CHART_CEILING = 220
+
+
 class _ChartPage(QWidget):
     """Three stacked small multiples, one per array, sharing Time [s] as
     their x-axis, with the key-numbers table beneath. The Temperature
@@ -309,11 +317,11 @@ class _ChartPage(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
 
-        self.voltage = MultiSeriesChart(height=180)
+        self.voltage = MultiSeriesChart(height=180, ceiling=_STACKED_CHART_CEILING)
         self.voltage.set_axis_titles(_TIME, "Voltage [V]")
-        self.current = MultiSeriesChart(height=180)
+        self.current = MultiSeriesChart(height=180, ceiling=_STACKED_CHART_CEILING)
         self.current.set_axis_titles(_TIME, "Current [A]")
-        self.temperature = MultiSeriesChart(height=180)
+        self.temperature = MultiSeriesChart(height=180, ceiling=_STACKED_CHART_CEILING)
         self.temperature.set_axis_titles(_TIME, _TEMPERATURE)
         # Each panel names its own missing array: the generic "No comparison
         # data yet." read as a contradiction on, say, the Current panel while

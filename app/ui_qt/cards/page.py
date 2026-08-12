@@ -35,16 +35,19 @@ def page_header() -> tuple[QFrame, QVBoxLayout]:
 def page_content() -> tuple[QWidget, QVBoxLayout]:
     """The content column below the header, on the same gutter.
 
-    Capped at ``style.CONTENT_MEASURE`` so a card's fields/prose stay a
-    readable width rather than stretching edge-to-edge with a wide pane;
-    the cap only bounds the maximum, so the column still shrinks on a
-    narrow pane. Left unset on the widget itself, the containing
-    ``QVBoxLayout`` hugs the capped column against its left edge (the same
-    side ``GUTTER`` already indents from), so no explicit alignment call is
-    needed here.
+    Capped at ``style.PAGE_MEASURE`` rather than the narrower
+    ``style.CONTENT_MEASURE``: a card's editor is a chart, a grid or a
+    ledger of keyed values, not running prose, so the reading measure
+    starved it the same way it once starved the Workspace page (see
+    ``PAGE_MEASURE``'s own comment) -- a 528px-wide chart with hundreds of
+    idle pixels beside it. The cap only bounds the maximum, so the column
+    still shrinks on a narrow pane. Left unset on the widget itself, the
+    containing ``QVBoxLayout`` hugs the capped column against its left edge
+    (the same side ``GUTTER`` already indents from), so no explicit
+    alignment call is needed here.
     """
     body = QWidget()
-    body.setMaximumWidth(style.CONTENT_MEASURE)
+    body.setMaximumWidth(style.PAGE_MEASURE)
     layout = QVBoxLayout(body)
     layout.setContentsMargins(GUTTER, 12, GUTTER, GUTTER)
     layout.setSpacing(10)

@@ -225,6 +225,68 @@ def test_y_axis_tick_count_is_forced_to_the_shared_constant():
 
 
 # ----------------------------------------------------------------------
+# Dense-series dots: the draft scatter marks hide past a point-count
+# threshold, where they read as clutter rather than individual points
+# ----------------------------------------------------------------------
+
+
+@requires_charts
+def test_scatter_dots_are_shown_at_or_under_the_dense_threshold():
+    from ui_qt.cards.table_preview import _MAX_SCATTER_POINTS
+
+    preview = TablePreview(mode="xy")
+    rows = [[float(i), float(i)] for i in range(_MAX_SCATTER_POINTS)]
+
+    preview.update_rows(rows)
+
+    assert preview._dots.isVisible()
+    assert preview._dots.count() == _MAX_SCATTER_POINTS
+
+
+@requires_charts
+def test_scatter_dots_are_hidden_above_the_dense_threshold():
+    """The line still carries every point (the value itself never
+    changes); only the dot marks -- which would otherwise overlap into a
+    fat band -- are withheld. The hover readout still gives any one
+    point's value on demand."""
+    from ui_qt.cards.table_preview import _MAX_SCATTER_POINTS
+
+    preview = TablePreview(mode="xy")
+    rows = [[float(i), float(i)] for i in range(_MAX_SCATTER_POINTS + 1)]
+
+    preview.update_rows(rows)
+
+    assert not preview._dots.isVisible()
+    assert preview._dots.count() == 0
+    assert preview._line.count() == _MAX_SCATTER_POINTS + 1
+
+
+@requires_charts
+def test_scatter_dots_reappear_once_back_under_the_threshold():
+    """Visibility tracks the *current* draft, not a one-way trip -- editing
+    a dense table back down to a handful of rows restores the dots."""
+    from ui_qt.cards.table_preview import _MAX_SCATTER_POINTS
+
+    preview = TablePreview(mode="xy")
+    preview.update_rows([[float(i), float(i)] for i in range(_MAX_SCATTER_POINTS + 1)])
+    assert not preview._dots.isVisible()
+
+    preview.update_rows([[0.0, 1.0], [1.0, 2.0]])
+
+    assert preview._dots.isVisible()
+    assert preview._dots.count() == 2
+
+
+@requires_charts
+def test_scatter_dot_marker_size_is_six_not_seven():
+    """Down from 7px (Bella: the dots read as fat and ugly on dense
+    data) -- 6px for the sparse case dots are still shown at."""
+    preview = TablePreview(mode="xy")
+
+    assert preview._dots.markerSize() == 6.0
+
+
+# ----------------------------------------------------------------------
 # Hover readout: the cache TablePreview feeds ReadoutChartView
 # ----------------------------------------------------------------------
 

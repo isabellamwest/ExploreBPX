@@ -66,13 +66,51 @@ def setup_chart(chart) -> None:
     chart.setMargins(QMargins(0, 0, 0, 0))
 
 
-def setup_chart_view(view, height: int) -> None:
-    """The app's ``QChartView`` baseline: antialiased, fixed-height, and
-    without QGraphicsView's native sunken frame -- the chart sits inside a
-    card that already owns the border, matching the app's flat look."""
+#: The tallest a responsive chart view may grow (see ``setup_chart_view``)
+#: absent a caller-supplied *ceiling*. Chosen so the Inspector's now-960px
+#: page measure (``style.PAGE_MEASURE``, minus ``cards/page.py``'s gutters --
+#: 928px of actual content width) renders a chart around this tall, instead
+#: of the old flat 140/180px band that left ~500px of dead space beside it.
+CHART_HEIGHT_CEILING = 280
+
+#: Height grows slower than width, so a wide chart does not become a
+#: near-square block. Picked so the *old* fixed heights read as this rule's
+#: own floor rather than an arbitrary slope: at the pre-fix 528px content
+#: width this lands within a pixel of TablePreview's old 140px band; at the
+#: 928px Inspector content width it reaches :data:`CHART_HEIGHT_CEILING`.
+_HEIGHT_WIDTH_RATIO = 3.2
+
+
+def responsive_chart_height(width: int, floor: int, ceiling: int) -> int:
+    """The chart height for a view *width* pixels wide: ``round(width /
+    3.2)``, clamped to never drop below *floor* (the shortest the caller
+    judged legible for a compact card) or rise above *ceiling*. Pure, so the
+    clamping arithmetic is unit-testable without a live chart -- see
+    ``ReadoutChartView`` for where this actually drives a widget's height."""
+    return min(ceiling, max(floor, round(width / _HEIGHT_WIDTH_RATIO)))
+
+
+def setup_chart_view(view, height: int, *, ceiling: int = CHART_HEIGHT_CEILING) -> None:
+    """The app's ``QChartView`` baseline: antialiased, without
+    QGraphicsView's native sunken frame (the chart sits inside a card that
+    already owns the border, matching the app's flat look), and a *width-
+    responsive* height rather than one flat value.
+
+    *height* is the floor -- the shortest the chart may ever be, the same
+    number every caller already passed in when this was a flat
+    ``setFixedHeight`` (140 for ``TablePreview``, 180 for
+    ``MultiSeriesChart``). *ceiling* caps how tall it may grow as its
+    containing column widens, defaulting to :data:`CHART_HEIGHT_CEILING`;
+    the database-examples Compare dialog passes a lower one so its three
+    stacked charts cannot outgrow the dialog. Recomputed on every resize
+    (``ReadoutChartView.resizeEvent``) from the view's own current width --
+    see :func:`responsive_chart_height` for the formula, and
+    :func:`tick_count_for_height` for how the y axis' tick count follows the
+    same height.
+    """
     view.setRenderHint(QPainter.Antialiasing)
     view.setFrameShape(QFrame.NoFrame)
-    view.setFixedHeight(height)
+    view.set_height_range(height, ceiling)
 
 
 def style_axis(axis, widget_font: QFont) -> None:
@@ -118,6 +156,35 @@ def style_axis(axis, widget_font: QFont) -> None:
 #: labels run along the chart's full width, never tight enough to collide.
 Y_AXIS_TICK_COUNT = 3
 
+#: One step up from :data:`Y_AXIS_TICK_COUNT`, for a chart tall enough to
+#: give the extra label room -- see :func:`tick_count_for_height`.
+#:
+#: Deliberately not 4. The comment above explains *why* 3 (halving a nice
+#: span) reads clean while 4 (thirding it) does not; the same reasoning
+#: makes 5 (quartering it -- two clean halvings) the next safe count, not
+#: the next integer. Re-measured with that hypothesis in mind, against the
+#: same 21 ranges plus every bundled example run's Voltage/Current (15
+#: ranges in total): tick_count=4 produced a repeating decimal on 12 of 15;
+#: tick_count=5 produced not one -- matching tick_count=3's own zero. A
+#: taller chart still earns real extra resolution, it just skips straight
+#: past the one count that was never going to be clean.
+TALL_Y_AXIS_TICK_COUNT = 5
+
+#: The chart height, in pixels, above which :func:`tick_count_for_height`
+#: switches from :data:`Y_AXIS_TICK_COUNT` to :data:`TALL_Y_AXIS_TICK_COUNT`.
+_TALL_CHART_HEIGHT = 180
+
+
+def tick_count_for_height(height: int) -> int:
+    """The y-axis tick count for a chart *height* pixels tall (see
+    :func:`setup_chart_view`): :data:`Y_AXIS_TICK_COUNT` at or below
+    :data:`_TALL_CHART_HEIGHT` (unchanged from the fixed-height original --
+    this is the height that measurement was made at),
+    :data:`TALL_Y_AXIS_TICK_COUNT` above it. Never the count in between --
+    see that constant's own comment for why 4 is skipped outright rather
+    than merely deferred to a still-taller tier."""
+    return TALL_Y_AXIS_TICK_COUNT if height > _TALL_CHART_HEIGHT else Y_AXIS_TICK_COUNT
+
 
 def fit_axis(axis, low: float, high: float, *, tick_count: int | None = None) -> None:
     """Set *axis* to the data range, snapped outward to round tick values.
@@ -155,10 +222,10 @@ def fit_axis(axis, low: float, high: float, *, tick_count: int | None = None) ->
 #: fight over the cursor.
 READOUT_SNAP_RADIUS = 24.0
 
-#: The hover marker's diameter -- the same 7px ``QScatterSeries`` marker size
-#: ``TablePreview``'s own draft dots already use, so a snapped point reads as
-#: the same mark, not a new visual language.
-READOUT_MARKER_SIZE = 7.0
+#: The hover marker's diameter -- the same ``QScatterSeries`` marker size
+#: ``TablePreview``'s own draft dots use for a sparse series, so a snapped
+#: point reads as the same mark, not a new visual language.
+READOUT_MARKER_SIZE = 6.0
 
 
 @dataclass(frozen=True)
@@ -280,6 +347,18 @@ if _CHARTS_AVAILABLE:
             self._marker.setPen(QPen(QColor("#ffffff"), 1.5))
             self._marker.setZValue(1000)
             self._marker.hide()
+            #: Width-responsive height range (see :func:`setup_chart_view`).
+            #: ``None`` until :meth:`set_height_range` is called -- a view
+            #: built and resized directly, as this class's own tests do,
+            #: keeps whatever height its caller sets and this class never
+            #: touches it.
+            self._height_floor: int | None = None
+            self._height_ceiling: int = CHART_HEIGHT_CEILING
+            #: Re-entrancy guard: ``setFixedHeight`` below fires this same
+            #: view's own ``resizeEvent`` (any geometry change does, not only
+            #: a parent-layout-driven one), which must not itself recompute
+            #: and fight the height just being applied.
+            self._adjusting_height = False
 
         def set_readout_series(
             self,
@@ -294,6 +373,49 @@ if _CHARTS_AVAILABLE:
                 (name, colour, tuple(points), visible)
                 for name, colour, points, visible in series
             ]
+
+        def set_height_range(self, floor: int, ceiling: int) -> None:
+            """Turn on width-responsive height (see
+            :func:`setup_chart_view`): never shorter than *floor*, never
+            taller than *ceiling*.
+
+            Starts pinned to *floor* rather than computed from the view's
+            current width: a freshly constructed, not-yet-laid-out widget's
+            width is Qt's own un-managed default (measured: 640px), not the
+            real space a parent layout will eventually give it, so reading
+            it here would size the chart from an accident of construction
+            order rather than its actual home. It grows on the first
+            genuine resize once a parent layout assigns real width (see
+            :meth:`resizeEvent`).
+            """
+            self._height_floor = floor
+            self._height_ceiling = ceiling
+            self._adjusting_height = True
+            self.setFixedHeight(floor)
+            self._adjusting_height = False
+
+        def resizeEvent(self, event) -> None:  # noqa: N802 (Qt override)
+            super().resizeEvent(event)
+            if self._adjusting_height:
+                return
+            self._apply_responsive_height(event.size().width())
+
+        def _apply_responsive_height(self, width: int) -> None:
+            if self._height_floor is None:
+                return
+            target = responsive_chart_height(width, self._height_floor, self._height_ceiling)
+            if target == self.height():
+                return
+            self._adjusting_height = True
+            self.setFixedHeight(target)
+            self._adjusting_height = False
+            # The y axis' own tick count tracks the same height (see
+            # tick_count_for_height) so a resize alone -- no new data --
+            # still re-subdivides an already-fitted range correctly. Safe
+            # without re-running applyNiceNumbers: fit_axis's own docstring
+            # notes that only applyNiceNumbers discards a tick count set
+            # after it, and nothing here calls it again.
+            self._axis_y.setTickCount(tick_count_for_height(target))
 
         def mouseMoveEvent(self, event) -> None:  # noqa: N802 (Qt override)
             super().mouseMoveEvent(event)

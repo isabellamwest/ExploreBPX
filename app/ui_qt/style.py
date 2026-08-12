@@ -33,6 +33,18 @@ SPACING_LG = 16
 #: the pane.
 CONTENT_MEASURE = 560
 
+#: A wider cap for a content column that is genuinely data -- charts, grids,
+#: keyed rows -- rather than running prose, which ``CONTENT_MEASURE`` starves
+#: the same way twice over. The Workspace page hit this first
+#: (``workspace_panel.py``'s own comment, quoted here since this constant now
+#: generalises it): "at the reading measure the four reference slots got
+#: about 90 px each and their names elided to a few characters, and the From
+#: row could not show a path." The Inspector's own cards repeated the exact
+#: disease at ``CONTENT_MEASURE`` -- a 528px-wide chart with roughly 500px of
+#: dead space beside it, and a grid squeezed the same way -- so both pages
+#: now share this one wider measure instead of each re-deriving their own.
+PAGE_MEASURE = 960
+
 OK = "#2e7d32"
 ERROR = "#c62828"
 WARNING = "#ef6c00"
@@ -340,17 +352,18 @@ QLineEdit#SearchBar:focus { border: 1px solid #1f6feb; }
    material button sits in a card's grid button row, not the toolbar, so the
    flat treatment its padding forfeits is restated for it here.
 
-   The caret is pinned rather than left native, because native is neither
-   small enough nor the same across platforms. Left to itself Qt paints an
-   11px arrow whose ink butts straight against the label (measured gap: 0px
-   on the macOS, Windows and Fusion styles alike) -- chunky, and reading as
-   glued to the word. Pinning the subcontrol to 8px shrinks it and, more
-   importantly, makes the box identical everywhere, so the label-to-caret gap
-   no longer depends on which platform's PM_MenuButtonIndicator is in force
-   (7px on macOS, 12px on Windows/Fusion -- a gutter tuned to one collides on
-   the other). With a 20px gutter and a 5px inset the gap measures 4-5px on
-   all three styles. The vertical hang the rule originally fought is cured by
-   subcontrol-origin/position below, not by the gutter's width. */
+   The caret keeps ``subcontrol-origin``/``subcontrol-position`` (needed once
+   any QSS targets the button at all -- native positioning stops applying)
+   but no longer a forced ``width``/``height``. An earlier version pinned the
+   box to 8x8, reasoning a fixed size would read identically everywhere; in
+   fact Qt does not scale its glyph to fit a smaller box, it clips to it, so
+   at a style whose native glyph runs larger than 8px (measured: 11px on
+   Windows) the caret rendered as half an arrow. Leaving width/height unset
+   lets each style paint its own glyph whole, at whatever size
+   ``PM_MenuButtonIndicator`` gives it; the 20px gutter (padding-right,
+   below) and 5px inset already had enough room for that native size -- they
+   were sized for it originally, before the 8x8 box shrank what got painted
+   inside them. */
 QToolButton#ExportButton { padding-right: 20px; }
 QToolButton#AddMaterialButton {
     background: transparent; border: none; border-radius: 4px;
@@ -361,8 +374,6 @@ QToolButton#ExportButton::menu-indicator,
 QToolButton#AddMaterialButton::menu-indicator {
     subcontrol-origin: padding;
     subcontrol-position: center right;
-    width: 8px;
-    height: 8px;
     right: 5px;
 }
 QTreeView, QListWidget { border: 1px solid #d0d7de; background: #ffffff; }

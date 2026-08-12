@@ -19,7 +19,14 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPen
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
-from .chart_axes import Y_AXIS_TICK_COUNT, fit_axis, setup_chart, setup_chart_view, style_axis
+from .chart_axes import (
+    CHART_HEIGHT_CEILING,
+    fit_axis,
+    setup_chart,
+    setup_chart_view,
+    style_axis,
+    tick_count_for_height,
+)
 
 try:  # QtCharts is part of PySide6 but absent from some minimal builds.
     from PySide6.QtCharts import QChart, QLineSeries, QValueAxis
@@ -41,7 +48,16 @@ def charts_available() -> bool:
 class MultiSeriesChart(QWidget):
     """A small multiple: several ``(x, y)`` curves sharing one axis pair."""
 
-    def __init__(self, height: int = 100, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        height: int = 100,
+        ceiling: int = CHART_HEIGHT_CEILING,
+        parent: QWidget | None = None,
+    ) -> None:
+        """*ceiling* caps how tall the chart may grow as its column widens
+        (see ``chart_axes.setup_chart_view``); the database-examples Compare
+        dialog passes a lower one since three of these stack in one dialog.
+        """
         super().__init__(parent)
         self.available = _CHARTS_AVAILABLE
         layout = QVBoxLayout(self)
@@ -62,7 +78,7 @@ class MultiSeriesChart(QWidget):
         self._chart.addAxis(self._axis_y, Qt.AlignLeft)
 
         self._view = ReadoutChartView(self._chart, self._axis_x, self._axis_y)
-        setup_chart_view(self._view, height)
+        setup_chart_view(self._view, height, ceiling=ceiling)
         layout.addWidget(self._view)
 
         self._empty = QLabel("No comparison data yet.")
@@ -169,7 +185,9 @@ class MultiSeriesChart(QWidget):
         xs = [x for x, _ in points]
         ys = [y for _, y in points]
         fit_axis(self._axis_x, min(xs), max(xs))
-        fit_axis(self._axis_y, min(ys), max(ys), tick_count=Y_AXIS_TICK_COUNT)
+        fit_axis(
+            self._axis_y, min(ys), max(ys), tick_count=tick_count_for_height(self._view.height())
+        )
 
     def _show_empty(self, empty: bool) -> None:
         self._view.setVisible(not empty)

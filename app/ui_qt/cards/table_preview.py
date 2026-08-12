@@ -50,12 +50,12 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 from .. import badges, typography
 from ..style import ACCENT, MUTED
 from .chart_axes import (
-    Y_AXIS_TICK_COUNT,
     as_plot_number,
     fit_axis,
     setup_chart,
     setup_chart_view,
     style_axis,
+    tick_count_for_height,
 )
 
 try:  # QtCharts is part of PySide6 but absent from some minimal builds.
@@ -80,6 +80,13 @@ _LINE = ACCENT
 #: value being edited stays the loudest thing on the chart however many
 #: references are overlaid on it.
 _REF_LINE_WIDTH = 1.6
+
+#: Above this many main-series points, the draft dots read as a fat,
+#: cluttered band rather than individual points (a 98-point OCP table drew
+#: 98 overlapping 7px circles on top of its own line) -- past the
+#: threshold the line alone carries the shape; the hover readout
+#: (``ReadoutChartView``) still gives any single point's value on demand.
+_MAX_SCATTER_POINTS = 48
 
 
 def charts_available() -> bool:
@@ -147,7 +154,7 @@ class TablePreview(QWidget):
         pen.setWidth(2)
         self._line.setPen(pen)
         self._dots = QScatterSeries()
-        self._dots.setMarkerSize(7.0)
+        self._dots.setMarkerSize(6.0)
         self._dots.setColor(QColor(_LINE))
         self._dots.setBorderColor(QColor("#ffffff"))
         self._chart.addSeries(self._line)
@@ -247,9 +254,15 @@ class TablePreview(QWidget):
     def _redraw(self) -> None:
         self._line.clear()
         self._dots.clear()
+        # Dense data: line only (see _MAX_SCATTER_POINTS) -- the series
+        # stays empty and hidden rather than populated-but-invisible, so it
+        # costs nothing to keep around for the sparse case that follows.
+        show_dots = len(self._main_points) <= _MAX_SCATTER_POINTS
+        self._dots.setVisible(show_dots)
         for x, y in self._main_points:
             self._line.append(x, y)
-            self._dots.append(x, y)
+            if show_dots:
+                self._dots.append(x, y)
         for series, points, shown in zip(
             self._ref_series, self._curve_points, self._curve_shown
         ):
@@ -301,7 +314,9 @@ class TablePreview(QWidget):
         xs = [p[0] for p in points]
         ys = [p[1] for p in points]
         fit_axis(self._axis_x, min(xs), max(xs))
-        fit_axis(self._axis_y, min(ys), max(ys), tick_count=Y_AXIS_TICK_COUNT)
+        fit_axis(
+            self._axis_y, min(ys), max(ys), tick_count=tick_count_for_height(self._view.height())
+        )
 
     def _show_empty(self, empty: bool) -> None:
         self._view.setVisible(not empty)

@@ -286,6 +286,121 @@ def test_readout_chart_view_leave_event_hides_the_marker():
 
 
 # ----------------------------------------------------------------------
+# responsive_chart_height: the pure clamping formula behind a chart's
+# width-driven height (setup_chart_view; replaces the old flat height)
+# ----------------------------------------------------------------------
+
+
+def test_responsive_chart_height_never_drops_below_the_floor():
+    from ui_qt.cards.chart_axes import responsive_chart_height
+
+    assert responsive_chart_height(100, floor=140, ceiling=280) == 140
+    assert responsive_chart_height(0, floor=140, ceiling=280) == 140
+
+
+def test_responsive_chart_height_never_rises_above_the_ceiling():
+    from ui_qt.cards.chart_axes import responsive_chart_height
+
+    assert responsive_chart_height(2000, floor=140, ceiling=280) == 280
+
+
+def test_responsive_chart_height_matches_the_measured_inspector_widths():
+    """The numbers behind the fix: the Inspector's 928px content column
+    (``style.PAGE_MEASURE`` minus ``cards/page.py``'s gutters) reaches the
+    ceiling; the old fixed-528px content width lands close to
+    TablePreview's own former fixed height, so nothing narrower regresses."""
+    from ui_qt.cards.chart_axes import responsive_chart_height
+
+    assert responsive_chart_height(928, floor=140, ceiling=280) == 280
+    assert responsive_chart_height(528, floor=140, ceiling=280) == 165
+
+
+# ----------------------------------------------------------------------
+# tick_count_for_height: the y-axis tick count following the same height
+# ----------------------------------------------------------------------
+
+
+def test_tick_count_for_height_stays_compact_up_to_its_threshold():
+    from ui_qt.cards.chart_axes import Y_AXIS_TICK_COUNT, tick_count_for_height
+
+    assert tick_count_for_height(140) == Y_AXIS_TICK_COUNT
+    assert tick_count_for_height(180) == Y_AXIS_TICK_COUNT
+
+
+def test_tick_count_for_height_steps_up_past_its_threshold():
+    from ui_qt.cards.chart_axes import TALL_Y_AXIS_TICK_COUNT, tick_count_for_height
+
+    assert tick_count_for_height(181) == TALL_Y_AXIS_TICK_COUNT
+    assert tick_count_for_height(280) == TALL_Y_AXIS_TICK_COUNT
+
+
+def test_tick_count_for_height_never_returns_four():
+    """4 is skipped outright, not merely deferred to a taller tier -- see
+    TALL_Y_AXIS_TICK_COUNT's own comment for the measured reason (dividing
+    a nice-numbers span into three intervals, tick_count=4, produced a
+    repeating decimal on 12 of 15 real BPX ranges tested; tick_count=5,
+    dividing into four, produced none)."""
+    from ui_qt.cards.chart_axes import tick_count_for_height
+
+    for height in range(50, 400):
+        assert tick_count_for_height(height) != 4
+
+
+# ----------------------------------------------------------------------
+# ReadoutChartView: width-responsive height, shown (task 2's own note --
+# resize dispatch needs a shown widget; see set_height_range's docstring
+# for why an unshown view must not size itself from Qt's own un-managed
+# default geometry instead)
+# ----------------------------------------------------------------------
+
+
+@requires_charts
+def test_chart_view_height_is_pinned_to_the_floor_before_any_resize():
+    view, _chart = _build_view()
+
+    view.set_height_range(140, 280)
+
+    assert view.height() == 140
+
+
+@requires_charts
+def test_chart_view_height_grows_with_width_once_shown_and_resized():
+    view, _chart = _build_view()
+    view.set_height_range(140, 280)
+
+    view.resize(928, view.height())
+
+    assert view.height() == 280
+
+
+@requires_charts
+def test_chart_view_height_clamps_back_down_to_its_floor():
+    view, _chart = _build_view()
+    view.set_height_range(140, 280)
+    view.resize(928, view.height())
+    assert view.height() == 280
+
+    view.resize(300, view.height())
+
+    assert view.height() == 140
+
+
+@requires_charts
+def test_chart_view_tick_count_updates_on_resize_alone_with_no_new_data():
+    """A window resize that changes chart height must re-subdivide the y
+    axis' already-fitted range even when no new data arrives -- otherwise a
+    resize alone leaves a stale tick count from the last data fit."""
+    from ui_qt.cards.chart_axes import TALL_Y_AXIS_TICK_COUNT
+
+    view, _chart = _build_view()
+    view.set_height_range(140, 280)
+
+    view.resize(928, view.height())
+
+    assert view._axis_y.tickCount() == TALL_Y_AXIS_TICK_COUNT
+
+
+# ----------------------------------------------------------------------
 # style.CHART_SERIES: one palette source (moved out of the compare dialog)
 # ----------------------------------------------------------------------
 

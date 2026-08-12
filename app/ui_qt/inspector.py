@@ -69,7 +69,7 @@ from .documentation_view import DocumentationView
 from .group_box import TintedSection
 from .issues_view import IssuesView
 from .reference_identity import ReferencePin
-from .style import ERROR, MUTED, OK, WARNING, not_checked_tooltip
+from .style import ERROR, MUTED, OK, PAGE_MEASURE, WARNING, not_checked_tooltip
 from .validation_empty_state import ValidationEmptyState
 
 
@@ -138,7 +138,10 @@ class InspectorPanel(QWidget):
         self._issues_count = QLabel("")
         self._issues_count.setObjectName("InspectorIssuesCount")
         self._issues_section = TintedSection(
-            "Issues", object_name="InspectorIssuesSection", suffix=self._issues_count
+            "Issues",
+            object_name="InspectorIssuesSection",
+            suffix=self._issues_count,
+            measure=PAGE_MEASURE,
         )
         self._issues_section.body_layout.addWidget(self._issues_view)
         self._issues_section.hide()
@@ -150,7 +153,10 @@ class InspectorPanel(QWidget):
         # state); only ``reset`` collapses it again.
         self._docs_view = DocumentationView()
         self._docs_section = TintedSection(
-            "Documentation", object_name="InspectorDocsSection", collapsible=True
+            "Documentation",
+            object_name="InspectorDocsSection",
+            collapsible=True,
+            measure=PAGE_MEASURE,
         )
         self._docs_section.body_layout.addWidget(self._docs_view)
         self._docs_section.set_collapsed(True)

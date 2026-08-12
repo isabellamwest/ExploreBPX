@@ -58,7 +58,7 @@ from . import badges, icons
 from .group_box import TintedSection
 from .reference_identity import badge_colour, badge_letters
 from . import typography
-from .style import ERROR, MUTED, OK, WARNING, not_checked_tooltip
+from .style import ERROR, MUTED, OK, PAGE_MEASURE, WARNING, not_checked_tooltip
 from .typography import panel_title
 
 _INFO_PANEL_EMPTY_STATE_TEXT = "No document open"
@@ -78,10 +78,11 @@ UNTITLED_WORKSPACE = "Untitled workspace"
 #: loader itself reads (see ``ui_qt/file_filters.py``).
 SUPPORTED_BPX_EXTENSIONS = SUPPORTED_EXTENSIONS
 
-#: The actions rail's fixed width (explicit user call): wider than the
-#: New chooser's rows strictly need, so the rail/pane divider sits further
-#: right than the bare minimum.
-_RAIL_WIDTH = 340
+#: The actions rail's fixed width. Narrower than the original 340px
+#: (explicit user call): the row labels already elide gracefully, and 340
+#: gave the rail far more room than the New chooser's rows or a workspace
+#: row need, at the cost of the board beside it.
+_RAIL_WIDTH = 280
 
 #: The white gap between the board and the strip beneath it.
 _SECTION_GAP = 16
@@ -93,17 +94,16 @@ _EMPTY_SLOT_HEIGHT = 56
 
 #: The measure every section on this page is capped at -- one right edge for
 #: the whole page, so the board and the strip beneath it are bookends of the
-#: same column rather than two bands ending in different places. Wider than
-#: ``style.CONTENT_MEASURE`` because the page's widest content is a
-#: horizontal row of cards and a keyed record, neither of which is running
-#: text: at the reading measure the four reference slots got about 90 px
-#: each and their names elided to a few characters, and the From row could
-#: not show a path. The description is the one paragraph here and it does
-#: run to this measure -- capping that label alone re-clips it, because a
+#: same column rather than two bands ending in different places. The shared
+#: ``style.PAGE_MEASURE`` (see that constant's own comment, which quotes this
+#: page's own discovery: at the reading measure the four reference slots got
+#: about 90 px each and their names elided to a few characters, and the From
+#: row could not show a path) now that the Inspector page hit the identical
+#: disease. The description is the one paragraph here and it does run to
+#: this measure -- capping that label alone re-clips it, because a
 #: word-wrapped label narrower than the form column it sits in is measured
 #: for height at the column's width and handed too few pixels (the same
 #: mismatch ``_MeasureBoundVBox`` guards at the section level).
-_PAGE_MEASURE = 960
 
 #: The Main slot's share of the board row, against 2 per reference slot.
 #: The row is capped at the page measure, so the two states want
@@ -809,7 +809,10 @@ class ReferenceRecordPanel(QWidget):
             )
         else:
             colour = MUTED
-        self._checked_dot.setText(icons.html_img(icons.DOT, color=colour))
+        # Isolated dot, no text in its own document: lift=0, like the card
+        # header's dot (the x-height-midline artifact the lift corrects only
+        # exists when the image shares a line with text).
+        self._checked_dot.setText(icons.html_img(icons.DOT, color=colour, lift=0))
 
         # From: a bundled set came from the reference library; a file names
         # its path plus the disk facts captured at pin time.
@@ -938,7 +941,8 @@ class _MainCard(QFrame):
         self._name.setText(filename)
         self._set_ghosted(False)
         self._unsaved_tag.setVisible(never_saved)
-        self._dot.setText(icons.html_img(icons.DOT, color=colour))
+        # Isolated dot: lift=0, same reasoning as the record plaque's dot.
+        self._dot.setText(icons.html_img(icons.DOT, color=colour, lift=0))
         self._dot.setToolTip(tooltip)
         self._dot.show()
         self._badge.setText(validity)
@@ -1664,7 +1668,7 @@ class WorkspacePanel(QWidget):
         section = TintedSection(
             "This workspace",
             object_name="WorkspaceBoardSection",
-            measure=_PAGE_MEASURE,
+            measure=PAGE_MEASURE,
         )
         body = section.body_layout
 
@@ -1715,7 +1719,7 @@ class WorkspacePanel(QWidget):
         file's own immutable facts. The split is the D6 rule made visible:
         the upper block is yours, the plaque is the file's."""
         section = TintedSection(
-            "Main", object_name="WorkspaceMainSection", measure=_PAGE_MEASURE
+            "Main", object_name="WorkspaceMainSection", measure=PAGE_MEASURE
         )
         body = section.body_layout
 

@@ -718,11 +718,14 @@ def test_record_refresh_mid_edit_keeps_the_draft(app_driver, spm_workfile, qtbot
 def test_the_workspace_page_sections_share_one_wider_measure(app_driver):
     """The page is cards and keyed rows, not prose: capped at the reading
     measure the four reference slots got ~90 px each and elided their names
-    away. Both sections take the same cap, so the page has one right edge."""
+    away. Both sections take the same cap, so the page has one right edge.
+
+    ``style.PAGE_MEASURE`` is the shared token (the Inspector page uses it
+    too); this page keeps no local copy."""
     from ui_qt import style
     from ui_qt.group_box import TintedSection
 
-    page_measure = workspace_panel_module._PAGE_MEASURE
+    page_measure = style.PAGE_MEASURE
     assert page_measure > style.CONTENT_MEASURE
 
     workspace = app_driver._w._workspace
