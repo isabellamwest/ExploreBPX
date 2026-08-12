@@ -212,13 +212,16 @@ def test_a_fifth_reference_run_is_refused():
 def test_chart_table_toggle_switches_the_visible_view():
     dialog = DatabaseExamplesDialog(_OWN_RUN)
 
-    assert dialog._view_stack.currentWidget() is dialog._chart_page
+    # The chart page lives inside a scroll area (so a shrunk dialog scrolls
+    # rather than cutting the charts off); the stack switches the wrapper.
+    assert dialog._view_stack.currentWidget() is dialog._chart_scroll
+    assert dialog._chart_scroll.widget() is dialog._chart_page
 
     dialog._on_mode_clicked(1)
     assert dialog._view_stack.currentWidget() is dialog._table
 
     dialog._on_mode_clicked(0)
-    assert dialog._view_stack.currentWidget() is dialog._chart_page
+    assert dialog._view_stack.currentWidget() is dialog._chart_scroll
 
 
 def test_default_table_selection_is_you_when_present():

@@ -82,6 +82,7 @@ class _SetRow(QFrame):
 
         model = QLabel(ref_set.model)
         model.setStyleSheet(f"color: {MUTED}; {typography.size_qss(typography.META)}")
+        model.setWordWrap(True)
         layout.addWidget(model)
 
         self._tick = QLabel("✓")
@@ -117,6 +118,7 @@ class ReferenceLibraryDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Reference library")
         self.resize(720, 430)
+        self.setMinimumSize(640, 400)
 
         self._sets = list_reference_sets()
         self._rows: dict[str, _SetRow] = {}
@@ -198,11 +200,14 @@ class ReferenceLibraryDialog(QDialog):
         self._detail_description.setWordWrap(True)
         self._detail_description.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         body_layout.addWidget(self._detail_description)
-        body_layout.addStretch(1)
         provenance = QLabel(PROVENANCE)
         provenance.setObjectName("ReferenceLibraryProvenance")
         provenance.setWordWrap(True)
         body_layout.addWidget(provenance)
+        # After, not between: provenance follows the description directly,
+        # and slack collects at the bottom instead of opening a blank band
+        # mid-card when the description is short.
+        body_layout.addStretch(1)
         return card
 
     def _build_footer(self) -> QHBoxLayout:
@@ -216,6 +221,7 @@ class ReferenceLibraryDialog(QDialog):
             f"Pins as a read-only reference · up to {MAX_PINNED_REFERENCES} at once"
         )
         hint.setObjectName("Hint")
+        hint.setWordWrap(True)
         footer.addWidget(hint)
         footer.addStretch(1)
         buttons = QDialogButtonBox()

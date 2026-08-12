@@ -47,7 +47,7 @@ from PySide6.QtWidgets import (
 from core.csv_import import CsvData, auto_map
 from core.values import format_value
 
-from ..style import ERROR, MUTED
+from ..style import ERROR, MUTED, TABLE_PREVIEW_MAX_HEIGHT
 from .paste_dialog import PastePreviewResult
 
 #: Rows shown in the preview; the parse itself is complete (same convention as
@@ -74,6 +74,7 @@ class CsvImportDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Import CSV")
+        self.setMinimumWidth(520)
         self._data = data
         self._targets = targets
         self._filename = filename
@@ -101,6 +102,12 @@ class CsvImportDialog(QDialog):
         # nothing is guessed invisibly.
         proposal = proposed if proposed is not None else auto_map(data, targets)
         form = QFormLayout()
+        # Explicit left alignment: macOS's native form style otherwise centres
+        # rows and right-aligns labels (workspace_panel's _record_form
+        # documents this).
+        form.setFormAlignment(Qt.AlignLeft | Qt.AlignTop)
+        form.setLabelAlignment(Qt.AlignLeft)
+        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
         self._combos: list[QComboBox] = []
         column_names = [data.column_name(i) for i in range(data.column_count)]
         for target, guess in zip(targets, proposal):
@@ -117,6 +124,7 @@ class CsvImportDialog(QDialog):
         if data.row_count > _PREVIEW_ROWS:
             more = QLabel(f"Showing the first {_PREVIEW_ROWS} of {data.row_count} rows.")
             more.setStyleSheet(f"color: {MUTED};")
+            more.setWordWrap(True)
             layout.addWidget(more)
 
         # Why Import is blocked, when it is. Same convention as a card's
@@ -260,5 +268,5 @@ def _preview_table(data: CsvData) -> QTableWidget:
             if value is not None and not isinstance(value, (int, float)):
                 item.setForeground(QColor(ERROR))
             table.setItem(row_index, column_index, item)
-    table.setMaximumHeight(260)
+    table.setMaximumHeight(TABLE_PREVIEW_MAX_HEIGHT)
     return table

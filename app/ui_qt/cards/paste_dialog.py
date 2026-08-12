@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (
 from core.paste import ParsedPaste
 from core.values import format_value
 
-from ..style import ERROR, MUTED
+from ..style import ERROR, MUTED, TABLE_PREVIEW_MAX_HEIGHT
 
 #: Rows shown in the preview before it notes "and N more". The parse itself is
 #: complete; only the preview is capped, so a thousand-row paste stays instant.
@@ -47,6 +47,7 @@ class PastePreviewDialog(QDialog):
     def __init__(self, parsed: ParsedPaste, headers: tuple[str, ...], parent=None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Paste preview")
+        self.setMinimumWidth(520)
         self._choice: str | None = None
 
         layout = QVBoxLayout(self)
@@ -62,6 +63,7 @@ class PastePreviewDialog(QDialog):
         if parsed.row_count > _PREVIEW_ROWS:
             more = QLabel(f"Showing the first {_PREVIEW_ROWS} of {parsed.row_count} rows.")
             more.setStyleSheet(f"color: {MUTED};")
+            more.setWordWrap(True)
             layout.addWidget(more)
 
         buttons = QDialogButtonBox()
@@ -128,5 +130,5 @@ def _preview_table(parsed: ParsedPaste, headers: tuple[str, ...]) -> QTableWidge
             if value is not None and not isinstance(value, (int, float)):
                 item.setForeground(QColor(ERROR))
             table.setItem(r, c, item)
-    table.setMaximumHeight(260)
+    table.setMaximumHeight(TABLE_PREVIEW_MAX_HEIGHT)
     return table

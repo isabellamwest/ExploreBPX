@@ -52,6 +52,7 @@ from core.example_library import (
 from core.values import format_value
 
 from .. import typography
+from ..elided_label import ElidedLabel
 from ..file_filters import BPX_FILTER_WITH_ALL
 from ..style import ACCENT, BORDER, CHART_SERIES, ERROR, MUTED
 from ..typography import panel_title
@@ -95,6 +96,10 @@ _REFERENCE_WIDTH = 2.0
 #: belongs to the empty chart pane's hint and would otherwise repeat it
 #: while both are on screen.
 _NO_OWN_DATA_NOTICE = "No data in this experiment yet."
+
+#: The picker column's fixed width -- mirrors reference_library_dialog's own
+#: _PICKER_WIDTH.
+_PICKER_WIDTH = 250
 
 
 @dataclass(frozen=True)
@@ -266,7 +271,11 @@ class _LegendChip(QFrame):
         swatch.setStyleSheet(f"background: {color}; border-radius: 5px;")
         layout.addWidget(swatch)
 
-        layout.addWidget(QLabel(label))
+        # Elided, not clipped: a long run name must shrink itself rather than
+        # push later chips off the dialog. ElidedLabel sets its own tooltip.
+        text_label = ElidedLabel()
+        text_label.setText(label)
+        layout.addWidget(text_label)
 
         if removable:
             remove = QToolButton()
@@ -366,6 +375,7 @@ class DatabaseExamplesDialog(QDialog):
             f"Compare · Experiment · {run_label}" if run_label else "Compare · Experiment"
         )
         self.resize(1000, 760)
+        self.setMinimumSize(720, 520)
 
         #: ``series_id -> _AddedSeries`` for every run currently in the
         #: comparison, in the order it was added. "You" (when it has data)
@@ -480,7 +490,7 @@ class DatabaseExamplesDialog(QDialog):
         scroll.setWidget(container)
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
-        scroll.setFixedWidth(250)
+        scroll.setFixedWidth(_PICKER_WIDTH)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         return scroll
 
@@ -504,6 +514,7 @@ class DatabaseExamplesDialog(QDialog):
         self._own_notice = QLabel(_NO_OWN_DATA_NOTICE)
         self._own_notice.setObjectName("CompareOwnDataNotice")
         self._own_notice.setStyleSheet(f"color: {MUTED};")
+        self._own_notice.setWordWrap(True)
         toolbar.addWidget(self._own_notice)
         toolbar.addStretch(1)
         self._mode_strip = ModeStrip(("Chart", "Table"), self._on_mode_clicked)
@@ -520,6 +531,7 @@ class DatabaseExamplesDialog(QDialog):
         self._hint_label = QLabel("Pick a run on the left to compare it here.")
         self._hint_label.setObjectName("Hint")
         self._hint_label.setAlignment(Qt.AlignCenter)
+        self._hint_label.setWordWrap(True)
 
         self._chart_page = _ChartPage()
         self._table = _build_table()
@@ -527,9 +539,17 @@ class DatabaseExamplesDialog(QDialog):
         # NumericGrid look (the numbers table instead fits to its contents).
         self._table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
 
+        # Scrollable so shrinking the dialog scrolls the charts instead of
+        # cutting them off the bottom -- three stacked charts plus the
+        # numbers table can outgrow a narrowed window.
+        self._chart_scroll = QScrollArea()
+        self._chart_scroll.setWidget(self._chart_page)
+        self._chart_scroll.setWidgetResizable(True)
+        self._chart_scroll.setFrameShape(QFrame.NoFrame)
+
         self._view_stack = QStackedWidget()
         self._view_stack.addWidget(self._hint_label)
-        self._view_stack.addWidget(self._chart_page)
+        self._view_stack.addWidget(self._chart_scroll)
         self._view_stack.addWidget(self._table)
         layout.addWidget(self._view_stack, 1)
 
@@ -784,4 +804,4 @@ class DatabaseExamplesDialog(QDialog):
         elif self._view_mode == "table":
             self._view_stack.setCurrentWidget(self._table)
         else:
-            self._view_stack.setCurrentWidget(self._chart_page)
+            self._view_stack.setCurrentWidget(self._chart_scroll)
