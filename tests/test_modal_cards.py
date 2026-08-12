@@ -44,6 +44,7 @@ from ui_qt.cards.map import (
 )
 from ui_qt.cards.map import initial_mode as map_initial_mode
 from ui_qt.cards.modal import RAW_MODE, Mode, ModalCard, RawValueCard
+from ui_qt.cards.multi_series_chart import charts_available
 from ui_qt.cards.paste_dialog import PastePreviewResult
 from ui_qt.cards.registry import create_card
 from ui_qt.cards.table import TableCard
@@ -359,6 +360,98 @@ def test_function_hint_quotes_bpx_function_docstring():
     expected = " · ".join(line.strip().lstrip("- ") for line in lines if line.strip())
     labels = card._modes[1].body.findChildren(QLabel)
     assert any(label.text() == expected for label in labels)
+
+
+# ----------------------------------------------------------------------
+# ExpressionBody: the committed-value chart preview
+# ----------------------------------------------------------------------
+
+requires_charts = pytest.mark.skipif(
+    not charts_available(), reason="QtCharts not available in this PySide6 build"
+)
+
+
+@requires_charts
+def test_expression_chart_samples_the_committed_expression():
+    card = _fn("2*x", unit="V")
+    body = card._expression_body
+    name, _colour, points = body._chart._series_meta["main"]
+    assert name == "Main"
+    assert len(points) == 200
+    assert points[0][0] == pytest.approx(0.0)  # default domain [0, 1]
+    assert points[-1][0] == pytest.approx(1.0)
+
+
+@requires_charts
+def test_expression_chart_y_axis_names_the_unit():
+    card = _fn("2*x", unit="V")
+    assert card._expression_body._chart._axis_y.titleText() == "y [V]"
+
+
+@requires_charts
+def test_expression_chart_y_axis_falls_back_to_bare_y_without_a_unit():
+    card = _fn("2*x", unit="")
+    assert card._expression_body._chart._axis_y.titleText() == "y"
+
+
+@requires_charts
+def test_expression_chart_domain_edit_resamples_the_curve():
+    card = _fn("2*x", unit="V")
+    body = card._expression_body
+
+    body._domain_high_edit.setText("2")
+    body._domain_high_edit.editingFinished.emit()
+
+    xs = [x for x, _y in body._chart._series_meta["main"][2]]
+    assert max(xs) == pytest.approx(2.0)
+
+
+@requires_charts
+def test_expression_chart_invalid_domain_text_reverts_both_fields():
+    card = _fn("2*x", unit="V")
+    body = card._expression_body
+
+    body._domain_high_edit.setText("not a number")
+    body._domain_high_edit.editingFinished.emit()
+
+    assert body._domain_low_edit.text() == "0"
+    assert body._domain_high_edit.text() == "1"
+
+
+@requires_charts
+def test_expression_chart_low_greater_than_high_reverts():
+    card = _fn("2*x", unit="V")
+    body = card._expression_body
+
+    body._domain_low_edit.setText("5")
+    body._domain_low_edit.editingFinished.emit()
+
+    assert body._domain_low_edit.text() == "0"  # low >= high: rejected whole
+
+
+@requires_charts
+def test_expression_chart_invalid_function_shows_a_muted_note_and_no_chart():
+    card = _fn("2x")  # missing '*': not a legal bpx.Function
+    body = card._expression_body
+
+    assert not body._error_note.isHidden()
+    assert body._error_note.text().startswith("Invalid Function")
+    assert body._chart.isHidden()
+
+
+@requires_charts
+def test_expression_chart_valid_resample_replaces_the_note():
+    """A commit rebuilds the card from the fresh value (``show_parameter``),
+    which reseeds the body through ``set_value`` -- the same hook a fresh,
+    now-valid expression repopulates through."""
+    card = _fn("2x")
+    body = card._expression_body
+    assert not body._error_note.isHidden()
+
+    body.set_value("2*x")
+
+    assert body._error_note.isHidden()
+    assert not body._chart.isHidden()
 
 
 # ----------------------------------------------------------------------

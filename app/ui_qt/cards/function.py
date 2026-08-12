@@ -80,9 +80,10 @@ class FunctionCard(ModalCard):
         renamable = structure.can_rename_parameter(parameter.path, parameter.value)
         unit_tooltip = "" if renamable else FIXED_UNIT_TOOLTIP
         self._table_body = TableBody(parameter.unit)
+        self._expression_body = ExpressionBody(parameter.unit)
         modes = [
             Mode(FLOAT_INT, NumberBody(parameter.unit, unit_tooltip)),
-            Mode(FUNCTION, ExpressionBody()),
+            Mode(FUNCTION, self._expression_body),
             Mode(INTERPOLATED_TABLE, self._table_body),
         ]
         if opens_in == RAW_MODE:
@@ -96,3 +97,9 @@ class FunctionCard(ModalCard):
         visible to draw until the strip switches back to it (see
         ``TableBody.set_reference_curves``)."""
         self._table_body.set_reference_curves(curves)
+
+    def set_reference_functions(self, entries) -> None:
+        """Delegate to the ``Function`` mode's own body, whichever mode the
+        strip currently shows -- mirrors :meth:`set_reference_curves` (see
+        ``ExpressionBody.set_reference_functions``)."""
+        self._expression_body.set_reference_functions(entries)

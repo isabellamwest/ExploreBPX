@@ -266,6 +266,7 @@ class ParameterCard(QWidget):
             if self._ledger is not None:
                 self._ledger.hide()
             self._editor.set_reference_curves([])
+            self._editor.set_reference_functions([])
             return
         if self._ledger is None:
             self._main_file_heading = QLabel("Main")
@@ -306,8 +307,32 @@ class ParameterCard(QWidget):
             width=width,
         )
         self._apply_table_grid(groups, pins)
+        self._editor.set_reference_functions(self._function_references(groups, pins))
         self._main_file_heading.show()
         self._ledger.show()
+
+    def _function_references(
+        self, groups: tuple[ValueGroup, ...], pins: list[ReferencePin]
+    ) -> list[tuple[ReferencePin, str]]:
+        """Every pinned reference whose value at this key is itself a
+        function-expression string and differs from main, in pin order,
+        paired with that expression -- the ``Function``-mode chart's own
+        overlay data.
+
+        Mirrors :meth:`_table_references`'s shape and its "equal to main is
+        absent" rule (an overlay identical to the main curve would draw
+        exactly on top of it, promising a badge the eye cannot find), but
+        samples nothing itself: ``core.bpx_gateway.sample_function`` does
+        that, at whatever preview domain the chart is currently showing.
+        """
+        entries = []
+        for group in groups:
+            if group.equals_main or not isinstance(group.value, str):
+                continue
+            for index in group.indices:
+                entries.append((pins[index], group.value))
+        entries.sort(key=lambda entry: entry[0].index)
+        return entries
 
     def _table_references(
         self, groups: tuple[ValueGroup, ...], pins: list[ReferencePin]

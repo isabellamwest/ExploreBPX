@@ -344,6 +344,62 @@ def test_non_expression_reference_never_gets_the_monospace_font():
     assert card._ledger._rows[0]._value.font().family() != _monospace_font().family()
 
 
+# ----------------------------------------------------------------------
+# Function-expression reference overlay (the chart preview's own overlay)
+# ----------------------------------------------------------------------
+
+
+def test_function_references_excludes_a_non_string_value():
+    """A reference whose value at this key is not itself a function string
+    (here, a table) is simply absent from the chart overlay -- the ledger
+    above already shows it."""
+    card = _function_card("2*x")
+    groups = (ValueGroup((0,), {"x": [0, 1], "y": [1, 2]}, False),)
+    assert card._function_references(groups, [_pin()]) == []
+
+
+def test_function_references_excludes_a_value_equal_to_main():
+    card = _function_card("2*x")
+    groups = (ValueGroup((0,), "2*x", True),)
+    assert card._function_references(groups, [_pin()]) == []
+
+
+@requires_charts
+def test_function_reference_overlays_the_expression_chart_as_a_named_series():
+    card = _function_card("2*x")
+    card.set_reference(*_one_reference("3*x"), ParameterKind.FUNCTION)
+
+    body = card._editor._expression_body
+    name, _colour, points = body._chart._series_meta["ref-0"]
+    assert name == "reference.json"
+    assert len(points) == 200
+
+
+@requires_charts
+def test_function_reference_overlay_resamples_on_domain_change():
+    card = _function_card("2*x")
+    card.set_reference(*_one_reference("3*x"), ParameterKind.FUNCTION)
+    body = card._editor._expression_body
+
+    body._domain_high_edit.setText("2")
+    body._domain_high_edit.editingFinished.emit()
+
+    xs = [x for x, _y in body._chart._series_meta["ref-0"][2]]
+    assert max(xs) == pytest.approx(2.0)
+
+
+@requires_charts
+def test_undocking_the_reference_clears_the_function_overlay():
+    card = _function_card("2*x")
+    card.set_reference(*_one_reference("3*x"), ParameterKind.FUNCTION)
+    body = card._editor._expression_body
+    assert "ref-0" in body._chart._series_meta
+
+    card.set_reference((), [], None)
+
+    assert "ref-0" not in body._chart._series_meta
+
+
 @requires_charts
 def test_function_cards_table_overlay_survives_switching_mode_away_and_back():
     """FunctionCard's ``InterpolatedTable`` mode is one of several strip

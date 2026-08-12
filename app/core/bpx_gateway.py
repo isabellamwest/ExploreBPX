@@ -6,6 +6,8 @@ The public ``bpx`` API is used:
 
 * ``bpx.parse_bpx_obj`` for parsing/validation,
 * ``bpx.BPX.model_json_schema`` for parameter metadata,
+* ``bpx.Function`` for evaluating a function-expression parameter's chart
+  preview (:func:`sample_function`),
 
 plus one deliberate exception: ``bpx._migrations`` for legacy v0.x detection
 and conversion (see :func:`is_legacy`/:func:`convert_legacy`), because
@@ -20,7 +22,9 @@ from __future__ import annotations
 import copy
 import inspect
 import json
+import math
 import warnings
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from functools import lru_cache
@@ -808,3 +812,156 @@ def _allows_map(any_of: list) -> bool:
     additional_has_number = any(member.get("type") == "number" for member in additional_any_of)
     additional_has_integer = any(member.get("type") == "integer" for member in additional_any_of)
     return has_number and has_integer and additional_has_number and additional_has_integer
+
+
+# ----------------------------------------------------------------------
+# Function-expression sampling, for the Inspector's chart preview
+# ----------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class FunctionSamples:
+    """Evenly spaced points sampled from a ``bpx.Function`` expression over a
+    domain, for a chart preview. Never a partial success dressed as one:
+    either ``points`` holds what could be evaluated, or ``error`` explains
+    why none could -- see :func:`sample_function`."""
+
+    points: tuple[tuple[float, float], ...]
+    #: ``None`` on success. Otherwise one of three things, in the order
+    #: :func:`sample_function` can produce them: ``bpx``'s own "Invalid
+    #: Function: ..." message verbatim, this app's own domain-guard
+    #: sentence, or the name and message of whichever exception every
+    #: sampled point raised.
+    error: str | None
+
+
+def _clear_pyparsing_packrat_cache() -> None:
+    """Defensive mirror of ``ui_qt.latex``'s ``_render_png`` guard (see
+    the project guide's "Qt pitfalls already paid for").
+
+    ``bpx``'s own ``ExpressionParser`` never calls pyparsing's
+    ``enable_packrat`` -- checked directly against the installed package,
+    no such call anywhere in ``bpx``. But that flag
+    (``pyparsing.ParserElement._packratEnabled``) is a single class
+    attribute shared by *every* pyparsing parser in the process, and
+    matplotlib's ``_mathtext`` module calls ``enable_packrat()`` at import
+    time. ``ui_qt/latex.py`` imports matplotlib lazily elsewhere in this
+    same app (any symbol popover), so by the time a user opens a function
+    parameter, packrat may already be on for ``bpx.Function.validate``'s
+    parser too -- and a caught parse exception left in that cache pins a
+    traceback (and every widget in the calling frames) until the next
+    cyclic-GC pass, which can fire mid-``processEvents`` and crash. Clearing
+    the cache costs nothing when packrat is in fact off (it is simply
+    empty); it only matters on the run where something upstream turned it
+    on.
+    """
+    try:
+        import gc
+
+        import pyparsing
+
+        pyparsing.ParserElement.reset_cache()
+        gc.collect()
+    except Exception:  # noqa: BLE001 - mirrors ui_qt/latex.py's own guard
+        pass
+
+
+@lru_cache(maxsize=32)
+def _compiled_function(expression: str) -> Callable[[float], float]:
+    """The plain callable ``bpx.Function.to_python_function`` builds for
+    *expression*, cached on the expression string.
+
+    ``to_python_function`` writes a temporary ``.py`` file and imports it
+    fresh on every call, so repeated evaluation of the same expression (a
+    preview resampled at a new domain, or shown again after a mode switch)
+    is cached hard here instead of touching disk each time. Only ever
+    called by :func:`sample_function` *after* it has validated *expression*
+    with ``bpx.Function.validate`` -- this helper never validates, so it
+    must never be called with a string that has not already passed.
+    """
+    return bpx.Function(expression).to_python_function()
+
+
+def sample_function(
+    expression: str, low: float, high: float, samples: int = 200
+) -> FunctionSamples:
+    """Evaluate ``bpx.Function`` expression *expression* at *samples* evenly
+    spaced x positions across ``[low, high]``, for a chart preview.
+
+    Parsing and evaluation are entirely ``bpx``'s own: syntax is judged by
+    ``bpx.Function.validate`` -- the same gate a document's own validation
+    runs -- and the callable comes from ``bpx.Function.to_python_function``.
+    This function only chooses which x positions to sample and how to
+    report the outcome; it never reinterprets what a legal expression means.
+
+    *low*/*high* must be a finite range with ``low < high``. That is an
+    app-side guard on the sampling *domain* -- a view-only control the
+    preview widget owns, never a value that reaches the document -- not
+    spec logic, so it is judged here rather than left to ``bpx``.
+
+    Never raises. Two failure modes are reported as *whole-sample* errors
+    rather than per-point: the expression fails ``bpx.Function.validate``
+    outright (see above), or it passes validation but ``bpx`` still cannot
+    turn it into a callable -- ``to_python_function`` splices the raw
+    string into a single-line ``return`` statement, so a *validation-legal*
+    multi-line expression (a real, already-supported way to write a long
+    OCP polynomial in this app) fails to even *compile*, with a
+    ``SyntaxError`` bpx itself raises. Both are surfaced as bpx produced
+    them, never rewritten or worked around (this seam does not decide that
+    a newline is insignificant -- that is bpx's call, not this app's).
+
+    Past that, each sampled point is evaluated independently and a point
+    that fails (``ZeroDivisionError``, ``OverflowError``, ``ValueError``,
+    ``ArithmeticError`` -- the ordinary ways a point-wise maths failure
+    shows up -- plus ``NameError``, since bpx's grammar accepts any
+    identifier as a function call and only the *default preamble*'s
+    ``exp``/``tanh``/``cosh`` actually exist at call time) is dropped
+    rather than aborting the whole sample; a non-finite result
+    (``math.isfinite``) is dropped the same way. If every point was
+    dropped, ``error`` is the last exception's own name and message when at
+    least one point raised, or ``"no finite values over this domain"`` when
+    none did (every result was simply non-finite).
+    """
+    if not math.isfinite(low) or not math.isfinite(high) or low >= high:
+        return FunctionSamples((), error="domain must be a finite range with low < high")
+    try:
+        bpx.Function.validate(expression)
+    except ValueError as exc:
+        return FunctionSamples((), error=str(exc))
+    except Exception as exc:  # noqa: BLE001 - see below
+        # bpx.Function.validate only catches pyparsing's ParseException, but
+        # its own grammar can raise the sibling ParseSyntaxException instead
+        # for some malformed input (e.g. an unclosed function call, "exp(-x"
+        # -- confirmed against the installed bpx/pyparsing) -- a real bpx
+        # gap, not something to silently paper over. Surfaced faithfully as
+        # what it actually is rather than dressed in bpx's "Invalid
+        # Function: " wording, which belongs to the ValueError path above.
+        return FunctionSamples((), error=f"{type(exc).__name__}: {exc}")
+    finally:
+        _clear_pyparsing_packrat_cache()
+
+    try:
+        function = _compiled_function(expression)
+    except Exception as exc:  # noqa: BLE001 - see below
+        # A validation-legal expression can still fail to *compile* (see the
+        # docstring above) -- surfaced the same faithful way as the escaped
+        # ParseSyntaxException, never patched over by reformatting the
+        # user's own expression before handing it to bpx.
+        return FunctionSamples((), error=f"{type(exc).__name__}: {exc}")
+    points: list[tuple[float, float]] = []
+    last_exc: Exception | None = None
+    step = (high - low) / (samples - 1) if samples > 1 else 0.0
+    for index in range(samples):
+        x = low + step * index if samples > 1 else low
+        try:
+            y = function(x)
+        except (ZeroDivisionError, OverflowError, ValueError, ArithmeticError, NameError) as exc:
+            last_exc = exc
+            continue
+        if isinstance(y, (int, float)) and math.isfinite(y):
+            points.append((x, float(y)))
+    if not points:
+        if last_exc is not None:
+            return FunctionSamples((), error=f"{type(last_exc).__name__}: {last_exc}")
+        return FunctionSamples((), error="no finite values over this domain")
+    return FunctionSamples(tuple(points), error=None)

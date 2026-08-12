@@ -23,6 +23,7 @@ an invalid edit -- so it reports a ``commit_blocked_reason``.
 from __future__ import annotations
 
 import json
+import math
 
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
@@ -40,10 +41,11 @@ from core import bpx_gateway
 from core.values import format_value, parse_value
 
 from .. import typography
-from ..style import ERROR, MUTED, VALUE_INPUT_MAX_WIDTH
+from ..style import ACCENT, ERROR, MUTED, VALUE_INPUT_MAX_WIDTH
 from .cell_issues import table_cells
 from .grid import NumericGrid
 from .hint import GridHint, WrappedHelp
+from .multi_series_chart import MultiSeriesChart
 from .table_preview import TablePreview
 
 
@@ -148,14 +150,82 @@ class NumberBody(ModeBody):
 
 
 class ExpressionBody(ModeBody):
-    """``Function``: a free-text expression, hinted by ``bpx.Function``'s own docs."""
+    """``Function``: a free-text expression, hinted by ``bpx.Function``'s own
+    docs, over a chart previewing what it draws.
 
-    def __init__(self) -> None:
+    The chart is evaluated by ``bpx`` itself
+    (``core.bpx_gateway.sample_function``, itself ``bpx.Function.validate``
+    then ``to_python_function``) -- this body never interprets the
+    expression. It reflects only the *committed* value: populated by
+    :meth:`set_value`/:meth:`reset`, never resampled per keystroke (see
+    :meth:`_show`). The x domain it samples over is a compact, view-only
+    pair of fields the user can widen or narrow (:attr:`_domain_low`/
+    :attr:`_domain_high`) -- never written to the document, and never
+    remembered between cards, so a freshly built body always reopens at the
+    default ``[0, 1]``.
+
+    *unit*, when given, names the chart's y axis (``"y [V]"``) -- the same
+    unit ``TableBody``'s own preview shows for this parameter.
+    """
+
+    #: The preview domain's default extent (see the class docstring).
+    _DEFAULT_LOW = 0.0
+    _DEFAULT_HIGH = 1.0
+
+    def __init__(self, unit: str = "") -> None:
         super().__init__()
         self._seed: object = None
+        #: The committed value, only when it is itself a function-expression
+        #: string -- ``None`` while unseeded (this was not the mode the
+        #: committed value opened in) or last seeded with a bare number.
+        #: What :meth:`_resample_main` samples.
+        self._committed_expression: str | None = None
+        self._domain_low = self._DEFAULT_LOW
+        self._domain_high = self._DEFAULT_HIGH
+        #: ``(ReferencePin, expression)`` per pinned reference whose value at
+        #: this key is itself a function string -- see
+        #: :meth:`set_reference_functions`.
+        self._reference_functions: list = []
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(2)
+
+        # Chart sits where TableBody's own preview sits: above the editor.
+        self._chart = MultiSeriesChart(height=140)
+        self._chart.set_axis_titles("x", f"y [{unit}]" if unit else "y")
+        self._chart.set_empty_text("No expression to preview yet.")
+        layout.addWidget(self._chart)
+
+        # Occupies the chart's own place when the expression fails to
+        # evaluate -- never shown alongside it (see _set_preview_error).
+        self._error_note = WrappedHelp("")
+        self._error_note.setStyleSheet(
+            f"color: {MUTED}; {typography.size_qss(typography.META)}"
+        )
+        self._error_note.hide()
+        layout.addWidget(self._error_note)
+
+        domain_row = QHBoxLayout()
+        domain_row.setContentsMargins(0, 0, 0, 0)
+        domain_row.addStretch(1)
+        domain_row.addWidget(_domain_label("Preview domain"))
+        self._domain_low_edit = QLineEdit(_format_domain_bound(self._domain_low))
+        self._domain_low_edit.setObjectName("ExpressionDomainLow")
+        self._domain_low_edit.setMaximumWidth(70)
+        domain_row.addWidget(self._domain_low_edit)
+        domain_row.addWidget(_domain_label("to"))
+        self._domain_high_edit = QLineEdit(_format_domain_bound(self._domain_high))
+        self._domain_high_edit.setObjectName("ExpressionDomainHigh")
+        self._domain_high_edit.setMaximumWidth(70)
+        domain_row.addWidget(self._domain_high_edit)
+        # editingFinished (not textChanged): fires on Enter or focus-out,
+        # never per keystroke, and this is view state -- never wired to
+        # self.changed, so adjusting it can never dirty the card.
+        self._domain_low_edit.editingFinished.connect(self._on_domain_edited)
+        self._domain_high_edit.editingFinished.connect(self._on_domain_edited)
+        layout.addLayout(domain_row)
+
         self._edit = QLineEdit()
         self._edit.setPlaceholderText("e.g. 2*x + exp(-x)")
         self._edit.textChanged.connect(lambda *_: self.changed.emit())
@@ -192,7 +262,8 @@ class ExpressionBody(ModeBody):
         self._show(self._seed)
 
     def _show(self, value: object) -> None:
-        """Populate the box reading from the *start* of the expression.
+        """Populate the box reading from the *start* of the expression, and
+        resample the chart from this same committed *value*.
 
         ``setText`` leaves the cursor at the end, which scrolls a long OCP
         expression so that the only part on screen is its tail -- the
@@ -202,10 +273,88 @@ class ExpressionBody(ModeBody):
         """
         self._edit.setText(format_value(value))
         self._edit.setCursorPosition(0)
-
+        self._committed_expression = value if isinstance(value, str) else None
+        self._resample_main()
 
     def focus_widget(self) -> QWidget:
         return self._edit
+
+    # ------------------------------------------------------------------
+    # Chart preview -- the committed value only, never a live keystroke
+    # ------------------------------------------------------------------
+
+    def set_reference_functions(self, entries) -> None:
+        """Overlay one sampled curve per pinned reference whose value at
+        this key is itself a function-expression string; an empty list
+        clears every overlay.
+
+        *entries* is ``(ReferencePin, expression)`` pairs, in pin order --
+        ``ParameterCard``'s job to pick out the function-shaped references
+        and pair them, this body never inspects a reference's value itself.
+        Resampled here and again on every domain change
+        (:meth:`_on_domain_edited`), independent of the main curve.
+        """
+        for pin, _expression in self._reference_functions:
+            self._chart.remove_series(_reference_series_id(pin))
+        self._reference_functions = list(entries)
+        self._resample_references()
+
+    def _resample_main(self) -> None:
+        if self._committed_expression is None:
+            self._chart.remove_series("main")
+            self._set_preview_error(None)
+            return
+        samples = bpx_gateway.sample_function(
+            self._committed_expression, self._domain_low, self._domain_high
+        )
+        if samples.error is not None:
+            self._chart.remove_series("main")
+            self._set_preview_error(samples.error)
+            return
+        self._set_preview_error(None)
+        self._chart.set_series("main", list(samples.points), ACCENT, width=2.0, name="Main")
+
+    def _resample_references(self) -> None:
+        for pin, expression in self._reference_functions:
+            series_id = _reference_series_id(pin)
+            samples = bpx_gateway.sample_function(
+                expression, self._domain_low, self._domain_high
+            )
+            if samples.error is not None:
+                self._chart.remove_series(series_id)
+                continue
+            self._chart.set_series(
+                series_id, list(samples.points), pin.colour, width=1.6, name=pin.name
+            )
+
+    def _set_preview_error(self, error: str | None) -> None:
+        """Show the chart, or replace it with one muted note -- never both.
+
+        The note is bpx's own message verbatim; this body invents nothing
+        about *why* an expression failed, only whether to show the curve.
+        """
+        self._error_note.setText(error or "")
+        self._error_note.setVisible(error is not None)
+        self._chart.setVisible(error is None and self._chart.available)
+
+    def _on_domain_edited(self) -> None:
+        """``editingFinished`` on either domain field: parse both, revert
+        both to the last good values on anything invalid (no dialog), or
+        adopt the new domain and resample the main curve and every
+        reference overlay.
+        """
+        try:
+            low = float(self._domain_low_edit.text())
+            high = float(self._domain_high_edit.text())
+        except ValueError:
+            low = high = math.nan
+        if not math.isfinite(low) or not math.isfinite(high) or low >= high:
+            self._domain_low_edit.setText(_format_domain_bound(self._domain_low))
+            self._domain_high_edit.setText(_format_domain_bound(self._domain_high))
+            return
+        self._domain_low, self._domain_high = low, high
+        self._resample_main()
+        self._resample_references()
 
 
 class TableBody(ModeBody):
@@ -504,6 +653,27 @@ class RawJsonBody(ModeBody):
 # ----------------------------------------------------------------------
 # helpers
 # ----------------------------------------------------------------------
+
+
+def _domain_label(text: str) -> QLabel:
+    """A quiet caption for the preview-domain row -- same treatment as the
+    chart legend's own small labels (``table_preview._legend_label``)."""
+    label = QLabel(text)
+    label.setStyleSheet(f"color: {MUTED}; {typography.size_qss(typography.META)}")
+    return label
+
+
+def _format_domain_bound(value: float) -> str:
+    """A compact preview-domain bound, trailing zeros trimmed -- the same
+    ``%g`` convention chart axis ticks already use (``chart_axes.style_axis``)."""
+    return f"{value:g}"
+
+
+def _reference_series_id(pin) -> str:
+    """The chart series id for a pinned reference's function overlay,
+    stable for as long as the reference stays pinned at this position
+    (``ReferencePin.index`` is unique within one pin list)."""
+    return f"ref-{pin.index}"
 
 
 def _to_json(value: object) -> str:

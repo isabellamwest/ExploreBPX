@@ -254,6 +254,14 @@ navigate to locations rather than filtering or replacing the hierarchy.
   expanded; floating windows are reserved for read-only visualisation, such
   as the validation-run comparison charts. A card's ( i ) opens a quick
   documentation popover; the Documentation section carries the full prose.
+  A function-expression value gets the same chart: `bpx.Function` itself
+  evaluates it (`core.bpx_gateway.sample_function`), never a hand-rolled
+  reader of the expression. Its x domain is a plain view control, defaulted
+  to 0–1 and never written to the document, and the curve reflects only the
+  last **committed** value, resampling on a domain edit or a fresh commit,
+  never a keystroke. A pinned reference whose own value at that key is also
+  a function string overlays as a second named curve, sampled the same way
+  over the same domain.
 - **Diagnostics page** — a summary strip over one scrolling stream of
   per-section groups, each holding a section's issue rows and incomplete
   rows under a foldable header. The strip's chips double as view-only

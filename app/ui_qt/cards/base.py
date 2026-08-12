@@ -180,6 +180,19 @@ class EditorCard(QWidget):
         shows.
         """
 
+    def set_reference_functions(self, entries) -> None:
+        """Overlay one sampled curve per pinned reference whose value at
+        this key is itself a function-expression string, on this card's own
+        ``Function``-mode preview; an empty list clears the overlay.
+
+        A no-op for every card without an expression-shaped mode (most
+        cards). Each entry pairs a ``ReferencePin`` with that reference's
+        raw expression string; ``core.bpx_gateway.sample_function`` does the
+        evaluating, this card never re-derives the curve itself.
+        ``ParameterCard`` calls this whenever the pinned references change,
+        independent of which mode a strip-based card currently shows.
+        """
+
     def reference_value_width(self) -> int | None:
         """The width cap of this editor's value input, so an aligned
         read-only reference value can match it exactly -- or ``None`` when
