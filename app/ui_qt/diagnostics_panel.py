@@ -431,10 +431,12 @@ def _add_message_row(list_widget: QListWidget, text: str) -> None:
 
 def _add_subhead_row(list_widget: QListWidget, text: str) -> None:
     """A quiet, non-activatable sub-head row -- today only the section's own
-    "OPTIONAL . K UNFILLED" (the required group's own former "<Section> .
-    N of M remaining" sub-head is gone: that ratio now lives in the
-    section's fold header itself, D5, so repeating it a few pixels below
-    would be the exact "same count twice" bug this redesign removes)."""
+    "K optional parameters unfilled" line (a plain sentence: the plan's
+    "OPTIONAL . K UNFILLED" shorthand read as a riddle in the running app).
+    The required group's own former "<Section> . N of M remaining" sub-head
+    is gone: that ratio now lives in the section's fold header itself, D5,
+    so repeating it a few pixels below would be the exact "same count
+    twice" bug this redesign removes."""
     item = QListWidgetItem(text)
     item.setFlags(Qt.ItemIsEnabled)  # visible, never selectable/activatable
     item.setData(_KIND_ROLE, "subhead")
@@ -711,7 +713,10 @@ def _add_section(
         # (bucket.optional_tasks); showing it over zero surviving rows
         # would orphan a header for nothing, so it only renders when at
         # least one optional row survives.
-        _add_subhead_row(list_widget, f"OPTIONAL . {len(bucket.optional_tasks)} UNFILLED")
+        count = len(bucket.optional_tasks)
+        _add_subhead_row(
+            list_widget, f"{count} optional parameter{'s' if count != 1 else ''} unfilled"
+        )
         for task, absorbed in optional_rows:
             _add_task_row(list_widget, task, absorbed)
     return True
@@ -740,9 +745,10 @@ class _DiagnosticsRowDelegate(ParameterRowDelegate):
     #: A validator message ran the full bleed -- around 200 characters a line
     #: on a maximised window, well past readable -- and its right-aligned
     #: "Go to ▸" ended up a thousand pixels from the row it belonged to.
-    #: Wider than ``style.CONTENT_MEASURE``, which is sized for prose these
-    #: dense technical strings are not, and a no-op on a narrow window.
-    _MEASURE = 900
+    #: ``style.PAGE_MEASURE`` (the data-column measure, not the prose one:
+    #: these dense technical strings starve at ``style.CONTENT_MEASURE``),
+    #: and a no-op on a narrow window.
+    _MEASURE = style.PAGE_MEASURE
 
     def _available_width(self, option) -> float:
         return min(super()._available_width(option), self._MEASURE)
@@ -752,8 +758,10 @@ class _DiagnosticsRowDelegate(ParameterRowDelegate):
 
         The rect is what both the text wrap and the right-aligned action are
         laid out against, so narrowing it here is what keeps the two in one
-        column. The band kinds never come through here: their shaded
-        background is full-bleed by design.
+        column. The band kinds come through here too: a band used to paint
+        full-bleed while rows stopped at the measure, which is exactly what
+        made the dead space to their right visible -- bands and rows now
+        share one edge.
         """
         narrowed = QStyleOptionViewItem(option)
         narrowed.rect.setWidth(min(narrowed.rect.width(), self._MEASURE))
@@ -762,10 +770,10 @@ class _DiagnosticsRowDelegate(ParameterRowDelegate):
     def paint(self, painter, option, index) -> None:
         kind = index.data(_KIND_ROLE)
         if kind == "fold_header":
-            self._paint_fold_header(painter, option, index)
+            self._paint_fold_header(painter, self._measured(option), index)
             return
         if kind == "clear_summary":
-            self._paint_band(painter, option, index.data(Qt.DisplayRole) or "")
+            self._paint_band(painter, self._measured(option), index.data(Qt.DisplayRole) or "")
             return
         if kind == "clear_row":
             self._paint_clear_row(painter, option, index)
@@ -780,32 +788,55 @@ class _DiagnosticsRowDelegate(ParameterRowDelegate):
             return QSize(int(self._available_width(option)), self._FOLD_HEADER_HEIGHT)
         return super().sizeHint(option, index)
 
+    def _band_ground(self, painter, option, *, edge_at_top: bool) -> None:
+        """Fill a band's shaded ground plus its 1px boundary hairline
+        (concept-B contrast pass: the wash alone vanished on ordinary
+        Windows panels, so every band also draws a line that cannot). A
+        fold header's hairline sits on its bottom edge, against the rows it
+        opens; the clear line's sits on its top edge, against the rows
+        above it."""
+        painter.save()
+        painter.fillRect(option.rect, QColor(style.RAIL_BG))
+        edge_y = option.rect.top() if edge_at_top else option.rect.bottom()
+        painter.fillRect(
+            QRect(option.rect.left(), edge_y, option.rect.width(), 1),
+            QColor(style.BORDER_STRONG),
+        )
+        painter.restore()
+
+    def _caps_font(self, option) -> QFont:
+        """The caps-tier font for a band's title text -- META semibold with
+        the shared letter-spacing, the same treatment the parameter-list
+        header's own section title already wears (that header uppercases
+        section labels too, the precedent for doing it here): structure in
+        caps, validator text in sentence case, so the two never blur."""
+        return typography.apply_caps_spacing(
+            typography.semibold(typography.sized(option.font, typography.META))
+        )
+
     def _paint_band(self, painter, option, text: str) -> None:
         """The shared shaded-band background both banded header kinds
         paint on; :meth:`_paint_fold_header` layers its own two-tier text
         on top of this instead of using *text* directly."""
+        self._band_ground(painter, option, edge_at_top=True)
         painter.save()
-        painter.fillRect(option.rect, QColor(style.RAIL_BG))
-        painter.restore()
-        painter.save()
+        painter.setFont(self._caps_font(option))
         painter.setPen(QColor(style.MUTED))
         text_rect = option.rect.adjusted(self._h_pad, 0, -self._h_pad, 0)
-        painter.drawText(text_rect, Qt.AlignVCenter | Qt.AlignLeft, text)
+        painter.drawText(text_rect, Qt.AlignVCenter | Qt.AlignLeft, text.upper())
         painter.restore()
 
     def _paint_fold_header(self, painter, option, index) -> None:
         header: _FoldHeader = index.data(_FOLD_BUCKET_ROLE)
         collapsed = bool(index.data(_FOLD_COLLAPSED_ROLE))
         chevron = "▸" if collapsed else "▾"
-        label_text = f"{chevron}  {header.label}"
+        label_text = f"{chevron}  {header.label.upper()}"
         suffix = header.suffix
 
-        painter.save()
-        painter.fillRect(option.rect, QColor(style.RAIL_BG))
-        painter.restore()
+        self._band_ground(painter, option, edge_at_top=False)
 
         painter.save()
-        font = typography.semibold(option.font)
+        font = self._caps_font(option)
         painter.setFont(font)
         metrics = QFontMetrics(font)
         painter.setPen(QColor(style.DEFAULT_TEXT))
@@ -815,7 +846,7 @@ class _DiagnosticsRowDelegate(ParameterRowDelegate):
 
         if suffix:
             painter.save()
-            suffix_font = QFont(option.font)
+            suffix_font = typography.sized(option.font, typography.META)
             painter.setFont(suffix_font)
             painter.setPen(QColor(style.MUTED))
             suffix_x = label_rect.left() + metrics.horizontalAdvance(label_text) + 10
@@ -1099,12 +1130,15 @@ class _FilterChip(QLabel):
 
 
 class _CollapseAllLink(QLabel):
-    """D15's strip affordance: plain clickable text ("Collapse all"/"Expand
-    all"), not a chip -- there is no count to toggle. Stays a ``QLabel``
-    for the same reason ``_FilterChip`` does (a native ``QPushButton``
-    would work here too, since this label carries no rich-text content,
-    but sharing the click-via-``mousePressEvent`` idiom keeps the strip's
-    two interactive-label kinds consistent)."""
+    """D15's strip affordance ("Collapse all"/"Expand all"). Styled as a
+    quiet bordered chip like its ``_FilterChip`` neighbours -- the app-wide
+    affordance rule says an action wears a chip and only navigation is flat
+    link-blue text, and as plain blue text this was a third interaction
+    style on one strip. Stays a ``QLabel`` for the same reason
+    ``_FilterChip`` does (a native ``QPushButton`` would work here too,
+    since this label carries no rich-text content, but sharing the
+    click-via-``mousePressEvent`` idiom keeps the strip's two
+    interactive-label kinds consistent)."""
 
     clicked = Signal()
 

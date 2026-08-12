@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import pytest
 
+from ui_qt import style
+
 pytest.importorskip("PySide6")
 
 
@@ -127,16 +129,16 @@ def test_activity_bar_paints_its_background_and_right_border(app_driver):
     border_x = image.width() - 1
     probe_y = image.height() // 2
     border_pixel = image.pixelColor(border_x, probe_y).name()
-    assert border_pixel == "#d0d7de", (
-        f"ActivityBar right border pixel was {border_pixel}, not #d0d7de -- "
+    assert border_pixel == style.BORDER, (
+        f"ActivityBar right border pixel was {border_pixel}, not {style.BORDER} -- "
         "likely missing setAttribute(Qt.WA_StyledBackground, True) in "
         "ActivityBar.__init__, which silently drops all QSS background/"
         "border painting on a plain QWidget."
     )
 
     interior_pixel = image.pixelColor(10, probe_y).name()
-    assert interior_pixel == "#f6f8fa", (
-        f"ActivityBar interior pixel was {interior_pixel}, not #f6f8fa -- "
+    assert interior_pixel == style.NEUTRAL_WASH, (
+        f"ActivityBar interior pixel was {interior_pixel}, not {style.NEUTRAL_WASH} -- "
         "likely missing setAttribute(Qt.WA_StyledBackground, True) in "
         "ActivityBar.__init__, which silently drops all QSS background/"
         "border painting on a plain QWidget."
@@ -150,8 +152,8 @@ def test_page_header_paints_its_background_and_bottom_border(app_driver):
     border_y = image.height() - 1
     probe_x = image.width() // 2
     border_pixel = image.pixelColor(probe_x, border_y).name()
-    assert border_pixel == "#d0d7de", (
-        f"PageHeader bottom border pixel was {border_pixel}, not #d0d7de -- "
+    assert border_pixel == style.BORDER, (
+        f"PageHeader bottom border pixel was {border_pixel}, not {style.BORDER} -- "
         "likely missing setAttribute(Qt.WA_StyledBackground, True) in "
         "PageHeader.__init__, which silently drops all QSS background/"
         "border painting on a plain QWidget."

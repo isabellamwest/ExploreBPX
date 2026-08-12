@@ -57,7 +57,7 @@ ACCENT = "#1f6feb"
 #: selector (as every other named colour already does in that string, e.g.
 #: ``BORDER_STRONG``/``HEADER_BAND_STRONG``); only type is substituted, via
 #: the ``string.Template`` placeholders at the foot of this module.
-ACCENT_TINT = "#ddeeff"
+ACCENT_TINT = "#cfe4fc"
 #: The reference-file feature's own accent: purple, by explicit user
 #: decision -- everything reference-specific carries this one hue so it is
 #: visually unmistakable, and it can never be confused with ``ACCENT`` (the
@@ -88,7 +88,7 @@ CHART_SERIES = ("#008300", "#e87ba4", "#eda100", "#1baf7a")
 #: schema-required parameter reads as its own, readable, amber category in
 #: the add-parameter popup and the parameter list.
 REQUIRED = "#9a6700"
-BORDER = "#d0d7de"
+BORDER = "#b9c4ce"
 #: Wash behind a grid cell the validator blamed -- a background tint, so it
 #: reads distinctly from ``ERROR``, which is used as text/badge colour.
 ERROR_TINT = "#ffebe9"
@@ -97,24 +97,24 @@ ERROR_TINT = "#ffebe9"
 WARNING_TINT = "#fff1e0"
 #: Pale wash behind a REF_ONLY ghost row/the comparison strip -- the
 #: ``REFERENCE`` counterpart to ``ERROR_TINT``/``WARNING_TINT``.
-REFERENCE_TINT = "#f3ecfa"
+REFERENCE_TINT = "#ece2f6"
 #: The reference purple's pale border tone -- already used by the inspector
-#: reference block's chrome in the stylesheet below (#d5cde6); named here so
+#: reference block's chrome in the stylesheet below (#c3b6dc); named here so
 #: the Source page's ← pull chip draws its outline from the same tint.
-REFERENCE_BORDER = "#d5cde6"
+REFERENCE_BORDER = "#c3b6dc"
 #: The app's baseline pale-neutral wash -- the same tone already used
 #: throughout as a "shaded band" (the toolbar, ``GroupBoxHeader``, hover
 #: washes), named here so a full-bleed page section can share it
 #: explicitly instead of re-spelling the literal. Used by the Workspace
 #: page's main-document section (``QWidget#WorkspaceMainSection`` below).
-NEUTRAL_WASH = "#f6f8fa"
+NEUTRAL_WASH = "#e7ecf1"
 #: The reference feature's pale full-bleed wash -- the same hue already
 #: used by the Comparison strip and the reference value box
 #: (``QWidget#ComparisonStrip``/``QFrame#ReferenceValueBox`` below), named
 #: here so the Workspace page's reference-document section
 #: (``QWidget#WorkspaceReferenceSection``) can reuse it explicitly instead
 #: of re-spelling the literal a third time.
-REFERENCE_WASH = "#f8f5fc"
+REFERENCE_WASH = "#eee7f7"
 #: Mid reference tone between ``REFERENCE`` and ``REFERENCE_BORDER``: the
 #: outline of the hollow "reference only" gutter bar in the parameter list
 #: (:data:`~ui_qt.parameter_row.REF_BAR_ROLE`) -- lighter than the solid
@@ -135,7 +135,7 @@ DIFF_TINT = "#e5dcf3"
 #: badge and every "outstanding" count badge (rail/pane), which are never
 #: red/amber -- "outstanding is not an error" kept visible in the colour
 #: itself.
-NEUTRAL_TINT = "#eef0f2"
+NEUTRAL_TINT = "#e2e7ec"
 #: Muted/de-emphasised text. Used for secondary labels (e.g. QLabel#Heading)
 #: and reused as the foreground for the add-parameter popup's "other BPX
 #: alias" suggestion tier (aliases the section doesn't expect), so grey rows
@@ -153,19 +153,19 @@ GHOST_TEXT = "#8c959f"
 #: Diagnostics stream band fill (fold headers and the clear line): a grey
 #: band distinct from the white rows. The name survives the rail it was
 #: born on.
-RAIL_BG = "#f3f4f6"
-#: One step darker than the app's usual ``#d0d7de`` border tone, used only
+RAIL_BG = "#dfe5eb"
+#: One step darker than the app's usual ``#b9c4ce`` border tone, used only
 #: on the Diagnostics page's own chrome (group-box border, rail's right
 #: edge, strip's bottom edge, chip borders) so those regions read a touch
 #: more defined without raising contrast anywhere else in the app.
 #: Fills/palette are otherwise unchanged -- flat colour only, no shadows.
-BORDER_STRONG = "#c4cdd5"
+BORDER_STRONG = "#a5b1bd"
 #: The faintest border tone: dividers and disabled-control outlines. One of
 #: exactly three border greys, with ``BORDER`` and ``BORDER_STRONG``.
-BORDER_FAINT = "#eaecef"
+BORDER_FAINT = "#dde2e8"
 #: Slightly stronger shaded band for the Diagnostics group-box header row --
-#: one step darker than the app's usual ``#f6f8fa`` banded-header tone.
-HEADER_BAND_STRONG = "#eef1f4"
+#: one step darker than the app's usual ``#e7ecf1`` banded-header tone.
+HEADER_BAND_STRONG = "#dbe2e9"
 #: Chart grid lines (both QtCharts widgets: ``TablePreview`` and
 #: ``MultiSeriesChart``). Lighter than ``BORDER`` so the grid recedes behind
 #: the data; named here so the two charts draw from one source instead of
@@ -320,7 +320,7 @@ def toast_qss() -> str:
 _STYLESHEET_TEMPLATE = """
 QWidget { font-size: ${body}px; color: #1f2328; }
 QMainWindow, QWidget#Panel { background: #ffffff; }
-QToolBar { background: #f6f8fa; border-bottom: 1px solid #d0d7de; padding: 4px; spacing: 8px; }
+QToolBar { background: #e7ecf1; border-bottom: 1px solid #b9c4ce; padding: 4px; spacing: 8px; }
 /* Toolbar buttons (Save/Export/Undo/Redo), styled as one family. The
    native Windows style hangs Export's menu-indicator caret below the text
    baseline, tight against the label, where it reads as a stray comma;
@@ -330,7 +330,7 @@ QToolBar { background: #f6f8fa; border-bottom: 1px solid #d0d7de; padding: 4px; 
    Export a one-off. Child selector on purpose: a descendant selector
    would also catch the search box's internal clear button. */
 QToolBar > QToolButton { background: transparent; border: none; border-radius: 4px; padding: 3px 8px; }
-QToolBar > QToolButton:hover:!disabled { background: #e8eaed; }
+QToolBar > QToolButton:hover:!disabled { background: #dbe1e7; }
 QToolBar > QToolButton:disabled { color: #8c959f; }
 /* The toolbar search, given the same box as the add-parameter input rather
    than left to the platform: unstyled it took whatever inset the native line
@@ -340,11 +340,11 @@ QToolBar > QToolButton:disabled { color: #8c959f; }
    height (measured 26px against their 25 on macOS, and top-aligned with them
    -- against 21px and 2px low when it was native). */
 QLineEdit#SearchBar {
-    border: 1px solid #d0d7de;
+    border: 1px solid #b9c4ce;
     border-radius: 4px;
     padding: 3px 8px;
     background: #ffffff;
-    selection-background-color: #ddeeff;
+    selection-background-color: #cfe4fc;
 }
 QLineEdit#SearchBar:focus { border: 1px solid #1f6feb; }
 /* Menu-carrying buttons (Export, the material map's "Material"): reserve
@@ -369,19 +369,19 @@ QToolButton#AddMaterialButton {
     background: transparent; border: none; border-radius: 4px;
     padding: 3px 8px; padding-right: 20px;
 }
-QToolButton#AddMaterialButton:hover { background: #e8eaed; }
+QToolButton#AddMaterialButton:hover { background: #dbe1e7; }
 QToolButton#ExportButton::menu-indicator,
 QToolButton#AddMaterialButton::menu-indicator {
     subcontrol-origin: padding;
     subcontrol-position: center right;
     right: 5px;
 }
-QTreeView, QListWidget { border: 1px solid #d0d7de; background: #ffffff; }
+QTreeView, QListWidget { border: 1px solid #b9c4ce; background: #ffffff; }
 QTreeView::item, QListWidget::item { padding: 3px 4px; }
-/* #ddeeff below is style.ACCENT_TINT, spelled as a literal (see the
+/* #cfe4fc below is style.ACCENT_TINT, spelled as a literal (see the
    constant's comment for why) -- every list-selection/hover wash in this
    stylesheet reuses this same tint. */
-QListWidget::item:selected, QTreeView::item:selected { background: #ddeeff; color: #1f2328; }
+QListWidget::item:selected, QTreeView::item:selected { background: #cfe4fc; color: #1f2328; }
 /* Editor page: the tree and parameter-list panes sit flush against the
    splitter's own 1px hairline (see QSplitter#EditorSplitter::handle below),
    so their own borders are stripped to avoid a doubled seam. Explicit ids
@@ -395,7 +395,7 @@ QListWidget#ParameterListView::item { padding: 6px 8px; border-radius: 4px; }
 /* The editor page's tree/params/inspector splitter: a single 1px hairline
    per seam. Scoped by objectName so it does not affect the Inspector's own
    internal (top/bottom) splitter, whose handle stays at its default width. */
-QSplitter#EditorSplitter::handle { background: #d0d7de; }
+QSplitter#EditorSplitter::handle { background: #b9c4ce; }
 QLabel#CardTitle { font-size: ${title}px; font-weight: ${semibold}; }
 QLabel#CardSymbol { margin-left: 8px; }
 /* Heading tiers. Fixed panel/section labels the app authors are one caps
@@ -409,21 +409,22 @@ QLabel#CardDescription { color: #57606a; }
 /* Structured-page inspector: the editing pane is a white page -- frameless
    scroll area, white content surface -- opened by each card's full-bleed
    tinted header band (style.NEUTRAL_WASH, spelled as a literal like the
-   Workspace sections below; no hairline -- the wash edge is the boundary),
+   Workspace sections below, closed by a BORDER hairline -- washes alone
+   proved too subtle on ordinary Windows panels),
    with the Issues/Documentation sections further down the page on the same
    wash. The gutter and rhythm live in cards/page.py and
    group_box.TintedSection; only the surfaces are painted here. */
 QScrollArea#InspectorScroll { border: none; background: #ffffff; }
 QWidget#InspectorContent { background: #ffffff; }
-QFrame#CardPageHeader { border: none; background: #f6f8fa; }
-QWidget#InspectorIssuesSection, QWidget#InspectorDocsSection { background: #f6f8fa; }
+QFrame#CardPageHeader { border: none; border-bottom: 1px solid #b9c4ce; background: #e7ecf1; }
+QWidget#InspectorIssuesSection, QWidget#InspectorDocsSection { background: #e7ecf1; }
 QLabel#InspectorIssuesCount { color: #57606a; font-size: ${meta}px; }
 QLabel#CardValidityText { color: #57606a; font-size: ${meta}px; }
 QLabel#InspectorPlaceholder { color: #57606a; }
 /* Unit labels sit directly beside their input (never at the pane edge) and
    stay quiet: they annotate the value, they are not part of it. */
 QLabel#UnitLabel, QLabel#ReferenceUnitLabel { color: #57606a; }
-QFrame#Card { border: 1px solid #d0d7de; border-radius: 6px; }
+QFrame#Card { border: 1px solid #b9c4ce; border-radius: 6px; }
 /* Workspace page: a shaded fixed-width actions rail beside a white pane.
    The pane is a full-width whitespace-structured page (Phase 3), not the
    Diagnostics page's bordered group boxes: two stacked, borderless tinted
@@ -437,27 +438,28 @@ QFrame#Card { border: 1px solid #d0d7de; border-radius: 6px; }
    heading and Read-only tag only -- never louder than the document
    section. */
 QWidget#WorkspacePage, QWidget#WorkspacePane { background: #ffffff; }
+QScrollArea#WorkspaceScroll { border: none; background: #ffffff; }
 /* style.NEUTRAL_WASH / style.REFERENCE_WASH, spelled as literals (see each
    constant's comment for why). */
-QWidget#WorkspaceMainSection { background: #f6f8fa; }
-QWidget#WorkspaceBoardSection { background: #f6f8fa; }
-QWidget#WorkspaceReferenceSection { background: #f8f5fc; }
-QWidget#WorkspaceRail { background: #f3f4f6; border-right: 1px solid #c4cdd5; }
+QWidget#WorkspaceMainSection { background: #e7ecf1; }
+QWidget#WorkspaceBoardSection { background: #e7ecf1; }
+QWidget#WorkspaceReferenceSection { background: #eee7f7; }
+QWidget#WorkspaceRail { background: #dfe5eb; border-right: 1px solid #a5b1bd; }
 /* The board: the main card beside four reference slots. The main card is
    white and solid -- it is the one editable file -- while a slot carries
    the reference purple's palest tint, so which side of the ⇄ a card is on
    is legible before a word is read. An empty slot is a dashed outline with
    nothing in it but its ＋: an invitation, not a control that might fail. */
 QFrame#BoardMainCard {
-    background: #ffffff; border: 1px solid #c4cdd5; border-radius: 6px;
+    background: #ffffff; border: 1px solid #a5b1bd; border-radius: 6px;
 }
 QFrame#BoardSlotFilled {
-    background: #f8f5fc; border: 1px solid #d5cde6; border-radius: 6px;
+    background: #eee7f7; border: 1px solid #c3b6dc; border-radius: 6px;
 }
-QFrame#BoardSlotFilled:hover { background: #f2ecfa; }
+QFrame#BoardSlotFilled:hover { background: #e4d9f2; }
 QFrame#BoardSlotFilled[selected="true"] { border-color: #6f42c1; }
 QFrame#BoardSlotEmpty {
-    background: transparent; border: 1px dashed #c4cdd5; border-radius: 6px;
+    background: transparent; border: 1px dashed #a5b1bd; border-radius: 6px;
 }
 QFrame#BoardSlotEmpty:hover { border-color: #9aa7b4; }
 QPushButton#BoardSlotAdd {
@@ -488,11 +490,11 @@ QPushButton#StartOpenButton {
     padding: 9px 12px; font-size: ${body}px; font-weight: ${semibold};
     text-align: left;
 }
-QPushButton#StartOpenButton:hover { background: #eef4ff; color: #1f6feb; }
+QPushButton#StartOpenButton:hover { background: #ddebfd; color: #1f6feb; }
 QFrame[startRow="true"] {
     background: #ffffff; border: none; border-radius: 4px;
 }
-QFrame[startRow="true"]:hover { background: #eef4ff; }
+QFrame[startRow="true"]:hover { background: #ddebfd; }
 QLabel#StartRowName { font-weight: ${semibold}; }
 QLabel#StartRowDetail { color: #8c959f; font-size: ${meta}px; }
 /* Never saved anywhere yet -- a fact about where the document lives, not a
@@ -507,7 +509,7 @@ QPushButton#BoardRoute {
 QPushButton#BoardRoute:hover { text-decoration: underline; }
 /* The selected reference's record, beneath the board: the reference wash
    again, so it reads as belonging to the slot it came from. */
-QWidget#ReferenceRecordPanel { background: #f8f5fc; }
+QWidget#ReferenceRecordPanel { background: #eee7f7; }
 QLabel#ReferenceRecordTitle { font-weight: ${semibold}; }
 /* The workspace's own name: a page-title rung, click to rename, with the
    uniqueness refusal inline beneath it rather than in a dialog. */
@@ -527,10 +529,10 @@ QLabel#WorkspaceMissingText { color: #6b5b1f; font-size: ${meta}px; }
    button here and it takes the chip rather than the flat-row treatment the
    departed chooser rows shared. */
 QPushButton#NewWorkspace {
-    background: #ffffff; border: 1px solid #c4cdd5; border-radius: 6px;
+    background: #ffffff; border: 1px solid #a5b1bd; border-radius: 6px;
     padding: 5px 10px; text-align: left;
 }
-QPushButton#NewWorkspace:hover { background: #eef1f4; }
+QPushButton#NewWorkspace:hover { background: #dbe2e9; }
 /* Workspace rows: white chips like the Open button, the whole row a click
    target. A named row wears the stronger border -- naming is what makes a
    workspace permanent, so it is what the rail shows first. The row on the
@@ -538,12 +540,12 @@ QPushButton#NewWorkspace:hover { background: #eef1f4; }
    already open. A missing main keeps the chip shape; its struck-through
    name is set in the font, not here. */
 QFrame#RecentRow, QFrame#WorkspaceNamedRow {
-    background: #ffffff; border: 1px solid #d0d7de; border-radius: 6px;
+    background: #ffffff; border: 1px solid #b9c4ce; border-radius: 6px;
 }
 QFrame#WorkspaceNamedRow { border-color: #9aa7b4; }
-QFrame#RecentRow:hover, QFrame#WorkspaceNamedRow:hover { background: #eef1f4; }
+QFrame#RecentRow:hover, QFrame#WorkspaceNamedRow:hover { background: #dbe2e9; }
 QFrame#RecentRow[current="true"], QFrame#WorkspaceNamedRow[current="true"] {
-    background: #eef4ff; border-color: #1f6feb;
+    background: #ddebfd; border-color: #1f6feb;
 }
 QLabel#HistoryRowName { font-weight: ${semibold}; }
 QLabel#HistoryRowDetail { color: #57606a; font-size: ${meta}px; }
@@ -558,20 +560,20 @@ QPushButton#HistoryRowButton {
     background: transparent; border: none; padding: 1px 4px;
     color: #57606a; font-size: ${meta}px;
 }
-QPushButton#HistoryRowButton:hover { background: #e8eaed; border-radius: 4px; }
+QPushButton#HistoryRowButton:hover { background: #dbe1e7; border-radius: 4px; }
 /* The shared banded group-box chrome (``ui_qt.group_box.GroupBox``):
    bordered rounded card, shaded banded header -- the Diagnostics Issues/
    Outstanding boxes and the reference-library dialog's detail card alike.
    The reference variant swaps the band and border to the reference
    purple's own pale tints. */
-QFrame#GroupBox { background: #ffffff; border: 1px solid #c4cdd5; border-radius: 6px; }
+QFrame#GroupBox { background: #ffffff; border: 1px solid #a5b1bd; border-radius: 6px; }
 QWidget#GroupBoxHeader {
-    background: #eef1f4; border-bottom: 1px solid #c4cdd5;
+    background: #dbe2e9; border-bottom: 1px solid #a5b1bd;
     border-top-left-radius: 6px; border-top-right-radius: 6px;
 }
-QFrame#ReferenceGroupBox { background: #ffffff; border: 1px solid #d5cde6; border-radius: 6px; }
+QFrame#ReferenceGroupBox { background: #ffffff; border: 1px solid #c3b6dc; border-radius: 6px; }
 QWidget#ReferenceGroupBoxHeader {
-    background: #f6f2fb; border-bottom: 1px solid #d5cde6;
+    background: #ece4f6; border-bottom: 1px solid #c3b6dc;
     border-top-left-radius: 6px; border-top-right-radius: 6px;
 }
 QLabel#WorkspaceCardTitle { font-size: ${title}px; font-weight: ${semibold}; }
@@ -585,9 +587,9 @@ QLabel[editableValue="true"] { border-bottom: 1px dashed #b6c0ca; }
 QLabel[editableValue="true"][ghosted="true"] { color: #8c959f; }
 QLineEdit#WorkspaceTitleEditor { font-size: ${title}px; font-weight: ${semibold}; }
 /* The fact plaque: the file's own immutable facts on a wash one step
-   quieter than the section's (#f6f8fa -> #eef1f4), so "editable above,
+   quieter than the section's (#e7ecf1 -> #dbe2e9), so "editable above,
    facts below" is visible structure rather than a rule in a docstring. */
-QWidget#WorkspaceFactBand { background: #eef1f4; }
+QWidget#WorkspaceFactBand { background: #dbe2e9; }
 QLabel#WorkspaceFactDetail { color: #57606a; font-size: ${meta}px; }
 /* The reference box's panel title keeps its purple identity while joining
    the caps tier -- colour is identity, caps is hierarchy. */
@@ -597,20 +599,20 @@ QLabel#ReferenceHeading { color: #6f42c1; font-weight: ${semibold}; font-size: $
 QLabel#ReferenceReadOnlyTag { color: #7a63ad; font-size: ${micro}px; }
 QPushButton#ReferenceTileRemove,
 QPushButton#ReferenceFromLibrary, QPushButton#WorkspaceOpenReference {
-    background: #ffffff; border: 1px solid #d0d7de; border-radius: 4px;
+    background: #ffffff; border: 1px solid #b9c4ce; border-radius: 4px;
     padding: 3px 10px;
 }
 QPushButton#ReferenceTileRemove:hover,
-QPushButton#ReferenceFromLibrary:hover, QPushButton#WorkspaceOpenReference:hover { background: #f6f8fa; }
+QPushButton#ReferenceFromLibrary:hover, QPushButton#WorkspaceOpenReference:hover { background: #e7ecf1; }
 QPushButton#ReferenceFromLibrary:disabled, QPushButton#WorkspaceOpenReference:disabled {
-    background: #fafbfc; color: #8c959f; border-color: #eaecef;
+    background: #eef1f4; color: #8c959f; border-color: #dde2e8;
 }
 /* One pinned reference's Workspace row: a white card on the section's purple
    wash, its own border the same pale reference tint the inspector's reference
    chrome uses. Row Remove is quieter than the two entry buttons below it --
    flat text, no box -- so a destructive action never outweighs the additive
    ones. */
-QFrame#ReferenceRow { background: #ffffff; border: 1px solid #d5cde6; border-radius: 6px; }
+QFrame#ReferenceRow { background: #ffffff; border: 1px solid #c3b6dc; border-radius: 6px; }
 QFrame#ReferenceRow QPushButton#ReferenceTileRemove {
     background: transparent; border: none; padding: 1px 4px; color: #57606a;
 }
@@ -621,7 +623,7 @@ QLabel#ReferenceRowModel { color: #57606a; font-size: ${meta}px; }
    rung and the muted (not ghost) grey: at ${micro}px the flip between the
    collapsed and expanded glyphs was a few pixels and read as neither. */
 QLabel#ReferenceRowChevron { color: #57606a; font-size: ${body}px; }
-QWidget#ReferenceRowDetail { border-top: 1px solid #d5cde6; }
+QWidget#ReferenceRowDetail { border-top: 1px solid #c3b6dc; }
 /* The pin count sits at the footer's far right, the quietest thing on the
    row -- bookkeeping, not an instruction. */
 QLabel#ReferenceCapCount { color: #8c959f; font-size: ${micro}px; }
@@ -636,7 +638,7 @@ QLabel#ReferenceLibraryMeta { color: #57606a; font-size: ${meta}px; }
 QLabel#ReferenceLibraryCitation { color: #454c54; font-size: ${meta}px; }
 QLabel#ReferenceLibraryDescription {
     color: #454c54; font-size: ${meta}px;
-    border-left: 2px solid #d5cde6; padding-left: 8px;
+    border-left: 2px solid #c3b6dc; padding-left: 8px;
 }
 QLabel#ReferenceLibraryProvenance { color: #8c959f; font-size: ${meta}px; }
 QPushButton#ReferenceLibraryDockButton {
@@ -645,10 +647,10 @@ QPushButton#ReferenceLibraryDockButton {
 }
 QPushButton#ReferenceLibraryDockButton:hover { background: #5a3399; }
 /* Comparison strip: the slim reference-aware band atop the parameter
-   list. Purple identity (style.REFERENCE), muted counts. #f8f5fc below is
+   list. Purple identity (style.REFERENCE), muted counts. #eee7f7 below is
    style.REFERENCE_WASH, spelled as a literal (also reused by
    QWidget#WorkspaceReferenceSection above). */
-QWidget#ComparisonStrip { background: #f8f5fc; }
+QWidget#ComparisonStrip { background: #eee7f7; border-bottom: 1px solid #c3b6dc; }
 QLabel#ComparisonStripIdentity { color: #6f42c1; font-weight: ${semibold}; font-size: ${meta}px; }
 /* Reference row (aligned-rows card layout): "Main" and "Reference" are the
    role-label column beside their value, sharing one fixed width
@@ -663,7 +665,7 @@ QLabel#ComparisonStripIdentity { color: #6f42c1; font-weight: ${semibold}; font-
    pattern QLabel#DiagnosticsChip[chipOff="true"] already uses below. */
 QLabel#MainFileHeading { color: #57606a; font-weight: ${semibold}; font-size: ${meta}px; padding-top: 7px; }
 QLabel#ReferenceFileHeading { color: #6f42c1; font-weight: ${semibold}; font-size: ${meta}px; padding-top: 7px; }
-QFrame#ReferenceValueBox { border: none; border-radius: 4px; background: #f6f8fa; }
+QFrame#ReferenceValueBox { border: none; border-radius: 4px; background: #e7ecf1; }
 QLabel#ReferenceBlockValue[same="true"] { color: #8c959f; }
 /* The read-only reference grid lives inside the washed value box: no frame
    of its own, transparent so the box's wash shows through, quiet 11px
@@ -683,7 +685,7 @@ QPushButton#PullButton {
     background: transparent; color: #6f42c1; font-weight: ${semibold};
     border: none; border-radius: 4px; padding: 4px 8px;
 }
-QPushButton#PullButton:hover:!disabled { color: #5a3399; background: #f3ecfa; }
+QPushButton#PullButton:hover:!disabled { color: #5a3399; background: #ece2f6; }
 QPushButton#PullButton:disabled { color: #8c959f; font-weight: ${regular}; }
 QLabel#GhostCardHeading { color: #6f42c1; font-weight: ${semibold}; font-size: ${meta}px; }
 /* Source page toolbar: the fold-all toggle sits left in both modes;
@@ -692,20 +694,20 @@ QLabel#GhostCardHeading { color: #6f42c1; font-weight: ${semibold}; font-size: $
 QLabel#SourceFileLabel { color: #57606a; font-size: ${meta}px; }
 QLabel#SourceHint { color: #6f42c1; font-size: ${meta}px; }
 QPushButton#SourceFoldButton {
-    background: #ffffff; border: 1px solid #d0d7de; border-radius: 4px;
+    background: #ffffff; border: 1px solid #b9c4ce; border-radius: 4px;
     padding: 2px 10px; color: #57606a;
 }
-QPushButton#SourceFoldButton:hover { background: #f6f8fa; }
+QPushButton#SourceFoldButton:hover { background: #e7ecf1; }
 /* Stale-reference band: slim, neutral, under the pane headers; the
    Reload link is the page's only blue. */
-QWidget#SourceStaleBand { background: #eef0f2; }
+QWidget#SourceStaleBand { background: #e2e7ec; }
 QLabel#SourceStaleText { color: #57606a; font-size: ${meta}px; }
 QPushButton#SourceReloadLink {
     background: transparent; border: none; color: #1f6feb;
     font-size: ${meta}px; padding: 0;
 }
 QPushButton#SourceReloadLink:hover { color: #1a5fd0; }
-QStatusBar { background: #f6f8fa; border-top: 1px solid #d0d7de; font-size: ${meta}px; color: #57606a; }
+QStatusBar { background: #e7ecf1; border-top: 1px solid #b9c4ce; font-size: ${meta}px; color: #57606a; }
 /* Every permanent widget the bar carries is a label, so they are padded as a
    family rather than one rule per chip -- the version label was flush against
    the window edge because it had no rule of its own, and the next chip added
@@ -719,11 +721,11 @@ QStatusBar QLabel { padding: 0 8px; }
    frame settles it the same way the menu caret was settled: take the platform
    metric out of the sum rather than tune a value for one side. */
 QStatusBar::item { border: none; }
-QWidget#ActivityBar { background: #f6f8fa; border-right: 1px solid #d0d7de; }
+QWidget#ActivityBar { background: #e7ecf1; border-right: 1px solid #b9c4ce; }
 QToolButton#ActivityButton { background: transparent; border: none; border-left: 2px solid transparent; }
-QToolButton#ActivityButton:hover:!checked { background: #e8eaed; }
+QToolButton#ActivityButton:hover:!checked { background: #dbe1e7; }
 QToolButton#ActivityButton:checked { border-left: 2px solid #1f2328; background: transparent; }
-QWidget#PageHeader { background: #ffffff; border-bottom: 1px solid #d0d7de; }
+QWidget#PageHeader { background: #ffffff; border-bottom: 1px solid #b9c4ce; }
 QLabel#PageHeaderTitle { color: #57606a; font-size: ${meta}px; font-weight: ${semibold}; }
 /* The Inspector's Issues list sits directly on its section's wash: no
    frame, no ground of its own -- rows read on the tint. */
@@ -733,7 +735,7 @@ QListWidget#IssuesList { border: none; background: transparent; }
    so the app's two floating palettes read as one family. */
 QFrame#SearchPopupCard {
     background: #ffffff;
-    border: 1px solid #d0d7de;
+    border: 1px solid #b9c4ce;
     border-radius: 10px;
 }
 QListWidget#SearchPopupList {
@@ -742,16 +744,16 @@ QListWidget#SearchPopupList {
     outline: none;
 }
 QListWidget#SearchPopupList::item { padding: 6px 8px; border-radius: 4px; }
-QListWidget#SearchPopupList::item:selected { background: #ddeeff; color: #1f2328; }
+QListWidget#SearchPopupList::item:selected { background: #cfe4fc; color: #1f2328; }
 /* The Diagnostics page: a summary strip (chips + the D15 Collapse all/
    Expand all affordance) over one scrolling stream list -- the "one
    stream" redesign (PLAN-diagnostics-stream.md), no rail, no separate
    detail pane. Fold-header/clear-line bands paint on RAIL_BG (the name
    predates this redesign; the constant itself just means "a band one
    shade off white"). The strip/chip border lines use BORDER_STRONG
-   (#c4cdd5), one step darker than the app's usual #d0d7de, so this page's
+   (#a5b1bd), one step darker than the app's usual #b9c4ce, so this page's
    own regions read a touch more defined -- flat colour only, no shadows. */
-QWidget#DiagnosticsSummaryStrip { background: #f9fafb; border-bottom: 1px solid #c4cdd5; }
+QWidget#DiagnosticsSummaryStrip { background: #e7ecf1; border-bottom: 1px solid #a5b1bd; }
 /* One strip chip: a small bordered, rounded card on the shaded strip
    band, distinct from the flat text it replaced. Each chip is a
    click-toggle filter; its "off" state is a dynamic QSS property
@@ -760,24 +762,30 @@ QWidget#DiagnosticsSummaryStrip { background: #f9fafb; border-bottom: 1px solid 
    uses below) -- a visibly muted/pressed-out card, never a hidden one
    (toggling never removes the chip itself, only what it filters). */
 QLabel#DiagnosticsChip {
-    background: #ffffff; border: 1px solid #c4cdd5; border-radius: 6px; padding: 4px 10px;
+    background: #ffffff; border: 1px solid #a5b1bd; border-radius: 6px; padding: 4px 10px;
 }
-QLabel#DiagnosticsChip[chipOff="true"] { background: #eef0f2; border: 1px solid #d0d7de; }
+QLabel#DiagnosticsChip[chipOff="true"] { background: #e2e7ec; border: 1px solid #b9c4ce; }
 /* D13: a chip whose unfiltered count is zero is also actually disabled
    (Qt withholds mouse events from a disabled widget, so the cursor/click
    both go away) -- it must not look pressable, since it filters nothing. */
-QLabel#DiagnosticsChip:disabled { background: #f3f4f6; border: 1px solid #e1e4e8; }
-/* D15's plain-text fold-everything affordance -- link-styled, not a chip
-   (there is no count for it to toggle). */
-QLabel#DiagnosticsCollapseAll { color: #1f6feb; font-size: ${meta}px; }
+QLabel#DiagnosticsChip:disabled { background: #dfe5eb; border: 1px solid #cdd5dd; }
+/* D15's fold-everything affordance: a quiet bordered chip like its strip
+   neighbours (app-wide affordance rule: an *action* wears a chip; only
+   navigation is flat link-blue text -- as plain blue text this read as a
+   third interaction style on one strip). Muted, never accent: it is the
+   quietest thing on the band. */
+QLabel#DiagnosticsCollapseAll {
+    background: #ffffff; border: 1px solid #a5b1bd; border-radius: 6px;
+    padding: 4px 10px; color: #57606a;
+}
 /* The one stream list: same row rhythm as everywhere else in the app.
    Fold headers/the clear line are delegate-painted bands
    (_DiagnosticsRowDelegate) that ignore this hover/selected styling --
    only issue/task rows are genuinely selectable. */
 QListWidget#DiagnosticsStreamList { border: none; }
 QListWidget#DiagnosticsStreamList::item { padding: 6px 8px; border-radius: 4px; }
-QListWidget#DiagnosticsStreamList::item:hover { background: #f0f2f4; }
-QListWidget#DiagnosticsStreamList::item:selected { background: #ddeeff; color: #1f2328; }
+QListWidget#DiagnosticsStreamList::item:hover { background: #e4e9ee; }
+QListWidget#DiagnosticsStreamList::item:selected { background: #cfe4fc; color: #1f2328; }
 /* The Documentation section's quiet "no description" line -- in-flow body
    text on the section wash, not a centred empty state. */
 QLabel#DocumentationPlaceholder { color: #57606a; }
@@ -790,12 +798,12 @@ QLabel#Hint { color: #57606a; font-size: ${meta}px; }
    popup's Standard/Custom tabs) where the segmented look reads fine as tabs
    too. */
 QToolButton#ModeButton {
-    border: 1px solid #d0d7de; border-left-width: 0;
-    padding: 3px 10px; background: #f6f8fa; color: #57606a; font-size: ${meta}px;
+    border: 1px solid #b9c4ce; border-left-width: 0;
+    padding: 3px 10px; background: #e7ecf1; color: #57606a; font-size: ${meta}px;
 }
 QToolButton#ModeButton:first-child { border-left-width: 1px; border-top-left-radius: 4px; border-bottom-left-radius: 4px; }
 QToolButton#ModeButton:last-child { border-top-right-radius: 4px; border-bottom-right-radius: 4px; }
-QToolButton#ModeButton:hover { background: #eef1f4; }
+QToolButton#ModeButton:hover { background: #dbe2e9; }
 QToolButton#ModeButton:checked { background: #ffffff; color: #1f2328; font-weight: ${semibold}; border-bottom: 2px solid #1f6feb; }
 
 /* Parameter-list pane's section header: style.NEUTRAL_WASH, spelled as a
@@ -806,7 +814,7 @@ QToolButton#ModeButton:checked { background: #ffffff; color: #1f2328; font-weigh
    button, since it now lives inside chrome rather than on plain background,
    and honestly greys out (not error-red) while disabled (no section
    selected). */
-QWidget#ParameterListHeader { background: #f6f8fa; }
+QWidget#ParameterListHeader { background: #e7ecf1; border-bottom: 1px solid #a5b1bd; }
 QLabel#ParameterListHeaderCount { color: #57606a; font-size: ${meta}px; }
 QPushButton#AddParameterButton {
     background: transparent; border: none; color: #1f6feb;
@@ -820,15 +828,15 @@ QPushButton#AddParameterButton:disabled { color: #8c959f; }
    it reads like Raycast/Linear/VS Code Quick Open rather than a raw widget. */
 QFrame#AddParameterCard {
     background: #ffffff;
-    border: 1px solid #d0d7de;
+    border: 1px solid #b9c4ce;
     border-radius: 10px;
 }
 QLineEdit#AddParameterInput {
-    border: 1px solid #d0d7de;
+    border: 1px solid #b9c4ce;
     border-radius: 4px;
     padding: 6px 8px;
     background: #ffffff;
-    selection-background-color: #ddeeff;
+    selection-background-color: #cfe4fc;
 }
 QLineEdit#AddParameterInput:focus { border: 1px solid #1f6feb; }
 QLabel#AddParameterPopupHint { color: #57606a; padding: 2px 4px 4px 4px; }
@@ -838,8 +846,8 @@ QListWidget#AddParameterList {
     outline: none;
 }
 QListWidget#AddParameterList::item { padding: 8px; border-radius: 4px; }
-QListWidget#AddParameterList::item:selected { background: #ddeeff; color: #1f2328; }
-QFrame#AddParameterDivider { background: #eaecef; border: none; }
+QListWidget#AddParameterList::item:selected { background: #cfe4fc; color: #1f2328; }
+QFrame#AddParameterDivider { background: #dde2e8; border: none; }
 /* The pinned "Create custom parameter" action -- accent-tinted escape hatch,
    highlighted the same way as a selected row when keyboard focus reaches it. */
 QPushButton#AddParameterCreate {
@@ -853,8 +861,8 @@ QPushButton#AddParameterCreate {
 }
 /* Same wash as the row-selected states above (style.ACCENT_TINT) -- this
    used to be its own near-identical #eaf2ff blue. */
-QPushButton#AddParameterCreate:hover { background: #ddeeff; }
-QPushButton#AddParameterCreate[selected="true"] { background: #ddeeff; }
+QPushButton#AddParameterCreate:hover { background: #cfe4fc; }
+QPushButton#AddParameterCreate[selected="true"] { background: #cfe4fc; }
 """
 
 #: The stylesheet the app actually applies (``MainWindow`` sets it once).

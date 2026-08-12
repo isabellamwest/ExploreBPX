@@ -277,7 +277,7 @@ def test_optional_subhead_only_when_optional_tasks_exist(app_driver, tmp_path):
     raw["Parameterisation"]["Cell"]["Volume [m3]"] = None
     d.open(_write(tmp_path, "with_optional.json", raw))
     subheads = d.diagnostics_stream_subhead_texts()
-    assert subheads == ["OPTIONAL . 1 UNFILLED"]
+    assert subheads == ["1 optional parameter unfilled"]
 
 
 # --- clear line / all-clear / Partial notice --------------------------------
@@ -367,6 +367,7 @@ def test_clear_row_is_html_based_muted_no_accent_and_compact(app_driver, tmp_pat
     same environment so the comparison can't be thrown off by a synthetic
     QStyleOptionViewItem's own font/metrics) -- not the taller banded
     fold-header/clear-line height."""
+    from PySide6.QtCore import QRect
     from PySide6.QtWidgets import QStyleOptionViewItem
 
     from ui_qt import parameter_row, style
@@ -386,6 +387,11 @@ def test_clear_row_is_html_based_muted_no_accent_and_compact(app_driver, tmp_pat
     delegate = lst.itemDelegate()
     option = QStyleOptionViewItem()
     option.font = lst.font()
+    # A realistic row width: with no rect the delegate falls back to a
+    # 300px column, where the subhead's sentence ("1 optional parameter
+    # unfilled") wraps to two lines and the single-line-height comparison
+    # below would be comparing a wrapped row against an unwrapped one.
+    option.rect = QRect(0, 0, 900, 0)
     for item in clear_rows:
         html = item.data(parameter_row.HTML_ROLE)
         assert html is not None

@@ -190,7 +190,7 @@ def test_state3b_partial_null_is_outstanding_not_error(app_driver, tmp_path, val
     assert [t.kind for t in tasks] == [TaskKind.NULL_FIELD]
     assert tasks[0].path == _CAPACITY
     assert tasks[0].required is False  # nothing is Required under Partial
-    assert d.diagnostics_stream_subhead_texts() == ["OPTIONAL . 1 UNFILLED"]
+    assert d.diagnostics_stream_subhead_texts() == ["1 optional parameter unfilled"]
     assert d.tree_error_marked_sections() == []  # calm tree too
 
     cell_header = next(h for h in d.diagnostics_stream_headers() if h.startswith("Cell"))
@@ -415,7 +415,7 @@ def test_optional_null_field_gets_its_own_subgroup(app_driver, tmp_path):
 
     headers = d.diagnostics_stream_headers()
     assert "Cell  5 of 5 remaining" in headers
-    assert d.diagnostics_stream_subhead_texts() == ["OPTIONAL . 1 UNFILLED"]
+    assert d.diagnostics_stream_subhead_texts() == ["1 optional parameter unfilled"]
     assert d.validation_task_row_count_under_header("Cell  5 of 5 remaining") == 5
 
     optional_task = next(
@@ -458,7 +458,7 @@ def test_section_with_only_optional_nulls_shows_a_bare_header(
     headers = d.diagnostics_stream_headers()
     assert "Header" in headers  # bare label, no suffix
     assert not any(h.startswith("Header ") for h in headers)  # no trailing ratio words
-    assert d.diagnostics_stream_subhead_texts() == ["OPTIONAL . 1 UNFILLED"]
+    assert d.diagnostics_stream_subhead_texts() == ["1 optional parameter unfilled"]
 
 
 def test_fold_headers_are_non_activatable(app_driver, tmp_path):

@@ -19,6 +19,8 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtWidgets import QFrame
 
+from ui_qt import style
+
 _CELL = ("Parameterisation", "Cell")
 
 
@@ -65,8 +67,8 @@ def test_editor_splitter_handle_paints_the_hairline_colour(app_driver, valid_spm
     handle = splitter.handle(1)
     image = handle.grab().toImage()
     pixel = image.pixelColor(image.width() // 2, image.height() // 2).name()
-    assert pixel == "#d0d7de", (
-        f"Editor splitter handle pixel was {pixel}, not #d0d7de -- check the "
+    assert pixel == style.BORDER, (
+        f"Editor splitter handle pixel was {pixel}, not {style.BORDER} -- check the "
         "QSplitter#EditorSplitter::handle rule in style.py."
     )
 
@@ -89,8 +91,8 @@ def test_add_parameter_popup_card_border_is_unaffected_by_the_new_view_rule(
     assert card is not None
     image = card.grab().toImage()
     pixel = image.pixelColor(0, image.height() // 2).name()
-    assert pixel == "#d0d7de", (
-        f"AddParameterCard border pixel was {pixel}, not #d0d7de -- the "
+    assert pixel == style.BORDER, (
+        f"AddParameterCard border pixel was {pixel}, not {style.BORDER} -- the "
         "QFrame#AddParameterCard border rule was overridden. Check that the "
         "new StructureTree/ParameterListView border rule uses explicit "
         "objectName selectors only, not a descendant selector that could "

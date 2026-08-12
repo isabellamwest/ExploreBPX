@@ -110,7 +110,7 @@ def test_outstanding_chip_off_hides_required_and_optional_task_rows(app_driver, 
     d = app_driver
     d.open(_write(tmp_path, "cell_with_optional.json", raw))
     assert len(d.diagnostics_stream_task_texts()) == 24  # 5+9+9 required + 1 optional, both "task" rows
-    assert d.diagnostics_stream_subhead_texts() == ["OPTIONAL . 1 UNFILLED"]
+    assert d.diagnostics_stream_subhead_texts() == ["1 optional parameter unfilled"]
 
     d.diagnostics_toggle_chip("outstanding")
 
