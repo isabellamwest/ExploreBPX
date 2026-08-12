@@ -458,8 +458,8 @@ def test_pane_headers_show_roles_names_and_models(qtbot):
         main_model="DFN",
     )
     assert not page._pane_head.isHidden()
-    assert page._main_head.text() == "Main  ·  nmc.json  ·  DFN"
-    assert page._ref_head.text() == "Reference  ·  lfp.json  ·  SPMe"
+    assert page._main_head.full_text() == "Main  ·  nmc.json  ·  DFN"
+    assert page._ref_head.full_text() == "Reference  ·  lfp.json  ·  SPMe"
 
 
 def test_two_pane_page_still_has_no_input_widget(qtbot):

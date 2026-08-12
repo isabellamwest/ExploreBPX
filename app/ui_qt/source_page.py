@@ -37,6 +37,7 @@ from PySide6.QtWidgets import (
 from core.compare import RowState
 from core.source_rows import RowKind, SourceRow, build_rows, format_value
 from ui_qt import badges, style, typography
+from ui_qt.elided_label import ElidedLabel
 
 #: One indent step, in pixels, per nesting depth.
 _INDENT_PX = 18
@@ -1199,10 +1200,11 @@ class SourcePage(QWidget):
         # Single-pane toolbar: the main file's identity on the
         # left, the docking hint on the right. Both hide in two-pane mode,
         # leaving only the fold-all button and the pane headers.
-        self._file_label = QLabel()
-        self._file_label.setObjectName("SourceFileLabel")
-        self._hint = QLabel("Open a reference to compare…")
-        self._hint.setObjectName("SourceHint")
+        # Both elide under pressure: the identity is a filename and the hint
+        # is the first thing a narrow toolbar should give up, not clip.
+        self._file_label = ElidedLabel("SourceFileLabel")
+        self._hint = ElidedLabel("SourceHint")
+        self._hint.setText("Open a reference to compare…")
 
         # Fold-all toggle: left-aligned in both single- and two-pane modes,
         # so the rest of the toolbar never reshuffles around it. It acts on
@@ -1229,12 +1231,13 @@ class SourcePage(QWidget):
         for control in (self._file_label, self._hint, self._fold_button):
             control.setVisible(False)
 
-        self._main_head = QLabel()
+        # Elided: each head carries a filename, and the two share one row.
+        self._main_head = ElidedLabel()
         self._main_head.setStyleSheet(
             f"color: {style.MUTED}; {typography.size_qss(typography.META)} "
             f"{typography.semibold_qss()}"
         )
-        self._ref_head = QLabel()
+        self._ref_head = ElidedLabel()
         self._ref_head.setStyleSheet(
             f"color: {style.REFERENCE}; {typography.size_qss(typography.META)} "
             f"{typography.semibold_qss()}"
@@ -1274,6 +1277,7 @@ class SourcePage(QWidget):
         stale_layout.setSpacing(8)
         self._stale_text = QLabel()
         self._stale_text.setObjectName("SourceStaleText")
+        self._stale_text.setWordWrap(True)
         stale_layout.addWidget(self._stale_text)
         self._reload_button = QPushButton("Reload")
         self._reload_button.setObjectName("SourceReloadLink")

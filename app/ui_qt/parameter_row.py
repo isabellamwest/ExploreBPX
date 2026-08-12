@@ -85,6 +85,11 @@ _MIN_WIDTH = 40
 #: The value preview never claims more than this share of the row, however
 #: long the raw value is -- the name keeps priority, the value elides.
 _VALUE_MAX_SHARE = 0.45
+#: The action hint's own cap. Action strings are short by convention, but
+#: uncapped the reserve could exceed a narrow row entirely, driving the
+#: name's width negative -- the name then overran and painted *under* the
+#: action text.
+_ACTION_MAX_SHARE = 0.4
 #: Gap between the (wrapped) name fragment and the value preview.
 _VALUE_GAP = 12
 
@@ -410,24 +415,28 @@ class ParameterRowDelegate(QStyledItemDelegate):
         action hint's own styling (:func:`compose_row_html`)."""
         return QFont(option.font)
 
-    def _action_reserved(self, option: QStyleOptionViewItem, index) -> int:
+    def _action_reserved(
+        self, option: QStyleOptionViewItem, index, row_width: float
+    ) -> int:
         """Row width the right-aligned call-to-action (:data:`ACTION_ROLE`)
-        claims (including its gap), 0 for a row with none. Never elided --
-        action strings are short by convention ("Go to ▸", "+ Add section",
-        "Choose…"), so unlike :data:`VALUE_ROLE` this reserves its full
-        natural width rather than capping/eliding against the row."""
+        claims (including its gap), 0 for a row with none. Action strings
+        are short by convention ("Go to ▸", "+ Add section", "Choose…"), so
+        the ``_ACTION_MAX_SHARE`` cap only ever bites on a truly narrow
+        row -- where an uncapped reserve drove the name's width negative and
+        the two texts painted over each other."""
         text = index.data(ACTION_ROLE)
         if not text:
             return 0
         metrics = QFontMetrics(self._action_font(option))
-        return metrics.horizontalAdvance(text) + _VALUE_GAP
+        needed = metrics.horizontalAdvance(text)
+        return min(needed, int(row_width * _ACTION_MAX_SHARE)) + _VALUE_GAP
 
     def sizeHint(self, option, index):
         width = self._available_width(option)
         reserved = (
             self._value_reserved(option, index, width)
             + self._icon_reserved(index)
-            + self._action_reserved(option, index)
+            + self._action_reserved(option, index, width)
         )
         doc = self._build_document(option, index, width - 2 * self._h_pad - reserved)
         if doc is None:
@@ -437,7 +446,7 @@ class ParameterRowDelegate(QStyledItemDelegate):
     def paint(self, painter, option, index) -> None:
         row_width = option.rect.width() if option.rect.width() > 0 else self._available_width(option)
         icon_reserved = self._icon_reserved(index)
-        action_reserved = self._action_reserved(option, index)
+        action_reserved = self._action_reserved(option, index, row_width)
         value_reserved = self._value_reserved(option, index, row_width)
         text_width = row_width - 2 * self._h_pad - icon_reserved - action_reserved - value_reserved
         doc = self._build_document(option, index, text_width)
@@ -493,8 +502,13 @@ class ParameterRowDelegate(QStyledItemDelegate):
         font = self._action_font(option)
         painter.setFont(font)
         painter.setPen(QColor(style.ACCENT))
-        text = index.data(ACTION_ROLE)
-        x = option.rect.right() - self._h_pad - QFontMetrics(font).horizontalAdvance(text)
+        metrics = QFontMetrics(font)
+        # Elided into its reserve: past the cap the hint shortens, it does
+        # not overrun the name beside it.
+        text = metrics.elidedText(
+            index.data(ACTION_ROLE), Qt.ElideRight, reserved - _VALUE_GAP
+        )
+        x = option.rect.right() - self._h_pad - metrics.horizontalAdvance(text)
         painter.drawText(QPointF(x, self._name_baseline(option)), text)
         painter.restore()
 

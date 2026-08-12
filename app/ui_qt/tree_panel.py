@@ -101,8 +101,16 @@ class _TreeItemDelegate(QStyledItemDelegate):
         widget_style = widget.style() if widget is not None else QApplication.style()
         text_rect = widget_style.subElementRect(QStyle.SE_ItemViewItemText, opt, widget)
         metrics = QFontMetrics(opt.font)
-        box = QRect(
+        # Clamped into the text rect: the base paint may have elided the
+        # label, and the full-text advance would place the dot past the
+        # visible edge -- an error mark that silently vanished on a narrow
+        # tree.
+        x = min(
             text_rect.x() + metrics.horizontalAdvance(opt.text) + self._GAP,
+            text_rect.right() - MARK_BOX,
+        )
+        box = QRect(
+            x,
             cap_midline_mark_top(text_rect, metrics, MARK_BOX),
             MARK_BOX,
             MARK_BOX,

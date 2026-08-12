@@ -78,6 +78,7 @@ class TextCard(EditorCard):
             # translated or prettified.
             hint = QLabel(f"pattern: {meta.pattern}")
             hint.setStyleSheet(f"color: {MUTED};")
+            hint.setWordWrap(True)
             layout.addWidget(hint)
 
         self._install_keyboard_handler(self._edit)

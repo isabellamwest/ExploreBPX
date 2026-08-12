@@ -239,6 +239,7 @@ class ExperimentCard(QWidget):
         header = QHBoxLayout()
         self._title = QLabel(f"Experiment · {run.label}")
         self._title.setObjectName("CardTitle")
+        self._title.setWordWrap(True)
         header.addWidget(self._title)
         header.addStretch(1)
         self._import_button = None
@@ -337,6 +338,7 @@ class ExperimentCard(QWidget):
         self._sample_count_chip = QLabel()
         self._sample_count_chip.setObjectName("SampleCountChip")
         self._sample_count_chip.setStyleSheet(f"color: {MUTED};")
+        self._sample_count_chip.setWordWrap(True)
         self._grid.add_toolbar_widget(self._sample_count_chip)
 
         # Focus the resolved column, if any -- a bare run-node reveal

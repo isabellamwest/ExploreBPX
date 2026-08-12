@@ -820,10 +820,15 @@ class _DiagnosticsRowDelegate(ParameterRowDelegate):
         on top of this instead of using *text* directly."""
         self._band_ground(painter, option, edge_at_top=True)
         painter.save()
-        painter.setFont(self._caps_font(option))
+        font = self._caps_font(option)
+        painter.setFont(font)
         painter.setPen(QColor(style.MUTED))
         text_rect = option.rect.adjusted(self._h_pad, 0, -self._h_pad, 0)
-        painter.drawText(text_rect, Qt.AlignVCenter | Qt.AlignLeft, text.upper())
+        # Elided, never clipped: drawText cuts mid-glyph at the rect edge.
+        elided = QFontMetrics(font).elidedText(
+            text.upper(), Qt.ElideRight, text_rect.width()
+        )
+        painter.drawText(text_rect, Qt.AlignVCenter | Qt.AlignLeft, elided)
         painter.restore()
 
     def _paint_fold_header(self, painter, option, index) -> None:
@@ -835,21 +840,33 @@ class _DiagnosticsRowDelegate(ParameterRowDelegate):
 
         self._band_ground(painter, option, edge_at_top=False)
 
-        painter.save()
         font = self._caps_font(option)
-        painter.setFont(font)
         metrics = QFontMetrics(font)
-        painter.setPen(QColor(style.DEFAULT_TEXT))
+        suffix_font = typography.sized(option.font, typography.META)
         label_rect = option.rect.adjusted(self._h_pad, 0, -self._h_pad, 0)
-        painter.drawText(label_rect, Qt.AlignVCenter | Qt.AlignLeft, label_text)
+        # The label gives way before the suffix vanishes: reserve the suffix
+        # its natural width (never more than half the band), elide the label
+        # into the rest. Unelided, a long section name pushed suffix_x past
+        # the rect and the counts silently collapsed to width 0.
+        reserved = 0
+        if suffix:
+            natural = QFontMetrics(suffix_font).horizontalAdvance(suffix)
+            reserved = min(natural, label_rect.width() // 2) + 10
+        label_elided = metrics.elidedText(
+            label_text, Qt.ElideRight, max(label_rect.width() - reserved, 0)
+        )
+
+        painter.save()
+        painter.setFont(font)
+        painter.setPen(QColor(style.DEFAULT_TEXT))
+        painter.drawText(label_rect, Qt.AlignVCenter | Qt.AlignLeft, label_elided)
         painter.restore()
 
         if suffix:
             painter.save()
-            suffix_font = typography.sized(option.font, typography.META)
             painter.setFont(suffix_font)
             painter.setPen(QColor(style.MUTED))
-            suffix_x = label_rect.left() + metrics.horizontalAdvance(label_text) + 10
+            suffix_x = label_rect.left() + metrics.horizontalAdvance(label_elided) + 10
             suffix_rect = QRect(
                 suffix_x, option.rect.top(), max(option.rect.right() - self._h_pad - suffix_x, 0), option.rect.height()
             )
@@ -867,7 +884,8 @@ class _DiagnosticsRowDelegate(ParameterRowDelegate):
         painter.setFont(font)
         painter.setPen(QColor(style.MUTED))
         text_rect = option.rect.adjusted(self._h_pad, 0, -self._h_pad, 0)
-        painter.drawText(text_rect, Qt.AlignVCenter | Qt.AlignLeft, text)
+        elided = QFontMetrics(font).elidedText(text, Qt.ElideRight, text_rect.width())
+        painter.drawText(text_rect, Qt.AlignVCenter | Qt.AlignLeft, elided)
         painter.restore()
 
 

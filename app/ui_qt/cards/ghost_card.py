@@ -79,6 +79,7 @@ class GhostParameterCard(QWidget):
         name, unit = split_name_and_unit(key)
         self._title = QLabel(f"{name} [{unit}]" if unit else name)
         self._title.setObjectName("CardTitle")
+        self._title.setWordWrap(True)
         header_box.addWidget(self._title)
         layout.addWidget(header_frame)
 

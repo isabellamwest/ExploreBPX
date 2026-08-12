@@ -84,6 +84,7 @@ class MultiSeriesChart(QWidget):
         self._empty = QLabel("No comparison data yet.")
         self._empty.setObjectName("Hint")
         self._empty.setAlignment(Qt.AlignCenter)
+        self._empty.setWordWrap(True)
         self._empty.setFixedHeight(height)
         layout.addWidget(self._empty)
 

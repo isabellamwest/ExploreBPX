@@ -86,6 +86,7 @@ class DocumentationView(QWidget):
         for heading, prose in metadata.documentation:
             title = QLabel(heading, objectName="Heading")
             title.setTextFormat(Qt.PlainText)
+            title.setWordWrap(True)
             self._layout.addWidget(title)
             body = QLabel(prose)
             body.setTextFormat(Qt.PlainText)

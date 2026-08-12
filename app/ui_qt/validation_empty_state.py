@@ -95,6 +95,7 @@ class ValidationEmptyState(QWidget):
         heading = QLabel(_HEADING)
         heading.setObjectName("CardTitle")
         heading.setAlignment(Qt.AlignCenter)
+        heading.setWordWrap(True)
         layout.addWidget(heading)
 
         copy = QLabel(_COPY)

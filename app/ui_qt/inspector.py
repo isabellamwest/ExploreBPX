@@ -317,6 +317,7 @@ class InspectorPanel(QWidget):
         # The one surface with no page header of its own: centred in the
         # pane (an empty state), not typeset at the top-left of a page.
         placeholder.setAlignment(Qt.AlignCenter)
+        placeholder.setWordWrap(True)
         self._set_surface(placeholder, fills=True)
         self._deactivate_sections()
 
