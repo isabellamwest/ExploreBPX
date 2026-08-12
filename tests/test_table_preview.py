@@ -20,8 +20,10 @@ from PySide6.QtCore import Qt
 
 from core.parameter_types import ParameterKind
 from core.tree_model import ParameterItem
+from ui_qt.cards.chart_axes import Y_AXIS_TICK_COUNT
 from ui_qt.cards.registry import create_card
-from ui_qt.cards.table_preview import TablePreview, charts_available
+from ui_qt.cards.table_preview import ReferenceCurve, TablePreview, charts_available
+from ui_qt.style import ACCENT
 
 
 @pytest.fixture(autouse=True)
@@ -202,3 +204,116 @@ def test_seeding_the_preview_does_not_mark_the_card_dirty():
     as user interaction."""
     card = _series_card([4.1, 4.0, 3.9])
     assert card.is_dirty is False
+
+
+# ----------------------------------------------------------------------
+# Y axis tick count: the QtCharts "..." elision regression
+# ----------------------------------------------------------------------
+
+
+@requires_charts
+def test_y_axis_tick_count_is_forced_to_the_shared_constant():
+    """QtCharts silently elides every y tick label to "..." at this widget's
+    compact height once applyNiceNumbers picks its own (commonly 4-6) tick
+    count -- proven visually against chen2020's own OCP table (0.09-2.03 V).
+    Forcing a low, fixed count after every fit is what keeps numerals on
+    screen (chart_axes.Y_AXIS_TICK_COUNT); the x axis is untouched."""
+    preview = TablePreview(mode="xy")
+    preview.update_rows([[0.005, 2.02988], [0.5, 1.0], [0.995, 0.09202]])
+
+    assert preview._axis_y.tickCount() == Y_AXIS_TICK_COUNT
+
+
+# ----------------------------------------------------------------------
+# Hover readout: the cache TablePreview feeds ReadoutChartView
+# ----------------------------------------------------------------------
+
+
+@requires_charts
+def test_readout_cache_names_the_main_series_and_keeps_it_visible():
+    preview = TablePreview(mode="xy")
+    preview.update_rows([[0.0, 1.0], [1.0, 2.0]])
+
+    names = [(name, colour, visible) for name, colour, _points, visible in preview._view._series]
+
+    assert names == [("Main", ACCENT, True)]
+
+
+@requires_charts
+def test_readout_cache_carries_a_reference_curves_own_name_and_colour():
+    preview = TablePreview(mode="xy")
+    preview.update_rows([[0.0, 1.0]])
+    curve = ReferenceCurve("A", "#008300", "Chen2020 · C/20 discharge", [[0.0, 0.9]])
+
+    preview.set_reference_curves([curve])
+
+    cache = {name: (colour, visible) for name, colour, _points, visible in preview._view._series}
+    assert cache["Chen2020 · C/20 discharge"] == ("#008300", True)
+
+
+@requires_charts
+def test_hiding_a_reference_curve_marks_it_not_visible_in_the_readout_cache():
+    """A legend-hidden curve must stop being a hover target immediately, not
+    only after the next redraw."""
+    preview = TablePreview(mode="xy")
+    preview.update_rows([[0.0, 1.0]])
+    curve = ReferenceCurve("A", "#008300", "Chen2020", [[0.0, 0.9]])
+    preview.set_reference_curves([curve])
+
+    preview._on_curve_toggled(0, False)
+
+    cache = {name: visible for name, _colour, _points, visible in preview._view._series}
+    assert cache["Chen2020"] is False
+    assert cache["Main"] is True
+
+
+# ----------------------------------------------------------------------
+# TableBody's y axis unit -- threaded from the parameter, not hardcoded
+# ----------------------------------------------------------------------
+
+
+def _function_card(unit: str, value: object):
+    param = ParameterItem(
+        label=f"OCP [{unit}]" if unit else "OCP",
+        path=("Parameterisation", "Negative electrode", "OCP"),
+        kind=ParameterKind.FUNCTION,
+        value=value,
+        unit=unit,
+    )
+    return create_card(param, None)
+
+
+def _table_card(unit: str, value: object):
+    param = ParameterItem(
+        label=f"Custom curve [{unit}]" if unit else "Custom curve",
+        path=("Parameterisation", "User-defined", "Custom curve"),
+        kind=ParameterKind.TABLE,
+        value=value,
+        unit=unit,
+    )
+    return create_card(param, None)
+
+
+@requires_charts
+def test_function_card_table_mode_titles_y_with_the_parameters_unit():
+    card = _function_card("V", {"x": [0.0, 1.0], "y": [1.7, 0.1]})
+    body = card._modes[2].body  # InterpolatedTable
+
+    assert body._preview._axis_y.titleText() == "y [V]"
+    assert body._preview._axis_x.titleText() == "x"
+
+
+@requires_charts
+def test_function_card_table_mode_y_title_has_no_unit_when_none_is_declared():
+    card = _function_card("", {"x": [0.0, 1.0], "y": [1.7, 0.1]})
+    body = card._modes[2].body
+
+    assert body._preview._axis_y.titleText() == "y"
+
+
+@requires_charts
+def test_table_card_titles_y_with_the_parameters_unit():
+    card = _table_card("Ohm", {"x": [0.0, 1.0], "y": [2.0, 3.0]})
+
+    assert card._table_body._preview._axis_y.titleText() == "y [Ohm]"
+    assert card._table_body._preview._axis_x.titleText() == "x"

@@ -134,6 +134,21 @@ def test_adding_a_reference_run_adds_its_curve_to_voltage_and_current_charts():
     assert run.id in page.current._series
 
 
+def test_added_runs_hover_readout_uses_their_legend_label_not_their_raw_id():
+    """The hover readout (chart_axes.ReadoutChartView) names a curve from
+    _AddedSeries.label -- the same text the legend chip shows -- never the
+    internal series id, which for a bundled run looks like
+    "about_energy/nmc_pouch_cell::C/20 discharge"."""
+    dialog = DatabaseExamplesDialog(_OWN_RUN, "my_cell · test run")
+    run = _first_run()
+
+    dialog._toggle_run(run)
+
+    page = dialog._chart_page
+    names = {name for name, *_rest in page.voltage._view._series}
+    assert names == {"my_cell · test run", dialog._added[run.id].label}
+
+
 def test_removing_a_run_removes_its_chip_and_its_curves():
     dialog = DatabaseExamplesDialog()
     run = _first_run()

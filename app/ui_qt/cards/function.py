@@ -79,7 +79,7 @@ class FunctionCard(ModalCard):
         opens_in = initial_mode(parameter.value)
         renamable = structure.can_rename_parameter(parameter.path, parameter.value)
         unit_tooltip = "" if renamable else FIXED_UNIT_TOOLTIP
-        self._table_body = TableBody()
+        self._table_body = TableBody(parameter.unit)
         modes = [
             Mode(FLOAT_INT, NumberBody(parameter.unit, unit_tooltip)),
             Mode(FUNCTION, ExpressionBody()),

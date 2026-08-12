@@ -19,10 +19,14 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QPen
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
-from .chart_axes import fit_axis, setup_chart, setup_chart_view, style_axis
+from .chart_axes import Y_AXIS_TICK_COUNT, fit_axis, setup_chart, setup_chart_view, style_axis
 
 try:  # QtCharts is part of PySide6 but absent from some minimal builds.
-    from PySide6.QtCharts import QChart, QChartView, QLineSeries, QValueAxis
+    from PySide6.QtCharts import QChart, QLineSeries, QValueAxis
+
+    # Only defined in chart_axes when QtCharts itself imported cleanly there
+    # too (same guard, same process) -- see ReadoutChartView's own docstring.
+    from .chart_axes import ReadoutChartView
 
     _CHARTS_AVAILABLE = True
 except ImportError:  # pragma: no cover - depends on the PySide6 build
@@ -57,7 +61,7 @@ class MultiSeriesChart(QWidget):
         self._chart.addAxis(self._axis_x, Qt.AlignBottom)
         self._chart.addAxis(self._axis_y, Qt.AlignLeft)
 
-        self._view = QChartView(self._chart)
+        self._view = ReadoutChartView(self._chart, self._axis_x, self._axis_y)
         setup_chart_view(self._view, height)
         layout.addWidget(self._view)
 
@@ -68,6 +72,11 @@ class MultiSeriesChart(QWidget):
         layout.addWidget(self._empty)
 
         self._series: dict[str, QLineSeries] = {}
+        #: ``series_id -> (name, colour, points)`` -- the same data
+        #: ``set_series`` was already given, kept for the hover view's cache
+        #: (see ``_sync_readout_series``) so a mouse move never re-copies
+        #: points from the live ``QLineSeries`` objects above.
+        self._series_meta: dict[str, tuple[str, str, tuple[tuple[float, float], ...]]] = {}
         self._show_empty(True)
 
     def set_axis_titles(self, x_title: str, y_title: str) -> None:
@@ -90,11 +99,15 @@ class MultiSeriesChart(QWidget):
         points: list[tuple[float, float]],
         color: str,
         width: float = 2.0,
+        name: str | None = None,
     ) -> None:
         """Add, or replace, the curve for *series_id*.
 
         *points* must already be ``x``-sorted -- this widget draws exactly
-        what it is given, the same contract ``TablePreview`` has.
+        what it is given, the same contract ``TablePreview`` has. *name* is
+        the hover readout's own label for this curve (e.g. the run's display
+        title); it defaults to *series_id* itself, which is readable enough
+        for callers that never pass one (the existing tests).
         """
         if not self.available:
             return
@@ -110,6 +123,7 @@ class MultiSeriesChart(QWidget):
         line.attachAxis(self._axis_x)
         line.attachAxis(self._axis_y)
         self._series[series_id] = line
+        self._series_meta[series_id] = (name or series_id, color, tuple(points))
         self._refresh()
 
     def remove_series(self, series_id: str) -> None:
@@ -130,8 +144,19 @@ class MultiSeriesChart(QWidget):
         line = self._series.pop(series_id, None)
         if line is not None:
             self._chart.removeSeries(line)
+        self._series_meta.pop(series_id, None)
+
+    def _sync_readout_series(self) -> None:
+        """Feed the hover view's cache from ``_series_meta`` -- called on
+        every add/remove, never on a mouse move (see
+        ``ReadoutChartView.set_readout_series``). Every curve here is always
+        visible: this widget has no legend-toggle to hide one."""
+        self._view.set_readout_series(
+            [(name, colour, points, True) for name, colour, points in self._series_meta.values()]
+        )
 
     def _refresh(self) -> None:
+        self._sync_readout_series()
         # "Empty" means no *points* across every series, not merely "no
         # series" -- a series can legitimately be added with zero points
         # (e.g. a live draft column with no values typed yet), and min()/
@@ -144,7 +169,7 @@ class MultiSeriesChart(QWidget):
         xs = [x for x, _ in points]
         ys = [y for _, y in points]
         fit_axis(self._axis_x, min(xs), max(xs))
-        fit_axis(self._axis_y, min(ys), max(ys))
+        fit_axis(self._axis_y, min(ys), max(ys), tick_count=Y_AXIS_TICK_COUNT)
 
     def _show_empty(self, empty: bool) -> None:
         self._view.setVisible(not empty)

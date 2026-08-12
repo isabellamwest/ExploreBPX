@@ -214,9 +214,14 @@ class TableBody(ModeBody):
     The plotted line is the value: an interpolated table *is* the piecewise-
     linear function through its points, so the preview shows exactly what the
     grid defines.
+
+    *unit*, when given, names the y axis (``"y [V]"``) -- the same unit
+    ``NumberBody``'s own unit label shows for this parameter. ``x`` stays the
+    bare letter: the spec gives an InterpolatedTable's x column no meaning of
+    its own, so naming it would invent one.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, unit: str = "") -> None:
         super().__init__()
         self._seed: object = None
         layout = QVBoxLayout(self)
@@ -224,7 +229,7 @@ class TableBody(ModeBody):
         layout.setSpacing(4)
 
         self._preview = TablePreview(mode="xy")
-        self._preview.set_axis_titles("x", "y")
+        self._preview.set_axis_titles("x", f"y [{unit}]" if unit else "y")
         layout.addWidget(self._preview)
 
         self._grid = NumericGrid(("x", "y"), csv_import=True)

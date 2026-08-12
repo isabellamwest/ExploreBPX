@@ -53,7 +53,7 @@ from core.values import format_value
 
 from .. import typography
 from ..file_filters import BPX_FILTER_WITH_ALL
-from ..style import ACCENT, BORDER, ERROR, MUTED
+from ..style import ACCENT, BORDER, CHART_SERIES, ERROR, MUTED
 from ..typography import panel_title
 from .chart_axes import as_plot_number
 from .modal import ModeStrip
@@ -77,15 +77,12 @@ _KNOWN_ALIASES = tuple(
 #: always contains "::".
 _YOU_ID = "__you__"
 
-#: Categorical colours assigned to reference runs, in fixed *slot* order
-#: (see ``DatabaseExamplesDialog._toggle_run``): the first run added takes
-#: slot 0, and removing a run frees its slot for the next add rather than
-#: shifting anyone else's colour. From the project's dataviz skill's
-#: validated categorical palette (green / magenta / yellow / aqua) --
-#: deliberately skipping the palette's blue slot, which ``ACCENT`` (the
-#: colour "You" always renders in) already occupies, so a future reader must
-#: not "restore" blue here.
-_REFERENCE_COLORS = ("#008300", "#e87ba4", "#eda100", "#1baf7a")
+#: Reference runs take ``style.CHART_SERIES`` in fixed *slot* order (see
+#: ``DatabaseExamplesDialog._toggle_run``): the first run added takes slot 0,
+#: and removing a run frees its slot for the next add rather than shifting
+#: anyone else's colour. See that constant's own comment for the palette
+#: itself and why "You" never takes a slot.
+_REFERENCE_COLORS = CHART_SERIES
 
 #: How many reference runs (not counting "You", which never takes a slot)
 #: can be compared at once -- one per ``_REFERENCE_COLORS`` entry.
@@ -702,11 +699,15 @@ class DatabaseExamplesDialog(QDialog):
         page.temperature.setVisible(has_temperature and page.temperature.available)
         for series_id, added in self._added.items():
             width = _YOU_WIDTH if series_id == _YOU_ID else _REFERENCE_WIDTH
-            page.voltage.set_series(series_id, _points(added.data, "Voltage [V]"), added.color, width)
-            page.current.set_series(series_id, _points(added.data, "Current [A]"), added.color, width)
+            page.voltage.set_series(
+                series_id, _points(added.data, "Voltage [V]"), added.color, width, name=added.label
+            )
+            page.current.set_series(
+                series_id, _points(added.data, "Current [A]"), added.color, width, name=added.label
+            )
             if _TEMPERATURE in added.data:
                 page.temperature.set_series(
-                    series_id, _points(added.data, _TEMPERATURE), added.color, width
+                    series_id, _points(added.data, _TEMPERATURE), added.color, width, name=added.label
                 )
 
     def _refresh_numbers(self) -> None:

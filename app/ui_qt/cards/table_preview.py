@@ -50,6 +50,7 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 from .. import badges, typography
 from ..style import ACCENT, MUTED
 from .chart_axes import (
+    Y_AXIS_TICK_COUNT,
     as_plot_number,
     fit_axis,
     setup_chart,
@@ -60,11 +61,14 @@ from .chart_axes import (
 try:  # QtCharts is part of PySide6 but absent from some minimal builds.
     from PySide6.QtCharts import (
         QChart,
-        QChartView,
         QLineSeries,
         QScatterSeries,
         QValueAxis,
     )
+
+    # Only defined in chart_axes when QtCharts itself imported cleanly there
+    # too (same guard, same process) -- see ReadoutChartView's own docstring.
+    from .chart_axes import ReadoutChartView
 
     _CHARTS_AVAILABLE = True
 except ImportError:  # pragma: no cover - depends on the PySide6 build
@@ -159,7 +163,7 @@ class TablePreview(QWidget):
             series.attachAxis(self._axis_x)
             series.attachAxis(self._axis_y)
 
-        self._view = QChartView(self._chart)
+        self._view = ReadoutChartView(self._chart, self._axis_x, self._axis_y)
         setup_chart_view(self._view, height)
         layout.addWidget(self._view)
 
@@ -236,6 +240,9 @@ class TablePreview(QWidget):
         if 0 <= index < len(self._curve_shown):
             self._curve_shown[index] = shown
             self._ref_series[index].setVisible(shown)
+            # Visibility alone (no content change) still gates hover
+            # hit-testing: a just-hidden curve must stop being hit at once.
+            self._sync_readout_series()
 
     def _redraw(self) -> None:
         self._line.clear()
@@ -253,6 +260,7 @@ class TablePreview(QWidget):
             for x, y in points:
                 series.append(x, y)
             series.setVisible(shown)
+        self._sync_readout_series()
         all_points = self._main_points + [
             point for points in self._curve_points for point in points
         ]
@@ -261,6 +269,15 @@ class TablePreview(QWidget):
             return
         self._show_empty(False)
         self._fit_axes(all_points)
+
+    def _sync_readout_series(self) -> None:
+        """Feed the hover view's cache from the current draft + overlay --
+        called on every content change and every legend toggle, never on a
+        mouse move (see ``ReadoutChartView.set_readout_series``)."""
+        series = [("Main", _LINE, self._main_points, True)]
+        for curve, points, shown in zip(self._curves, self._curve_points, self._curve_shown):
+            series.append((curve.name, curve.colour, points, shown))
+        self._view.set_readout_series(series)
 
     # ------------------------------------------------------------------
     def _points(self, rows: list[list[object]]) -> list[tuple[float, float]]:
@@ -284,7 +301,7 @@ class TablePreview(QWidget):
         xs = [p[0] for p in points]
         ys = [p[1] for p in points]
         fit_axis(self._axis_x, min(xs), max(xs))
-        fit_axis(self._axis_y, min(ys), max(ys))
+        fit_axis(self._axis_y, min(ys), max(ys), tick_count=Y_AXIS_TICK_COUNT)
 
     def _show_empty(self, empty: bool) -> None:
         self._view.setVisible(not empty)

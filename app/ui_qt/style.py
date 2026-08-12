@@ -61,6 +61,16 @@ REFERENCE = "#6f42c1"
 #: ``ACCENT`` and the three severity colours are reserved against this set
 #: and must never be added to it.
 REFERENCE_BADGES = ("#0c8581", "#5563c9", "#8f3167", "#79670b")
+#: Categorical colours for a small-multiples chart's curves (the
+#: database-examples Compare dialog's reference runs). From the project's
+#: dataviz skill's validated categorical palette (green / magenta / yellow /
+#: aqua) -- deliberately skipping the palette's blue slot, which ``ACCENT``
+#: (the colour "your" own curve always renders in) already occupies, so a
+#: future reader must not "restore" blue here. Deliberately distinct from
+#: ``REFERENCE_BADGES``: that set names *which pinned reference* a value
+#: came from app-wide, while this one is a chart's own curve-to-curve
+#: contrast and carries no reference identity.
+CHART_SERIES = ("#008300", "#e87ba4", "#eda100", "#1baf7a")
 #: A required-but-absent/required-parameter tint -- distinct from both
 #: ``ERROR`` (invalid) and ``ACCENT`` (a merely-suggested field), so a
 #: schema-required parameter reads as its own, readable, amber category in
