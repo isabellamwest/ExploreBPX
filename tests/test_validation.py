@@ -6,8 +6,11 @@ Pure Python, no Qt.
 from __future__ import annotations
 
 from core.validation import (
+    BPXExceptionDiagnostic,
     PydanticErrorDiagnostic,
+    PythonWarningDiagnostic,
     Severity,
+    input_fact,
     merge_union_pair,
     merge_union_pairs_by_location,
 )
@@ -15,6 +18,10 @@ from core.validation import (
 
 def _diag(error_type: str, message: str = "msg") -> PydanticErrorDiagnostic:
     return PydanticErrorDiagnostic(raw_error={"type": error_type, "msg": message})
+
+
+def _diag_with_input(error_type: str, value: object, message: str = "msg") -> PydanticErrorDiagnostic:
+    return PydanticErrorDiagnostic(raw_error={"type": error_type, "msg": message, "input": value})
 
 
 def test_merge_union_pair_collapses_float_and_int_type():
@@ -121,3 +128,71 @@ def test_merge_union_pair_severity_preserved():
     )
     merged = merge_union_pair((float_d, int_d))
     assert merged[0].severity == Severity.ERROR
+
+
+# --- input_fact --------------------------------------------------------
+
+
+def test_input_fact_numeric_int():
+    assert input_fact(_diag_with_input("greater_than", 5)) == "input 5"
+
+
+def test_input_fact_numeric_float():
+    assert input_fact(_diag_with_input("less_than_equal", -0.3)) == "input -0.3"
+
+
+def test_input_fact_excludes_bool():
+    """``bool`` is an ``int`` subclass in Python, but no user typed "True"
+    into a numeric field."""
+    assert input_fact(_diag_with_input("float_type", True)) is None
+    assert input_fact(_diag_with_input("float_type", False)) is None
+
+
+def test_input_fact_excludes_non_finite_float():
+    assert input_fact(_diag_with_input("float_type", float("inf"))) is None
+    assert input_fact(_diag_with_input("float_type", float("-inf"))) is None
+    assert input_fact(_diag_with_input("float_type", float("nan"))) is None
+
+
+def test_input_fact_excludes_non_numeric_input():
+    assert input_fact(_diag_with_input("dict_type", {"a": 1})) is None
+    assert input_fact(_diag_with_input("list_type", [1, 2])) is None
+    assert input_fact(_diag_with_input("string_type", "banana")) is None
+    assert input_fact(_diag_with_input("float_type", None)) is None
+
+
+def test_input_fact_none_for_a_missing_field_error():
+    """A ``missing`` error carries no offending value at all (``.input`` is
+    ``None`` since the raw dict has no ``"input"`` key) -- nothing is
+    invented to fill the gap."""
+    assert input_fact(_diag("missing", "Field required")) is None
+
+
+def test_input_fact_none_for_non_pydantic_diagnostic_kinds():
+    import warnings
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        warnings.warn("test warning", stacklevel=1)
+    warning_diag = PythonWarningDiagnostic(raw_warning=caught[0])
+    assert input_fact(warning_diag) is None
+
+    exc_diag = BPXExceptionDiagnostic(raw_exception=ValueError("boom"))
+    assert input_fact(exc_diag) is None
+
+
+def test_merge_union_pair_yields_one_input_fact_not_two():
+    """A merged FloatInt union pair must produce at most one input_fact --
+    proven directly rather than assumed. Both halves are constructed with
+    the same real numeric input (not reachable live, since a genuinely
+    numeric value always parses as the float branch and so never raises
+    both halves of the pair -- see the float_type/int_type docstring above)
+    specifically so a regression that stopped collapsing the pair would be
+    caught here as two suffixes, not zero."""
+    float_d = _diag_with_input("float_type", 5, "Input should be a valid number")
+    int_d = _diag_with_input("int_type", 5, "Input should be a valid integer")
+
+    merged = merge_union_pair((float_d, int_d))
+
+    assert len(merged) == 1
+    assert [input_fact(d) for d in merged] == ["input 5"]

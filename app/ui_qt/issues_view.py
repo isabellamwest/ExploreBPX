@@ -21,7 +21,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QFrame, QListWidgetItem, QSizePolicy, QVBoxLayout, QWidget
 
-from core.validation import Severity, merge_union_pair
+from core.validation import Severity, input_fact, merge_union_pair
 
 from . import parameter_row, style
 from .content_sized_list import ContentSizedList
@@ -95,14 +95,20 @@ class IssuesView(QWidget):
         for issue in merged:
             is_error = issue.severity == Severity.ERROR
             label = "ERROR" if is_error else "WARN"
-            item = QListWidgetItem(f"[{label}] {issue.message}")
+            # The offending value, when the validator captured a real number
+            # -- see core.validation.input_fact's own fidelity rule. *merged*
+            # has already collapsed a FloatInt union pair to one diagnostic,
+            # so this never fires twice for one underlying problem.
+            fact = input_fact(issue)
+            message = f"{issue.message} · {fact}" if fact else issue.message
+            item = QListWidgetItem(f"[{label}] {message}")
             # Same treatment as the Diagnostics page's issue rows: a
             # delegate-painted severity icon (SEVERITY_ROLE) plus the muted
             # verbatim message; the location slot stays empty -- this list is
             # already scoped to one parameter.
             item.setData(
                 parameter_row.HTML_ROLE,
-                parameter_row.compose_issue_row_html("", issue.message),
+                parameter_row.compose_issue_row_html("", issue.message, fact),
             )
             item.setData(parameter_row.SEVERITY_ROLE, "error" if is_error else "warning")
             item.setToolTip(style.severity_tooltip(issue.severity))

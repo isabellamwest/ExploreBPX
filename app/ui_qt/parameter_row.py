@@ -218,7 +218,7 @@ def value_tooltip(value: object) -> str:
     return text
 
 
-def compose_issue_row_html(location: str, message: str) -> str:
+def compose_issue_row_html(location: str, message: str, detail: str | None = None) -> str:
     """Compose an issue row's rich-text fragment: the bold location on the
     first line, the validator's verbatim message (muted, smaller) on the
     second -- or the message alone when there is no location to show.
@@ -236,23 +236,29 @@ def compose_issue_row_html(location: str, message: str) -> str:
     which drops the row to a single message line rather than an empty first
     line. *location* is expected already section-relative (the owning
     section is the group header/rail entry above the row), and its trailing
-    unit is muted like every other parameter label."""
+    unit is muted like every other parameter label.
+
+    *detail* is an optional short fact (e.g. :func:`core.validation.
+    input_fact`'s offending value) appended after *message* with the app's
+    " · " separator, inside the same span -- same muted style, same line --
+    never altering *message* itself. ``None``/empty omits it entirely."""
+    full_message = f"{message} · {detail}" if detail else message
     if not location:
         # The message is the whole row here (a document-level diagnostic, or
         # the Issues tab, already scoped to one parameter). Muted META is the
         # right weight for a *second* line under a bold location; as the only
         # line it made the page's actual content read as a footnote, so it
         # takes the body rung and the body colour instead.
-        return _span(message, color=style.DEFAULT_TEXT)
-    detail = (
+        return _span(full_message, color=style.DEFAULT_TEXT)
+    message_html = (
         f'<span style="color:{style.MUTED}; {typography.size_qss(typography.META)}">'
-        f"{_html.escape(message)}</span>"
+        f"{_html.escape(full_message)}</span>"
     )
     name, unit = split_name_and_unit(location)
     head = _span(name, color=style.DEFAULT_TEXT, bold=True)
     if unit:
         head += _span(f" [{unit}]", color=style.MUTED)
-    return head + "<br>" + detail
+    return head + "<br>" + message_html
 
 
 def build_parameter_row_html(label: str, *, severity: str | None = None, is_empty: bool = False) -> str:

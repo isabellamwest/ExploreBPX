@@ -10,11 +10,14 @@ only captures and exposes validator output.
 
 from __future__ import annotations
 
+import math
 import warnings as _warnings
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
+
+from .values import format_value
 
 
 class Severity(str, Enum):
@@ -112,6 +115,38 @@ def warnings_as_diagnostics(
 ) -> list[PythonWarningDiagnostic]:
     """Wrap captured Python warnings as diagnostics, preserving all information."""
     return [PythonWarningDiagnostic(raw_warning=w) for w in caught]
+
+
+# --- Presentation helpers ----------------------------------------------------
+#
+# Read a diagnostic's already-captured fields and produce plain display text;
+# they never alter, invent or interpret what the validator said.
+
+
+def input_fact(diagnostic: ValidatorDiagnostic) -> str | None:
+    """Render a diagnostic's offending value as ``"input <value>"``, or
+    ``None`` when there is nothing safe to show.
+
+    Fidelity rule: this surfaces exactly what ``PydanticErrorDiagnostic.input``
+    already captured, verbatim and unrounded -- the validator's ``.message``
+    is never touched, and no value is invented for a diagnostic that carries
+    none (a ``missing``-field error, a Python warning, a bare exception).
+
+    Only a genuine scalar number qualifies: a real ``int``/``float``.
+    ``bool`` is explicitly excluded even though it is an ``int`` subclass in
+    Python -- a user never typed "True" into a numeric field -- and a
+    non-finite ``float`` (``inf``/``nan``) is excluded too, since neither
+    reads as a value the user recognises on the page. Every other input
+    shape -- a dict, list, string, or ``None`` -- yields ``None``.
+    """
+    if not isinstance(diagnostic, PydanticErrorDiagnostic):
+        return None
+    value = diagnostic.input
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    return f"input {format_value(value)}"
 
 
 # --- Display helpers --------------------------------------------------------

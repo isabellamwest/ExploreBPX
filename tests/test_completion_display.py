@@ -209,6 +209,60 @@ def test_union_pair_does_not_merge_across_different_locations(app_driver, tmp_pa
 
 
 # ---------------------------------------------------------------------------
+# The offending value (core.validation.input_fact) is appended to the
+# Issues section's own row, same as the Diagnostics page's.
+# ---------------------------------------------------------------------------
+
+
+def test_issues_section_row_appends_the_offending_value(app_driver, tmp_path, valid_spm_dict):
+    """A fractional value on a whole-number field -- the genuinely reachable
+    scalar failure today (see ``test_validation_page_layout.py``'s companion
+    test for why) -- shows the same " · input 1.5" suffix here as it does on
+    the Diagnostics page, since both read ``core.validation.input_fact``."""
+    raw = json.loads(json.dumps(valid_spm_dict))
+    raw["Parameterisation"]["Cell"][
+        "Number of electrode pairs connected in parallel to make a cell"
+    ] = 1.5
+    d = app_driver
+    d.open(_write(tmp_path, "fractional_electrode_count.json", raw))
+    d.go_to(_CELL + ("Number of electrode pairs connected in parallel to make a cell",))
+
+    assert d.issues_section_visible()
+    assert d.issues_list_texts() == [
+        "[ERROR] Input should be a valid integer, got a number with a fractional part · input 1.5"
+    ]
+
+
+def test_union_pair_with_matching_numeric_input_still_yields_one_suffix(qtbot):
+    """The merge-then-suffix invariant, proven against the real
+    ``IssuesView.show_issues`` call path rather than assumed: feed it an
+    *unmerged* float_type/int_type pair (``show_issues`` merges internally,
+    same as the live pipeline already does before either surface ever sees
+    a diagnostic) where -- deliberately, to stress the case -- both halves
+    carry the same real numeric input. Only one row, one suffix, results.
+    (Not reachable through a live document: a genuinely numeric, finite,
+    non-bool value always parses as the float branch, so bpx itself never
+    raises both halves of the pair for one.)"""
+    from core.validation import PydanticErrorDiagnostic
+    from ui_qt.issues_view import IssuesView
+
+    float_d = PydanticErrorDiagnostic(
+        raw_error={"type": "float_type", "msg": "Input should be a valid number", "input": 5}
+    )
+    int_d = PydanticErrorDiagnostic(
+        raw_error={"type": "int_type", "msg": "Input should be a valid integer", "input": 5}
+    )
+    view = IssuesView()
+    qtbot.addWidget(view)
+
+    count = view.show_issues([float_d, int_d], ("Parameterisation", "Cell", "X"))
+
+    assert count == 1
+    texts = [view._list.item(i).text() for i in range(view._list.count())]
+    assert texts == ["[ERROR] Input should be a valid number · input 5"]
+
+
+# ---------------------------------------------------------------------------
 # The Issues section's header COUNT must always equal its own LIST count --
 # two Inspector call-sites (live-preview, Escape-revert) used to push the
 # unmerged diagnostic length into the old tab badge while the list stayed

@@ -168,3 +168,20 @@ def test_a_message_only_issue_row_is_body_text_not_a_footnote():
     assert typography.size_qss(typography.META) not in html
     assert style.MUTED not in html
     assert style.DEFAULT_TEXT in html
+
+
+def test_a_detail_suffix_joins_the_message_with_the_app_separator():
+    """*detail* (e.g. the offending value) lands after *message* on the
+    same line, in the same muted-message span -- never a separate line or
+    a different colour -- joined with the app's " · " middle-dot
+    separator, and the verbatim message text survives unchanged."""
+    html = compose_issue_row_html("Thickness [m]", "value must be positive", "input -0.3")
+    assert "value must be positive · input -0.3" in html
+    assert html.count("<br>") == 1  # still just location/message, one split
+
+
+def test_no_detail_omits_the_suffix_entirely():
+    html_with_none = compose_issue_row_html("Thickness [m]", "value must be positive", None)
+    html_without = compose_issue_row_html("Thickness [m]", "value must be positive")
+    assert html_with_none == html_without
+    assert "·" not in html_without

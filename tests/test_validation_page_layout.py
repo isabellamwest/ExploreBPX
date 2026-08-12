@@ -217,6 +217,29 @@ def test_issue_row_splits_location_from_message(app_driver, many_issues_path):
     assert "[ERROR]" not in row and "[WARN]" not in row
 
 
+def test_numeric_diagnostic_appends_the_offending_value(app_driver, tmp_path, valid_spm_dict):
+    """A fractional value on a whole-number field is the genuinely reachable
+    "the value itself is wrong" scalar error today -- ``bpx`` 1.1.1 declares
+    no ``le``/``ge`` Field constraint on any numeric BPX property, so this
+    (not a range violation) is what actually carries a real ``float`` on
+    ``.input``. The row now appends it after the verbatim message, muted,
+    on the same line, via the app's " · " separator."""
+    raw = json.loads(json.dumps(valid_spm_dict))
+    raw["Parameterisation"]["Cell"][
+        "Number of electrode pairs connected in parallel to make a cell"
+    ] = 1.5
+    d = app_driver
+    d.open(_write(tmp_path, "fractional_electrode_count.json", raw))
+
+    texts = d.validation_issue_texts()
+    row = next(t for t in texts if "· input 1.5" in t)
+    # Additive only -- the verbatim message survives untouched.
+    assert "Input should be a valid integer, got a number with a fractional part" in row
+
+    html = d.validation_issue_html()
+    assert any("· input 1.5" in h for h in html)
+
+
 def test_issue_rows_carry_the_severity_role_for_the_delegate_icon(app_driver, many_issues_path):
     from ui_qt import parameter_row
 

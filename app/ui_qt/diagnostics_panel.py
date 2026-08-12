@@ -47,7 +47,12 @@ filled-circle icon (:data:`ui_qt.parameter_row.SEVERITY_ROLE`) -- red X for
 an error, amber ! for a warning -- replacing the old bracketed
 ``[ERROR]``/``[WARN]`` text tag. This is a shared change to
 ``ParameterRowDelegate`` itself, so the Inspector's Issues tab
-(:mod:`ui_qt.issues_view`) picks it up too. A task row keeps its own glyph
+(:mod:`ui_qt.issues_view`) picks it up too. When the validator's own
+offending value is a real number, it is appended after the message with the
+app's " · " separator (:func:`core.validation.input_fact`) -- e.g. "... ·
+input -0.3" -- via the shared :func:`ui_qt.parameter_row.
+compose_issue_row_html`, so both surfaces show it identically; the verbatim
+message itself is never altered. A task row keeps its own glyph
 (a hollow circle for "missing", a half-filled circle for a committed null),
 bold name + muted unit, a REQUIRED tag where applicable, the absorbed
 validator message as muted secondary text, and -- task rows only (D14) --
@@ -99,7 +104,7 @@ from core.page_buckets import (
     SectionBucket,
     strip_parameterisation_prefix,
 )
-from core.validation import Severity, merge_union_pair
+from core.validation import Severity, input_fact, merge_union_pair
 
 from . import icons, parameter_row, style, typography
 from .activating_list import ActivatingList
@@ -386,8 +391,15 @@ def _add_issue_row(list_widget: QListWidget, bucket_label: str, diagnostic, nav_
     label = "ERROR" if is_error else "WARN"
     location = _relative_location(bucket_label, nav_path)
     plain_loc = location or _EMPTY_LOCATION_LABEL
-    item = QListWidgetItem(f"[{label}] {plain_loc}: {diagnostic.message}")
-    item.setData(parameter_row.HTML_ROLE, parameter_row.compose_issue_row_html(location, diagnostic.message))
+    # The offending value, when the validator captured a real number --
+    # see core.validation.input_fact's own fidelity rule. bucket.issues has
+    # already been through merge_union_pair (core.page_buckets.
+    # bucket_page_content, once per document), so a FloatInt union pair
+    # never reaches here twice.
+    fact = input_fact(diagnostic)
+    message = f"{diagnostic.message} · {fact}" if fact else diagnostic.message
+    item = QListWidgetItem(f"[{label}] {plain_loc}: {message}")
+    item.setData(parameter_row.HTML_ROLE, parameter_row.compose_issue_row_html(location, diagnostic.message, fact))
     item.setData(parameter_row.SEVERITY_ROLE, "error" if is_error else "warning")
     item.setToolTip(style.severity_tooltip(diagnostic.severity))
     item.setData(_NAV_PATH_ROLE, nav_path)
