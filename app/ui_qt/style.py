@@ -754,10 +754,12 @@ QListWidget#SearchPopupList::item:selected { background: #cfe4fc; color: #1f2328
    stream" redesign (PLAN-diagnostics-stream.md), no rail, no separate
    detail pane. Fold-header/clear-line bands paint on RAIL_BG (the name
    predates this redesign; the constant itself just means "a band one
-   shade off white"). The strip/chip border lines use BORDER_STRONG
-   (#a5b1bd), one step darker than the app's usual #b9c4ce, so this page's
-   own regions read a touch more defined -- flat colour only, no shadows. */
-QWidget#DiagnosticsSummaryStrip { background: #e7ecf1; border-bottom: 1px solid #a5b1bd; }
+   shade off white"). Only the chip borders keep BORDER_STRONG (#a5b1bd):
+   a bordered chip is a control and earns the darker step, while the
+   page's dividers (the strip's bottom edge here, the painted band
+   hairlines in diagnostics_panel.py) stay on the ordinary #b9c4ce --
+   repeated once per section, the darker line read too heavy. */
+QWidget#DiagnosticsSummaryStrip { background: #e7ecf1; border-bottom: 1px solid #b9c4ce; }
 /* One strip chip: a small bordered, rounded card on the shaded strip
    band, distinct from the flat text it replaced. Each chip is a
    click-toggle filter; its "off" state is a dynamic QSS property

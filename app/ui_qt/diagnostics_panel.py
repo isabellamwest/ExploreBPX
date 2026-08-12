@@ -794,13 +794,15 @@ class _DiagnosticsRowDelegate(ParameterRowDelegate):
         Windows panels, so every band also draws a line that cannot). A
         fold header's hairline sits on its bottom edge, against the rows it
         opens; the clear line's sits on its top edge, against the rows
-        above it."""
+        above it. The line is the app's ordinary ``BORDER`` tone, not
+        ``BORDER_STRONG`` -- at one per section the darker step made the
+        dividers the loudest thing on the page."""
         painter.save()
         painter.fillRect(option.rect, QColor(style.RAIL_BG))
         edge_y = option.rect.top() if edge_at_top else option.rect.bottom()
         painter.fillRect(
             QRect(option.rect.left(), edge_y, option.rect.width(), 1),
-            QColor(style.BORDER_STRONG),
+            QColor(style.BORDER),
         )
         painter.restore()
 
