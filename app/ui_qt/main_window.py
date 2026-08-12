@@ -1063,7 +1063,7 @@ class MainWindow(QMainWindow):
         return self._save()
 
     def _open(self) -> None:
-        name, _ = QFileDialog.getOpenFileName(self, "Open BPX", "", BPX_FILTER)
+        name, _ = QFileDialog.getOpenFileName(self, "Open BPX file", "", BPX_FILTER)
         if not name:
             return
         self._open_chosen_path(Path(name))
@@ -1501,7 +1501,7 @@ class MainWindow(QMainWindow):
         said what they want, and docking a reference never touches the main
         document.
         """
-        name, _ = QFileDialog.getOpenFileName(self, "Open BPX", "", BPX_FILTER)
+        name, _ = QFileDialog.getOpenFileName(self, "Open BPX file", "", BPX_FILTER)
         if not name:
             return
         self._open_reference_path(Path(name))
@@ -1563,7 +1563,7 @@ class MainWindow(QMainWindow):
             return
         message = {
             PinReferenceOutcome.ADDED: (
-                f"{self._state.references[-1].filename} · pinned as reference"
+                f"Pinned {self._state.references[-1].filename} as reference"
             ),
             PinReferenceOutcome.ALREADY_REFERENCE: "Already pinned as reference",
             PinReferenceOutcome.AT_CAP: AT_CAP_MESSAGE,
@@ -1866,7 +1866,7 @@ class MainWindow(QMainWindow):
             # action), leaving the document effectively un-savable.
             if adopted_backing:
                 session.backing_file = None
-            QMessageBox.critical(self, "Save failed", str(exc))
+            QMessageBox.critical(self, "Cannot save", str(exc))
             return False
         self._refresh_after_save()
         return True
@@ -1944,7 +1944,7 @@ class MainWindow(QMainWindow):
             session.save()
         except OSError as exc:
             session.backing_file = backing
-            QMessageBox.critical(self, "Save failed", str(exc))
+            QMessageBox.critical(self, "Cannot save", str(exc))
             return False
         self._save_dialog_dir = Path(name).parent
         self._refresh_after_save()
@@ -2077,7 +2077,7 @@ class MainWindow(QMainWindow):
         try:
             Path(name).write_bytes(export.to_bytes(session.document.raw, fmt))
         except OSError as exc:
-            QMessageBox.critical(self, "Export failed", str(exc))
+            QMessageBox.critical(self, "Cannot export", str(exc))
 
     def _update_title(self) -> None:
         """Sync the OS window title and bottom status bar with session state.
@@ -2100,7 +2100,7 @@ class MainWindow(QMainWindow):
             state_text = "Read-only"
         else:
             state_text = "Unsaved changes" if session.dirty else "Saved"
-        self._status_label.setText(f"{name}  |  {state_text}")
+        self._status_label.setText(f"{name} · {state_text}")
 
     def _fallback_filename(self, session: DocumentSession) -> str:
         """The file name to show when a document has no Header Title."""
@@ -2199,7 +2199,7 @@ class MainWindow(QMainWindow):
         if history is None:
             self._workspace.set_workspaces([], [])
             return
-        # "open now" marks whichever workspace is current, empty or not. It
+        # "Open" marks whichever workspace is current, empty or not. It
         # used to be earned by an open document instead, which was right
         # while a workspace only existed once it held one -- now that
         # creating a workspace is its own act, an empty board is a workspace

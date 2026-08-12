@@ -467,7 +467,7 @@ class ParameterListPanel(QWidget):
 
         Unlike :meth:`reveal`, which only ever addresses a real row that
         already exists in the document, this addresses a field that isn't
-        there yet -- what an Outstanding "Go to ›" action for a missing
+        there yet -- what an Outstanding "Go to ▸" action for a missing
         field calls.
         """
         if self._node is None:

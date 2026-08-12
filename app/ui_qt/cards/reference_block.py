@@ -14,7 +14,7 @@ the main editor's input above; the value column itself starts at the same x
 as that input (``style.ROLE_LABEL_WIDTH``), so the eye compares vertically.
 
 A row says exactly one thing beyond its value: **same** when the value
-equals the main document's, or a **Use this value** button when it differs
+equals the main document's, or a **Use** button when it differs
 (the pull action, D9 wording). The button's
 presence *is* the differs signal -- there is no third word, no severity
 colour, and no styling that could read as validation. A reference lacking
@@ -142,7 +142,7 @@ class ReferenceTableGrid(QWidget):
 
 class _LedgerRow(QWidget):
     """One distinct reference value: its badge cluster, the value, and either
-    "same" or a "Use this value" button."""
+    "same" or a "Use" button."""
 
     #: Emitted with the *first-pinned* index in this row's group. First
     #: pinned, not "the one clicked": the row is one value shared by several
@@ -213,10 +213,10 @@ class _LedgerRow(QWidget):
             same.setObjectName("LedgerSameLabel")
             row.addWidget(same, 0, Qt.AlignTop)
         elif pull_enabled:
-            pull = QPushButton("Use this value")
+            pull = QPushButton("Use")
             pull.setObjectName("PullButton")
             pull.setCursor(Qt.PointingHandCursor)
-            pull.setToolTip(f"Use this value from {pins[self._source_index].name}")
+            pull.setToolTip(f"Use the value from {pins[self._source_index].name}")
             pull.clicked.connect(self._emit_pull)
             row.addWidget(pull, 0, Qt.AlignTop)
         # A read-only card (pull_enabled False) shows the differing value
@@ -245,7 +245,7 @@ class ReferenceLedger(QFrame):
         super().__init__()
         self.setObjectName("ReferenceLedger")
         #: False on a read-only card: rows show differing values without the
-        #: "Use this value" button (the write it invites is not on offer).
+        #: "Use" button (the write it invites is not on offer).
         self._pull_enabled = pull_enabled
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(0, 0, 0, 0)

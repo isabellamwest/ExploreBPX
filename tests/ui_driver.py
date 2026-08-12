@@ -847,7 +847,7 @@ class AppDriver:
         return self._row_labels("RecentRow")
 
     def current_workspace_row_label(self) -> str | None:
-        """The label of the row wearing the "open now" pill, if any."""
+        """The label of the row wearing the "Open" pill, if any."""
         from PySide6.QtWidgets import QLabel
 
         for row in self._workspace_rows():
@@ -912,10 +912,14 @@ class AppDriver:
         return self
 
     def visible_rail_groups(self) -> list[str]:
-        """Which rail groups (Workspaces, Recent) are currently shown -- each
-        hides whole, title included, whenever it has no rows."""
+        """Which rail groups (Named workspaces, Recent workspaces) are
+        currently shown -- each hides whole, title included, whenever it has
+        no rows."""
         ws = self._w._workspace
-        groups = {"Workspaces": ws._workspaces_group, "Recent": ws._recent_group}
+        groups = {
+            "Named workspaces": ws._workspaces_group,
+            "Recent workspaces": ws._recent_group,
+        }
         return [name for name, group in groups.items() if not group.isHidden()]
 
     # --- the board's header and banner ------------------------------------
@@ -983,14 +987,14 @@ class AppDriver:
         return not ws._main_section.isHidden() and not ws._fact_band.isHidden()
 
     def click_edit_route(self) -> "AppDriver":
-        """Click the main card's "Edit its parameters ▸"."""
+        """Click the main card's "Edit ▸"."""
         self._qtbot.mouseClick(
             self._w._workspace._main_card._edit_route, Qt.LeftButton
         )
         return self
 
     def click_issue_route(self) -> "AppDriver":
-        """Click the main card's "N errors · why? ▸"."""
+        """Click the main card's "Diagnostics ▸"."""
         self._qtbot.mouseClick(
             self._w._workspace._main_card._issue_route, Qt.LeftButton
         )

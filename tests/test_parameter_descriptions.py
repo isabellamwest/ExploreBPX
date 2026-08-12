@@ -1,4 +1,5 @@
-"""The technical-descriptions dataset, its loader, and the Documentation tab.
+"""The technical-descriptions dataset, its loader, and the Documentation
+section.
 
 The dataset (``app/data/parameter_descriptions.yaml``) is replaceable data:
 these tests pin the loader's contract (section-scoped lookup, graceful

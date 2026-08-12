@@ -466,7 +466,7 @@ def test_the_main_card_routes_to_the_editor_and_to_its_errors(
 
     d.open(invalid_bpx_path)
     d.show_view("Workspace")
-    assert d.issue_route_text() == "1 error · why? ▸"
+    assert d.issue_route_text() == "Diagnostics ▸"
     d.click_issue_route()
     assert d.current_view_index() == 1
 

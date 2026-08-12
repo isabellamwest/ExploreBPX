@@ -423,7 +423,7 @@ def test_a_missing_field_row_does_not_repeat_itself(app_driver):
 
 def test_stream_rows_stop_at_a_readable_measure(app_driver, tmp_path):
     """A validator message ran the full bleed on a wide window, and its
-    right-aligned "Go to ›" ended up a thousand pixels from its own row."""
+    right-aligned "Go to ▸" ended up a thousand pixels from its own row."""
     from PySide6.QtWidgets import QStyleOptionViewItem
 
     from ui_qt.diagnostics_panel import _DiagnosticsRowDelegate

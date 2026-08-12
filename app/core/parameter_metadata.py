@@ -29,8 +29,9 @@ class ParameterMetadata:
     Every field is optional; consumers render only what is populated.
     ``physical_meaning``, ``units`` and ``accepted_types`` are the quick-glance
     facts (the ( i ) popover). ``symbol`` is LaTeX source. ``documentation`` is
-    the ordered (heading, prose) sections for the Documentation tab, rendered
-    verbatim in dataset order so the dataset file controls its own structure.
+    the ordered (heading, prose) sections for the Documentation section,
+    rendered verbatim in dataset order so the dataset file controls its own
+    structure.
     """
 
     physical_meaning: str | None = None

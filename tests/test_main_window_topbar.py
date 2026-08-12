@@ -98,7 +98,7 @@ def test_identity_falls_back_to_filename_when_all_header_fields_empty(
 def test_status_bar_shows_filename_and_state_not_title(app_driver, valid_spm_path):
     app_driver.open(valid_spm_path)
 
-    assert app_driver.status_text() == f"{valid_spm_path.name}  |  Saved"
+    assert app_driver.status_text() == f"{valid_spm_path.name} · Saved"
     assert "Minimal valid SPM example" not in app_driver.status_text()
 
 
@@ -106,7 +106,7 @@ def test_status_bar_reflects_dirty_state(app_driver, spm_workfile):
     capacity = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
     app_driver.open(spm_workfile).go_to(capacity).edit_field(6.0).commit()
 
-    assert app_driver.status_text() == f"{spm_workfile.name}  |  Unsaved changes"
+    assert app_driver.status_text() == f"{spm_workfile.name} · Unsaved changes"
 
 
 # ---------------------------------------------------------------------------
@@ -182,7 +182,7 @@ def test_open_shortcut_opens_a_file_with_none_loaded(
 
     app_driver.press_open_shortcut()
 
-    assert app_driver.status_text() == f"{valid_spm_path.name}  |  Saved"
+    assert app_driver.status_text() == f"{valid_spm_path.name} · Saved"
 
 
 def test_open_shortcut_reaches_open_from_the_editor_page(
@@ -206,7 +206,7 @@ def test_open_shortcut_reaches_open_from_the_editor_page(
 
     app_driver.press_open_shortcut()
 
-    assert app_driver.status_text() == f"{valid_spm_path.name}  |  Saved"
+    assert app_driver.status_text() == f"{valid_spm_path.name} · Saved"
 
 
 def test_open_shortcut_reaches_open_from_the_diagnostics_page(
@@ -228,4 +228,4 @@ def test_open_shortcut_reaches_open_from_the_diagnostics_page(
 
     app_driver.press_open_shortcut()
 
-    assert app_driver.status_text() == f"{valid_spm_path.name}  |  Saved"
+    assert app_driver.status_text() == f"{valid_spm_path.name} · Saved"

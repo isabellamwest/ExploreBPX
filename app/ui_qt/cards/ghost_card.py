@@ -4,7 +4,7 @@ row -- a parameter some pinned reference has and the main document does not.
 No draft, no input widget: just the parameter's name and the ledger
 (:class:`~.reference_block.ReferenceLedger`, shared with ``ParameterCard``'s
 own reference section so the two can never drift), one row per distinct
-reference value with "Use this value" always offered -- there is no main-file value for
+reference value with "Use" always offered -- there is no main-file value for
 any of them to be "the same" as. Mirrors ``ValidationEmptyState``'s "never
 dirty" contract (a class-level ``is_dirty``/``is_editable``) so the
 Inspector's undo guard (which reads ``is_dirty``) and the test driver's
@@ -84,7 +84,7 @@ class GhostParameterCard(QWidget):
 
         body, body_layout = page_content()
         # On a read-only main the reference value stays a visible fact, but
-        # "Use this value" would write to the document, so it is not offered.
+        # "Use" would write to the document, so it is not offered.
         self._ledger = ReferenceLedger(pull_enabled=not read_only)
         self._ledger.pull_requested.connect(self.pull_requested)
         body_layout.addWidget(self._ledger)

@@ -73,7 +73,7 @@ class ModeBody(QWidget):
         return None
 
     def pending_grid(self):
-        """This body's grid, for the card to drive its "Unsaved edits" bar
+        """This body's grid, for the card to drive its "Unsaved changes" bar
         (``EditorCard._bind_grid_pending``) -- ``None`` for a body without
         one (numbers, expressions, JSON)."""
         return None

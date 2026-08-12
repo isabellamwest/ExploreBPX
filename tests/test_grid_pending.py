@@ -6,7 +6,7 @@ Two mechanisms keep the cell/grid Enter split from being a trap (see the
 * confirming a cell steps the selection down a row (``_GridView``), so
   spreadsheet-style repeated Enter walks the column instead of falling
   through to the grid layer and committing the document by accident;
-* a dirty draft shows an "Unsaved edits" bar whose Apply/Discard buttons
+* a dirty draft shows an "Unsaved changes" bar whose Apply/Discard buttons
   re-enter the exact keyboard paths. The *card* drives its visibility from
   ``is_dirty`` -- never the grid itself -- so an edit typed back to the
   original value hides it again.
@@ -77,11 +77,13 @@ def test_pending_bar_hidden_until_told():
 
 
 def test_pending_bar_names_both_halves_of_the_contract():
-    """The buttons carry their keys in the label -- the bar exists to make the
-    invisible keyboard contract readable."""
+    """The buttons carry their keys in the tooltip -- the bar exists to make
+    the invisible keyboard contract readable."""
     grid = NumericGrid(("x", "y"))
-    assert grid._pending_bar.apply_button.text() == "Apply (Enter)"
-    assert grid._pending_bar.discard_button.text() == "Discard (Esc)"
+    assert grid._pending_bar.apply_button.text() == "Apply"
+    assert grid._pending_bar.discard_button.text() == "Discard"
+    assert grid._pending_bar.apply_button.toolTip() == "Write these edits to the file (Enter)"
+    assert grid._pending_bar.discard_button.toolTip() == "Revert to the file's value (Esc)"
 
 
 def test_read_only_multicolumn_grid_builds_no_pending_bar():

@@ -91,7 +91,7 @@ def test_symbol_link_and_docs_hint_render_when_populated(qtbot):
     texts = [w.text() for w in widgets]
     assert "Symbol" in texts
     assert any("w3id.org/example" in t for t in texts)
-    assert any("Documentation tab" in t for t in texts)
+    assert any("Documentation section" in t for t in texts)
     # The long-form prose itself must NOT render in the glance popover.
     assert not any("Long prose." in t for t in texts)
     # The symbol renders as a pixmap (matplotlib present), not as raw LaTeX.

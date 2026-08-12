@@ -30,7 +30,7 @@ Three things keep that split legible rather than a trap:
 - confirming a cell **steps the selection down a row** (:class:`_GridView`),
   so the spreadsheet habit of "Enter, Enter, Enter" walks down the column
   rather than stopping dead on the row just typed;
-- a dirty grid shows an **"Unsaved edits" bar** (:class:`_PendingBar`) naming
+- a dirty grid shows an **"Unsaved changes" bar** (:class:`_PendingBar`) naming
   both halves of the contract -- Apply (Enter) and Discard (Esc) -- as
   clickable buttons. The grid never decides when: the owning card drives
   :meth:`NumericGrid.set_pending` from its real ``is_dirty`` state (see
@@ -353,7 +353,7 @@ class _GridView(QTableView):
 
 
 class _PendingBar(QWidget):
-    """The "Unsaved edits · Apply · Discard" strip under a dirty grid.
+    """The "Unsaved changes · Apply · Discard" strip under a dirty grid.
 
     The grid's draft/commit cycle used to be invisible: Enter-to-apply and
     Esc-to-discard existed only in a collapsed hint. This bar is the visible
@@ -390,22 +390,22 @@ class _PendingBar(QWidget):
         dot.setTextFormat(Qt.RichText)
         dot.setText(icons.html_img(icons.DOT, color=ACCENT))
         layout.addWidget(dot)
-        label = QLabel("Unsaved edits")
+        label = QLabel("Unsaved changes")
         label.setStyleSheet(f"color: {MUTED};")
         layout.addWidget(label)
         layout.addStretch(1)
 
         self.apply_button = QToolButton()
-        self.apply_button.setText("Apply (Enter)")
-        self.apply_button.setToolTip("Write these edits to the file")
+        self.apply_button.setText("Apply")
+        self.apply_button.setToolTip("Write these edits to the file (Enter)")
         self.apply_button.setAccessibleName("Apply edits")
         self.apply_button.setAutoRaise(True)
         self.apply_button.setStyleSheet(f"color: {ACCENT}; {typography.semibold_qss()}")
         layout.addWidget(self.apply_button)
 
         self.discard_button = QToolButton()
-        self.discard_button.setText("Discard (Esc)")
-        self.discard_button.setToolTip("Revert to the file's value")
+        self.discard_button.setText("Discard")
+        self.discard_button.setToolTip("Revert to the file's value (Esc)")
         self.discard_button.setAccessibleName("Discard edits")
         self.discard_button.setAutoRaise(True)
         layout.addWidget(self.discard_button)
@@ -730,7 +730,7 @@ class NumericGrid(QWidget):
         self._model.set_issues(issues)
 
     def set_pending(self, pending: bool) -> None:
-        """Show or hide the "Unsaved edits" bar.
+        """Show or hide the "Unsaved changes" bar.
 
         The grid never decides this itself -- its ``changed`` signal fires on
         edits that may cancel out (retyping the original value) -- so the
@@ -1215,7 +1215,7 @@ class MultiColumnGrid(QWidget):
         self._model.set_issues(issues)
 
     def set_pending(self, pending: bool) -> None:
-        """Show or hide the "Unsaved edits" bar -- see
+        """Show or hide the "Unsaved changes" bar -- see
         ``NumericGrid.set_pending``. A no-op on a read-only grid, whose bar
         is never built."""
         if self._pending_bar is not None:

@@ -654,7 +654,7 @@ QTableWidget#ReferenceTableGridTable QHeaderView::section {
     background: transparent; border: none; border-bottom: 1px solid #eaeef2;
     color: #8c959f; font-weight: ${semibold}; font-size: ${meta}px; padding: 1px 6px;
 }
-/* "Use this value": a quiet purple text button beside the ledger value --
+/* "Use": a quiet purple text button beside the ledger value --
    the pull action stays discoverable without outweighing the main editor
    (the old solid fill was the loudest thing on the card). Hidden for an
    EQUAL row -- nothing to copy -- rather than shown disabled. */

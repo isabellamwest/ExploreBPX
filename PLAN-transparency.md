@@ -117,6 +117,9 @@ for an app concept.
 - **D9 · "Pull" becomes "Use this value"**, undo reading
 `Use "Thickness [m]" from Chen2020`. Wording only; the
 `PullParameter`/`PullSection` command names are unaffected, so D1 stands.
+The button label was later shortened to **Use** by the approved 2026-08-10
+wording pass (D3); the tooltip still names the source file, and the undo
+label and command names are unchanged.
 
 ## Design rules per surface
 

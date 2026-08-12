@@ -57,7 +57,7 @@ VALUE_GHOST_ROLE = Qt.UserRole + 102
 #: page-specific subclass, precisely so the two never diverge.
 SEVERITY_ROLE = Qt.UserRole + 103
 #: Item-data role carrying a row's right-aligned call-to-action string
-#: (e.g. a Diagnostics Outstanding row's "Go to ›"), painted in
+#: (e.g. a Diagnostics Outstanding row's "Go to ▸"), painted in
 #: ``style.ACCENT``: every actionable row displays its own
 #: action, always visible, never folded inline with the name (unlike
 #: :data:`VALUE_ROLE`, a muted monospace value preview, this is normal-
@@ -383,7 +383,7 @@ class ParameterRowDelegate(QStyledItemDelegate):
     def _action_reserved(self, option: QStyleOptionViewItem, index) -> int:
         """Row width the right-aligned call-to-action (:data:`ACTION_ROLE`)
         claims (including its gap), 0 for a row with none. Never elided --
-        action strings are short by convention ("Go to ›", "+ Add section",
+        action strings are short by convention ("Go to ▸", "+ Add section",
         "Choose…"), so unlike :data:`VALUE_ROLE` this reserves its full
         natural width rather than capping/eliding against the row."""
         text = index.data(ACTION_ROLE)

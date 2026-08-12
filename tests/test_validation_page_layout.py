@@ -126,7 +126,7 @@ def test_absent_required_section_header_reads_section_absent(app_driver, tmp_pat
     bucket = d.diagnostics_bucket("Electrolyte")
     assert bucket.outstanding_count == 1
     assert bucket.error_count == 0
-    # its Outstanding row carries the add-section action, not "Go to ›".
+    # its Outstanding row carries the add-section action, not "Go to ▸".
     task_texts = d.diagnostics_stream_task_texts()
     assert any("+ Add section" in text for text in task_texts)
 
@@ -812,11 +812,11 @@ def test_task_row_action_text_is_a_separate_right_aligned_role(app_driver):
     lst = d._w._diagnostics._stream._list
     task_item = next(lst.item(i) for i in range(lst.count()) if lst.item(i).data(dp._KIND_ROLE) == "task")
 
-    assert task_item.data(parameter_row.ACTION_ROLE) == "Go to ›"
+    assert task_item.data(parameter_row.ACTION_ROLE) == "Go to ▸"
     html = task_item.data(parameter_row.HTML_ROLE)
     assert "REQUIRED" in html
     assert "Go to" not in html  # action text lives in ACTION_ROLE, not the HTML fragment
-    assert "· Go to ›" not in task_item.text()  # plain text no longer parenthesises it with REQUIRED
+    assert "· Go to ▸" not in task_item.text()  # plain text no longer parenthesises it with REQUIRED
 
 
 def test_summary_strip_chips_are_bordered_boxes(app_driver, valid_spm_path):

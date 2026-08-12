@@ -24,8 +24,8 @@ from .latex import symbol_label
 #: (heading, ParameterMetadata field name) for the quick-glance facts, in
 #: display order. A field that resolves empty/``None`` is simply omitted.
 #: The long-form documentation deliberately does NOT render here - it is
-#: multi-paragraph prose and lives in the Inspector's Documentation tab; the
-#: popover stays a glance.
+#: multi-paragraph prose and lives in the Inspector's Documentation section;
+#: the popover stays a glance.
 _SECTIONS: tuple[tuple[str, str], ...] = (
     ("Physical meaning", "physical_meaning"),
     ("Units", "units"),
@@ -86,7 +86,7 @@ class ParameterInfoPopover(QWidget):
             link.setToolTip(metadata.specification_link)
             self._layout.addWidget(link)
         if metadata.documentation:
-            hint = QLabel("Full description in the Documentation tab.")
+            hint = QLabel("Full description in the Documentation section.")
             hint.setObjectName("Hint")
             hint.setWordWrap(True)
             self._layout.addWidget(hint)

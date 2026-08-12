@@ -31,7 +31,7 @@ _CAPACITY = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
 
 def _make_dirty(app_driver, spm_workfile) -> None:
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(6.0).commit()
-    assert app_driver.status_text() == f"{spm_workfile.name}  |  Unsaved changes"
+    assert app_driver.status_text() == f"{spm_workfile.name} · Unsaved changes"
 
 
 def _fail_if_called(*args, **kwargs):
@@ -83,7 +83,7 @@ def test_open_with_clean_document_does_not_prompt(
 
     app_driver._w._open()
 
-    assert app_driver.status_text() == f"{spm_workfile.name}  |  Saved"
+    assert app_driver.status_text() == f"{spm_workfile.name} · Saved"
 
 
 def test_open_dirty_cancel_aborts(app_driver, spm_workfile, valid_spm_path, monkeypatch):
@@ -121,7 +121,7 @@ def test_open_dirty_dont_save_proceeds(app_driver, spm_workfile, valid_spm_path,
 
     app_driver._w._open()
 
-    assert app_driver.status_text() == f"{valid_spm_path.name}  |  Saved"
+    assert app_driver.status_text() == f"{valid_spm_path.name} · Saved"
 
 
 def test_open_dirty_save_succeeds_then_proceeds(
@@ -141,7 +141,7 @@ def test_open_dirty_save_succeeds_then_proceeds(
 
     app_driver._w._open()
 
-    assert app_driver.status_text() == f"{valid_spm_path.name}  |  Saved"
+    assert app_driver.status_text() == f"{valid_spm_path.name} · Saved"
     saved = json.loads(spm_workfile.read_text("utf-8"))
     assert saved["Parameterisation"]["Cell"]["Nominal cell capacity [A.h]"] == 6.0
 

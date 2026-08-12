@@ -51,9 +51,10 @@ def symbol_label(latex: str, size: int = typography.BODY, color: str = DEFAULT_T
     renderer is unavailable -- the symbol is never silently dropped.
 
     Shared by every surface that shows a parameter's symbol (the ( i ) popover,
-    the Documentation tab, the card header) so they render it identically. The
-    symbol is verbatim from the descriptions dataset; this function invents
-    nothing, and returns an empty-but-valid label only when handed empty text.
+    the Documentation section, the card header) so they render it identically.
+    The symbol is verbatim from the descriptions dataset; this function
+    invents nothing, and returns an empty-but-valid label only when handed
+    empty text.
     """
     label = QLabel()
     pixmap = latex_pixmap(latex, size=size, color=color) if latex else None

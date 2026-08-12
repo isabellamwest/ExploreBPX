@@ -214,7 +214,7 @@ class EditorCard(QWidget):
         widget.installEventFilter(self)
 
     def _bind_grid_pending(self, grid) -> None:
-        """Drive *grid*'s "Unsaved edits" bar from this card's dirty state.
+        """Drive *grid*'s "Unsaved changes" bar from this card's dirty state.
 
         The bar is the visible face of the otherwise invisible draft: it
         shows exactly while ``is_dirty`` is true -- so an edit typed back to

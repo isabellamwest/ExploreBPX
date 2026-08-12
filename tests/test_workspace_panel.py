@@ -153,7 +153,7 @@ def test_opening_from_workspace_page_goes_through_discard_guard(
     """
     d = app_driver
     d.open(spm_workfile).go_to(_CAPACITY).edit_field(6.0).commit()
-    assert d.status_text() == f"{spm_workfile.name}  |  Unsaved changes"
+    assert d.status_text() == f"{spm_workfile.name} · Unsaved changes"
     original_status = d.status_text()
 
     monkeypatch.setattr(
@@ -193,7 +193,7 @@ def test_main_card_reports_errors_and_offers_the_route_to_them(
     assert not doc.is_valid
     assert app_driver.workspace_validity_text() == "1 error"
     # The page is not a dead end: the errors carry their own way to read them.
-    assert app_driver.issue_route_text() == "1 error · why? ▸"
+    assert app_driver.issue_route_text() == "Diagnostics ▸"
 
 
 def test_document_card_badge_matches_partitioned_count_not_raw_diagnostics(

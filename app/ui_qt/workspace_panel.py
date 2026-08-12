@@ -841,10 +841,10 @@ class _MainCard(QFrame):
     """The board's main document: the one editable file, and the two ways
     out of this page that belong to it.
 
-    Routes rather than a dead end (the page's own rule): "Edit its
-    parameters ▸" always, and "N errors · why? ▸" only when there is
-    something to explain -- a route to Diagnostics with nothing wrong there
-    would be an invitation to a blank page.
+    Routes rather than a dead end (the page's own rule): "Edit ▸" always,
+    and "Diagnostics ▸" only when there is something to explain -- a route
+    to Diagnostics with nothing wrong there would be an invitation to a
+    blank page.
     """
 
     edit_requested = Signal()
@@ -875,7 +875,7 @@ class _MainCard(QFrame):
         # A document that has never been written is a plain fact about where
         # it lives, not a problem with it -- so a muted word, never a warning
         # colour and never a mark.
-        self._unsaved_tag = QLabel("unsaved")
+        self._unsaved_tag = QLabel("Unsaved")
         self._unsaved_tag.setObjectName("UnsavedTag")
         self._unsaved_tag.hide()
         name_row.addWidget(self._unsaved_tag, 0, Qt.AlignBottom)
@@ -900,7 +900,7 @@ class _MainCard(QFrame):
         routes = QHBoxLayout()
         routes.setContentsMargins(0, 0, 0, 0)
         routes.setSpacing(10)
-        self._edit_route = QPushButton("Edit its parameters ▸")
+        self._edit_route = QPushButton("Edit ▸")
         self._edit_route.setObjectName("BoardRoute")
         self._edit_route.setCursor(Qt.PointingHandCursor)
         self._edit_route.clicked.connect(self.edit_requested)
@@ -947,8 +947,7 @@ class _MainCard(QFrame):
         self._read_only_tag.setVisible(read_only)
         self._edit_route.show()
         if errors:
-            plural = "s" if errors != 1 else ""
-            self._issue_route.setText(f"{errors} error{plural} · why? ▸")
+            self._issue_route.setText("Diagnostics ▸")
             self._issue_route.show()
         else:
             self._issue_route.hide()
@@ -1190,7 +1189,7 @@ class _MissingBanner(QFrame):
 
         locate = QPushButton("Locate…")
         locate.setObjectName("HistoryRowButton")
-        locate.setToolTip("Point this workspace at where the file is now")
+        locate.setToolTip("Find where the file moved to")
         locate.clicked.connect(
             lambda _=False, index=entry.reference_index: self.locate_requested.emit(index)
         )
@@ -1305,6 +1304,9 @@ class _StartSurface(QWidget):
         self._recent_layout = QVBoxLayout(self._recent_host)
         self._recent_layout.setContentsMargins(0, 0, 0, 0)
         self._recent_layout.setSpacing(4)
+        recent_label = QLabel("Recent files")
+        recent_label.setObjectName("BoardSlotRole")
+        self._recent_layout.addWidget(recent_label)
         self._recent_host.hide()
         layout.addWidget(self._recent_host)
 
@@ -1402,7 +1404,7 @@ def _workspace_glyph(reference_count: int, has_main: bool = True) -> QLabel:
         label.setToolTip(
             f"{reference_count} reference{plural}, no main"
             if reference_count
-            else "Nothing in this workspace yet"
+            else "Empty workspace"
         )
     else:
         label.setToolTip(
@@ -1507,12 +1509,14 @@ class WorkspacePanel(QWidget):
         rail_layout.addWidget(self._new_workspace_button)
 
         self._workspaces_group, self._workspace_rows_layout = self._build_group(
-            "Workspaces"
+            "Named workspaces"
         )
         rail_layout.addSpacing(6)
         rail_layout.addWidget(self._workspaces_group)
 
-        self._recent_group, self._recent_rows_layout = self._build_group("Recent")
+        self._recent_group, self._recent_rows_layout = self._build_group(
+            "Recent workspaces"
+        )
         rail_layout.addSpacing(6)
         rail_layout.addWidget(self._recent_group)
         rail_layout.addStretch(1)
@@ -1587,7 +1591,7 @@ class WorkspacePanel(QWidget):
         layout.addStretch(1)
 
         if entry.is_current:
-            pill = QLabel("open now")
+            pill = QLabel("Open")
             pill.setObjectName("HistoryRowPill")
             layout.addWidget(pill)
         else:

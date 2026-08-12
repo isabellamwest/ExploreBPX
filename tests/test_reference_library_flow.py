@@ -61,7 +61,7 @@ def test_library_button_docks_the_accepted_set(app_driver, monkeypatch):
     assert "Read-only" in text
     assert f"Model: {entry.model}" in text
     assert "Checked: Complete · Valid" in text
-    assert d.toast_text() == f"{entry.short_title} · pinned as reference"
+    assert d.toast_text() == f"Pinned {entry.short_title} as reference"
 
 
 def test_cancelling_the_dialog_docks_nothing(app_driver, monkeypatch):

@@ -456,9 +456,7 @@ class DatabaseExamplesDialog(QDialog):
 
         open_button = QPushButton("Open BPX file…")
         open_button.setObjectName("CompareOpenFileButton")
-        open_button.setToolTip(
-            "Add the validation runs of another BPX file to this comparison"
-        )
+        open_button.setToolTip("Add another file's runs")
         open_button.clicked.connect(self._open_reference_file)
         layout.addWidget(open_button)
 

@@ -255,9 +255,7 @@ class ExperimentCard(QWidget):
         if not read_only:
             self._database_examples_button = QToolButton()
             self._database_examples_button.setText("Compare…")
-            self._database_examples_button.setToolTip(
-                "Compare this run's data against sample cells or another BPX file"
-            )
+            self._database_examples_button.setToolTip("Compare against other runs")
             self._database_examples_button.setAutoRaise(True)
             self._database_examples_button.clicked.connect(self._open_database_examples)
             header.addWidget(self._database_examples_button)
@@ -347,7 +345,7 @@ class ExperimentCard(QWidget):
         if focused_alias in headers:
             self._grid.focus_column(headers.index(focused_alias))
 
-        # The grid's "Unsaved edits" bar re-enters this card's own commit/
+        # The grid's "Unsaved changes" bar re-enters this card's own commit/
         # revert paths, exactly as ``EditorCard._bind_grid_pending`` wires
         # them for draft-based cards; visibility is kept honest by
         # ``_refresh_derived_state`` from the same per-column diff Enter
@@ -452,7 +450,7 @@ class ExperimentCard(QWidget):
             # stays enabled regardless: opened on an empty run, the dialog
             # says so plainly and still shows the reference data.
             self._import_button.setEnabled(not empty)
-        # The "Unsaved edits" bar mirrors the same per-column diff Enter
+        # The "Unsaved changes" bar mirrors the same per-column diff Enter
         # would commit (a no-op on a read-only grid, which builds no bar).
         self._grid.set_pending(self.is_dirty)
         self._sample_count_chip.setText(self._sample_count_text())

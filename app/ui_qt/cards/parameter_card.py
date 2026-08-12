@@ -110,7 +110,7 @@ class ParameterCard(QWidget):
         self._popover: ParameterInfoPopover | None = None
         #: A read-only card (D3's "Open as-is") swaps the typed editor for
         #: the ReadOnlyCard view, drops the rename pencil, and builds its
-        #: ledger without "Use this value" -- the same anatomy, no writes.
+        #: ledger without "Use" -- the same anatomy, no writes.
         self._read_only = read_only
         self._renamable = not read_only and structure.can_rename_parameter(
             parameter.path, parameter.value

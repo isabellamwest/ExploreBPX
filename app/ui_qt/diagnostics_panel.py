@@ -122,7 +122,7 @@ _MSG_PARTIAL_NO_TARGET = (
     "are still suggested in each section's parameter list."
 )
 
-_ACTION_GO_TO = "Go to ›"
+_ACTION_GO_TO = "Go to ▸"
 _ACTION_ADD_SECTION = "+ Add section"
 _ACTION_CHOOSE = "Choose…"
 
@@ -727,7 +727,7 @@ class _DiagnosticsRowDelegate(ParameterRowDelegate):
     #: The widest a stream row's *content* gets, however wide the window is.
     #: A validator message ran the full bleed -- around 200 characters a line
     #: on a maximised window, well past readable -- and its right-aligned
-    #: "Go to ›" ended up a thousand pixels from the row it belonged to.
+    #: "Go to ▸" ended up a thousand pixels from the row it belonged to.
     #: Wider than ``style.CONTENT_MEASURE``, which is sized for prose these
     #: dense technical strings are not, and a no-op on a narrow window.
     _MEASURE = 900

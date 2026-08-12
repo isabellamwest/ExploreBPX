@@ -124,7 +124,7 @@ class ModalCard(EditorCard):
         for mode in modes:
             mode.body.changed.connect(self.draft_changed)
             self._install_keyboard_handler(mode.body.focus_widget())
-            # Every grid-bearing body gets the card-level "Unsaved edits"
+            # Every grid-bearing body gets the card-level "Unsaved changes"
             # bar: dirtiness is a property of the *card* (its active draft
             # vs the committed value), so all bars mirror the same state --
             # only the visible body's bar can be seen at any moment.
