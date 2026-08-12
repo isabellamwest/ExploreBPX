@@ -53,10 +53,18 @@ _MACOS = sys.platform == "darwin"
 
 #: The UI face, most-preferred first.
 #:
-#: On Windows, ``Segoe UI Variable Text`` is Windows 11's own refreshed Segoe,
-#: optically sized for text rather than display, so it is the better face at
-#: the small sizes this app lives at; ``Segoe UI`` is the Windows 10 fallback
-#: (and what VS Code itself asks for).
+#: On Windows this used to prefer ``Segoe UI Variable Text``, Windows 11's
+#: refreshed, text-optically-sized Segoe. Measured 2026-08-12 (DPR 1.0,
+#: 96dpi) against the reported "text looks awkward, sometimes bold on some
+#: letters": rendering ``BODY`` 13px at :data:`REGULAR` and :data:`SEMIBOLD`
+#: and comparing per-glyph ink density, the Variable face's regular-to-
+#: semibold weight gain is wildly uneven across letters of the *same* string
+#: at the *same* nominal weight -- 1.26x for "t"/"i" vs 1.72x for "o" (a
+#: 0.46 spread) -- while classic ``Segoe UI`` stays within 1.11x-1.42x (0.31
+#: spread). That unevenness is exactly the "some letters bold, some not"
+#: look: Qt's variable-font instancing is not applying the weight axis
+#: consistently per glyph at this size. ``Segoe UI`` is also what VS Code
+#: itself asks for, and is the most battle-tested UI face on Windows.
 #:
 #: On macOS the counterpart is the system UI face itself. ``.AppleSystemUIFont``
 #: is the name Qt resolves ``GeneralFont`` to, and naming it explicitly gives
@@ -67,9 +75,7 @@ _MACOS = sys.platform == "darwin"
 #: consistent only by luck, since anything constructing a bare ``QFont()``
 #: picked up the *application* default rather than the widget's.
 UI_FAMILIES: tuple[str, ...] = (
-    (".AppleSystemUIFont", "Helvetica Neue")
-    if _MACOS
-    else ("Segoe UI Variable Text", "Segoe UI", "system-ui")
+    (".AppleSystemUIFont", "Helvetica Neue") if _MACOS else ("Segoe UI", "system-ui")
 )
 
 #: The monospace face, most-preferred first, chosen to *optically match*
