@@ -1,4 +1,4 @@
-"""ComparisonStrip: slim reference-aware band atop the parameter list.
+"""ComparisonStrip: the pinned references' identity chips in the page bar.
 
 One quiet identity chip per pinned reference -- badge plus name, nothing
 else. No counts on the face of it, no controls: the strip's whole job is to
@@ -6,8 +6,11 @@ answer "what am I comparing against?" at a glance, and a row of numbers
 there would be read as a verdict on the file rather than as bookkeeping.
 Per-reference counts live in each chip's tooltip.
 
-Visible only while at least one reference is pinned -- with none it stays
-hidden and renders nothing, so the Editor is pixel-for-pixel today's.
+Docked in the window's page-header bar, after the page title (it began
+life as a band atop the parameter list, where it cost the column a row and
+collapsed to bare badges far sooner). Visible only while at least one
+reference is pinned *and* the Editor page is current -- the bar is shared
+by every page, and Workspace/Source carry their own reference surfaces.
 Purely a display widget: it holds no comparison state of its own between
 calls, so ``MainWindow`` (the single place computing that state) stays the
 one source of truth.
@@ -91,14 +94,17 @@ class ComparisonStrip(QWidget):
         super().__init__()
         self.setObjectName("ComparisonStrip")
         layout = QHBoxLayout(self)
-        # Left/right inset matches the section header wash directly above it
-        # (``ui_qt.group_box.TintedSection``'s gutter) so the two stacked
-        # washes' text lines up; top/bottom stay slim.
-        layout.setContentsMargins(style.SPACING_LG, style.SPACING_XS, style.SPACING_LG, style.SPACING_XS)
+        # Left inset separates the chips from the page title beside them;
+        # no right inset (the internal stretch owns the leftover width) and
+        # no vertical inset (the 34px bar centres the row itself).
+        layout.setContentsMargins(style.SPACING_LG, 0, 0, 0)
         layout.setSpacing(style.SPACING_MD)
 
         self._chips: list[_IdentityChip] = []
         self._layout = layout
+        #: Whether the page the chips describe (the Editor) is current --
+        #: the bar itself never goes away, so the chips must.
+        self._page_active = True
         layout.addStretch(1)
 
         self.hide()  # nothing pinned yet
@@ -118,7 +124,7 @@ class ComparisonStrip(QWidget):
         self._chips = []
 
         if not pins:
-            self.hide()
+            self._refresh_visible()
             return
 
         for index, pin in enumerate(pins):
@@ -126,7 +132,16 @@ class ComparisonStrip(QWidget):
             self._chips.append(chip)
             self._layout.insertWidget(index, chip)
         self._apply_elision()
-        self.show()
+        self._refresh_visible()
+
+    def set_page_active(self, active: bool) -> None:
+        """Tell the strip whether the Editor page is current. Chips render
+        only there: on any other page the bar's title stands alone."""
+        self._page_active = active
+        self._refresh_visible()
+
+    def _refresh_visible(self) -> None:
+        self.setVisible(bool(self._chips) and self._page_active)
 
     def resizeEvent(self, event) -> None:  # noqa: N802 - Qt naming
         super().resizeEvent(event)
@@ -137,11 +152,11 @@ class ComparisonStrip(QWidget):
         line.
 
         Measured against what the chips actually want rather than a fixed
-        breakpoint: the strip lives in the parameter list's own narrow
-        column, where one reference's name fits comfortably and four never
-        would. A fixed threshold hid the name even when there was room for
-        it. Names go all-or-nothing -- a row where some chips are named and
-        some are not reads as an error, not as a fit.
+        breakpoint: the strip takes whatever width the bar has left after
+        the page title, where one reference's name always fits and four
+        long ones may not. A fixed threshold hid the name even when there
+        was room for it. Names go all-or-nothing -- a row where some chips
+        are named and some are not reads as an error, not as a fit.
         """
         if not self._chips:
             return

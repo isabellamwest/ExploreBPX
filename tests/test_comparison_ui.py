@@ -23,6 +23,7 @@ from core.compare import ComparisonResult, RowDiff, RowState, SectionDiff, compa
 from core.tree_model import build_path_map, build_tree
 from state.reference_snapshot import ReferenceSnapshot
 from ui_qt import parameter_row, style, tree_model
+from ui_qt.comparison_strip import ComparisonStrip
 from ui_qt.parameter_list import ParameterListPanel
 from ui_qt.reference_identity import ReferencePin, badge_colour, badge_letters
 from ui_qt.tree_model import BpxTreeModel
@@ -165,7 +166,6 @@ def test_no_comparison_renders_no_decoration_at_all(panel):
     assert _ghost_items(panel) == []
     for label in ("Reference temperature", "Nominal cell capacity", "Density"):
         assert _real_item(panel, label).data(parameter_row.REF_BAR_ROLE) is None
-    assert panel._strip.isHidden()
 
 
 def test_row_bar_variant_per_row_state(panel):
@@ -262,14 +262,16 @@ def test_merge_rule_with_no_reference_docked_matches_todays_behaviour(panel):
     assert _ghost_items(panel) == []
 
 
-def test_strip_counts_live_in_the_chip_tooltip(panel):
+def test_strip_counts_live_in_the_chip_tooltip(qtbot):
     """The chip itself stays quiet -- name and badge only. The counts are one
     hover away, per reference."""
     reference = _reference_snapshot(REF_RAW)
+    strip = ComparisonStrip()
+    qtbot.addWidget(strip)
 
-    panel.set_comparison(_one_pin(MAIN_RAW, REF_RAW))
-    assert panel._strip._chips[0]._name.text() == "reference.json"
-    assert panel._strip._chips[0].toolTip() == (
+    strip.set_state(_one_pin(MAIN_RAW, REF_RAW))
+    assert strip._chips[0]._name.text() == "reference.json"
+    assert strip._chips[0].toolTip() == (
         "reference.json · SPM · 2 differ · 1 reference only"
     )
 
@@ -283,36 +285,40 @@ def test_strip_counts_live_in_the_chip_tooltip(panel):
             )
         }
     )
-    panel.set_comparison(_pins((one_differ, reference)))
-    assert panel._strip._chips[0].toolTip().endswith("1 differs")
+    strip.set_state(_pins((one_differ, reference)))
+    assert strip._chips[0].toolTip().endswith("1 differs")
 
     no_diff = ComparisonResult(sections={_CELL_PATH: SectionDiff(_CELL_PATH, True, True, {})})
-    panel.set_comparison(_pins((no_diff, reference)))
-    assert panel._strip._chips[0].toolTip().endswith("no differences")
+    strip.set_state(_pins((no_diff, reference)))
+    assert strip._chips[0].toolTip().endswith("no differences")
 
 
-def test_strip_shows_one_chip_per_pinned_reference(panel):
+def test_strip_shows_one_chip_per_pinned_reference(qtbot):
     """Four pinned, four chips, each with its own badge letters."""
     pins = _pins(
         (compare(MAIN_RAW, REF_RAW), _reference_snapshot(REF_RAW, "chen.json")),
         (compare(MAIN_RAW, REF_RAW), _reference_snapshot(REF_RAW, "marquis.json")),
         (compare(MAIN_RAW, MAIN_RAW), _reference_snapshot(MAIN_RAW, "okane.json")),
     )
-    panel.set_comparison(pins)
+    strip = ComparisonStrip()
+    qtbot.addWidget(strip)
+    strip.set_state(pins)
 
-    assert [chip._name.text() for chip in panel._strip._chips] == [
+    assert [chip._name.text() for chip in strip._chips] == [
         "chen.json",
         "marquis.json",
         "okane.json",
     ]
     assert [pin.letters for pin in pins] == ["Ch", "Ma", "Ok"]
     # Counts differ per reference: okane matches main exactly.
-    assert panel._strip._chips[2].toolTip().endswith("no differences")
+    assert strip._chips[2].toolTip().endswith("no differences")
 
 
-def test_strip_invisible_with_nothing_pinned(panel):
-    panel.set_comparison([])
-    assert panel._strip.isHidden()
+def test_strip_invisible_with_nothing_pinned(qtbot):
+    strip = ComparisonStrip()
+    qtbot.addWidget(strip)
+    strip.set_state([])
+    assert strip.isHidden()
 
 
 # ---------------------------------------------------------------------------

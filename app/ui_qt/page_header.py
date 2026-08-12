@@ -39,6 +39,18 @@ class PageHeader(QWidget):
 
         self._raw_title = ""
 
+    def set_accessory(self, widget: QWidget) -> None:
+        """Dock *widget* into the bar, directly after the title.
+
+        The bar's trailing stretch is handed over to the accessory
+        (stretch 1): a width-aware accessory (the comparison chips'
+        name-collapse) must measure the room the bar really has, and a
+        spacer competing at the same stretch would halve it.
+        """
+        layout = self.layout()
+        layout.takeAt(layout.count() - 1)
+        layout.addWidget(widget, 1)
+
     def set_title(self, text: str) -> None:
         """Set the page name shown, displayed upper-cased."""
         self._raw_title = text

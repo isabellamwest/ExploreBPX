@@ -55,6 +55,7 @@ from state.workspace_history import MainRecord, WorkspaceHistory, WorkspaceRecor
 
 from . import icons
 from .activity_bar import ActivityBar
+from .comparison_strip import ComparisonStrip
 from .editor_page import EditorPage
 from .file_filters import BPX_FILTER, export_filter
 from .inspector import InspectorPanel
@@ -434,6 +435,14 @@ class MainWindow(QMainWindow):
         # Page header + stack form the content column; it sits beside the
         # activity bar so the header spans the content width only.
         self._page_header = PageHeader()
+        # The Editor's comparison identity docks into the bar, after the
+        # title: the chips answer "compared against what?" without costing
+        # the parameter column a row, and collapse to bare badges when the
+        # bar runs out of room. Shown only while the Editor page is current
+        # (see _show_page) -- Workspace and Source carry their own
+        # reference surfaces.
+        self._comparison_strip = ComparisonStrip()
+        self._page_header.set_accessory(self._comparison_strip)
         content = QWidget()
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(0, 0, 0, 0)
@@ -577,6 +586,7 @@ class MainWindow(QMainWindow):
         self._stack.setCurrentIndex(page_index)
         self._activity_bar.select(page_index)
         self._page_header.set_title(self._activity_bar.label_for(page_index))
+        self._comparison_strip.set_page_active(page_index == _EDITOR_PAGE_INDEX)
         # Stale-on-disk is checked on notice, never watched;
         # entering the Source page is one of the two notice points (the
         # other is window activation, see ``changeEvent``).
@@ -1621,6 +1631,7 @@ class MainWindow(QMainWindow):
         pins = self._pins()
         self._tree.set_comparison(self._comparisons)
         self._params.set_comparison(pins)
+        self._comparison_strip.set_state(pins)
         self._inspector.set_comparison(pins)
         # The board's per-reference differ routes. Pushed from here, not
         # from _update_workspace_info: comparisons are recomputed after the

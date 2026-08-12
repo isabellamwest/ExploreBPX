@@ -108,12 +108,11 @@ REFERENCE_BORDER = "#c3b6dc"
 #: explicitly instead of re-spelling the literal. Used by the Workspace
 #: page's main-document section (``QWidget#WorkspaceMainSection`` below).
 NEUTRAL_WASH = "#e7ecf1"
-#: The reference feature's pale full-bleed wash -- the same hue already
-#: used by the Comparison strip and the reference value box
-#: (``QWidget#ComparisonStrip``/``QFrame#ReferenceValueBox`` below), named
-#: here so the Workspace page's reference-document section
-#: (``QWidget#WorkspaceReferenceSection``) can reuse it explicitly instead
-#: of re-spelling the literal a third time.
+#: The reference feature's pale full-bleed wash -- the hue the board's
+#: filled slots (``QFrame#BoardSlotFilled`` below) and the Workspace
+#: page's reference-document section
+#: (``QWidget#WorkspaceReferenceSection``) share, named here so neither
+#: re-spells the literal.
 REFERENCE_WASH = "#eee7f7"
 #: Mid reference tone between ``REFERENCE`` and ``REFERENCE_BORDER``: the
 #: outline of the hollow "reference only" gutter bar in the parameter list
@@ -653,11 +652,9 @@ QPushButton#ReferenceLibraryDockButton {
     border: none; border-radius: 4px; padding: 5px 14px;
 }
 QPushButton#ReferenceLibraryDockButton:hover { background: #5a3399; }
-/* Comparison strip: the slim reference-aware band atop the parameter
-   list. Purple identity (style.REFERENCE), muted counts. #eee7f7 below is
-   style.REFERENCE_WASH, spelled as a literal (also reused by
-   QWidget#WorkspaceReferenceSection above). */
-QWidget#ComparisonStrip { background: #eee7f7; border-bottom: 1px solid #c3b6dc; }
+/* Comparison chips: the pinned references' identity (badge + purple
+   name), docked in the page-header bar while the Editor is active. The
+   chips sit on the bar's own white -- no wash, no border of their own. */
 QLabel#ComparisonStripIdentity { color: #6f42c1; font-weight: ${semibold}; font-size: ${meta}px; }
 /* Reference row (aligned-rows card layout): "Main" and "Reference" are the
    role-label column beside their value, sharing one fixed width

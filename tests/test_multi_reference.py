@@ -198,7 +198,7 @@ def test_strip_shows_a_quiet_chip_per_pin(three_pins):
 
 
 def test_strip_keeps_names_while_they_fit_and_drops_them_together(qtbot):
-    """The strip lives in the parameter list's own narrow column, so whether
+    """The strip takes whatever width the page bar has left, so whether
     names fit is a question of measured width, not a fixed breakpoint. Names
     go all-or-nothing: a row where some chips are named and some are not
     reads as an error, not as a fit."""

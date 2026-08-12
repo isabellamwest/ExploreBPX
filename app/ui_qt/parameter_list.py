@@ -56,7 +56,6 @@ from core.tree_model import TreeNode
 from . import parameter_row, style, typography
 from .add_parameter_popup import AddParameterPopup, suggestion_row_html, suggestion_row_text
 from .cards.experiment import is_validation_run_path
-from .comparison_strip import ComparisonStrip
 from .reference_identity import ReferencePin
 from .group_box import TintedSectionHeader
 from .parameter_row import ParameterRowDelegate
@@ -212,12 +211,6 @@ class ParameterListPanel(QWidget):
         self._header.hide()  # no section selected yet
         layout.addWidget(self._header)
 
-        # Comparison strip: a second, slimmer wash sitting directly beneath
-        # the section header wash -- two adjacent full-width tints, no gap
-        # or line between them (``layout.setSpacing(0)`` above).
-        self._strip = ComparisonStrip()
-        layout.addWidget(self._strip)
-
         self._list = _ParameterListView()
         self._list.setObjectName("ParameterListView")
         # A long label (name plus unit) wraps onto a second line rather than
@@ -262,10 +255,11 @@ class ParameterListPanel(QWidget):
 
         Called by ``MainWindow`` -- the single place computing this state --
         on every document change and every pin/remove. Empty with nothing
-        pinned or no document open.
+        pinned or no document open. (The identity chips this state also
+        feeds live in the page-header bar, not in this panel -- MainWindow
+        hands the same pins to both.)
         """
         self._pins = list(pins)
-        self._strip.set_state(pins)
         if self._node is not None:
             self.show_node(self._node, self._model)
 
