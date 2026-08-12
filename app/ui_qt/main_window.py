@@ -191,6 +191,9 @@ class MainWindow(QMainWindow):
         typography.apply_application_font()
         self.setStyleSheet(STYLESHEET)
         self.resize(1200, 760)
+        # Below this the panes crush their text; every pane elides rather
+        # than floors itself.
+        self.setMinimumSize(900, 560)
         # ``history`` is the persistent workspace store the real entry point
         # (main_qt) builds from the platform config dir. ``None`` -- the
         # default, and what every headless test constructs -- records
@@ -254,6 +257,10 @@ class MainWindow(QMainWindow):
         self._blocked_chip.setObjectName("BlockedWriteChip")
         self._blocked_chip.setTextFormat(Qt.RichText)
         self._blocked_chip.setTextInteractionFlags(Qt.LinksAccessibleByMouse)
+        #: The chip's own plain-text sentence (set alongside its rich-text
+        #: label in _refuse_blocked_write), kept for _refresh_blocked_write_chip
+        #: to rebuild the tooltip when only the reason changes.
+        self._blocked_chip_sentence = ""
         self._blocked_chip.linkActivated.connect(
             lambda _href: self._show_page(_EDITOR_PAGE_INDEX)
         )
@@ -1466,6 +1473,7 @@ class MainWindow(QMainWindow):
         None for cancel/empty (an empty name is a cancel, not an entry)."""
         dialog = QDialog(self)
         dialog.setWindowTitle(title)
+        dialog.setMinimumWidth(320)
         layout = QVBoxLayout(dialog)
         label = QLabel("Name")
         layout.addWidget(label)
@@ -2017,12 +2025,15 @@ class MainWindow(QMainWindow):
         # chip repeats it in the status bar until the block stops existing
         # (see _refresh_blocked_write_chip) -- otherwise a missed toast
         # leaves Save looking silently broken on every further attempt.
+        sentence = f"{verb.capitalize()} blocked · fix or discard {target}"
         self._blocked_chip.setText(
             f'<a href="editor" style="color: {ERROR}; text-decoration: none;">'
-            f"{html.escape(verb.capitalize())} blocked "
-            f"· fix or discard {html.escape(target)}</a>"
+            f"{html.escape(sentence)}</a>"
         )
-        self._blocked_chip.setToolTip(reason)
+        self._blocked_chip_sentence = sentence
+        # Two lines: the chip clips at the status bar edge with no ellipsis,
+        # so the tooltip repeats the sentence itself, not just the reason.
+        self._blocked_chip.setToolTip(f"{sentence}\n{reason}")
         self._blocked_chip.show()
 
     def _refresh_blocked_write_chip(self) -> None:
@@ -2041,7 +2052,7 @@ class MainWindow(QMainWindow):
             self._blocked_chip.hide()
             self._blocked_chip.setToolTip("")
             return
-        self._blocked_chip.setToolTip(block[1])
+        self._blocked_chip.setToolTip(f"{self._blocked_chip_sentence}\n{block[1]}")
 
     def _export_as(self, fmt: str) -> None:
         """Write a copy of the document to a user-chosen location in *fmt*
@@ -2090,6 +2101,7 @@ class MainWindow(QMainWindow):
         if session is None or session.document is None:
             self.setWindowTitle("ExploreBPX")
             self._status_label.setText("")
+            self._status_label.setToolTip("")
             return
         name = session.backing_file.name if session.backing_file else session.document.filename
         prefix = "* " if session.dirty else ""
@@ -2100,7 +2112,11 @@ class MainWindow(QMainWindow):
             state_text = "Read-only"
         else:
             state_text = "Unsaved changes" if session.dirty else "Saved"
-        self._status_label.setText(f"{name} · {state_text}")
+        status_text = f"{name} · {state_text}"
+        self._status_label.setText(status_text)
+        # QStatusBar hard-clips this label with no ellipsis; the tooltip
+        # keeps the full text one hover away when it does.
+        self._status_label.setToolTip(status_text)
 
     def _fallback_filename(self, session: DocumentSession) -> str:
         """The file name to show when a document has no Header Title."""

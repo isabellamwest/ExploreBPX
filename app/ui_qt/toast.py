@@ -36,6 +36,7 @@ class Toast(QLabel):
         super().__init__(parent)
         self.setObjectName("Toast")
         self.setAlignment(Qt.AlignCenter)
+        self.setWordWrap(True)
         self.setAttribute(Qt.WA_TransparentForMouseEvents)
         self.setFocusPolicy(Qt.NoFocus)
         self.setStyleSheet(style.toast_qss())
@@ -81,6 +82,12 @@ class Toast(QLabel):
             self.setTextInteractionFlags(Qt.NoTextInteraction)
             self.setText(text)
         self.setAttribute(Qt.WA_TransparentForMouseEvents, self._action is None)
+        parent = self.parentWidget()
+        if parent is not None:
+            # Cap to the parent's width (less the same margin used to
+            # position the pill) so a long message wraps instead of
+            # clipping at the window edge.
+            self.setMaximumWidth(max(200, parent.width() - 2 * _BOTTOM_MARGIN))
         self.adjustSize()
         self._reposition()
         self.show()

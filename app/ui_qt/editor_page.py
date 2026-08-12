@@ -38,6 +38,11 @@ class EditorPage(QWidget):
             panel.setObjectName("Panel")
             splitter.addWidget(panel)
         splitter.setSizes([240, 280, 680])
+        # Without a floor, dragging a handle can crush a pane to nothing --
+        # its labels would elide at width 0 rather than stop shrinking.
+        tree.setMinimumWidth(160)
+        params.setMinimumWidth(200)
+        inspector.setMinimumWidth(280)
         self._stack.addWidget(splitter)  # _SPLITTER_INDEX
 
         self._placeholder = QLabel(_EMPTY_STATE_TEXT)

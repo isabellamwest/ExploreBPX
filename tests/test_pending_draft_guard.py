@@ -202,7 +202,8 @@ def test_a_blocked_save_leaves_a_persistent_status_chip(
     app_driver, spm_workfile, monkeypatch
 ):
     """The toast auto-dismisses; the chip does not. It names the blocked
-    edit and the way back, and carries the reason as its tooltip."""
+    edit and the way back; the tooltip repeats the sentence (a squeezed
+    status bar clips the chip with no ellipsis) and adds the reason."""
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(6.5)
     window = app_driver._w
     monkeypatch.setattr(
@@ -215,7 +216,10 @@ def test_a_blocked_save_leaves_a_persistent_status_chip(
     assert app_driver.blocked_write_chip_text() == (
         'Save blocked · fix or discard the edit to "Nominal cell capacity [A.h]"'
     )
-    assert window._blocked_chip.toolTip() == "unparseable"
+    assert window._blocked_chip.toolTip() == (
+        'Save blocked · fix or discard the edit to "Nominal cell capacity [A.h]"'
+        "\nunparseable"
+    )
 
 
 def test_the_chip_links_back_to_the_editor(app_driver, spm_workfile, monkeypatch):
