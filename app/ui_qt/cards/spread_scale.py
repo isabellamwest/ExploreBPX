@@ -8,12 +8,24 @@ whole message (design rule 4 of ``PLAN-multi-reference.md``).
 Deliberately not a chart:
 
 - **Every mark is a stated value.** No mean, no band, no target, no
-  good/bad colouring. The axis ends are labelled with the lowest and highest
-  values that actually appear (``SpreadScale.value_lo``/``value_hi``); the
-  padding that keeps those marks off the edges never surfaces as a number.
+  good/bad colouring. A *mark* -- a pin's dot, the main document's own
+  marker -- is never anything but a value some file actually states.
+- **The axis has real divisions, not just two end labels.** Small tick marks
+  plus labels (``SpreadScale.divisions``): round linear steps, or decade
+  marks on a log axis, the way any conventional chart's axis is graduated.
+  A division is axis furniture, not a mark -- its value need not be one any
+  file states. This is a 2026-08-12 supersession of the stricter reading
+  this docstring used to carry (every number on the axis a stated one, no
+  exceptions); see ``core.spread``'s module docstring for the full note.
+  The true stated extremes (``SpreadScale.value_lo``/``value_hi``) are still
+  on the model, just no longer painted as the axis's end text -- a mark's
+  own tooltip, and the ledger rows directly above, still give the exact
+  number.
 - **It never decides anything.** ``core.spread`` computes the geometry,
-  including the log/linear choice, and this paints it. The chosen axis is
-  always named on screen, so a log switch is never silent.
+  including the log/linear choice and the divisions, and this only paints
+  it. Neither kind spells its name out in words any more: a log axis's
+  decade-style labels (1, 10, 100, ...) read as logarithmic on their own,
+  and a linear axis now simply looks like every other numeric axis.
 - **Read-only.** Hovering a mark names the references sharing it and their
   exact value. There is no click-to-pull: Pull lives on the ledger row above,
   where the value it writes is spelled out in full.
@@ -83,9 +95,13 @@ _LABEL_GAP = 4
 _SIDE_INSET = _DOT
 #: How near the pointer must be, in x, to claim a mark's tooltip.
 _HIT_RADIUS = 9
-#: Clearance the axis-kind word needs from either end label before it is
-#: dropped to a tooltip rather than drawn into one of them.
-_KIND_CLEARANCE = 10
+#: How far a division's tick crosses *below* the axis -- shorter than
+#: ``_MAIN_OVERSHOOT`` so a division always reads as the quieter of the two
+#: things crossing the line.
+_DIVISION_TICK = 3
+#: Least horizontal gap two division labels must keep before they count as
+#: colliding.
+_LABEL_MIN_GAP = 6
 
 
 class SpreadScaleView(QWidget):
@@ -204,6 +220,11 @@ class SpreadScaleView(QWidget):
         painter.setPen(QPen(QColor(style.BORDER_STRONG), 1))
         painter.drawLine(_SIDE_INSET, axis_y, self.width() - _SIDE_INSET, axis_y)
 
+        # Division ticks paint first, under everything: a mark (dot, main
+        # marker) at the same x always reads as the more important thing at
+        # that column.
+        for division in scale.divisions:
+            self._paint_division_tick(painter, division, axis_y)
         for tick, x, base in self._placements():
             self._paint_tick(painter, tick, x, base, axis_y)
         if scale.main_position is not None:
@@ -212,7 +233,7 @@ class SpreadScaleView(QWidget):
             painter.setPen(QPen(QColor(style.DEFAULT_TEXT), 2))
             painter.drawLine(x, axis_y - _STEM - 3, x, axis_y + _MAIN_OVERSHOOT)
 
-        self._paint_labels(painter, QFontMetrics(font), axis_y)
+        self._paint_division_labels(painter, QFontMetrics(font), axis_y)
         painter.end()
 
     def _paint_tick(self, painter: QPainter, tick, x: int, base: int, axis_y: int) -> None:
@@ -228,44 +249,73 @@ class SpreadScaleView(QWidget):
             painter.drawEllipse(QPoint(x, centre), _DOT // 2, _DOT // 2)
             centre -= _DOT + _DOT_GAP
 
-    def _paint_labels(self, painter: QPainter, metrics: QFontMetrics, axis_y: int) -> None:
-        scale = self._scale
+    def _paint_division_tick(self, painter: QPainter, division, axis_y: int) -> None:
+        """A short tick crossing *below* the axis at one division -- the
+        same downward side the main marker overshoots to, but shorter, so a
+        division always reads as the quieter of the two."""
+        x = self._x_for(division.position)
+        painter.setPen(QPen(QColor(style.BORDER_STRONG), 1))
+        painter.drawLine(x, axis_y, x, axis_y + _DIVISION_TICK)
+
+    def _paint_division_labels(
+        self, painter: QPainter, metrics: QFontMetrics, axis_y: int
+    ) -> None:
+        """One label per division, each centred under its own tick -- unless
+        the axis is too narrow to fit them all, in which case
+        :meth:`_visible_divisions` has already thinned the set. Ticks are
+        never thinned, only the text beneath them: see ``paintEvent``.
+        """
         top = axis_y + _MAIN_OVERSHOOT + _LABEL_GAP
         height = metrics.height()
+        # Matches ``chart_axes.py``'s ``setLabelsColor(MUTED)`` -- the same
+        # tier every other axis label in the app reads at.
         painter.setPen(QColor(style.MUTED))
+        for division in self._visible_divisions(metrics):
+            x = self._x_for(division.position)
+            width = metrics.horizontalAdvance(division.label)
+            # Centred on x, but never pushed past the widget's own edges --
+            # a division near a padded end otherwise overhangs it.
+            left = max(0, min(x - width // 2, self.width() - width))
+            painter.drawText(QRect(left, top, width, height), Qt.AlignHCenter, division.label)
 
-        lo, hi = format_value(scale.value_lo), format_value(scale.value_hi)
-        painter.drawText(QRect(0, top, self.width(), height), Qt.AlignLeft, lo)
-        painter.drawText(QRect(0, top, self.width(), height), Qt.AlignRight, hi)
+    def _visible_divisions(self, metrics: QFontMetrics) -> list:
+        """The subset of ``scale.divisions`` whose labels fit without
+        colliding, doubling the stride (every 2nd, then every 4th, ...)
+        until what remains clears -- which a single label always does.
+        """
+        divisions = list(self._scale.divisions)
+        stride = 1
+        while self._labels_collide(divisions[::stride], metrics):
+            stride *= 2
+        return divisions[::stride]
 
-        # The axis kind is named whenever there is room for it plainly; when
-        # the two values fill the row it retreats to the tooltip rather than
-        # colliding with a number. "linear scale", not a bare "linear": the
-        # extra word is what makes the strip say what it is, so it needs no
-        # caption row of its own.
-        caption = f"{self.axis_kind()} scale"
-        needed = (
-            metrics.horizontalAdvance(lo)
-            + metrics.horizontalAdvance(hi)
-            + metrics.horizontalAdvance(caption)
-            + 2 * _KIND_CLEARANCE
+    def _labels_collide(self, divisions: list, metrics: QFontMetrics) -> bool:
+        if len(divisions) < 2:
+            return False
+        edges = [
+            (
+                self._x_for(division.position) - metrics.horizontalAdvance(division.label) / 2,
+                self._x_for(division.position) + metrics.horizontalAdvance(division.label) / 2,
+            )
+            for division in divisions
+        ]
+        # Divisions arrive in ascending position order (``core.spread``
+        # sorts them, the same invariant ``ticks`` keeps), so adjacent
+        # pairs in this list are adjacent on the axis too.
+        return any(
+            edges[i][1] + _LABEL_MIN_GAP > edges[i + 1][0] for i in range(len(edges) - 1)
         )
-        crowded = needed > self.width()
-        if not crowded:
-            # Lighter than the end labels: those are values a file states,
-            # this is only how the axis is drawn, and the two must not read
-            # as the same class of thing.
-            painter.setPen(QColor(style.GHOST_TEXT))
-            painter.drawText(QRect(0, top, self.width(), height), Qt.AlignHCenter, caption)
-        wanted = caption if crowded else ""
-        if self.toolTip() != wanted:
-            self.setToolTip(wanted)
 
     # ── reading ─────────────────────────────────────────────────────────
 
     def axis_kind(self) -> str:
-        """"log" or "linear" -- named on screen so the switch is never
-        silent."""
+        """"log" or "linear" -- the axis's own read of which kind it chose.
+
+        Until 2026-08-12 this was painted as a caption; now a log axis's
+        decade-style division labels imply it without spelling it out, so
+        nothing paints this word any more. It remains for callers that want
+        the fact itself rather than a rendering of it (tests, mainly).
+        """
         return "log" if self._scale is not None and self._scale.log else "linear"
 
     def tooltip_at(self, x: int) -> str:
@@ -293,8 +343,9 @@ class SpreadScaleView(QWidget):
         rather than by a child widget per mark.
 
         Off a mark this falls through to the base implementation, which
-        shows the widget-level tooltip -- the axis-kind fallback set by
-        :meth:`_paint_labels` when the row is too narrow to name it.
+        shows nothing: the widget carries no tooltip of its own now that the
+        axis-kind caption is gone (2026-08-12) -- only a mark has anything
+        to say on hover.
         """
         if event.type() == QEvent.ToolTip and self._scale is not None:
             text = self.tooltip_at(event.pos().x())

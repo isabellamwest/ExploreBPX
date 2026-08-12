@@ -338,6 +338,21 @@ def test_spread_scale_names_a_linear_axis(three_pins):
     assert d.spread_axis_kind() == "linear"
 
 
+def test_spread_scale_shows_labelled_divisions_not_a_caption(three_pins):
+    """The redesign this covers: real division marks replace the old bare
+    line's centred "log scale"/"linear scale" caption entirely -- nothing
+    sets the widget's own tooltip any more, only marks do."""
+    d = three_pins
+    d.go_to(_CAPACITY)
+
+    spread = d._spread()
+    assert spread is not None and spread.is_active
+    divisions = spread._scale.divisions
+    assert len(divisions) >= 3
+    assert all(division.label for division in divisions)
+    assert spread.toolTip() == ""
+
+
 def test_spread_scale_switches_to_log_past_two_decades(app_driver, tmp_path, monkeypatch):
     """The switch is never silent: the axis says which one it is."""
     d = app_driver
@@ -374,6 +389,46 @@ def test_spread_scale_stacks_dots_that_would_hide_each_other(qtbot):
     # own value, never nudged along the axis to make room.
     for tick, x, _base in placed:
         assert x == spread._x_for(tick.position)
+
+
+def test_spread_scale_thins_division_labels_on_a_narrow_axis(qtbot):
+    """Never let labels collide: at 30px, four decade labels ("1", "100",
+    "10000", "1e+06") cannot all fit, so the visible set shrinks."""
+    from core.spread import build_spread
+    from PySide6.QtGui import QFontMetrics
+    from ui_qt import typography
+    from ui_qt.cards.spread_scale import SpreadScaleView
+
+    scale = build_spread(None, [1.0, 1e7])
+    spread = SpreadScaleView()
+    qtbot.addWidget(spread)
+    spread.set_scale(scale, _strip_pins("a"))
+    spread.show()
+    qtbot.waitExposed(spread)
+    spread.setFixedWidth(30)
+
+    metrics = QFontMetrics(typography.ui_font(typography.MICRO))
+    visible = spread._visible_divisions(metrics)
+    assert 1 <= len(visible) < len(scale.divisions)
+    assert not spread._labels_collide(visible, metrics)
+
+
+def test_spread_scale_shows_every_division_label_with_room_to_spare(qtbot):
+    from core.spread import build_spread
+    from PySide6.QtGui import QFontMetrics
+    from ui_qt import typography
+    from ui_qt.cards.spread_scale import SpreadScaleView
+
+    scale = build_spread(None, [1.0, 1e7])
+    spread = SpreadScaleView()
+    qtbot.addWidget(spread)
+    spread.set_scale(scale, _strip_pins("a"))
+    spread.show()
+    qtbot.waitExposed(spread)
+    spread.setFixedWidth(1000)
+
+    metrics = QFontMetrics(typography.ui_font(typography.MICRO))
+    assert spread._visible_divisions(metrics) == list(scale.divisions)
 
 
 def test_spread_scale_on_a_ghost_card_has_no_main_marker(app_driver, tmp_path, monkeypatch):
