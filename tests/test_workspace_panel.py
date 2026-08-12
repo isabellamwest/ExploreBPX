@@ -310,9 +310,9 @@ def test_choosing_new_model_creates_document_and_switches_to_editor(app_driver, 
     assert d.current_view_index() == 0
     assert d.activity_bar_selected_label() == "Editor"
     assert d._w._state.active.document.identity.model == model
-    # A scaffold was never loaded and never saved: no From row to state,
-    # and the Status row says so in the record's own words.
-    assert "Status: Unsaved changes · never saved" in d.workspace_info_text()
+    # A scaffold was never loaded and has no backing file: no From row to
+    # state, and the Status row reads as unsaved from the start.
+    assert "Status: Unsaved changes" in d.workspace_info_text()
     assert "From:" not in d.workspace_info_text()
 
 
@@ -347,6 +347,47 @@ def test_choosing_a_model_on_a_filled_workspace_is_impossible_to_reach(app_drive
     d.click_workspace_new("DFN")
     assert not d.start_surface_visible()
     assert d.workspace_main_name() == "untitled.json"
+
+
+def test_a_long_record_scrolls_rather_than_being_squeezed(
+    app_driver, spm_workfile, valid_spm_path, tmp_path
+):
+    """A file's prose decides how tall its record is, so the page has to
+    take content taller than the window.
+
+    Without a scroll area the pane had nowhere to put the overflow and
+    compressed its widgets past their hints instead -- at 1280x720 the main
+    document's fact band was already being sliced through the glyphs with an
+    ordinary file, before anyone wrote a long description. The measure is
+    ``heightForWidth`` against the height actually given; a wrapped label's
+    ``sizeHint`` is taken at some other width and would not catch it.
+    """
+    import json
+
+    d = app_driver
+    # Shown and sized on purpose: an unshown offscreen window keeps Qt's
+    # 640x480 default whatever ``resize`` says, and the page's height is the
+    # whole question here.
+    d._w.show()
+    d._w.resize(1280, 720)
+    d.open(spm_workfile)
+
+    wordy = json.loads(valid_spm_path.read_text(encoding="utf-8"))
+    wordy["Header"]["Description"] = (
+        "Refitted from the 2024 winter characterisation campaign, which ran "
+        "eleven cells across four temperatures and three C-rates. " * 6
+    )
+    reference = tmp_path / "wordy_reference.json"
+    reference.write_text(json.dumps(wordy), encoding="utf-8")
+    d._w._open_reference_path(reference)
+
+    d.show_view("Workspace")
+    d.click_reference_row(0)
+    d.wait_for_live_validation()
+
+    assert d.reference_row_expanded(0)
+    assert d.workspace_squeezed_by() == 0
+    assert d.workspace_can_scroll()
 
 
 # --- panel-level drag/drop filtering ------------------------------------

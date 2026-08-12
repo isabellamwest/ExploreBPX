@@ -34,7 +34,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, QMimeData, Qt, Signal
-from PySide6.QtGui import QAction, QDragEnterEvent, QDropEvent, QFontMetrics
+from PySide6.QtGui import QAction, QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import (
     QFormLayout,
     QFrame,
@@ -43,6 +43,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMenu,
     QPushButton,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -55,10 +56,19 @@ from state.app_state import MAX_PINNED_REFERENCES
 from state.reference_snapshot import ReferenceSnapshot
 
 from . import badges, icons
+from .elided_label import ElidedLabel, PathLabel
 from .group_box import TintedSection
 from .reference_identity import badge_colour, badge_letters
 from . import typography
-from .style import ERROR, MUTED, OK, PAGE_MEASURE, WARNING, not_checked_tooltip
+from .style import (
+    ERROR,
+    MUTED,
+    OK,
+    PAGE_MEASURE,
+    SPACING_LG,
+    WARNING,
+    not_checked_tooltip,
+)
 from .typography import panel_title
 
 _INFO_PANEL_EMPTY_STATE_TEXT = "No document open"
@@ -84,8 +94,9 @@ SUPPORTED_BPX_EXTENSIONS = SUPPORTED_EXTENSIONS
 #: row need, at the cost of the board beside it.
 _RAIL_WIDTH = 280
 
-#: The white gap between the board and the strip beneath it.
-_SECTION_GAP = 16
+#: The white gap between the board and the strip beneath it -- the page
+#: gutter rung, not a width of its own.
+_SECTION_GAP = SPACING_LG
 
 #: How tall an empty reference slot stays. The slots are top-aligned, so
 #: without a floor a slot holding only its ＋ would shrink to the button and
@@ -515,6 +526,7 @@ class WorkspaceNameField(_EditableText):
         )
         self._error = QLabel()
         self._error.setObjectName("WorkspaceNameError")
+        self._error.setWordWrap(True)
         self._error.hide()
         self.layout().addWidget(self._error)
 
@@ -611,66 +623,33 @@ class _ExpandableFact(QLabel):
         super().mousePressEvent(event)
 
 
-class _ElidedLabel(QLabel):
-    """A one-line label that elides on the right and keeps the whole text in
-    its tooltip. The sibling of :class:`_PathLabel`, which elides the other
-    way because a path's end is the part that identifies it."""
-
-    def __init__(self, object_name: str) -> None:
-        super().__init__()
-        self.setObjectName(object_name)
-        self._full_text = ""
-        self.setMinimumWidth(0)
-
-    def setText(self, text: str) -> None:  # noqa: N802 - Qt naming
-        self._full_text = text
-        self.setToolTip(text)
-        self._apply_elision()
-
-    def full_text(self) -> str:
-        return self._full_text
-
-    def resizeEvent(self, event) -> None:  # noqa: N802 - Qt naming
-        super().resizeEvent(event)
-        self._apply_elision()
-
-    def _apply_elision(self) -> None:
-        metrics = QFontMetrics(self.font())
-        super().setText(
-            metrics.elidedText(self._full_text, Qt.ElideRight, max(self.width(), 1))
-        )
+# Shared with the other panes that must never clip a squeezed label; the
+# classes themselves moved to ``ui_qt.elided_label``.
+_ElidedLabel = ElidedLabel
+_PathLabel = PathLabel
 
 
-class _PathLabel(QLabel):
-    """A file path elided from the *left*, keeping the file name visible.
+def _record_form() -> QFormLayout:
+    """A keyed record-row layout -- one shared recipe so the document strip,
+    the fact plaque and the reference record can never drift apart. Explicit
+    left alignment throughout: macOS's native form style centres the rows and
+    right-aligns the labels, which reads as scattered text rather than a
+    keyed record. Growing fields keep a long value ("11 sections · 44
+    parameters") fully visible instead of squeezed."""
+    form = QFormLayout()
+    form.setContentsMargins(0, 4, 0, 0)
+    form.setHorizontalSpacing(12)
+    form.setVerticalSpacing(6)
+    form.setFormAlignment(Qt.AlignLeft | Qt.AlignTop)
+    form.setLabelAlignment(Qt.AlignLeft)
+    form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+    return form
 
-    Word wrap cannot help here: a Windows path has no spaces to break at, so
-    a long one simply ran off the row and lost exactly the end that
-    identifies it. Elides head-first (the sibling of ``main_window``'s
-    ``_IdentityLabel``, which elides the other way for a title), with the
-    full path always one hover away.
-    """
 
-    def __init__(self, path: str) -> None:
-        super().__init__()
-        self.setObjectName("WorkspaceCardValue")
-        self._full_text = path
-        self.setToolTip(path)
-        self.setMinimumWidth(0)
-        self._apply_elision()
-
-    def set_path(self, path: str) -> None:
-        self._full_text = path
-        self.setToolTip(path)
-        self._apply_elision()
-
-    def resizeEvent(self, event) -> None:  # noqa: N802 - Qt naming
-        super().resizeEvent(event)
-        self._apply_elision()
-
-    def _apply_elision(self) -> None:
-        metrics = QFontMetrics(self.font())
-        self.setText(metrics.elidedText(self._full_text, Qt.ElideLeft, max(self.width(), 1)))
+def _add_record_row(form: QFormLayout, key: str, widget: QWidget) -> None:
+    label = QLabel(f"{key}:")
+    label.setObjectName("WorkspaceCardKey")
+    form.addRow(label, widget)
 
 
 class ReferenceRecordPanel(QWidget):
@@ -707,8 +686,9 @@ class ReferenceRecordPanel(QWidget):
         self._badge_layout.setContentsMargins(0, 0, 0, 0)
         self._badge_layout.setSpacing(0)
         head_row.addWidget(self._badge_host, 0, Qt.AlignVCenter)
-        self._title = QLabel()
-        self._title.setObjectName("ReferenceRecordTitle")
+        # A filename, so it elides rather than pushing the Read-only tag off
+        # a narrow pane.
+        self._title = _ElidedLabel("ReferenceRecordTitle")
         head_row.addWidget(self._title, 0, Qt.AlignVCenter)
         self._read_only_tag = QLabel("Read-only")
         self._read_only_tag.setObjectName("ReferenceReadOnlyTag")
@@ -718,19 +698,18 @@ class ReferenceRecordPanel(QWidget):
 
         body = QWidget()
         outer.addWidget(body)
-        self._form = form = QFormLayout(body)
-        form.setContentsMargins(12, 6, 12, 10)
-        form.setHorizontalSpacing(12)
-        form.setVerticalSpacing(5)
-        form.setFormAlignment(Qt.AlignLeft | Qt.AlignTop)
-        form.setLabelAlignment(Qt.AlignLeft)
-        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        self._form = form = _record_form()
+        # The shared recipe carries no side insets (the strip's section
+        # gutter indents it there); this panel is its own washed surface,
+        # so the card-interior inset lives here.
+        form.setContentsMargins(12, 6, 12, 8)
+        body.setLayout(form)
 
         self._values: dict[str, QLabel] = {}
         for key in ("Title", "Description", "Citation", "Model", "Read as", "Contents"):
             value = _detail_value("-")
             self._values[key] = value
-            self._add_row(form, key, value)
+            _add_record_row(form, key, value)
 
         self._checked_dot = _validity_dot_label()
         self._checked_text = QLabel()
@@ -742,7 +721,7 @@ class ReferenceRecordPanel(QWidget):
         checked_row.setSpacing(6)
         checked_row.addWidget(self._checked_dot, 0, Qt.AlignVCenter)
         checked_row.addWidget(self._checked_text, 1, Qt.AlignVCenter)
-        self._add_row(form, "Checked", checked)
+        _add_record_row(form, "Checked", checked)
 
         self._from = QWidget()
         from_row = QHBoxLayout(self._from)
@@ -753,13 +732,7 @@ class ReferenceRecordPanel(QWidget):
         self._from_meta = QLabel()
         self._from_meta.setObjectName("WorkspaceCardKey")
         from_row.addWidget(self._from_meta, 0, Qt.AlignVCenter)
-        self._add_row(form, "From", self._from)
-
-    @staticmethod
-    def _add_row(form: QFormLayout, key: str, widget: QWidget) -> None:
-        label = QLabel(f"{key}:")
-        label.setObjectName("WorkspaceCardKey")
-        form.addRow(label, widget)
+        _add_record_row(form, "From", self._from)
 
     @property
     def snapshot(self) -> ReferenceSnapshot | None:
@@ -1012,7 +985,8 @@ class _ReferenceSlot(QFrame):
         # at narrow windows, but never past a few readable characters.
         self.setMinimumWidth(100)
         self._layout = QVBoxLayout(self)
-        self._layout.setContentsMargins(10, 10, 10, 10)
+        # The main card's own insets, so the two card kinds share one grid.
+        self._layout.setContentsMargins(12, 10, 12, 10)
         self._layout.setSpacing(4)
 
         self._add_button = QPushButton("＋")
@@ -1025,7 +999,7 @@ class _ReferenceSlot(QFrame):
         self._filled = QWidget()
         filled = QVBoxLayout(self._filled)
         filled.setContentsMargins(0, 0, 0, 0)
-        filled.setSpacing(3)
+        filled.setSpacing(4)
 
         head = QHBoxLayout()
         head.setContentsMargins(0, 0, 0, 0)
@@ -1050,8 +1024,9 @@ class _ReferenceSlot(QFrame):
         self._name = _ElidedLabel("BoardSlotName")
         filled.addWidget(self._name)
 
-        self._model = QLabel()
-        self._model.setObjectName("BoardSlotModel")
+        # Elided like the name above it: model strings ("SPMe (blended)")
+        # outgrow a narrow slot the same way filenames do.
+        self._model = _ElidedLabel("BoardSlotModel")
         filled.addWidget(self._model)
 
         self._diff_route = QPushButton()
@@ -1114,9 +1089,10 @@ class _ReferenceSlot(QFrame):
             self._diff_route.hide()
             return
         plural = "s" if differ != 1 else ""
-        self._diff_route.setText(
-            f"{differ} value{plural} differ ▸" if differ else "Identical ▸"
-        )
+        text = f"{differ} value{plural} differ ▸" if differ else "Identical ▸"
+        self._diff_route.setText(text)
+        # A native button clips its text with no ellipsis in a narrow slot.
+        self._diff_route.setToolTip(text)
         self._diff_route.show()
 
     def set_selected(self, selected: bool) -> None:
@@ -1188,8 +1164,10 @@ class _MissingBanner(QFrame):
         label = QLabel(entry.message)
         label.setObjectName("WorkspaceMissingText")
         label.setToolTip(entry.path)
-        layout.addWidget(label)
-        layout.addStretch(1)
+        # Stretch-1 and wrapped: the sentence gives way before the two
+        # buttons do, folding instead of shoving them off the banner.
+        label.setWordWrap(True)
+        layout.addWidget(label, 1)
 
         locate = QPushButton("Locate…")
         locate.setObjectName("HistoryRowButton")
@@ -1291,7 +1269,7 @@ class _StartSurface(QWidget):
         self.setObjectName("BoardStartSurface")
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(5)
+        layout.setSpacing(4)
 
         role = QLabel("Main")
         role.setObjectName("BoardSlotRole")
@@ -1372,8 +1350,10 @@ class _StartSurface(QWidget):
         row.setObjectName(object_name)
         row.setProperty("startRow", True)
         layout = QHBoxLayout(row)
-        layout.setContentsMargins(10, 4, 10, 4)
-        layout.setSpacing(8)
+        # The rail rows' own insets -- these chips are documented as speaking
+        # that language, so they share its metrics too.
+        layout.setContentsMargins(8, 5, 8, 5)
+        layout.setSpacing(6)
         label = QLabel(name)
         label.setObjectName("StartRowName")
         layout.addWidget(label, 0)
@@ -1482,7 +1462,7 @@ class WorkspacePanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         layout.addWidget(self._build_rail())
-        layout.addWidget(self._build_pane(), 1)
+        layout.addWidget(self._build_pane_scroll(), 1)
 
         self.set_workspaces([], [])
         self.refresh(None, None, False)
@@ -1504,7 +1484,8 @@ class WorkspacePanel(QWidget):
         rail.setAttribute(Qt.WA_StyledBackground, True)
         rail.setFixedWidth(_RAIL_WIDTH)
         rail_layout = QVBoxLayout(rail)
-        rail_layout.setContentsMargins(12, 12, 12, 12)
+        # The pane's 16px gutter, so the two columns' text shares one grid.
+        rail_layout.setContentsMargins(SPACING_LG, 12, SPACING_LG, 12)
         rail_layout.setSpacing(6)
 
         self._new_workspace_button = QPushButton("New workspace")
@@ -1587,8 +1568,10 @@ class WorkspacePanel(QWidget):
 
         layout.addWidget(_workspace_glyph(entry.reference_count, entry.has_main))
 
-        name = QLabel(entry.label)
-        name.setObjectName("HistoryRowName")
+        # Elided: the hover-revealed actions shrink the row mid-interaction,
+        # and a long workspace name must give way visibly, not clip.
+        name = _ElidedLabel("HistoryRowName")
+        name.setText(entry.label)
         if not entry.main_exists:
             _strike(name)
         layout.addWidget(name)
@@ -1628,6 +1611,30 @@ class WorkspacePanel(QWidget):
 
     # --- the pane ---------------------------------------------------------
 
+    def _build_pane_scroll(self) -> QWidget:
+        """The pane, in the one scroll area the page needs.
+
+        The pane states a whole record -- a reference's eight rows, then the
+        main document's own -- and a record is as tall as its file's prose
+        makes it. Without this the layout had nowhere to put the overflow
+        and compressed the widgets below their hints instead: at 1280x720 an
+        ordinary file's fact band was already being sliced through the
+        glyphs, with no scrollbar to say so. Vertical only, matching
+        ``InspectorScroll``; horizontally the pane still fits itself to the
+        width it is given, as it always has.
+        """
+        scroll = QScrollArea()
+        scroll.setObjectName("WorkspaceScroll")
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setWidgetResizable(True)
+        # AsNeeded, not AlwaysOff: below the board row's own minimums (a
+        # squeezed window with four slots pinned) a forbidden scrollbar
+        # meant the pane's right edge was simply cut off -- the bar is the
+        # honest fallback, and it never appears while the pane fits.
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setWidget(self._build_pane())
+        return scroll
+
     def _build_pane(self) -> QWidget:
         """The white pane: the workspace's name, the board of files it
         holds, the selected reference's record, and the main document's own
@@ -1636,7 +1643,10 @@ class WorkspacePanel(QWidget):
         pane.setObjectName("WorkspacePane")
         pane.setAttribute(Qt.WA_StyledBackground, True)
         pane_layout = QVBoxLayout(pane)
-        pane_layout.setContentsMargins(16, 14, 16, 0)
+        # A bottom margin only the scrolled case ever sees: the trailing
+        # stretch keeps the tail white when everything fits, and this stops
+        # the last row sitting flush against the edge when it does not.
+        pane_layout.setContentsMargins(SPACING_LG, 12, SPACING_LG, 12)
         pane_layout.setSpacing(0)
 
         self._name_field = WorkspaceNameField()
@@ -1742,9 +1752,9 @@ class WorkspacePanel(QWidget):
         self._info_citation.committed.connect(
             lambda text: self.identity_edited.emit("References", text)
         )
-        self._identity_form = self._record_form()
-        self._add_record_row(self._identity_form, "Description", self._info_description)
-        self._add_record_row(self._identity_form, "Citation", self._info_citation)
+        self._identity_form = _record_form()
+        _add_record_row(self._identity_form, "Description", self._info_description)
+        _add_record_row(self._identity_form, "Citation", self._info_citation)
         body.addLayout(self._identity_form)
 
         self._fact_band = QWidget()
@@ -1771,8 +1781,9 @@ class WorkspacePanel(QWidget):
         # The form is the band's direct layout with every row visible from
         # construction -- the one shape the pane provably sizes correctly
         # (see _ExpandableFact's docstring for the paid-for detour).
-        self._fact_form = self._record_form()
-        self._fact_form.setContentsMargins(10, 7, 10, 9)
+        self._fact_form = _record_form()
+        # The card-interior inset (12), on the plaque's own wash.
+        self._fact_form.setContentsMargins(12, 8, 12, 8)
         self._fact_band.setLayout(self._fact_form)
         for key, widget in (
             ("Model", self._fact_model),
@@ -1782,32 +1793,9 @@ class WorkspacePanel(QWidget):
             ("From", self._fact_from),
             ("Status", self._fact_status),
         ):
-            self._add_record_row(self._fact_form, key, widget)
+            _add_record_row(self._fact_form, key, widget)
         body.addWidget(self._fact_band)
         return section
-
-    @staticmethod
-    def _record_form() -> QFormLayout:
-        """A section's keyed record-row layout -- one shared recipe so the
-        document and reference records can never drift apart. Explicit left
-        alignment throughout: macOS's native form style centres the rows and
-        right-aligns the labels, which reads as scattered text rather than
-        a keyed record. Growing fields keep a long value ("11 sections · 44
-        parameters") fully visible instead of squeezed."""
-        form = QFormLayout()
-        form.setContentsMargins(0, 4, 0, 0)
-        form.setHorizontalSpacing(12)
-        form.setVerticalSpacing(6)
-        form.setFormAlignment(Qt.AlignLeft | Qt.AlignTop)
-        form.setLabelAlignment(Qt.AlignLeft)
-        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-        return form
-
-    @staticmethod
-    def _add_record_row(form: QFormLayout, key: str, widget: QWidget) -> None:
-        label = QLabel(f"{key}:")
-        label.setObjectName("WorkspaceCardKey")
-        form.addRow(label, widget)
 
     # --- the ＋ menu -------------------------------------------------------
 
@@ -1982,13 +1970,12 @@ class WorkspacePanel(QWidget):
 
         if read_only:
             # Not the D8 saved-state pair: a read-only session will never
-            # write, so its status is its mode. (It also has no backing
-            # file, which must not read as "never saved".)
+            # write, so its status is its mode.
             status = "Read-only"
-        elif never_saved:
-            status = "Unsaved changes · never saved"
         else:
-            status = "Unsaved changes" if dirty else "Saved"
+            # A document with no backing file has everything still to write,
+            # so it counts as unsaved even before its first edit.
+            status = "Saved" if not dirty and not never_saved else "Unsaved changes"
         self._fact_status.setText(status)
 
         validity, colour, tooltip = self._validity_mark(

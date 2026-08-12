@@ -205,7 +205,7 @@ class AppDriver:
 
     def validation_group_headers(self) -> list[str]:
         """Text of every stream sub-head row, in order -- today only ever
-        "OPTIONAL . K UNFILLED" (the required group's own former ratio
+        "K optional parameters unfilled" (the required group's own former ratio
         sub-head is gone: that ratio now lives in the section's own fold
         header, D5). See :meth:`diagnostics_stream_subhead_texts` for the
         same read under its new name."""
@@ -565,7 +565,8 @@ class AppDriver:
         page = self._w._source
         if page._pane_head.isHidden():
             return None
-        return (page._main_head.text(), page._ref_head.text())
+        # full_text(): the heads elide, so text() may be shortened.
+        return (page._main_head.full_text(), page._ref_head.full_text())
 
     def source_hint_visible(self) -> bool:
         """Whether the "Open a reference to compare…" toolbar hint is shown.
@@ -596,7 +597,7 @@ class AppDriver:
         """The single-pane toolbar's "filename · model" label text, or
         ``None`` while it is hidden (two-pane mode, or no document)."""
         label = self._w._source._file_label
-        return None if label.isHidden() else label.text()
+        return None if label.isHidden() else label.full_text()
 
     def source_selected_path(self) -> tuple | None:
         """The Source view's selected row path (last clicked/revealed row),
@@ -626,7 +627,7 @@ class AppDriver:
     def source_reference_header_text(self) -> str:
         """The reference pane's header ("Reference 1 of 3  ·  chen.json  ·
         SPM")."""
-        return self._w._source._ref_head.text()
+        return self._w._source._ref_head.full_text()
 
     def source_reference_badge_letters(self) -> str | None:
         """The letters of the reference pane's *selected* badge, or ``None``
@@ -820,7 +821,8 @@ class AppDriver:
             if object_name is not None and row.objectName() != object_name:
                 continue
             name = row.findChild(QLabel, "HistoryRowName")
-            if name is not None and name.text() == label:
+            # full_text(): the name label elides, so text() may be shortened.
+            if name is not None and name.full_text() == label:
                 return row
         raise AssertionError(f"No workspace row labelled {label!r}")
 
@@ -828,7 +830,7 @@ class AppDriver:
         from PySide6.QtWidgets import QLabel
 
         return [
-            row.findChild(QLabel, "HistoryRowName").text()
+            row.findChild(QLabel, "HistoryRowName").full_text()
             for row in self._workspace_rows()
             if object_name is None or row.objectName() == object_name
         ]
@@ -852,7 +854,7 @@ class AppDriver:
 
         for row in self._workspace_rows():
             if row.findChild(QLabel, "HistoryRowPill") is not None:
-                return row.findChild(QLabel, "HistoryRowName").text()
+                return row.findChild(QLabel, "HistoryRowName").full_text()
         return None
 
     def click_workspace_row(self, label: str) -> "AppDriver":
@@ -1067,6 +1069,37 @@ class AppDriver:
         """Whether the board is holding at least one reference."""
         return bool(self._reference_rows())
 
+    def _workspace_scroll(self):
+        from PySide6.QtWidgets import QScrollArea
+
+        return self._w._workspace.findChild(QScrollArea, "WorkspaceScroll")
+
+    def _workspace_pane(self):
+        from PySide6.QtWidgets import QWidget
+
+        # By name, not through the scroll area: with the scroll area gone the
+        # measurement below is exactly what should fail, and it cannot say so
+        # if finding the pane is what breaks first.
+        return self._w._workspace.findChild(QWidget, "WorkspacePane")
+
+    def workspace_squeezed_by(self) -> int:
+        """Pixels the Workspace page is withholding from its own content.
+
+        Always 0: the page scrolls, so a record is as tall as its file's
+        prose makes it. Before the pane had a scroll area the layout
+        absorbed the overflow by compressing widgets past their hints, and
+        the fact band was sliced through the glyphs with nothing to say so.
+        ``heightForWidth``, never ``sizeHint`` -- a wrapped label's hint is
+        measured at some other width, so it is not the comparison.
+        """
+        pane = self._workspace_pane()
+        return max(0, pane.heightForWidth(pane.width()) - pane.height())
+
+    def workspace_can_scroll(self) -> bool:
+        """Whether the Workspace page is offering to scroll."""
+        scroll = self._workspace_scroll()
+        return scroll is not None and scroll.verticalScrollBar().maximum() > 0
+
     def reference_empty_state_visible(self) -> bool:
         """Whether the board is holding no references at all -- every slot
         an empty ＋, which is the board's own empty state."""
@@ -1136,16 +1169,18 @@ class AppDriver:
     # ------------------------------------------------------------------
 
     def comparison_strip_visible(self) -> bool:
-        return not self._w._params._strip.isHidden()
+        """Whether the identity chips show in the page-header bar. Gated on
+        the Editor page being current as well as on pins existing."""
+        return not self._w._comparison_strip.isHidden()
 
     def comparison_strip_chip_names(self) -> list[str]:
         """The strip's chip names, in pin order."""
-        return [chip._name.text() for chip in self._w._params._strip._chips]
+        return [chip._name.text() for chip in self._w._comparison_strip._chips]
 
     def comparison_strip_chip_tooltips(self) -> list[str]:
         """The strip's chip tooltips -- where the per-reference counts live,
         since the chips themselves stay quiet."""
-        return [chip.toolTip() for chip in self._w._params._strip._chips]
+        return [chip.toolTip() for chip in self._w._comparison_strip._chips]
 
     def parameter_row_ref_bar(self, label: str) -> str | None:
         """The real parameter row starting with *label*'s own
