@@ -33,7 +33,8 @@ class BooleanCard(EditorCard):
         self._check.toggled.connect(self._on_toggled)
         self._check.clicked.connect(lambda *_: self.commit_requested.emit())
         layout.addWidget(self._check)
-        layout.addStretch(1)
+        # Zero-stretch: see ScalarCard -- deterministic input width.
+        layout.addStretch(0)
         self._install_keyboard_handler(self._check)
 
     def _on_toggled(self, checked: bool) -> None:

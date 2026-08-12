@@ -315,9 +315,12 @@ def test_typing_filters_both_groups_by_substring(popup, anchor):
     assert other_header.data(popup._TIER_ROLE) == "header"
     assert other_header.data(popup._TIER_TOP_ROLE) is True
 
-    # And the pinned custom footer coexists, since "temperature" is a fresh alias.
+    # And the pinned custom footer coexists, since "temperature" is a fresh
+    # alias. The tooltip is the full-sentence seam: the visible label elides
+    # against the card width, and the offscreen fallback font makes the elide
+    # point unpredictable.
     assert popup._footer_shown is True
-    assert "temperature" in popup._create_button.text()
+    assert "temperature" in popup._create_button.toolTip()
 
 
 def test_present_and_expected_aliases_are_excluded_everywhere(popup, anchor):
@@ -436,7 +439,9 @@ def test_footer_appears_for_a_fresh_typed_alias(popup, anchor):
     # no BPX alias matches, so the list is empty.
     assert _rows(popup) == []
     assert popup._footer_shown is True
-    assert "My custom parameter" in popup._create_button.text()
+    # toolTip carries the full sentence; the visible label elides against
+    # the card width (unpredictably so under the offscreen fallback font).
+    assert "My custom parameter" in popup._create_button.toolTip()
 
 
 def test_footer_withheld_for_an_already_present_alias(popup, anchor):

@@ -39,7 +39,7 @@ class SeriesCard(EditorCard):
         super().__init__(parameter, meta)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
+        layout.setSpacing(2)
 
         self._preview = TablePreview(mode="series")
         self._preview.set_axis_titles("row", parameter.label)

@@ -293,7 +293,7 @@ class _SuggestionDelegate(ParameterRowDelegate):
             return
         rect = option.rect
         painter.save()
-        painter.setPen(QPen(QColor("#eaecef")))
+        painter.setPen(QPen(QColor(style.BORDER_FAINT)))
         line_y = rect.top() + self._GAP // 2
         painter.drawLine(rect.left() + 6, line_y, rect.right() - 6, line_y)
         painter.restore()
@@ -377,7 +377,9 @@ class AddParameterPopup(QWidget):
         self._list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self._list.setWordWrap(True)
         self._list.setTextElideMode(Qt.ElideNone)
-        self._list.setItemDelegate(_SuggestionDelegate(self._list, h_pad=8, v_pad=8))
+        # The search popup's own row metrics -- the two palettes are one
+        # family, so their rows share one height.
+        self._list.setItemDelegate(_SuggestionDelegate(self._list, h_pad=8, v_pad=6))
         self._list.itemClicked.connect(self._on_row_clicked)
 
         #: Thin rule separating the scrolling list from the pinned footer;
@@ -559,7 +561,18 @@ class AddParameterPopup(QWidget):
         depends on the active tab -- see ``_update_footer_visibility``."""
         self._footer_shown = show
         if show:
-            self._create_button.setText(f"  Create custom parameter “{self._typed}”")
+            label = f"  Create custom parameter “{self._typed}”"
+            # Elided into the fixed-width card (56: card margins + button
+            # padding + icon) -- a native button clips a long typed name
+            # with no ellipsis. The tooltip carries the whole sentence, the
+            # app's usual elision contract (and the test seam: offscreen
+            # fallback fonts make the elide point itself unpredictable).
+            self._create_button.setToolTip(label.strip())
+            self._create_button.setText(
+                self._create_button.fontMetrics().elidedText(
+                    label, Qt.ElideRight, _CARD_WIDTH - 56
+                )
+            )
         self._update_footer_visibility()
 
     # -- tabs ----------------------------------------------------------

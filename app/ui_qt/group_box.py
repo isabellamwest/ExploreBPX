@@ -52,7 +52,7 @@ class GroupBox(QFrame):
         header_styled_background: bool = True,
         header_margins: tuple[int, int, int, int] = (12, 5, 12, 5),
         header_spacing: int | None = 8,
-        body_margins: tuple[int, int, int, int] = (12, 10, 12, 12),
+        body_margins: tuple[int, int, int, int] = (12, 10, 12, 10),
         body_spacing: int = 8,
         body_stretch: int = 0,
     ) -> None:
@@ -105,10 +105,10 @@ class GroupBox(QFrame):
         outer.addWidget(self.body, body_stretch)
 
 
-#: The gutter every :class:`TintedSection` title/body shares -- the same
-#: 16px left/right inset a suffix sits 16px from the right edge, matching
-#: this module's docstring exactly.
-_SECTION_GUTTER = 16
+#: The gutter every :class:`TintedSection` title/body shares -- the page
+#: rung of the shared spacing scale, the same 16px inset every full-width
+#: page block uses.
+_SECTION_GUTTER = style.SPACING_LG
 
 #: The disclosure chevrons a collapsible section's title row carries --
 #: the same pair the Diagnostics fold headers draw, so "this heading

@@ -25,6 +25,7 @@ from core.tree_model import ParameterItem, TreeNode
 
 from . import icons, parameter_row, style, typography
 from .dismissal import OutsideDismissFilter
+from .floating_card import CARD_MARGIN as _CARD_MARGIN
 from .floating_card import SHADOW_MARGIN as _SHADOW_MARGIN
 from .floating_card import floating_card
 from .parameter_row import ParameterRowDelegate
@@ -32,6 +33,10 @@ from .parameter_row import ParameterRowDelegate
 _PATH_ROLE = Qt.UserRole
 _MAX_RESULTS = 50
 _MAX_VISIBLE_ROWS = 8
+
+#: Floor for the results card: the popup tracks the search box's width, but
+#: a squeezed toolbar must not squeeze the results unreadable with it.
+_MIN_POPUP_WIDTH = 320
 
 
 def _entry_html(entry: "_Entry") -> str:
@@ -144,7 +149,7 @@ class SearchPopup(QWidget):
         # top of the list's own height.
         list_height = sum(self._list.sizeHintForRow(i) for i in range(rows))
         list_height += 2 * self._list.frameWidth()
-        return list_height + 2 * 8 + 2 * _SHADOW_MARGIN
+        return list_height + 2 * _CARD_MARGIN + 2 * _SHADOW_MARGIN
 
 
 class SearchBar(QLineEdit):
@@ -205,7 +210,9 @@ class SearchBar(QLineEdit):
         self._show_popup()
 
     def _show_popup(self) -> None:
-        self._popup.setFixedWidth(max(self.width(), 320) + 2 * _SHADOW_MARGIN)
+        self._popup.setFixedWidth(
+            max(self.width(), _MIN_POPUP_WIDTH) + 2 * _SHADOW_MARGIN
+        )
         height = self._popup.sized_height()
         if height:
             self._popup.setFixedHeight(height)

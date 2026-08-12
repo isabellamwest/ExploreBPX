@@ -149,6 +149,11 @@ class NumberBody(ModeBody):
         return VALUE_INPUT_MAX_WIDTH
 
 
+#: Width of the preview-domain bound fields -- room for a full
+#: scientific-notation bound (e.g. "-1.5e-06").
+_DOMAIN_FIELD_WIDTH = 100
+
+
 class ExpressionBody(ModeBody):
     """``Function``: a free-text expression, hinted by ``bpx.Function``'s own
     docs, over a chart previewing what it draws.
@@ -212,12 +217,12 @@ class ExpressionBody(ModeBody):
         domain_row.addWidget(_domain_label("Preview domain"))
         self._domain_low_edit = QLineEdit(_format_domain_bound(self._domain_low))
         self._domain_low_edit.setObjectName("ExpressionDomainLow")
-        self._domain_low_edit.setMaximumWidth(70)
+        self._domain_low_edit.setMaximumWidth(_DOMAIN_FIELD_WIDTH)
         domain_row.addWidget(self._domain_low_edit)
         domain_row.addWidget(_domain_label("to"))
         self._domain_high_edit = QLineEdit(_format_domain_bound(self._domain_high))
         self._domain_high_edit.setObjectName("ExpressionDomainHigh")
-        self._domain_high_edit.setMaximumWidth(70)
+        self._domain_high_edit.setMaximumWidth(_DOMAIN_FIELD_WIDTH)
         domain_row.addWidget(self._domain_high_edit)
         # editingFinished (not textChanged): fires on Enter or focus-out,
         # never per keystroke, and this is view state -- never wired to
@@ -375,7 +380,7 @@ class TableBody(ModeBody):
         self._seed: object = None
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
+        layout.setSpacing(2)
 
         self._preview = TablePreview(mode="xy")
         self._preview.set_axis_titles("x", f"y [{unit}]" if unit else "y")

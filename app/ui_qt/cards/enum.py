@@ -46,10 +46,19 @@ class EnumCard(EditorCard):
         self._select(self._original)
         self._combo.setMaximumWidth(VALUE_INPUT_MAX_WIDTH)
         self._combo.currentTextChanged.connect(lambda *_: self.draft_changed.emit())
+        # A capped combo elides its own current item with no way to read the
+        # rest; the tooltip carries it verbatim.
+        self._combo.currentTextChanged.connect(self._combo.setToolTip)
+        self._combo.setToolTip(self._combo.currentText())
         self._combo.activated.connect(self._on_activated)
         layout.addWidget(self._combo, 1)
-        layout.addStretch(1)
+        # Zero-stretch: see ScalarCard -- deterministic input width, so the
+        # reference row's box can match it exactly.
+        layout.addStretch(0)
         self._install_keyboard_handler(self._combo)
+
+    def reference_value_width(self) -> int | None:
+        return VALUE_INPUT_MAX_WIDTH
 
     def _on_activated(self, _index: int) -> None:
         """A pick from the opened popup commits; a closed-combo step does not.

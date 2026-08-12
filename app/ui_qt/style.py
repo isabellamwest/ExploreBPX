@@ -281,11 +281,18 @@ SPIN_INPUT_MAX_WIDTH = 160
 #: The card's role-label column ("Main" / "Reference"), shown only while a
 #: reference is docked. One shared fixed width -- set by both the editor row
 #: and ``ReferenceValueBlock`` -- is what keeps the two value columns aligned.
-ROLE_LABEL_WIDTH = 72
+#: Sized to the column's widest occupant: the ledger's badge cluster at the
+#: pin cap (4 badges x 18px + 3 gaps x 2px = 78), so a full cluster can never
+#: push its value column off the main editor's x.
+ROLE_LABEL_WIDTH = 78
 
 #: Gap between the role label and its value; must be the same in both rows
 #: for the same alignment reason.
 ROLE_ROW_SPACING = 12
+
+#: Tallest an import-preview table (the CSV and paste dialogs) may grow
+#: before it scrolls -- one cap, previously a copy-pasted literal in each.
+TABLE_PREVIEW_MAX_HEIGHT = 260
 
 
 def all_clear(text: str) -> str:
@@ -486,7 +493,7 @@ QLabel#BoardArrow { color: #8c959f; font-size: ${title}px; }
    already answered, or a model already named. */
 QWidget#BoardStartSurface { background: transparent; }
 QPushButton#StartOpenButton {
-    background: #ffffff; border: none; border-radius: 5px;
+    background: #ffffff; border: none; border-radius: 6px;
     padding: 9px 12px; font-size: ${body}px; font-weight: ${semibold};
     text-align: left;
 }
@@ -530,7 +537,7 @@ QLabel#WorkspaceMissingText { color: #6b5b1f; font-size: ${meta}px; }
    departed chooser rows shared. */
 QPushButton#NewWorkspace {
     background: #ffffff; border: 1px solid #a5b1bd; border-radius: 6px;
-    padding: 5px 10px; text-align: left;
+    padding: 4px 10px; text-align: left;
 }
 QPushButton#NewWorkspace:hover { background: #dbe2e9; }
 /* Workspace rows: white chips like the Open button, the whole row a click
@@ -695,7 +702,7 @@ QLabel#SourceFileLabel { color: #57606a; font-size: ${meta}px; }
 QLabel#SourceHint { color: #6f42c1; font-size: ${meta}px; }
 QPushButton#SourceFoldButton {
     background: #ffffff; border: 1px solid #b9c4ce; border-radius: 4px;
-    padding: 2px 10px; color: #57606a;
+    padding: 3px 10px; color: #57606a;
 }
 QPushButton#SourceFoldButton:hover { background: #e7ecf1; }
 /* Stale-reference band: slim, neutral, under the pane headers; the
@@ -845,7 +852,7 @@ QListWidget#AddParameterList {
     background: transparent;
     outline: none;
 }
-QListWidget#AddParameterList::item { padding: 8px; border-radius: 4px; }
+QListWidget#AddParameterList::item { padding: 6px 8px; border-radius: 4px; }
 QListWidget#AddParameterList::item:selected { background: #cfe4fc; color: #1f2328; }
 QFrame#AddParameterDivider { background: #dde2e8; border: none; }
 /* The pinned "Create custom parameter" action -- accent-tinted escape hatch,

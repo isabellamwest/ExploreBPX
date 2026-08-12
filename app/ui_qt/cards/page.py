@@ -18,8 +18,9 @@ from PySide6.QtWidgets import QFrame, QVBoxLayout, QWidget
 
 from .. import style
 
-#: The single horizontal gutter every page block shares.
-GUTTER = 16
+#: The single horizontal gutter every page block shares -- the page rung of
+#: the shared spacing scale, not a width of this module's own.
+GUTTER = style.SPACING_LG
 
 
 def page_header() -> tuple[QFrame, QVBoxLayout]:
@@ -27,7 +28,7 @@ def page_header() -> tuple[QFrame, QVBoxLayout]:
     frame = QFrame()
     frame.setObjectName("CardPageHeader")
     layout = QVBoxLayout(frame)
-    layout.setContentsMargins(GUTTER, 12, GUTTER, 10)
+    layout.setContentsMargins(GUTTER, 12, GUTTER, 12)
     layout.setSpacing(4)
     return frame, layout
 
@@ -50,5 +51,5 @@ def page_content() -> tuple[QWidget, QVBoxLayout]:
     body.setMaximumWidth(style.PAGE_MEASURE)
     layout = QVBoxLayout(body)
     layout.setContentsMargins(GUTTER, 12, GUTTER, GUTTER)
-    layout.setSpacing(10)
+    layout.setSpacing(style.SPACING_MD)
     return body, layout

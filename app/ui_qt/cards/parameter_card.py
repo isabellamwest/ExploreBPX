@@ -130,8 +130,12 @@ class ParameterCard(QWidget):
         header_frame, header_box = page_header()
 
         header = QHBoxLayout()
+        header.setSpacing(6)
         self._title = QLabel(parameter.label)
         self._title.setObjectName("CardTitle")
+        # Wrapped: a long parameter label (custom names especially) folds to
+        # a second line instead of shoving the validity mark off the header.
+        self._title.setWordWrap(True)
         header.addWidget(self._title)
         # The parameter's symbol, as rendered maths, sits beside its name -- the
         # glance the modeller reads by ("Electrode area [m2]", A). Present only
@@ -173,9 +177,10 @@ class ParameterCard(QWidget):
         self._info_button = QPushButton("i")
         self._info_button.setObjectName("InfoButton")
         self._info_button.setToolTip("Parameter information")
-        self._info_button.setFixedSize(20, 20)
+        # The rename pencil's own box, so the header's two icon buttons match.
+        self._info_button.setFixedSize(22, 22)
         self._info_button.setStyleSheet(
-            f"border-radius: 10px; font-style: italic; {typography.semibold_qss()}"
+            f"border-radius: 11px; font-style: italic; {typography.semibold_qss()}"
         )
         self._info_button.clicked.connect(self._toggle_info_popover)
         header.addWidget(self._info_button)

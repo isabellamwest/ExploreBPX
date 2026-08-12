@@ -16,6 +16,11 @@ from PySide6.QtWidgets import QFrame, QGraphicsDropShadowEffect, QVBoxLayout, QW
 #: paint inside the translucent top-level window.
 SHADOW_MARGIN = 16
 
+#: The card's own interior inset. Named so height/width math outside this
+#: module (the search popup's fit-to-rows sizing) can sum real margins
+#: instead of restating an 8 that would silently drift.
+CARD_MARGIN = 8
+
 
 def floating_card(
     popup: QWidget, object_name: str, width: int | None = None
@@ -30,7 +35,9 @@ def floating_card(
     if width is not None:
         card.setFixedWidth(width)
     card_layout = QVBoxLayout(card)
-    card_layout.setContentsMargins(8, 8, 8, 8)
+    card_layout.setContentsMargins(
+        CARD_MARGIN, CARD_MARGIN, CARD_MARGIN, CARD_MARGIN
+    )
     card_layout.setSpacing(6)
 
     shadow = QGraphicsDropShadowEffect(popup)

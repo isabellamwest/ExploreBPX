@@ -21,6 +21,9 @@ from core.parameter_metadata import ParameterMetadata
 from .dismissal import OutsideDismissFilter
 from .latex import symbol_label
 
+#: Same width as name_popup's card -- both are frameless anchored popups.
+_CARD_WIDTH = 300
+
 #: (heading, ParameterMetadata field name) for the quick-glance facts, in
 #: display order. A field that resolves empty/``None`` is simply omitted.
 #: The long-form documentation deliberately does NOT render here - it is
@@ -41,7 +44,7 @@ class ParameterInfoPopover(QWidget):
         self.setObjectName("ParameterInfoPopover")
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Tool)
         self.setFocusPolicy(Qt.StrongFocus)
-        self.setFixedWidth(300)
+        self.setFixedWidth(_CARD_WIDTH)
         self._layout = QVBoxLayout(self)
         #: The ( i ) anchor button is deliberately not registered as "inside"
         #: here -- clicking it while the popover is open must close-and-swallow

@@ -378,7 +378,7 @@ class _PendingBar(QWidget):
         )
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(8, 2, 6, 2)
+        layout.setContentsMargins(8, 2, 8, 2)
         layout.setSpacing(6)
 
         # The unified dot language's mark, in the accent colour: "edited, not
@@ -502,6 +502,9 @@ class NumericGrid(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        # Explicit: unset, this was the one card-body gap left to the
+        # platform style's default.
+        layout.setSpacing(2)
         layout.addWidget(self._view)
         layout.addLayout(self._buttons)
         layout.addWidget(self._pending_bar)
@@ -1046,6 +1049,8 @@ class MultiColumnGrid(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        # NumericGrid's own stack gap, for the same reason it sets it.
+        layout.setSpacing(2)
         layout.addWidget(self._view)
 
         # A read-only grid (a future card's display-only view) has nothing to
