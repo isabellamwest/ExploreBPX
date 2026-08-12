@@ -166,10 +166,10 @@ class ParameterCard(QWidget):
         # text via ``self._badge.text()``.
         self._dot = QLabel("")
         self._dot.setObjectName("ValidityDot")
-        header.addWidget(self._dot)
+        header.addWidget(self._dot, 0, Qt.AlignVCenter)
         self._badge = QLabel("")
         self._badge.setObjectName("CardValidityText")
-        header.addWidget(self._badge)
+        header.addWidget(self._badge, 0, Qt.AlignVCenter)
         self._info_button = QPushButton("i")
         self._info_button.setObjectName("InfoButton")
         self._info_button.setToolTip("Parameter information")
@@ -431,8 +431,20 @@ class ParameterCard(QWidget):
         *tooltip* explains a verdict whose words alone do not (today only
         "Not checked", whose reason lives in ``style.not_checked_tooltip``).
         It sits on both dot and text so the whole mark is one hover target;
-        empty clears it, so a later Valid never keeps a stale sentence."""
-        self._dot.setText(html_img(DOT, color=colour))
+        empty clears it, so a later Valid never keeps a stale sentence.
+
+        ``lift=0``: unlike a dot embedded *inline* beside text in one rich-
+        text flow (the parameter list's trailing mark, a diagnostics row's
+        leading glyph), ``_dot`` is its own ``QLabel`` with no sibling text
+        in the same document, so ``html_img``'s default x-height-midline
+        correction has nothing to correct against -- Qt sizes an image-only
+        label to the bare pixmap, with no font-metrics strut. ``_dot`` and
+        ``_badge`` are centred independently (``Qt.AlignVCenter`` on both)
+        on the same row axis instead: a circular dot's ink already sits
+        exactly on its own box's geometric centre, and cap-height text's
+        ink sits within a sub-pixel of its box's geometric centre too, so
+        the two coincide without any lift."""
+        self._dot.setText(html_img(DOT, color=colour, lift=0))
         self._badge.setText(text)
         self._dot.setToolTip(tooltip)
         self._badge.setToolTip(tooltip)

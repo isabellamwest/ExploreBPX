@@ -152,6 +152,30 @@ def paint_severity_dot(painter: QPainter, box: QRect, color: str) -> None:
     painter.restore()
 
 
+def cap_midline_mark_top(text_rect: QRect, metrics: QFontMetrics, mark_size: int) -> int:
+    """The y (top) for a *mark_size*-square mark -- typically a
+    :func:`paint_severity_dot` *box* -- so it centres on the **cap
+    midline** of text vertically centred within *text_rect* per *metrics*,
+    rather than on *text_rect*'s own geometric centre.
+
+    First the ordinary vertically-centred-text baseline (``text_rect.y() +
+    (text_rect.height() + ascent - descent) // 2``, integer like Qt's own
+    text-centring maths); then up half a cap height to the midline capital
+    letters and digits optically centre on; then up half the mark to
+    centre it there too. A mark placed on *text_rect*'s bare geometric
+    centre instead sits on the wrong line, because a font's ascent/descent
+    span reaches well past where capital-letter ink actually stops.
+
+    The one derivation every mark that sits *beside* a known text rect
+    should share -- used directly here by the navigation tree's after-label
+    error dot (:mod:`ui_qt.tree_panel`); :mod:`ui_qt.icons`'s ``html_img``
+    inline lift is the equivalent correction for a mark that is instead
+    *embedded inside* a line of rich text, where no such rect is
+    available."""
+    baseline = text_rect.y() + (text_rect.height() + metrics.ascent() - metrics.descent()) // 2
+    return round(baseline - metrics.capHeight() / 2 - mark_size / 2)
+
+
 def value_preview(value: object, kind: ParameterKind) -> tuple[str, bool]:
     """Return ``(text, ghost)`` for a parameter row's value column.
 

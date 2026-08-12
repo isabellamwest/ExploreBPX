@@ -50,7 +50,14 @@ from core.tree_model import TreeNode
 
 from . import style
 from .name_popup import NamePopup
-from .parameter_row import MARK_BOX, REF_BAR_ROLE, SEVERITY_ROLE, paint_ref_bar, paint_severity_dot
+from .parameter_row import (
+    MARK_BOX,
+    REF_BAR_ROLE,
+    SEVERITY_ROLE,
+    cap_midline_mark_top,
+    paint_ref_bar,
+    paint_severity_dot,
+)
 from .tree_model import BpxTreeModel
 
 
@@ -86,19 +93,17 @@ class _TreeItemDelegate(QStyledItemDelegate):
         # Position off the style's own text sub-rect, not option.rect: the
         # stylesheet's ::item padding shifts where the label actually starts,
         # and ignoring it left the dot touching the last glyph. Vertically
-        # the dot centres on the label's cap midline (baseline minus half the
-        # cap height) -- the row rect's geometric centre sits below the text's
-        # optical centre, which read as the dot riding high.
+        # the dot centres on the label's cap midline, not text_rect's own
+        # geometric centre -- see ``parameter_row.cap_midline_mark_top``.
         opt = QStyleOptionViewItem(option)
         self.initStyleOption(opt, index)
         widget = opt.widget
         widget_style = widget.style() if widget is not None else QApplication.style()
         text_rect = widget_style.subElementRect(QStyle.SE_ItemViewItemText, opt, widget)
         metrics = QFontMetrics(opt.font)
-        baseline = text_rect.y() + (text_rect.height() + metrics.ascent() - metrics.descent()) // 2
         box = QRect(
             text_rect.x() + metrics.horizontalAdvance(opt.text) + self._GAP,
-            round(baseline - metrics.capHeight() / 2 - MARK_BOX / 2),
+            cap_midline_mark_top(text_rect, metrics, MARK_BOX),
             MARK_BOX,
             MARK_BOX,
         )

@@ -11,12 +11,13 @@ logic of our own.
 from __future__ import annotations
 
 import base64
+from functools import lru_cache
 
 from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QRectF, QSize, Qt
-from PySide6.QtGui import QGuiApplication, QIcon, QPainter, QPixmap
+from PySide6.QtGui import QFontMetrics, QGuiApplication, QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 
-from ui_qt import style
+from ui_qt import style, typography
 
 #: Unselected / selected stroke colours. The icon glyph never changes --
 #: only its colour -- so severity/emphasis is always carried by tone, never
@@ -162,8 +163,8 @@ def _render_pixmap(svg: str, color: str, size: int, *, lift: int = 0) -> QPixmap
     Rendered at the primary screen's device-pixel-ratio and tagged with it
     so the icon stays crisp on HiDPI displays. *lift* shifts the ink up by
     that many logical pixels within the (unchanged) canvas -- see
-    :data:`_INLINE_LIFT`; every glyph carries enough viewBox padding that a
-    small lift never clips.
+    :func:`_default_inline_lift`; every glyph carries enough viewBox padding
+    that a small lift never clips.
     """
     dpr = _device_pixel_ratio()
     pixel_size = max(1, round(size * dpr))
@@ -180,32 +181,53 @@ def _render_pixmap(svg: str, color: str, size: int, *, lift: int = 0) -> QPixmap
     return pixmap
 
 
-_HTML_IMG_CACHE: dict[tuple[str, str, int], str] = {}
-
-#: Ink lift (logical px) applied to every :func:`html_img` glyph. Qt's rich
-#: text centres an inline image's *box* on the x-height midline
-#: (``vertical-align: middle``), but these glyphs all sit beside
-#: Capitalised/digit-led label text whose optical midline is the *cap*
-#: midline -- about 2px higher at the app's 12-13px fonts -- so an unlifted
-#: mark reads as hanging low (most visibly the red severity dot).
-_INLINE_LIFT = 2
+_HTML_IMG_CACHE: dict[tuple[str, str, int, int], str] = {}
 
 
-def html_img(svg: str, *, color: str = _MUTED, size: int = 13) -> str:
+@lru_cache(maxsize=1)
+def _default_inline_lift() -> int:
+    """The derived default ink lift (rounded logical px) for :func:`html_img`.
+
+    Qt's rich text centres an inline image's *box* on the x-height midline
+    (``vertical-align: middle``), but these glyphs all sit beside
+    Capitalised/digit-led label text whose optical midline is the *cap*
+    midline -- half a cap height above the baseline, against half an
+    x-height. The correction is the gap between those two halves,
+    ``(capHeight - xHeight) / 2``, of the font that text is actually set in
+    -- the app's BODY UI font, since that is the rung every card header and
+    list row beside these glyphs uses. A function, not a module constant:
+    building a ``QFontMetrics`` needs a live ``QGuiApplication``, which need
+    not exist yet when this module is imported; ``lru_cache`` means it is
+    still computed once. Compare :func:`~ui_qt.parameter_row.
+    cap_midline_mark_top`, the same correction for a mark painted directly
+    against a known text rect rather than embedded in a rich-text flow.
+    """
+    metrics = QFontMetrics(typography.ui_font(typography.BODY))
+    return round((metrics.capHeight() - metrics.xHeight()) / 2)
+
+
+def html_img(svg: str, *, color: str = _MUTED, size: int = 13, lift: int | None = None) -> str:
     """An ``<img>`` rich-text fragment embedding *svg* as a data-URI PNG.
 
     For rows painted through ``QTextDocument`` (``ParameterRowDelegate``),
     which cannot draw QIcons: the pixmap is rendered at the screen's
     device-pixel-ratio and scaled back to *size* by explicit width/height
     attributes, so glyphs stay crisp on HiDPI displays. Cached per
-    (svg, color, size) because callers rebuild rows on every keystroke;
-    a DPR change mid-session (rare) keeps serving the first rendering.
+    (svg, color, size, lift) because callers rebuild rows on every
+    keystroke; a DPR change mid-session (rare) keeps serving the first
+    rendering.
+
+    *lift* defaults to :func:`_default_inline_lift`, derived from the app's
+    BODY UI font; pass an explicit value only for a call site whose
+    adjacent text is genuinely set at a different rung or face.
     """
-    key = (svg, color, size)
+    if lift is None:
+        lift = _default_inline_lift()
+    key = (svg, color, size, lift)
     cached = _HTML_IMG_CACHE.get(key)
     if cached is not None:
         return cached
-    pixmap = _render_pixmap(svg, color, size, lift=_INLINE_LIFT)
+    pixmap = _render_pixmap(svg, color, size, lift=lift)
     buffer = QBuffer()
     buffer.open(QIODevice.WriteOnly)
     pixmap.save(buffer, "PNG")

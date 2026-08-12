@@ -7,6 +7,8 @@ import pytest
 
 pytest.importorskip("PySide6")
 
+from PySide6.QtCore import QRect
+from PySide6.QtGui import QFont, QFontMetrics
 from PySide6.QtWidgets import QApplication, QListWidget, QListWidgetItem
 
 from ui_qt import icons, style, typography
@@ -16,6 +18,7 @@ from ui_qt.parameter_row import (
     REF_BAR_ROLE,
     ParameterRowDelegate,
     build_parameter_row_html,
+    cap_midline_mark_top,
     compose_issue_row_html,
     compose_row_html,
     split_name_and_unit,
@@ -185,3 +188,82 @@ def test_no_detail_omits_the_suffix_entirely():
     html_without = compose_issue_row_html("Thickness [m]", "value must be positive")
     assert html_with_none == html_without
     assert "·" not in html_without
+
+
+# ---------------------------------------------------------------------------
+# cap_midline_mark_top -- the shared mark-alignment helper (pure QFontMetrics
+# maths, no painting, so these are offscreen-safe like every other test here).
+# ---------------------------------------------------------------------------
+
+
+def test_cap_midline_mark_top_centres_the_mark_on_the_cap_midline():
+    """The returned top, plus half the mark size, must land exactly on the
+    cap midline: the vertically-centred-text baseline (text_rect's own
+    formula) minus half the font's cap height -- the same "riding low
+    against a capital letter's optical centre" fix ``tree_panel`` used to
+    compute inline, now shared."""
+    font = QFont()
+    font.setPixelSize(13)
+    metrics = QFontMetrics(font)
+    text_rect = QRect(0, 100, 200, 20)
+    mark_size = 13
+
+    top = cap_midline_mark_top(text_rect, metrics, mark_size)
+
+    baseline = text_rect.y() + (text_rect.height() + metrics.ascent() - metrics.descent()) / 2
+    expected_midline = baseline - metrics.capHeight() / 2
+    assert abs((top + mark_size / 2) - expected_midline) <= 0.5
+
+
+def test_cap_midline_mark_top_matches_tree_panels_original_inline_formula():
+    """Regression guard for promoting this out of ``_TreeItemDelegate.paint``:
+    reproduces that exact original expression (integer baseline via ``//``,
+    matching Qt's own text-centring maths) so the extraction changed no
+    behaviour, down to the rounding."""
+    font = QFont()
+    font.setPixelSize(13)
+    metrics = QFontMetrics(font)
+    text_rect = QRect(5, 40, 150, 22)
+    mark_size = MARK_BOX
+
+    baseline = text_rect.y() + (text_rect.height() + metrics.ascent() - metrics.descent()) // 2
+    expected = round(baseline - metrics.capHeight() / 2 - mark_size / 2)
+
+    assert cap_midline_mark_top(text_rect, metrics, mark_size) == expected
+
+
+def test_cap_midline_mark_top_is_independent_of_text_rect_x_and_width():
+    """Only the vertical geometry (y, height) and the font feed the
+    formula -- x/width are irrelevant, matching how callers pass a text
+    rect whose width varies with the label text beside the mark."""
+    font = QFont()
+    font.setPixelSize(11)
+    metrics = QFontMetrics(font)
+    narrow = QRect(0, 50, 10, 18)
+    wide = QRect(999, 50, 500, 18)
+
+    assert cap_midline_mark_top(narrow, metrics, 13) == cap_midline_mark_top(wide, metrics, 13)
+
+
+# ---------------------------------------------------------------------------
+# icons._default_inline_lift -- the derived (not hand-tuned) replacement for
+# the old flat _INLINE_LIFT = 2.
+# ---------------------------------------------------------------------------
+
+
+def test_default_inline_lift_matches_body_font_cap_x_height_gap():
+    """Derived, not hand-tuned: half the gap between the BODY UI font's cap
+    height and x-height, rounded -- not a bare literal."""
+    metrics = QFontMetrics(typography.ui_font(typography.BODY))
+    expected = round((metrics.capHeight() - metrics.xHeight()) / 2)
+    assert icons._default_inline_lift() == expected
+
+
+def test_html_img_explicit_lift_overrides_the_derived_default():
+    """A call site whose adjacent text is not BODY (e.g. a card header's
+    isolated dot beside META badge text) can override the derived default;
+    the two renders must differ, and each must cache under its own key."""
+    default_html = icons.html_img(icons.DOT, color=style.ERROR, size=13)
+    overridden_html = icons.html_img(icons.DOT, color=style.ERROR, size=13, lift=0)
+    if icons._default_inline_lift() != 0:
+        assert default_html != overridden_html

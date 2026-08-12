@@ -385,14 +385,19 @@ class _PendingBar(QWidget):
         # yet written" is a document state, never a severity, so it must not
         # read as a validator warning. Drawn as the shared ``icons.DOT`` glyph
         # rather than a shrunk "●" character, so it is the same mark, at the
-        # same 8px-in-a-13px-box, as every other dot in the app.
+        # same 8px-in-a-13px-box, as every other dot in the app. ``lift=0``
+        # and ``Qt.AlignVCenter`` on both labels: this dot has no sibling
+        # text in its own rich-text document (unlike an inline trailing/
+        # leading mark), so ``html_img``'s default x-height-midline
+        # correction has nothing to correct against -- see
+        # ``ParameterCard.set_validity``'s identical reasoning.
         dot = QLabel()
         dot.setTextFormat(Qt.RichText)
-        dot.setText(icons.html_img(icons.DOT, color=ACCENT))
-        layout.addWidget(dot)
+        dot.setText(icons.html_img(icons.DOT, color=ACCENT, lift=0))
+        layout.addWidget(dot, 0, Qt.AlignVCenter)
         label = QLabel("Unsaved changes")
         label.setStyleSheet(f"color: {MUTED};")
-        layout.addWidget(label)
+        layout.addWidget(label, 0, Qt.AlignVCenter)
         layout.addStretch(1)
 
         self.apply_button = QToolButton()
