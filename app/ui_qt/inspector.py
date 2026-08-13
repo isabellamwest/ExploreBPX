@@ -62,7 +62,7 @@ from core.tree_model import ParameterItem
 from core.validation import Severity
 from state.app_state import AppState
 
-from .cards.experiment import ExperimentCard, is_validation_run_path
+from .cards.experiment import KNOWN_ALIASES, ExperimentCard, is_validation_run_path
 from .cards.ghost_card import GhostParameterCard
 from .cards.parameter_card import ParameterCard
 from .documentation_view import DocumentationView
@@ -410,8 +410,9 @@ class InspectorPanel(QWidget):
         unified ``ExperimentCard`` instead -- whether navigation resolved to
         one of the run's own array columns (focused there) or to the bare run
         node (``parameter is None``, nothing focused). Any *other* parameter
-        under a run (a custom, non-array field) keeps today's single-parameter
-        card: only a genuine array reroutes.
+        under a run keeps its own single-parameter card: only a schema array
+        reroutes. A custom list-valued field is SERIES by kind but has no
+        grid column, so it must not reroute -- it gets ``SeriesCard``.
         """
         run_path = self._experiment_run_path(parameter)
         if run_path is not None:
@@ -448,7 +449,11 @@ class InspectorPanel(QWidget):
         """
         if parameter is not None:
             owner = tuple(parameter.path[:-1])
-            if is_validation_run_path(owner) and parameter.kind is ParameterKind.SERIES:
+            if (
+                is_validation_run_path(owner)
+                and parameter.kind is ParameterKind.SERIES
+                and parameter.label in KNOWN_ALIASES
+            ):
                 return owner
             return None
         session = self._state.active

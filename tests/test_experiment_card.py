@@ -114,6 +114,48 @@ def test_custom_field_under_a_run_keeps_its_own_single_parameter_card(
     assert d.editor_kind() == "TextCard"
 
 
+def test_custom_series_under_a_run_gets_series_card_and_stays_editable(
+    app_driver, main_window, tmp_path, valid_spm_dict
+):
+    """A list-valued custom field under a run is SERIES by kind but not one of
+    ``KNOWN_ALIASES``: ExperimentCard builds columns only from the schema
+    aliases, so rerouting it there would leave it invisible and uneditable.
+    It must keep ``SeriesCard``, whose grid edits round-trip normally."""
+    workfile = _write_doc(
+        tmp_path,
+        valid_spm_dict,
+        {
+            "C/20 discharge": {
+                "Time [s]": [0, 100],
+                "Current [A]": [-0.6, -0.6],
+                "Voltage [V]": [4.1, 4.0],
+                "Impedance [Ohm]": [0.01, 0.02],
+            }
+        },
+    )
+    d = app_driver
+    d.open(workfile).go_to(_RUN + ("Impedance [Ohm]",))
+
+    assert d.editor_kind() == "SeriesCard"
+
+    d.set_grid_cell(0, 0, "0.05")
+    d.commit_grid()
+    run = main_window._state.active.document.raw["Validation"]["C/20 discharge"]
+    assert run["Impedance [Ohm]"] == [0.05, 0.02]
+
+
+def test_schema_arrays_still_reroute_to_the_experiment_card(
+    app_driver, spm_with_validation_path
+):
+    """The KNOWN_ALIASES gate must not over-narrow: every schema array under a
+    run still reaches the unified card (same behaviour as before the fix)."""
+    d = app_driver
+    d.open(spm_with_validation_path).go_to(_TIME)
+
+    assert d.experiment_columns() == KNOWN_ALIASES
+    assert d.experiment_focused_column() == "Time [s]"
+
+
 # ----------------------------------------------------------------------
 # Commit path: a typed single-cell edit names only the changed column
 # ----------------------------------------------------------------------
