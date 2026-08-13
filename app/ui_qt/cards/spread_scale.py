@@ -3,7 +3,7 @@
 The ledger rows above already state every value exactly; a column of numbers
 cannot say whether two of them are neighbours or decades apart. This widget
 says only that -- one axis, one mark per stated value, positions carrying the
-whole message (design rule 4 of ``PLAN-multi-reference.md``).
+whole message.
 
 Deliberately not a chart:
 

@@ -251,7 +251,7 @@ def test_none_value_can_be_typed_and_reverted(kind, text, expected_value):
 
 
 def test_known_alias_with_none_value_opens_proper_editor_end_to_end():
-    """The exact F3 scenario: a known-alias parameter added with an honest
+    """A known-alias parameter added with an honest
     empty value (``value=None``, e.g. via the ``AddParameter`` command) is
     metadata-authoritative in ``classify`` and must open the real per-kind
     editor -- never the raw/unknown fallback -- rendering it empty."""
@@ -270,9 +270,8 @@ def test_known_alias_with_none_value_opens_proper_editor_end_to_end():
 # ---------------------------------------------------------------------------
 # Registry routing for the declared TEXT/BOOLEAN/SERIES kinds, the interim card
 # shim for the still-unbuilt MAP kind, and the FUNCTION/MAP value-dependent
-# dispatch -- see docs/architecture.md "Editing Architecture". These lock today's
-# behaviour so a later real card (Phase 4c/5) is a deliberate, visible change
-# rather than a silent one.
+# dispatch. These lock today's behaviour so a later real card is a
+# deliberate, visible change rather than a silent one.
 # ---------------------------------------------------------------------------
 
 
@@ -295,7 +294,7 @@ def test_boolean_kind_uses_boolean_card():
 
 
 def test_series_kind_uses_series_card():
-    """SERIES now has a real grid editor (Phase 4b); see test_series_card.py
+    """SERIES has a real grid editor; see test_series_card.py
     for its behaviour and for the unrepresentable-value fallback."""
     _app()
     param = ParameterItem(
@@ -381,8 +380,7 @@ def test_integer_none_value_uses_fallback_and_can_be_typed():
 
 
 # ---------------------------------------------------------------------------
-# is_dirty: type-aware dirty-checking (docs/architecture.md "Editing
-# Architecture" -- commit only when the draft differs).
+# is_dirty: type-aware dirty-checking -- commit only when the draft differs.
 # ---------------------------------------------------------------------------
 
 

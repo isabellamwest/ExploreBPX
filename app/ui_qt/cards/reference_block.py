@@ -15,7 +15,7 @@ as that input (``style.ROLE_LABEL_WIDTH``), so the eye compares vertically.
 
 A row says exactly one thing beyond its value: **same** when the value
 equals the main document's, or a **Use** button when it differs
-(the pull action, D9 wording). The button's
+(the pull action). The button's
 presence *is* the differs signal -- there is no third word, no severity
 colour, and no styling that could read as validation. A reference lacking
 the key contributes no row at all rather than an empty placeholder.
@@ -23,7 +23,7 @@ the key contributes no row at all rather than an empty placeholder.
 For a table-representable reference the rows are followed by
 :class:`ReferenceTableGrid` -- a small read-only x/y grid showing one
 reference's numbers at a time, behind a badge selector over every pinned
-reference that has the key (design rule 5). Two columns of numbers side by
+reference that has the key. Two columns of numbers side by
 side is a comparison the eye cannot make; that is what the chart overlay is
 for.
 
@@ -348,7 +348,7 @@ class ReferenceLedger(QFrame):
         main_text: str = "",
         width: int | None = None,
     ) -> None:
-        """Show the spread scale under the rows, or hide it (design rule 4).
+        """Show the spread scale under the rows, or hide it.
 
         The caller decides whether this parameter gets a scale at all -- only
         it knows the kind -- and ``core.spread`` decides whether the values
@@ -363,7 +363,7 @@ class ReferenceLedger(QFrame):
         self, references: list[tuple[ReferencePin, list[list[object]], list[bool]]]
     ) -> None:
         """Show one reference's table beneath the rows, behind a badge
-        selector over all of *references* (design rule 5).
+        selector over all of *references*.
 
         One at a time, defaulting to the first pinned: two columns of numbers
         side by side is a comparison the eye cannot make, which is what the

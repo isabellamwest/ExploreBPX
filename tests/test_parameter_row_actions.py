@@ -1,6 +1,6 @@
 """Tests for the parameter-list row context menu's Rename.../Duplicate/Move
-up/down actions -- the completion track's row-scoped structural actions,
-alongside the already-tested "Remove parameter" (see test_remove_parameter.py)
+up/down actions -- row-scoped structural actions, alongside the
+already-tested "Remove parameter" (see test_remove_parameter.py)
 and the MoveParameter/DuplicateParameter command contract itself (see
 test_command_service.py).
 

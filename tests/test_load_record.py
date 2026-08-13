@@ -1,5 +1,5 @@
-"""Tests for ``core.load_record`` -- the load-time facts record (Phase 3 of
-the transparency track). No UI: the record is a pure core value object."""
+"""Tests for ``core.load_record`` -- the load-time facts record. No UI: the
+record is a pure core value object."""
 
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ def test_capture_without_path_has_no_disk_facts(valid_spm_bytes):
 
 def test_capture_carries_the_loaders_format(valid_spm_bytes):
     """``fmt`` is the format the load actually used (the document's own
-    recorded decision), not a re-derivation here (finding 5)."""
+    record), not a re-derivation here."""
     record = _capture(b"Header:\n  Model: SPM\n", "thing.yaml")
     assert record.fmt == "yaml"
     assert _capture(valid_spm_bytes, "spm_example_valid.json").fmt == "json"
@@ -47,7 +47,8 @@ def test_capture_carries_the_loaders_format(valid_spm_bytes):
 
 def test_capture_flags_legacy_v0_file(fixtures_dir):
     """The real v0.x fixture (Header.BPX = 0.1) is detected, while the raw
-    dict the app renders stays unconverted -- the fact D3's prompt needs."""
+    dict the app renders stays unconverted -- the fact the legacy-open
+    prompt needs."""
     path = fixtures_dir / "nmc_pouch_cell_BPX.json"
     data = path.read_bytes()
     record = _capture(data, path.name, path=path)

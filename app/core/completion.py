@@ -104,7 +104,7 @@ class SectionCompletion:
     missing_child_sections: tuple[tuple[str, ...], ...]
     #: Count of schema-required, non-container fields this section's
     #: definition declares -- the "M" in the Diagnostics page's Outstanding
-    #: group header ("<Section> -- N of M remaining", Phase 5). A pure schema
+    #: group header ("<Section> -- N of M remaining"). A pure schema
     #: fact: unlike ``MissingField.required``, it is **not** gated by
     #: ``model in CONCRETE_MODELS`` -- the one place this matters is the
     #: ``DECLARE_MODEL`` task's own group (an undeclared/garbage model), where

@@ -1,5 +1,5 @@
-"""The transparency plan's Phase 5 save gates: the stale-on-disk block (H6)
-and the once-per-document YAML comment confirmation (decision D4).
+"""The save gates: the stale-on-disk block and the once-per-document YAML
+comment confirmation.
 
 Both dialogs are dumb overridable seams (``_ask_stale_resolution`` /
 ``_ask_comment_loss``, the ``_ask_open_intent`` convention), so these tests

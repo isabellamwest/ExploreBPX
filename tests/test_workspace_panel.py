@@ -628,7 +628,7 @@ def test_dropping_an_unparseable_file_shows_the_load_error_dialog(
 def test_document_card_names_what_is_still_outstanding(app_driver):
     """A fresh DFN's badge names the incomplete count -- and does not say
     "Valid": bpx aborts its staged run over the missing required fields, so
-    no verdict exists to state (H2). "Not checked" is the same word the
+    no verdict exists to state. "Not checked" is the same word the
     Inspector uses for a parameter in that state."""
     app_driver._w._new("DFN")
     assert app_driver._w._state.active.document.validation_completed is False
@@ -644,7 +644,7 @@ def test_an_aborted_run_badges_not_checked_never_valid(
     """One deleted required field aborts bpx's staged run (State is never
     judged) and the lone "Field required" error is absorbed into the
     incomplete count -- zero errors on show. Zero errors from an aborted run
-    is not a verdict, so the badge must not read "Valid" (H2)."""
+    is not a verdict, so the badge must not read "Valid"."""
     import copy
     import json
 
@@ -665,12 +665,12 @@ def test_a_complete_document_says_only_valid(app_driver, valid_spm_path):
     assert "incomplete" not in app_driver.workspace_validity_text()
 
 
-# --- the Phase 4 record: editable identity rows + the fact plaque ----------
+# --- the record: editable identity rows + the fact plaque ------------------
 
 
 def test_record_title_edit_commits_through_setvalue(app_driver, spm_workfile, qtbot):
     """Typing in the record's Title row lands in Header.Title through the
-    same command path as the Header card (D6), so it marks the session
+    same command path as the Header card, so it marks the session
     dirty and every surface refreshes."""
     d = app_driver
     d.open(spm_workfile)
@@ -691,8 +691,8 @@ def test_record_title_edit_commits_through_setvalue(app_driver, spm_workfile, qt
 
 
 def test_record_citation_edit_reaches_header_references(app_driver, spm_workfile, qtbot):
-    """The Citation row edits the Header's ``References`` field (D1: the
-    spec field surfaces as Citation, the code path keeps the spec name)."""
+    """The Citation row edits the Header's ``References`` field: the
+    spec field surfaces as Citation, but the code path keeps the spec name."""
     d = app_driver
     d.open(spm_workfile)
     ws = d._w._workspace
@@ -733,7 +733,7 @@ def test_record_escape_reverts_the_draft(app_driver, spm_workfile, qtbot):
 
 def test_record_empty_identity_rows_state_their_absence(app_driver, valid_spm_dict, tmp_path):
     """An absent Description/Citation shows its ghost invitation rather
-    than nothing -- absence stated (the argument that rejected concept C)."""
+    than nothing -- absence stated, never silently omitted."""
     import json
 
     valid_spm_dict["Header"].pop("Description", None)
@@ -750,7 +750,7 @@ def test_record_empty_identity_rows_state_their_absence(app_driver, valid_spm_di
 
 def test_record_states_yaml_comments_fact(app_driver, valid_spm_dict, tmp_path, qtbot):
     """A YAML file with comments carries the fact on its Read as row, and
-    the row expands to the consequence sentence (D4)."""
+    the row expands to the consequence sentence."""
     import yaml as yaml_module
 
     work = tmp_path / "commented.yaml"
@@ -775,7 +775,7 @@ def test_record_states_yaml_comments_fact(app_driver, valid_spm_dict, tmp_path, 
 
 def test_record_states_legacy_conversion_fact(app_driver, fixtures_dir):
     """A v0.x file's Checked row names the conversion bpx judged, and its
-    detail names the file and what the conversion did (finding 1)."""
+    detail names the file and what the conversion did."""
     from core.bpx_gateway import BPX_VERSION
 
     d = app_driver

@@ -122,7 +122,7 @@ def test_classify_no_metadata_string_is_text():
 
 
 # ---------------------------------------------------------------------------
-# F1: the meta=None contract for user-authored custom parameters
+# The meta=None contract for user-authored custom parameters
 # ---------------------------------------------------------------------------
 # A user-authored custom parameter is an ordinary raw-dict entry whose BPX
 # metadata is genuinely absent (``meta=None``) -- nothing is synthesised or

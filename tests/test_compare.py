@@ -66,7 +66,7 @@ def test_order_independence_of_key_order_in_either_dict():
 
 def test_units_in_key_never_unit_converted_or_fuzzy_matched():
     """``Thickness [m]`` and ``Thickness [µm]`` are different keys: one
-    main-only, one ref-only, never DIFFERS (locked decision 1)."""
+    main-only, one ref-only, never DIFFERS."""
     main_raw = {"Section": {"Thickness [m]": 1.0}}
     ref_raw = {"Section": {"Thickness [µm]": 1000.0}}
 
@@ -287,7 +287,7 @@ def test_matching_table_rows_empty_main_marks_every_ref_row_false():
 
 
 # ----------------------------------------------------------------------
-# group_reference_values: Card Ledger grouping (multi-reference track)
+# group_reference_values: Card Ledger grouping
 # ----------------------------------------------------------------------
 
 

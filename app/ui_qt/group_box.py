@@ -3,10 +3,9 @@
 :class:`GroupBox` is one bordered, rounded frame whose first row is a
 shaded header band (caps title, an optional suffix widget snug against it,
 an optional trailing widget flush right past the stretch) over a body
-layout the caller fills freely. This is the "IDE panel" language reused,
-previously, by three independent copies: the Diagnostics Issues/
-Outstanding boxes, the reference-library dialog's detail card, and (until
-Phase 3) the Workspace document/reference cards.
+layout the caller fills freely. This is the "IDE panel" language shared by
+the Diagnostics Issues/Outstanding boxes, the reference-library dialog's
+detail card, and the Workspace document/reference cards.
 
 :class:`TintedSection` is the newer, borderless sibling: a full-width
 tinted wash with the same caps-title/suffix header over a measure-capped

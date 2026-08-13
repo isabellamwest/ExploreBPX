@@ -234,7 +234,7 @@ def _reference_validity_text(errors: int, warnings: int) -> tuple[str, str]:
 
 
 def _verdict_words(errors: int, warnings: int) -> str:
-    """The D7 validity-ladder words for a completed run: "Valid",
+    """The validity-ladder words for a completed run: "Valid",
     "2 errors, 1 warning", "3 warnings" -- the same composition every other
     validity surface uses."""
     if not errors and not warnings:
@@ -264,9 +264,9 @@ def _checked_row_text(
     """The record's Checked row: how far checking went, then the verdict.
 
     An aborted run names the stage it stopped after and says plainly that
-    nothing below it was judged (H2); a completed run leads with "Complete"
+    nothing below it was judged; a completed run leads with "Complete"
     and the ladder words. A legacy file prefixes the fact that ``bpx``
-    judged a converted copy, not the file as it stands (finding 1)."""
+    judged a converted copy, not the file as it stands."""
     if reach is CheckReach.COMPLETE:
         base = f"Complete · {_verdict_words(errors, warnings)}"
     elif reach is CheckReach.NOT_RUN:
@@ -276,7 +276,7 @@ def _checked_row_text(
         base = f"{stage}, then stopped"
         # With counted findings, they explain the stop and the row stays
         # compact; with none to show, the absence must be said out loud --
-        # an empty-looking aborted run is exactly the H2 hazard.
+        # an empty-looking aborted run must not read as a clean one.
         if errors or warnings:
             base = f"{base} · {_verdict_words(errors, warnings)}"
         else:
@@ -302,9 +302,9 @@ def _legacy_checked_detail(filename: str, file_version: str | None) -> str:
 
 
 #: The Read as row's expanded sentence when the opened YAML carries
-#: comments (decision D4). States the consequence only -- the once-per-
-#: document save confirmation is Phase 5's dialog and is not promised here
-#: before it exists.
+#: comments. States the consequence only -- the once-per-document save
+#: confirmation is a separate dialog and is not promised here before it
+#: exists.
 _COMMENTS_DETAIL = (
     "Saving rewrites the whole file: comments and formatting will not survive."
 )
@@ -384,9 +384,9 @@ def _detail_value(text: str) -> QLabel:
 
 class _EditableText(QWidget):
     """An in-place editable record value: a label until clicked, a line
-    edit while editing (decision D6 -- not a second editor: the caller
-    routes the committed text through the same ``SetValue`` command as the
-    Header cards, so undo is identical wherever the user typed).
+    edit while editing (not a second editor: the caller routes the
+    committed text through the same ``SetValue`` command as the Header
+    cards, so undo is identical wherever the user typed).
 
     Card discipline, translated to a record row: the editor is seeded
     *before* it is shown, a commit fires only when the text actually
@@ -450,7 +450,7 @@ class _EditableText(QWidget):
 
     def set_editable(self, editable: bool) -> None:
         """Close or reopen the click-to-edit path (a read-only main's
-        record, D3). While not editable the row is the reference record's
+        record). While not editable the row is the reference record's
         own shape: a plain label, absence shown as "-" rather than an
         invitation to type. A session swap mid-edit drops the draft
         uncommitted."""
@@ -738,9 +738,8 @@ class ReferenceRecordPanel(QWidget):
             _add_record_row(form, key, value)
 
         # Read as states its comment consequence exactly like the main
-        # document's row -- the detail used to be computed here and thrown
-        # away, leaving a reference's record quieter than the same fact on
-        # the main file.
+        # document's row: the detail is computed and shown, not thrown
+        # away, so a reference's record says as much as the main file does.
         self._read_as = _detail_value("-")
         _add_record_row(form, "Read as", self._read_as)
 
@@ -815,7 +814,7 @@ class ReferenceRecordPanel(QWidget):
 
         # Checked as dot *and* words: how far checking went, then the
         # verdict. The dot goes MUTED for anything short of a completed run
-        # -- zero errors from an aborted run is not a verdict (H2).
+        # -- zero errors from an aborted run is not a verdict.
         reach = record.checked if record is not None else CheckReach.COMPLETE
         is_legacy = record.is_legacy if record is not None else False
         self._checked_value = _checked_row_text(
@@ -1513,7 +1512,7 @@ class WorkspacePanel(QWidget):
     remove_reference_requested = Signal(object)
     #: An in-place identity edit in the record: (Header field alias, new
     #: text). MainWindow routes it through the session's ``SetValue`` --
-    #: decision D6, the same command and undo the Header cards use.
+    #: the same command and undo the Header cards use.
     identity_edited = Signal(str, str)
     #: Pin a recent file as a reference (the ＋ menu's third route).
     recent_pin_requested = Signal(str)
@@ -1830,7 +1829,7 @@ class WorkspacePanel(QWidget):
         """The main document's own strip, re-housed unchanged: the *identity
         block* -- Title, Description, Citation, the three rows a person may
         edit in place -- over the *fact plaque*, a quieter wash carrying the
-        file's own immutable facts. The split is the D6 rule made visible:
+        file's own immutable facts. This split makes that rule visible:
         the upper block is yours, the plaque is the file's."""
         section = TintedSection(
             "Main", object_name="WorkspaceMainSection", measure=PAGE_MEASURE
@@ -2031,9 +2030,9 @@ class WorkspacePanel(QWidget):
         self._fact_band.show()
 
         identity = document.identity
-        # D6 gives the main record its editable rows; a read-only main gets
-        # the reference record's shape instead -- plain values, "-" for
-        # absence, no click-to-edit.
+        # The main record gets editable rows when writable; a read-only
+        # main gets the reference record's shape instead -- plain values,
+        # "-" for absence, no click-to-edit.
         for row in (self._info_title, self._info_description, self._info_citation):
             row.set_editable(not read_only)
         self._info_title.set_text(identity.title)
@@ -2074,7 +2073,7 @@ class WorkspacePanel(QWidget):
             self._fact_from_meta.setVisible(has_disk_facts)
 
         if read_only:
-            # Not the D8 saved-state pair: a read-only session will never
+            # Not the Saved/Unsaved pair: a read-only session will never
             # write, so its status is its mode.
             status = "Read-only"
         else:
@@ -2234,7 +2233,7 @@ class WorkspacePanel(QWidget):
         green "Valid" beside a title reading "(incomplete)" told the user
         the file was ready when 35 required fields were still empty.
 
-        *reach* is ``validation_reach`` (H2): when ``bpx`` aborted its staged
+        *reach* is ``validation_reach``: when ``bpx`` aborted its staged
         run, every abort error can be absence-shaped and absorbed into the
         incomplete count, leaving zero errors to show -- but zero errors from
         an aborted run is not a verdict, and "Valid" would claim a check that

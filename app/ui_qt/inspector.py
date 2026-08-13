@@ -654,7 +654,7 @@ class InspectorPanel(QWidget):
 
         The card already states the reason inline, but that surface is
         invisible from every other page, so a Save/Export refusing over it
-        needs these facts to refuse out loud rather than silently (H6).
+        needs these facts to refuse out loud rather than silently.
         The name is ``None`` for a card without a ``parameter`` (none can
         block today -- a defensive miss, not a real state).
         """
@@ -709,7 +709,8 @@ class InspectorPanel(QWidget):
 
     @property
     def _read_only(self) -> bool:
-        """Whether the active session refuses edits (D3's "Open as-is").
+        """Whether the active session refuses edits (opened via the
+        "Open as-is, read-only" path).
 
         Read from the session on every use, never cached: the flag is the
         session's own fact, and the Inspector rebuilds its cards per reveal
@@ -862,8 +863,8 @@ class InspectorPanel(QWidget):
             # No issue attached is only a clean bill of health if bpx's run
             # actually judged this parameter's section; after a staged abort
             # an uncovered parameter was never examined, and claiming "Valid"
-            # would be false -- while a covered one really earned it (H2,
-            # both directions, same rule as the diagnostics clear line).
+            # would be false -- while a covered one really earned it (both
+            # directions, same rule as the diagnostics clear line).
             path = self._card.parameter.path
             if bpx_gateway.section_checked(path[0] if path else None, reach):
                 self._card.set_validity("Valid", OK)

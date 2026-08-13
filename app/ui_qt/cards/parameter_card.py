@@ -108,9 +108,10 @@ class ParameterCard(QWidget):
         self.parameter = parameter
         self._meta = meta
         self._popover: ParameterInfoPopover | None = None
-        #: A read-only card (D3's "Open as-is") swaps the typed editor for
-        #: the ReadOnlyCard view, drops the rename pencil, and builds its
-        #: ledger without "Use" -- the same anatomy, no writes.
+        #: A read-only card (opened via the "Open as-is, read-only" path)
+        #: swaps the typed editor for the ReadOnlyCard view, drops the
+        #: rename pencil, and builds its ledger without "Use" -- the same
+        #: anatomy, no writes.
         self._read_only = read_only
         self._renamable = not read_only and structure.can_rename_parameter(
             parameter.path, parameter.value
@@ -303,7 +304,7 @@ class ParameterCard(QWidget):
             monospace=monospace,
         )
         # The spread scale, for a numeric scalar whose values are not all the
-        # same (design rule 4): the rows above state the values, the axis
+        # same: the rows above state the values, the axis
         # says how far apart they are.
         self._ledger.set_spread(
             scale_for(self.parameter.value, groups, len(pins), kind),
@@ -380,8 +381,8 @@ class ParameterCard(QWidget):
     ) -> None:
         """Feed the ledger's reference grid and the editor's chart overlay.
 
-        The grid shows one reference at a time behind a badge selector
-        (design rule 5), defaulting to the first pinned that has the key;
+        The grid shows one reference at a time behind a badge selector,
+        defaulting to the first pinned that has the key;
         the chart overlays them all at once, since curves can be read
         together where columns of numbers cannot.
         """

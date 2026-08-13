@@ -1,9 +1,8 @@
 """Diagnostics page: one scrolling stream + a filter column, built on
-``core.page_buckets``. "One stream" redesign (see ``PLAN-diagnostics-
-stream.md`` at the repo root for the full, decision-numbered spec) --
-replaces the previous rail + two-renderer (single-section pane / "All
-sections" backup pane) layout with a single renderer over a single dataset,
-so there is nothing left that could drift out of sync with itself.
+``core.page_buckets``. A single renderer over a single dataset, replacing
+a previous rail + two-renderer (single-section pane / "All sections"
+backup pane) layout, so there is nothing left that could drift out of
+sync with itself.
 
 ``bucket_page_content`` makes every grouping/absorption decision once,
 inward of the UI: this module renders its ``PageBuckets`` output and
@@ -15,12 +14,11 @@ own module docstring).
 Layout:
 
 * A **filter column** down the right -- a "Collapse all"/"Expand all"
-  affordance shown once two or more sections render (D15), then a "FILTER"
+  affordance shown once two or more sections render, then a "FILTER"
   category label over three toggleable count filters (errors, warnings,
   outstanding), counts from ``PageBuckets`` totals. Fixed width, flat text,
   one left edge: four peer items, not a control band.
-* A **file-facts group** (S1, transparency track Phase 4 --
-  ``PLAN-transparency.md``) ahead of every bucket: the stream's own
+* A **file-facts group** ahead of every bucket: the stream's own
   statement of the load-time facts ``core.load_record.LoadRecord``/
   ``BPXDocument.validation_reach`` already carry (a legacy v0.x
   conversion, an aborted checking run, YAML comments a save would
@@ -31,15 +29,15 @@ Layout:
   path, like the clear line). Renders only while at least one fact exists
   -- the everyday clean file adds nothing.
 * A **stream** (``_StreamView``, one ``QListWidget``) below it: only
-  sections that have something in them render (D3) -- a bucket with zero
+  sections that have something in them render -- a bucket with zero
   errors/warnings/outstanding is *clear* and is named instead on one
-  foldable footer line at the bottom (D4), so the page's length tracks the
+  foldable footer line at the bottom, so the page's length tracks the
   amount of work rather than the size of the schema. A rendered section
   gets one foldable header (chevron + bold label + a muted words-only
-  suffix built from whichever counts are nonzero, D5 -- never a count
+  suffix built from whichever counts are nonzero -- never a count
   badge) over its issue rows then its outstanding rows, the optional ones
   under a quiet "OPTIONAL · K UNFILLED" sub-head. A genuinely clean
-  document (D9) or a Partial document with nothing outstanding (the
+  document or a Partial document with nothing outstanding (the
   Partial notice, pinned copy) gets one pinned, non-activatable row above
   the clear line instead of a bare absence.
 
@@ -56,7 +54,7 @@ compose_issue_row_html`, so both surfaces show it identically; the verbatim
 message itself is never altered. A task row keeps its own glyph
 (a hollow circle for "missing", a half-filled circle for a committed null),
 bold name + muted unit, a REQUIRED tag where applicable, the absorbed
-validator message as muted secondary text, and -- task rows only (D14) --
+validator message as muted secondary text, and -- task rows only --
 its action ("Go to (right chevron)"/"+ Add section"/"Choose...") always
 visible in accent colour; an issue row carries no trailing action text,
 activation stays Enter/double-click as for every other row.
@@ -71,7 +69,7 @@ so "no attachment point -> no-op" needs no special-casing here.
 
 View state (one primary document, no module-level globals) lives on this
 panel instance: the per-section fold set, the clear line's own
-expanded/collapsed flag, and the column's chip filter state (D11). All of it
+expanded/collapsed flag, and the column's chip filter state. All of it
 persists across an ordinary ``refresh`` (a commit, undo/redo) and resets
 via :meth:`reset_view_state`, called by ``MainWindow`` only when a
 *different* document replaces the session (open/new) -- mirrors the
@@ -137,7 +135,7 @@ _ACTION_GO_TO = "Go to ▸"
 _ACTION_ADD_SECTION = "+ Add section"
 _ACTION_CHOOSE = "Choose…"
 
-#: The file-facts group's sentinel fold-state path (S1) -- unlike
+#: The file-facts group's sentinel fold-state path -- unlike
 #: :data:`DOCUMENT_BUCKET_PATH` (``()``) or a real section path (schema
 #: property names), this literal token can never collide with one, so it
 #: shares :class:`_StreamView`'s one ``_collapsed`` set safely.
@@ -225,9 +223,10 @@ def _relative_location(bucket_label: str, nav_path: tuple[str, ...]) -> str:
     """The issue's location *within* its bucket -- the bucket label is the
     box/fold header above it, so it's dropped. Handles both a canonical,
     resolved path (``("Parameterisation", "Cell", "X")`` for the "Cell"
-    bucket) and a V4-stripped, unresolved one (``("Cell", "X")``, the
-    validator's own leading-prefix-dropped convention) the same way: strip
-    a leading "Parameterisation" wrapper via the one shared owner of that
+    bucket) and a leading-prefix-stripped, unresolved one
+    (``("Cell", "X")``, the validator's own leading-prefix-dropped
+    convention) the same way: strip a leading "Parameterisation" wrapper
+    via the one shared owner of that
     rule (:func:`core.page_buckets.strip_parameterisation_prefix` -- the
     same normalization :func:`core.page_buckets._bucket_path_for` itself
     builds on), then strip the bucket's own label if it is the leading
@@ -265,7 +264,7 @@ def _ratio_words(bucket: SectionBucket) -> str:
     """"N of M remaining" / "section absent" / "N sections absent"
     (Document's fallback: "N remaining") -- the outstanding part of a
     rendered (non-clear) section's header suffix
-    (:func:`_section_header_suffix`); a *clear* bucket's own D4 clear-row
+    (:func:`_section_header_suffix`); a *clear* bucket's own clear-row
     wording is unrelated (:func:`_clear_row_text` does not call this).
 
     A present bucket can also hold one or more required MISSING_SECTION
@@ -425,9 +424,8 @@ def _add_task_row(list_widget: QListWidget, task: CompletionTask, absorbed_messa
 
 def _add_message_row(list_widget: QListWidget, text: str) -> None:
     """A quiet, non-activatable, muted single line -- the Partial notice
-    today; the two deleted "No issues"/"Nothing outstanding" pinned rows
-    used to be the other callers (D3/D9 make a per-section empty state
-    unreachable: a bucket with nothing in it simply does not render)."""
+    today. A per-section empty state is unreachable: a bucket with nothing
+    in it simply does not render."""
     item = QListWidgetItem(text)
     item.setFlags(Qt.ItemIsEnabled)  # visible, never selectable/activatable
     item.setData(_KIND_ROLE, "message")
@@ -437,12 +435,9 @@ def _add_message_row(list_widget: QListWidget, text: str) -> None:
 
 def _add_subhead_row(list_widget: QListWidget, text: str) -> None:
     """A quiet, non-activatable sub-head row -- today only the section's own
-    "K optional parameters unfilled" line (a plain sentence: the plan's
-    "OPTIONAL . K UNFILLED" shorthand read as a riddle in the running app).
-    The required group's own former "<Section> . N of M remaining" sub-head
-    is gone: that ratio now lives in the section's fold header itself, D5,
-    so repeating it a few pixels below would be the exact "same count
-    twice" bug this redesign removes."""
+    "K optional parameters unfilled" line: a plain sentence, stating the
+    count once. The required group's own ratio ("N of M remaining") lives
+    in the section's fold header instead, so it is never repeated here."""
     item = QListWidgetItem(text)
     item.setFlags(Qt.ItemIsEnabled)  # visible, never selectable/activatable
     item.setData(_KIND_ROLE, "subhead")
@@ -451,11 +446,10 @@ def _add_subhead_row(list_widget: QListWidget, text: str) -> None:
 
 
 def _section_header_suffix(bucket: SectionBucket) -> str:
-    """The muted words after a rendered section's bold label (D5): whichever
+    """The muted words after a rendered section's bold label: whichever
     of "N error(s)"/"N warning(s)"/the outstanding ratio are actually
-    nonzero, joined with " · " (U+00B7 middle dot, per the approved
-    wireframe -- the plan's own ASCII art writes a plain period only as a
-    stand-in) -- never a count badge. This is the module's one place a
+    nonzero, joined with " · " (U+00B7 middle dot, never a plain period)
+    -- never a count badge. This is the module's one place a
     count is spelled out, replacing four separate badges (rail, fold
     header, box badge, box title) that used to say the same number.
 
@@ -464,7 +458,7 @@ def _section_header_suffix(bucket: SectionBucket) -> str:
     left", and a bucket whose only outstanding work is optional (empty
     ``required_tasks``, nonzero ``required_total``) would otherwise read
     "0 of N remaining", falsely implying N fields are required when none
-    are missing. Such a bucket still renders (D3: it isn't clear) with a
+    are missing. Such a bucket still renders (it isn't clear) with a
     bare label; its OPTIONAL sub-head says what the outstanding work
     actually is."""
     parts: list[str] = []
@@ -480,7 +474,7 @@ def _section_header_suffix(bucket: SectionBucket) -> str:
 @dataclass(frozen=True)
 class _FoldHeader:
     """One banded fold-header row's path/label/suffix -- generalised off
-    ``SectionBucket`` so the file-facts group (S1) can reuse the very same
+    ``SectionBucket`` so the file-facts group can reuse the very same
     header machinery a section bucket does, keyed by its own sentinel path
     (:data:`_FILE_FACTS_PATH`) rather than a faked-up bucket. *path* is also
     the fold-state key stored in :attr:`_StreamView._collapsed`."""
@@ -507,13 +501,13 @@ def _add_fold_header_row(list_widget: QListWidget, header: _FoldHeader, collapse
 
 
 def _bucket_is_clear(bucket: SectionBucket) -> bool:
-    """D3's definition of "nothing to show" -- from unfiltered truth, so a
-    filter never changes which buckets count as clear (amended D10)."""
+    """The definition of "nothing to show" -- from unfiltered truth, so a
+    filter never changes which buckets count as clear."""
     return bucket.error_count == 0 and bucket.warning_count == 0 and bucket.outstanding_count == 0
 
 
 def _page_is_clear(buckets: PageBuckets) -> bool:
-    """D9's whole-document condition for the pinned all-clear row."""
+    """The whole-document condition for the pinned all-clear row."""
     return buckets.error_count == 0 and buckets.warning_count == 0 and buckets.outstanding_count == 0
 
 
@@ -522,9 +516,9 @@ def _clear_line_text(checked: int, unchecked: int) -> str:
 
     "Clear" is a verdict, so it may only cover buckets whose stage the run
     reached; a bucket beyond an aborted run's reach was never examined and
-    reads "not checked" instead (H2). Both words come from the D7 ladder --
-    the line never vouches for an unexamined section and never disowns a
-    judged one.
+    reads "not checked" instead. Both words come from the same checking-
+    stage ladder -- the line never vouches for an unexamined section and
+    never disowns a judged one.
     """
     if not unchecked:
         return f"{checked} section{'s' if checked != 1 else ''} clear"
@@ -540,7 +534,7 @@ def _add_clear_summary_row(
     expanded: bool,
     reach: CheckReach = CheckReach.COMPLETE,
 ) -> None:
-    """The clear line (D4): one collapsed/expanded footer row naming every
+    """The clear line: one collapsed/expanded footer row naming every
     clear bucket at once. Its own single-click fold is independent of any
     per-section fold state -- toggled by :meth:`_StreamView._on_clicked`,
     tracked on :attr:`_StreamView._clear_expanded`, not per-row data."""
@@ -575,7 +569,7 @@ def _add_clear_row(
     reach: CheckReach = CheckReach.COMPLETE,
 ) -> None:
     """One quiet, non-activatable row per clear bucket, shown only while
-    the clear line is expanded (D4) -- the positive completion signal the
+    the clear line is expanded -- the positive completion signal the
     old rail's quiet, badge-less entries used to carry.
 
     Rendered the same way the OPTIONAL sub-head is (:func:`_add_subhead_row`):
@@ -600,7 +594,7 @@ def _add_clear_row(
 
 
 # ---------------------------------------------------------------------------
-# The file-facts group (S1) -- ahead of every bucket, its own fold header
+# The file-facts group -- ahead of every bucket, its own fold header
 # (:func:`_add_fold_header_row`, the same machinery a section bucket uses)
 # plus one quiet row per fact. Like the clear line/all-clear row, this is
 # computed straight from unfiltered truth -- the three chips never touch it.
@@ -627,7 +621,7 @@ def _file_fact_html(fact: FileFact) -> str:
 
 def _add_file_fact_row(list_widget: QListWidget, fact: FileFact) -> None:
     """One quiet, non-selectable, non-activatable file-facts row -- no
-    severity, no trailing action, no badge (stream rule D5), the same
+    severity, no trailing action, no badge, the same
     plain-text-plus-``HTML_ROLE`` idiom :func:`_add_clear_row` uses."""
     item = QListWidgetItem(f"{fact.headline}\n{fact.sub}")
     item.setFlags(Qt.ItemIsEnabled)  # visible, never selectable/activatable
@@ -640,8 +634,8 @@ def _add_file_facts_group(
     list_widget: QListWidget, filename: str, facts: tuple[FileFact, ...], *, collapsed: bool
 ) -> bool:
     """Build the file-facts group's fold header + rows and report whether
-    anything rendered. Renders only while *facts* is non-empty (D3's
-    "nothing to show, say nothing" rule extended to this group) -- an
+    anything rendered. Renders only while *facts* is non-empty -- the same
+    "nothing to show, say nothing" rule extended to this group -- an
     everyday clean file adds nothing to the page. Folding hides the rows
     only: the header, and the fact of how many notes there are, never
     disappears -- there is no separate "dismiss" affordance."""
@@ -657,12 +651,12 @@ def _add_file_facts_group(
 
 
 def _add_all_clear_row(list_widget: QListWidget, total_buckets: int, *, model: str | None) -> None:
-    """D9's pinned, non-activatable reassurance for a genuinely clean
+    """The pinned, non-activatable reassurance for a genuinely clean
     document: the shared all-clear glyph+wording (:func:`style.all_clear`)
     on line 1, unchanged regardless of *model*. Line 2 is normally the
     "N of N sections complete and valid" scale claim -- except under
-    Partial (amended D9, 2026-08-05 review finding): Partial has no
-    completion target, so "complete and valid" would be false the same way
+    Partial, which has no completion target, so "complete and valid"
+    would be false the same way
     :data:`_MSG_PARTIAL_NO_TARGET` exists to say elsewhere; line 2 becomes
     that notice instead, and it does not ALSO render as its own row (the
     caller's if/elif in :meth:`_StreamView.render` guarantees that). The
@@ -690,9 +684,9 @@ def _add_section(
 ) -> bool:
     """Build one non-clear bucket's fold header + rows. Returns whether
     anything actually rendered -- a header is emitted only once at least
-    one row survives the filter (amended D10): a section whose content is
+    one row survives the filter: a section whose content is
     entirely filtered out leaves no trace at all, not even its header, and
-    is not on the clear line either (clear is computed unfiltered, D3)."""
+    is not on the clear line either (clear is computed unfiltered)."""
     visible_issues = [
         (diagnostic, nav_path) for diagnostic, nav_path in bucket.issues if _issue_visible(diagnostic, filters)
     ]
@@ -738,7 +732,7 @@ class _DiagnosticsRowDelegate(ParameterRowDelegate):
     their own custom paint -- caps text plus one boundary hairline on the
     plain page, whitespace above doing the separating a filled band once
     did: a per-section ``fold_header`` splits bold label from muted suffix
-    (D5, no badges); the page-wide ``clear_summary`` row paints its own
+    (no badges); the page-wide ``clear_summary`` row paints its own
     already-composed plain text, single tier. A ``clear_row`` also gets
     custom paint --
     plain text, muted, italic only when its bucket is absent -- so an
@@ -909,16 +903,16 @@ class _DiagnosticsRowDelegate(ParameterRowDelegate):
 
 
 class _StreamView(QWidget):
-    """The whole page's content: one continuous, scrolling list (D2), the
+    """The whole page's content: one continuous, scrolling list, the
     single renderer replacing both the old single-section pane
     (``_SectionDetailView``/``_GroupBox``) and the "All sections" backup
     pane (``_AllSectionsView``) -- one dataset, one rendering path, nothing
     left to reconcile between two views.
 
     Only sections with something in them render, each its own foldable
-    header + rows (D3/D5/D8); every clear bucket collapses onto one
-    foldable footer line at the bottom instead (D4); a genuinely clean
-    document (D9) or a Partial document with nothing outstanding anywhere
+    header + rows; every clear bucket collapses onto one
+    foldable footer line at the bottom instead; a genuinely clean
+    document or a Partial document with nothing outstanding anywhere
     (the pinned Partial notice) gets one pinned row above that line instead
     of a bare absence. Caches its last ``render()`` inputs so a click
     (fold/unfold a section, fold/unfold the clear line) can re-render
@@ -928,12 +922,12 @@ class _StreamView(QWidget):
     issue_activated = Signal(tuple)
     task_activated = Signal(object)
     #: Emitted whenever a *per-section* fold toggles (a header click), so
-    #: :class:`DiagnosticsPanel` can refresh the column's D15 label -- the
-    #: label depends on the fold set, and a header click re-renders only
-    #: this widget, not the whole panel, so without this signal the label
-    #: goes stale (fold every section one by one and it still reads
-    #: "Collapse all", the review's MAJOR finding). A Qt signal, not a
-    #: stored bound method, per the project widget-lifetime rule.
+    #: :class:`DiagnosticsPanel` can refresh the column's fold-everything
+    #: label -- the label depends on the fold set, and a header click
+    #: re-renders only this widget, not the whole panel, so without this
+    #: signal the label goes stale (fold every section one by one and it
+    #: still reads "Collapse all"). A Qt signal, not a stored bound method,
+    #: per the project widget-lifetime rule.
     folds_changed = Signal()
 
     def __init__(self) -> None:
@@ -983,7 +977,7 @@ class _StreamView(QWidget):
 
     def reset_fold_state(self) -> None:
         """Per-section folds and the clear line's own expanded flag -- both
-        view-only state that resets only on a *different* document (D11)."""
+        view-only state that resets only on a *different* document."""
         self._collapsed.clear()
         self._clear_expanded = False
 
@@ -1006,12 +1000,13 @@ class _StreamView(QWidget):
         self._last_reach = reach
         self._list.clear()
 
-        # Tracked separately from ``_rendered_section_paths`` -- D15's own
-        # "fewer than two rendered SECTIONS" gate (:meth:`collapse_all_label`)
-        # stays section-only, so a lone facts group does not conjure a
-        # "Collapse all" affordance that would only ever fold that one
-        # always-present group. :meth:`toggle_all_folds` still includes it
-        # once the affordance is genuinely shown (S1: "include it").
+        # Tracked separately from ``_rendered_section_paths`` -- the fold-
+        # everything affordance's own "fewer than two rendered SECTIONS"
+        # gate (:meth:`collapse_all_label`) stays section-only, so a lone
+        # facts group does not conjure a "Collapse all" affordance that
+        # would only ever fold that one always-present group.
+        # :meth:`toggle_all_folds` still folds the file-facts group too,
+        # once the affordance is genuinely shown.
         self._file_facts_rendered = _add_file_facts_group(
             self._list, filename, facts, collapsed=_FILE_FACTS_PATH in self._collapsed
         )
@@ -1039,8 +1034,8 @@ class _StreamView(QWidget):
         if clear_buckets:
             # Judged per bucket, not blanket per page: after an abort at
             # Parameterisation a clean Header really was checked while State
-            # never was, and the line must say both truthfully (H2, both
-            # directions). The Document bucket's empty path asks about the
+            # never was, and the line must say both truthfully, in both
+            # directions. The Document bucket's empty path asks about the
             # document level itself.
             judged = {
                 bucket.path: section_checked(bucket.path[0] if bucket.path else None, reach)
@@ -1059,10 +1054,10 @@ class _StreamView(QWidget):
                     _add_clear_row(self._list, bucket, judged[bucket.path], reach)
 
     def collapse_all_label(self) -> str | None:
-        """D15's fold affordance label -- ``None`` hides it (fewer than two
-        rendered sections to fold, nothing to collapse); otherwise
-        "Collapse all" while any rendered section is expanded, else
-        "Expand all"."""
+        """The fold-everything affordance's label -- ``None`` hides it
+        (fewer than two rendered sections to fold, nothing to collapse);
+        otherwise "Collapse all" while any rendered section is expanded,
+        else "Expand all"."""
         if len(self._rendered_section_paths) < 2:
             return None
         any_expanded = any(path not in self._collapsed for path in self._rendered_section_paths)
@@ -1075,10 +1070,11 @@ class _StreamView(QWidget):
         afterwards; this only updates the fold set itself.
 
         Whether *any* is expanded, and whether there is anything to do at
-        all, is judged from rendered sections alone (unchanged, D15) -- the
+        all, is judged from rendered sections alone -- the
         file-facts group never by itself unlocks or drives this affordance.
         Once the affordance genuinely acts, though, its own path joins the
-        targets (S1: "include it in Collapse all/Expand all")."""
+        targets, so "Collapse all"/"Expand all" folds the file-facts group
+        too."""
         if not self._rendered_section_paths:
             return
         targets = set(self._rendered_section_paths)
@@ -1163,7 +1159,7 @@ class _FilterChip(QLabel):
         self._on = on
 
     def set_zero_count(self, zero: bool) -> None:
-        """D13: a chip whose unfiltered count is zero is genuinely disabled
+        """A chip whose unfiltered count is zero is genuinely disabled
         -- Qt withholds mouse events from a disabled widget, so
         :meth:`mousePressEvent` never even fires. Its muted look comes from
         :func:`_chip_html` like any other off state. This is purely a
@@ -1183,7 +1179,7 @@ class _FilterChip(QLabel):
 
 
 class _CollapseAllLink(QLabel):
-    """D15's fold-everything affordance ("Collapse all"/"Expand all"), the
+    """The fold-everything affordance ("Collapse all"/"Expand all"), the
     side column's first item. Flat text like its ``_FilterChip``
     neighbours: it is a peer of the three filters, not a control standing
     over them, so it wears no chip -- the app-wide "an action wears a chip"
@@ -1286,7 +1282,7 @@ class _FilterColumn(QWidget):
         says fewer than two sections render -- hides the affordance
         entirely rather than disabling it: "Collapse all" over zero
         foldable sections is chrome announcing nothing, the same bug
-        amended D10 removes elsewhere on this page."""
+        avoided elsewhere on this page."""
         self._collapse_all.setVisible(text is not None)
         if text is not None:
             self._collapse_all.setText(text)
@@ -1433,13 +1429,13 @@ class DiagnosticsPanel(QWidget):
         lookup (secondary text); *model* only for the Partial
         notice (see :data:`_MSG_PARTIAL_NO_TARGET`) -- every grouping/count
         this panel renders otherwise comes from *buckets* alone. *filename*/
-        *facts* feed the file-facts group (S1, :mod:`ui_qt.file_facts`) --
+        *facts* feed the file-facts group (:mod:`ui_qt.file_facts`) --
         both default empty so every existing caller that never mentions them
-        (e.g. the keyboard-navigation fixture) renders no such group, exactly
-        the pre-S1 behaviour. *reach* is the document's ``validation_reach``:
+        (e.g. the keyboard-navigation fixture) renders no such group.
+        *reach* is the document's ``validation_reach``:
         the clear line consults it per bucket, so a section beyond an aborted
         run's reach reads "not checked" while a genuinely judged one keeps
-        "clear", and the all-clear row only renders for a completed run (H2).
+        "clear", and the all-clear row only renders for a completed run.
         """
         self._buckets = buckets
         self._partition = partition
@@ -1469,9 +1465,9 @@ class DiagnosticsPanel(QWidget):
     def _on_folds_changed(self) -> None:
         """A per-section fold toggled directly (a header click, not the
         collapse-all affordance) -- ``_StreamView`` already re-rendered
-        itself; only the column's D15 label can be stale, so refresh just
-        that, the same narrow update :meth:`_render_stream` does at the end
-        of every other path that can move the fold set."""
+        itself; only the column's fold-everything label can be stale, so
+        refresh just that, the same narrow update :meth:`_render_stream`
+        does at the end of every other path that can move the fold set."""
         self._side.set_collapse_all_label(self._stream.collapse_all_label())
 
     def _render_stream(self) -> None:

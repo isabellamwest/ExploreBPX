@@ -16,8 +16,7 @@ inside the open ``Parameterisation/User-defined`` bucket, Particle materials,
 Validation runs, and any parameter leaf the schema defines nowhere, wherever
 it lives. "Move up"/"Move down" are offered for every real row, individually
 disabled at the first/last sibling. Context menus never create; creation
-controls are never hidden behind a right-click (see the parameter-list pane
-section of docs/architecture.md).
+controls are never hidden behind a right-click.
 
 "Rename…" does not open its own popup: it opens (or focuses) the same
 inline card-header editor the row's own parameter card offers via a pencil
@@ -196,8 +195,9 @@ class ParameterListPanel(QWidget):
         #: aggregate across all of them (``core.compare.merged_row_state`` /
         #: ``merged_ghost_keys``), never the first pin's opinion alone.
         self._pins: list[ReferencePin] = []
-        #: True while the active session refuses edits (D3's "Open as-is"):
-        #: the add button hides, rows offer no menu or Delete, and the
+        #: True while the active session refuses edits (opened via the
+        #: "Open as-is, read-only" path): the add button hides, rows offer
+        #: no menu or Delete, and the
         #: "fields to add" invitations are not appended.
         self._read_only = False
 

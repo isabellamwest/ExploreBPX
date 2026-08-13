@@ -39,7 +39,7 @@ def test_factory_partial_has_minimal_structure():
 
 
 def test_factory_creates_spme_scaffold_with_separator_no_section_level_missing():
-    """Regression for V2: SPMe requires Separator, not just DFN. The scaffold
+    """SPMe requires Separator, not just DFN. The scaffold
     must include an empty Separator section so the validator draws its usual
     field-level diagnostics inside it, never a bare ``missing ('Separator',)``."""
     raw = document_factory.create("SPMe", "Demo")
@@ -101,7 +101,7 @@ def test_change_model_adds_the_missing_required_sections_empty(valid_spm_dict):
 
 
 def test_change_model_to_spme_adds_electrolyte_and_separator(valid_spm_dict):
-    """Regression for V2: SPMe needs Separator too, mirroring the DFN case
+    """SPMe needs Separator too, mirroring the DFN case
     above."""
     import copy
 
@@ -641,7 +641,7 @@ def test_document_session_create_then_undo():
     assert "Extra" not in session.document.raw["Parameterisation"]
 
 
-# --- C1: AddParameter / RemoveParameter (shared add-parameter command spine) ---
+# --- AddParameter / RemoveParameter (shared add-parameter command spine) ---
 
 
 def test_add_parameter_writes_honest_empty_value():
@@ -735,7 +735,7 @@ def test_pull_parameter_sets_an_existing_value_verbatim():
 
 def test_pull_parameter_with_source_label_names_the_source_in_the_undo_label():
     """A named source produces `Use "<key>" from <source>` instead of the
-    plain `Use "<key>"` (transparency track D9 wording)."""
+    plain `Use "<key>"`."""
     raw = {"Header": {"Title": "mine"}}
     result = command_service.execute(
         raw, PullParameter(("Header", "Title"), "theirs", source_label="Chen2020")

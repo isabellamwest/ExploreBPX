@@ -198,7 +198,7 @@ _TASK_KIND_TOOLTIPS: dict[TaskKind, str] = {
 
 
 def not_checked_tooltip(reach: CheckReach) -> str:
-    """Why a mark reads "not checked" (H2), chosen by the ``CheckReach`` enum
+    """Why a mark reads "not checked", chosen by the ``CheckReach`` enum
     alone -- never by a validator message, exactly like the severity and task
     tooltips above.
 
@@ -430,7 +430,7 @@ QLabel#InspectorPlaceholder { color: #57606a; }
 QLabel#UnitLabel, QLabel#ReferenceUnitLabel { color: #57606a; }
 QFrame#Card { border: 1px solid #b9c4ce; border-radius: 6px; }
 /* Workspace page: a shaded fixed-width actions rail beside a white pane.
-   The pane is a full-width whitespace-structured page (Phase 3), not the
+   The pane is a full-width whitespace-structured page, not the
    Diagnostics page's bordered group boxes: two stacked, borderless tinted
    section washes (``ui_qt.group_box.TintedSection``) -- style.NEUTRAL_WASH
    for the main document, style.REFERENCE_WASH for the reference -- each a
@@ -583,7 +583,7 @@ QWidget#ReferenceGroupBoxHeader {
 QLabel#WorkspaceCardTitle { font-size: ${title}px; font-weight: ${semibold}; }
 QLabel#WorkspaceCardTitle:disabled { color: #8c959f; font-weight: ${regular}; }
 QLabel#WorkspaceCardKey { color: #57606a; }
-/* The record's editable identity rows (Phase 4, concept B): a persistent
+/* The record's editable identity rows: a persistent
    dashed underline is the edit affordance, ghost text states an absent
    value ("Add a citation…") without inventing one. The title's line edit
    matches the title label's own rung so the text never jumps on click. */
@@ -756,8 +756,8 @@ QListWidget#SearchPopupList {
 QListWidget#SearchPopupList::item { padding: 6px 8px; border-radius: 4px; }
 QListWidget#SearchPopupList::item:selected { background: #cfe4fc; color: #1f2328; }
 /* The Diagnostics page: one scrolling stream list beside a right-hand
-   filter column -- the "one stream" redesign (PLAN-diagnostics-stream.md),
-   no rail, no separate detail pane. Fold headers/the clear line are
+   filter column -- a single renderer, no rail, no separate detail pane.
+   Fold headers/the clear line are
    delegate-painted caps rows ruled with a single hairline on the plain
    page (the old shaded band fill read too heavy repeated once per section;
    whitespace inside the header row separates sections now). The filter
@@ -856,8 +856,7 @@ QPushButton#AddParameterCreate {
     color: #1f6feb;
     font-weight: ${semibold};
 }
-/* Same wash as the row-selected states above (style.ACCENT_TINT) -- this
-   used to be its own near-identical #eaf2ff blue. */
+/* Same wash as the row-selected states above (style.ACCENT_TINT). */
 QPushButton#AddParameterCreate:hover { background: #cfe4fc; }
 QPushButton#AddParameterCreate[selected="true"] { background: #cfe4fc; }
 """

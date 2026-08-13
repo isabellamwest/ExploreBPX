@@ -8,12 +8,11 @@ reappears from the stream while the TRUTH layer (buckets/counts) stays
 untouched, or proves the pure filter predicates (``_issue_visible``/
 ``_task_visible``) directly.
 
-Amended D10 (2026-08-05): there is no "N hidden by filters" line any more.
-A section whose content is entirely filtered out renders nowhere at all --
-not in the stream, not on the clear line either (clear is computed
-unfiltered). The reconciliation test at the bottom of this file restates
-that invariant directly from bucket data + chip state, per PLAN-diagnostics-
-stream.md section 6.
+There is no "N hidden by filters" line. A section whose content is
+entirely filtered out renders nowhere at all -- not in the stream, not on
+the clear line either (clear is computed unfiltered). The reconciliation
+test at the bottom of this file restates that invariant directly from
+bucket data + chip state.
 
 The text-filter field was removed (per-section buckets are small and the
 toolbar search already finds anything by name); the three count chips are
@@ -116,11 +115,11 @@ def test_outstanding_chip_off_hides_required_and_optional_task_rows(app_driver, 
 
     assert d.diagnostics_stream_task_texts() == []
     assert d.diagnostics_stream_subhead_texts() == []
-    # A filtered-empty section leaves no trace at all (amended D10): Cell/
+    # A filtered-empty section leaves no trace at all: Cell/
     # Negative electrode/Positive electrode are entirely task-only, so all
     # three headers disappear too, leaving only Header on the clear line --
     # which keeps "clear": the scaffold's missing required values abort
-    # bpx's run at Parameterisation, a stage after Header was judged (H2).
+    # bpx's run at Parameterisation, a stage after Header was judged.
     assert d.diagnostics_stream_section_headers() == []
     assert d.diagnostics_clear_line_text() == "1 section clear"
     bucket = d.diagnostics_bucket("Cell")
@@ -151,7 +150,7 @@ def test_chip_toggle_never_changes_the_strip_or_the_bucket_data(app_driver, two_
 
 
 # ---------------------------------------------------------------------------
-# D13: a chip whose unfiltered count is zero renders disabled -- it filters
+# A chip whose unfiltered count is zero renders disabled -- it filters
 # nothing, so it must not look pressable, and a click on it must be a
 # structural no-op.
 # ---------------------------------------------------------------------------
@@ -195,14 +194,14 @@ def test_all_chips_off_no_sections_render_but_the_clear_line_still_holds(app_dri
     d.diagnostics_toggle_chip("warnings")
 
     assert d.diagnostics_stream_section_headers() == []
-    # Header, State -- unaffected by filters, split by what the run judged
-    # (H2): the errors abort bpx at Parameterisation, after Header was
+    # Header, State -- unaffected by filters, split by what the run judged:
+    # the errors abort bpx at Parameterisation, after Header was
     # judged and before State ever was.
     assert d.diagnostics_clear_line_text() == "1 section clear · 1 not checked"
 
 
 # ---------------------------------------------------------------------------
-# Amended D10: a section entirely filtered out (every one of its rows
+# A section entirely filtered out (every one of its rows
 # suppressed) renders no trace at all -- no header, no hidden-count line
 # (there is no such line any more), not on the clear line either.
 # ---------------------------------------------------------------------------
@@ -321,14 +320,13 @@ def test_all_chips_off_buckets_and_badges_still_reconcile(app_driver, two_cell_e
 
 
 # ---------------------------------------------------------------------------
-# The reconciliation test (D2's safety net, restated for the stream --
-# PLAN-diagnostics-stream.md section 6): every diagnostic and every task in
-# PageBuckets is accounted for exactly once by rendered rows + rows
-# suppressed by chip state + clear-section rows (always zero -- a clear
-# bucket has nothing to suppress by definition). No hidden line renders any
-# more (amended D10), so the suppressed count is computed here directly
-# from the bucket data and the chip state -- never read back from a UI
-# line -- and nothing must render that ``PageBuckets`` does not contain.
+# The reconciliation test: every diagnostic and every task in PageBuckets
+# is accounted for exactly once by rendered rows + rows suppressed by chip
+# state + clear-section rows (always zero -- a clear bucket has nothing to
+# suppress by definition). No hidden line renders, so the suppressed count
+# is computed here directly from the bucket data and the chip state --
+# never read back from a UI line -- and nothing must render that
+# ``PageBuckets`` does not contain.
 # ---------------------------------------------------------------------------
 
 
@@ -353,8 +351,8 @@ def _reconcile(d, filters):
     assert rendered_issues + suppressed_issues == total_issues
     assert rendered_tasks + suppressed_tasks == total_tasks
     # Nothing renders that PageBuckets does not contain: every rendered
-    # section header names a real, non-clear bucket (the file-facts group,
-    # S1, is not a bucket at all and is excluded from this check).
+    # section header names a real, non-clear bucket (the file-facts group
+    # is not a bucket at all and is excluded from this check).
     bucket_labels = {b.label for b in buckets.buckets}
     for header in d.diagnostics_stream_section_headers():
         assert any(header.startswith(label) for label in bucket_labels)

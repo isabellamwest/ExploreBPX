@@ -188,9 +188,9 @@ def _missing_ancestors(raw: dict, path: tuple[str, ...]) -> tuple[tuple[str, ...
 
 def _pull_label(path: tuple[str, ...], source_label: str) -> str:
     """The undo/redo entry title for a ``PullParameter``/``PullSection``
-    write (transparency track D9 wording): `Use "<key>" from <source_label>`
-    once a source is named, else the plain `Use "<key>"` -- only the words;
-    the command names themselves keep Pull.
+    write: `Use "<key>" from <source_label>` once a source is named, else
+    the plain `Use "<key>"` -- only the words; the command names themselves
+    keep Pull.
     """
     key = path[-1]
     if source_label:

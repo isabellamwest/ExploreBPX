@@ -152,10 +152,10 @@ class PullParameter(Command):
     that also has to build structure is still one document rebuild and one
     undo entry. One direction only -- the reference is never a target.
 
-    ``source_label`` names which reference the value came from (multi-
-    reference track Phase 1, e.g. a docked file's display name), used by
-    ``command_service.execute`` to title the undo entry `Use "<key>" from
-    <source_label>`. Defaults to ``""``, which titles it plain `Use "<key>"`.
+    ``source_label`` names which reference the value came from (e.g. a
+    docked file's display name), used by ``command_service.execute`` to
+    title the undo entry `Use "<key>" from <source_label>`. Defaults to
+    ``""``, which titles it plain `Use "<key>"`.
     """
 
     path: tuple[str, ...]

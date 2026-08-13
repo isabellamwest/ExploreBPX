@@ -1,4 +1,4 @@
-"""Validation parameter-column coherence (V10/V11/V12/V15).
+"""Validation parameter-column coherence.
 
 The middle column over a Validation run now shows the same schema-first
 order as the run's grid, lists missing schema arrays as muted placeholder
@@ -53,7 +53,7 @@ def _pin(app_driver, monkeypatch, path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# V10: schema-first row order, Move up/down gating
+# Schema-first row order, Move up/down gating
 # ---------------------------------------------------------------------------
 
 
@@ -135,7 +135,7 @@ def test_rows_outside_validation_keep_move_actions(app_driver, valid_spm_path):
 
 
 # ---------------------------------------------------------------------------
-# V11: placeholder rows
+# Placeholder rows
 # ---------------------------------------------------------------------------
 
 
@@ -284,7 +284,7 @@ def test_ghost_temperature_use_pulls_the_whole_array_in_one_undo_step(
 
 
 # ---------------------------------------------------------------------------
-# V12: series tooltips summarise
+# Series tooltips summarise
 # ---------------------------------------------------------------------------
 
 
@@ -335,7 +335,7 @@ def test_differs_tooltip_reference_lines_are_summaries(
 
 
 # ---------------------------------------------------------------------------
-# V15: the ("Validation",) container
+# The ("Validation",) container
 # ---------------------------------------------------------------------------
 
 

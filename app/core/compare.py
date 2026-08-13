@@ -8,10 +8,10 @@ beyond structural traversal -- it walks the raw dict exactly the way
 decides section vs. leaf), so its sections line up with the app's own tree
 sections without hardcoding a single section name.
 
-Matching is by full literal key at each nesting level (locked decision 1):
+Matching is by full literal key at each nesting level:
 ``"Thickness [m]"`` and ``"Thickness [micron]"`` are two different keys, never
 unit-converted or fuzzy-matched. Difference is raw inequality of the committed
-value (locked decision 2), via :func:`raw_equal` -- structural equality on the
+value, via :func:`raw_equal` -- structural equality on the
 parsed JSON, but type-aware at the leaves (:func:`core.values.values_equal`)
 so ``true`` (a ``bool``) never counts as equal to ``1`` (an ``int``), and
 ``1`` (an ``int``) never counts as equal to ``1.0`` (a ``float``): both are
@@ -107,7 +107,7 @@ class SectionDiff:
 
     @property
     def differ_count(self) -> int:
-        """Rows that differ, including fillable (locked decision 2/3)."""
+        """Rows that differ, including fillable."""
         return sum(1 for row in self.rows.values() if row.state in _DIFFER_STATES)
 
     @property
@@ -292,7 +292,7 @@ def merged_row_state(rows: list[RowDiff | None]) -> RowState | None:
     """The single state one key wears against **all** pinned references.
 
     Every surface that shows one mark per key against several references --
-    the parameter-list row bar, the tree gutter (design rule 6) -- needs the
+    the parameter-list row bar, the tree gutter -- needs the
     same rule, so it lives here once rather than being re-derived per widget.
 
     Disagreement resolves toward the louder fact, because a mark that stays
@@ -339,8 +339,8 @@ def merged_ghost_keys(sections: list[SectionDiff | None]) -> tuple[str, ...]:
 
 @dataclass(frozen=True)
 class ValueGroup:
-    """One Card Ledger row (multi-reference track, design rule 3): every
-    pinned reference whose value at a key is identical, grouped together."""
+    """One Card Ledger row: every pinned reference whose value at a key is
+    identical, grouped together."""
 
     #: Pin-order indices, into the caller's own reference list, of every
     #: reference sharing ``value`` at this key.
@@ -356,7 +356,7 @@ class ValueGroup:
 
 def group_reference_values(rows: list[RowDiff | None]) -> tuple[ValueGroup, ...]:
     """Group one key's per-reference :class:`RowDiff`\\ s by identical value
-    (Card Ledger, design rule 3), for a caller with N pinned references and
+    (the Card Ledger), for a caller with N pinned references and
     one ``compare()`` result per reference.
 
     *rows* is one entry per pinned reference, in pin order: the row for this

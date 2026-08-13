@@ -27,8 +27,8 @@ from .reference_identity import ReferencePin
 
 def _counts_text(comparison: ComparisonResult) -> str:
     """"14 differ · 8 reference only" -- singular forms at 1, a zero side
-    omitted entirely, "no differences" when both are zero (M2 brief).
-    "Reference" spelled out, never "ref" (decision D1)."""
+    omitted entirely, "no differences" when both are zero.
+    "Reference" spelled out, never "ref"."""
     differ = comparison.differ_count
     ref_only = comparison.ref_only_count
     parts = []

@@ -1,8 +1,8 @@
 """Tests for the remove-parameter feature: a parameter row right-click
 context menu ("Remove parameter") and its Delete-key accelerator, completing
 the add/remove pair on top of the already-tested RemoveParameter command
-(see test_command_service.py C1 section for the command/undo contract
-itself).
+(see test_command_service.py's AddParameter/RemoveParameter section for the
+command/undo contract itself).
 
 Creation stays confined to the "+ Add parameter" header (test_add_parameter.py);
 this file covers only the row-scoped removal action -- context menu wiring in

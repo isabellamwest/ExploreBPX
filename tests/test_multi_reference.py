@@ -122,7 +122,7 @@ def test_rows_start_collapsed_and_click_expands_the_full_record(three_pins):
 
     assert d.reference_row_expanded(1)
     detail = d.reference_row_detail_text(1)
-    # The one record shape (Phase 4): identical rows to the main document,
+    # The one record shape: identical rows to the main document,
     # read-only. Verbatim from the validator, whatever it says about this
     # fixture -- the row reports, it never judges.
     assert "Title: " in detail
@@ -136,7 +136,7 @@ def test_rows_start_collapsed_and_click_expands_the_full_record(three_pins):
 
 
 def test_removing_a_pin_shifts_the_later_badges(three_pins):
-    """Decision D1: colour and letters are the current pin order, so
+    """Colour and letters are the current pin order, so
     removing an earlier pin re-derives everything after it."""
     d = three_pins
     d.click_reference_remove(0)
@@ -287,7 +287,7 @@ def test_pull_names_the_groups_first_pinned_source(three_pins, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Spread scale (design rule 4)
+# Spread scale
 # ---------------------------------------------------------------------------
 
 
@@ -489,7 +489,7 @@ def test_ghost_rows_are_the_union_across_pins(three_pins):
 
 
 # ---------------------------------------------------------------------------
-# Source page (honesty pass -- the selector itself is Phase 2)
+# Source page: the reference selector
 # ---------------------------------------------------------------------------
 
 
@@ -596,7 +596,7 @@ def test_stale_band_names_a_reference_that_is_not_the_one_shown(
 
 
 # ---------------------------------------------------------------------------
-# Phase 2: chart overlay and the reference-grid selector
+# Chart overlay and the reference-grid selector
 # ---------------------------------------------------------------------------
 
 _TABLE_MAIN = {

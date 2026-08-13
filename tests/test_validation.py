@@ -97,14 +97,14 @@ def test_merge_union_pairs_by_location_empty_input():
 
 
 def test_merge_union_pairs_by_location_never_merges_across_different_locations():
-    """m1 (reviewed gap): the false-positive the plan asks to prove
-    impossible. A ``float_type`` at one location and an ``int_type`` at a
-    DIFFERENT location must NOT merge -- neither is a complete pair at its
-    own location. A location-insensitive grouping bug would instead pool
-    both error_types together, wrongly conclude a pair exists, and silently
-    drop the second diagnostic (a real validator message vanishing off the
-    page). Deliberately asymmetric (unlike the float+float scenario a naive
-    fix could still pass): each location holds only ONE half of the pair.
+    """The false-positive this guards against: a ``float_type`` at one
+    location and an ``int_type`` at a DIFFERENT location must NOT merge --
+    neither is a complete pair at its own location. A location-insensitive
+    grouping bug would instead pool both error_types together, wrongly
+    conclude a pair exists, and silently drop the second diagnostic (a real
+    validator message vanishing off the page). Deliberately asymmetric
+    (unlike the float+float scenario a naive fix could still pass): each
+    location holds only ONE half of the pair.
     """
     loc_a = ("Cell", "Nominal cell capacity [A.h]")
     loc_b = ("Cell", "Electrode area [m2]")

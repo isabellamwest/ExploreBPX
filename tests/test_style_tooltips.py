@@ -76,9 +76,10 @@ def test_every_task_kind_has_a_tooltip():
 
 
 def test_missing_field_and_missing_section_have_distinct_wording():
-    """§4b F5: "○ 'Required field not yet added' / section variant per
-    task kind" -- MISSING_FIELD and MISSING_SECTION must read differently
-    (field vs section) even though both use the same ○ glyph."""
+    """The tooltip is "○ 'Required field not yet added' / section variant
+    per task kind" -- MISSING_FIELD and MISSING_SECTION must read
+    differently (field vs section) even though both use the same ○
+    glyph."""
     field_text = style.task_kind_tooltip(TaskKind.MISSING_FIELD)
     section_text = style.task_kind_tooltip(TaskKind.MISSING_SECTION)
     assert field_text != section_text

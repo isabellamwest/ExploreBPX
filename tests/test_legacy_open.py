@@ -1,4 +1,4 @@
-"""Decision D3: the legacy open prompt and the read-only main document.
+"""The legacy open prompt and the read-only main document.
 
 A detectably legacy BPX v0.x file opened as the main document routes
 through one prompt -- converted copy, as-is read-only, or cancel -- from

@@ -7,9 +7,7 @@ this module exposes *whole documents* -- well-known published parameter sets
 a user can pull up as a read-only reference for Parameterisation comparison
 and plotting. The two stay separate because a PyBaMM-derived set carries no
 ``Validation`` section at all (PyBaMM parameter sets hold no cycling data),
-so it has nothing to offer the run-comparison dialog; see
-``docs/future.md``'s "Bundled PyBaMM parameter sets" entry for the
-accepted constraints.
+so it has nothing to offer the run-comparison dialog.
 
 The bundled files are generated offline by
 ``scripts/generate_reference_library.py`` (the application never imports

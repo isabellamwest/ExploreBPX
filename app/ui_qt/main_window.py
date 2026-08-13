@@ -99,7 +99,7 @@ class OpenIntent(Enum):
 
 class StaleChoice(Enum):
     """How to resolve a Save onto a backing file that changed on disk
-    (the stale-on-disk block, transparency plan H6)."""
+    (the stale-on-disk block)."""
 
     RELOAD = "reload"
     SAVE_AS_COPY = "save_as_copy"
@@ -108,8 +108,7 @@ class StaleChoice(Enum):
 
 
 class LegacyIntent(Enum):
-    """How to open a detectably legacy BPX v0.x file as the main document
-    (decision D3's prompt)."""
+    """How to open a detectably legacy BPX v0.x file as the main document."""
 
     CONVERTED_COPY = "converted_copy"
     AS_IS_READ_ONLY = "as_is_read_only"
@@ -964,9 +963,9 @@ class MainWindow(QMainWindow):
         files and ``OSError`` if the file cannot be read; callers arriving via
         a dialog surface these as a message box.
 
-        A detectably legacy v0.x file routes through the D3 prompt before
-        anything is installed, whatever brought it here -- the Open dialog,
-        drag-and-drop, or the stale dialog's Reload.
+        A detectably legacy v0.x file routes through the legacy-open
+        prompt before anything is installed, whatever brought it here --
+        the Open dialog, drag-and-drop, or the stale dialog's Reload.
         """
         path = Path(path)
         if self._route_legacy(path):
@@ -986,7 +985,8 @@ class MainWindow(QMainWindow):
         self._show_page(_EDITOR_PAGE_INDEX)
 
     def _route_legacy(self, path: Path) -> bool:
-        """Route *path* through the D3 prompt when it is detectably legacy.
+        """Route *path* through the legacy-open prompt when it is
+        detectably legacy.
 
         Returns True when the file was legacy and this method handled it
         (opened a converted copy, opened it as-is read-only, or the user
@@ -1010,11 +1010,11 @@ class MainWindow(QMainWindow):
         return True
 
     def _ask_legacy_intent(self, filename: str, file_version: str) -> LegacyIntent:
-        """The decision-D3 prompt for a legacy v0.x file.
+        """The legacy-open prompt for a legacy v0.x file.
 
         Overridable seam: headless tests monkeypatch this method directly,
         the ``_ask_open_intent`` convention. Open converted copy is the
-        default (D3 names it primary); every choice leaves *filename*
+        default choice; every choice leaves *filename*
         itself unmodified, and the words say so before the click.
         """
         box = QMessageBox(self)
@@ -1244,10 +1244,11 @@ class MainWindow(QMainWindow):
             self._show_page(_WORKSPACE_PAGE_INDEX)
 
     def _open_recorded_main(self, main: MainRecord) -> bool:
-        """Open a workspace's recorded main document, honouring its recorded
-        D3 mode while that mode's precondition still holds: a file recorded
-        read-only/converted-copy is reopened that way only if it is still
-        detectably legacy -- the prompt exists to learn intent, and the
+        """Open a workspace's recorded main document, honouring its
+        recorded legacy-open mode while that mode's precondition still
+        holds: a file recorded read-only/converted-copy is reopened that
+        way only if it is still detectably legacy -- the prompt exists to
+        learn intent, and the
         record holds the answer. A file whose shape changed gets the
         ordinary route, which asks again. Returns True once a document is
         installed; False means a prompt was cancelled."""
@@ -1834,11 +1835,11 @@ class MainWindow(QMainWindow):
         on save: what is on screen is what reaches the file. The apply is an
         ordinary command, so Ctrl+Z takes it back.
 
-        Two transparency gates run before anything is written: a backing
-        file that changed on disk since this session last touched it stops
-        the save (Reload / Save as copy / Overwrite / Cancel, plan H6), and
-        a source that carried YAML comments is confirmed once before the
-        document's first save (decision D4).
+        Two gates run before anything is written: a backing file that
+        changed on disk since this session last touched it stops the save
+        (Reload / Save as copy / Overwrite / Cancel), and a source that
+        carried YAML comments is confirmed once before the document's
+        first save.
         """
         if self._state.active is None:
             return False
@@ -1986,7 +1987,7 @@ class MainWindow(QMainWindow):
         return True
 
     def _confirm_comment_loss(self, session: DocumentSession) -> bool:
-        """Gate a save behind decision D4 when the source carried YAML
+        """Gate a save behind a confirmation when the source carried YAML
         comments; True means proceed.
 
         Asked at most once per document by construction, with no stored
@@ -2006,7 +2007,8 @@ class MainWindow(QMainWindow):
         return self._ask_comment_loss(source_name, session.document.filename)
 
     def _ask_comment_loss(self, source_name: str, document_name: str) -> bool:
-        """The decision-D4 dialog; True means "Save without comments".
+        """The YAML-comment-loss confirmation dialog; True means "Save
+        without comments".
 
         Overridable seam: headless tests monkeypatch this method directly,
         the ``_ask_open_intent`` convention. Cancel is the default -- the
@@ -2033,10 +2035,10 @@ class MainWindow(QMainWindow):
 
         The card states the reason inline, but from any other page -- or
         inside the Save/Discard/Cancel guard on the way out of Open, New or
-        close -- the abort used to be silent: nothing saved, nothing said.
-        The refusal names what is blocked, why, and the way back (the
-        transparency plan's refusal shape). Showing the Editor page changes
-        no selection, so the draft is still there to repair.
+        close -- an abort must say what happened: nothing saved, nothing
+        said is not acceptable. The refusal names what is blocked, why, and
+        the way back. Showing the Editor page changes no selection, so the
+        draft is still there to repair.
         """
         block = self._inspector.pending_draft_block()
         if block is None:
@@ -2134,7 +2136,7 @@ class MainWindow(QMainWindow):
         prefix = "* " if session.dirty else ""
         self.setWindowTitle(f"{prefix}{name} - ExploreBPX")
         if session.read_only:
-            # Not the D8 saved-state pair: a read-only session has no saved
+            # Not the Saved/Unsaved pair: a read-only session has no saved
             # state to report, only its mode.
             state_text = "Read-only"
         else:
@@ -2242,11 +2244,9 @@ class MainWindow(QMainWindow):
         if history is None:
             self._workspace.set_workspaces([], [])
             return
-        # "Open" marks whichever workspace is current, empty or not. It
-        # used to be earned by an open document instead, which was right
-        # while a workspace only existed once it held one -- now that
-        # creating a workspace is its own act, an empty board is a workspace
-        # on the board and the row has to say so.
+        # "Open" marks whichever workspace is current, empty or not:
+        # creating a workspace is its own act, so an empty board is a
+        # workspace on the board and the row has to say so.
         current_id = history.current_id
 
         def view(workspace) -> WorkspaceRowView:
@@ -2274,10 +2274,10 @@ class MainWindow(QMainWindow):
 
     def _on_identity_edited(self, field: str, text: str) -> None:
         """A record identity row was committed in place (Title, Description
-        or Citation -- the latter the Header's ``References`` field, D1).
+        or Citation -- the latter the Header's ``References`` field).
         The same ``SetValue`` command the Header cards issue, then the
         standard post-commit refresh, so undo and every surface behave
-        identically wherever the user typed (D6)."""
+        identically wherever the user typed."""
         session = self._state.active
         if session is None or session.document is None or session.read_only:
             return
@@ -2293,8 +2293,9 @@ class MainWindow(QMainWindow):
         regardless: with an empty document history they still have a focused
         text field's typing to undo/redo.
 
-        A read-only session (D3's "Open as-is") disables Save -- even
-        identical bytes written back would normalise the file -- while
+        A read-only session (opened via the "Open as-is, read-only" path)
+        disables Save -- even identical bytes written back would
+        normalise the file -- while
         Export stays available: an exported copy is explicitly a new file.
         """
         session = self._state.active
@@ -2343,7 +2344,7 @@ class MainWindow(QMainWindow):
 
         self._editor_page.set_has_document(document is not None)
         # Before any row or menu renders: the tree and list gate their
-        # editing affordances on the session's read-only fact (D3).
+        # editing affordances on the session's read-only fact.
         read_only = session is not None and session.read_only
         self._tree.set_read_only(read_only)
         self._params.set_read_only(read_only)
@@ -2363,7 +2364,7 @@ class MainWindow(QMainWindow):
         )
 
         buckets = page_buckets.bucket_page_content(raw, model, partition, tasks) if document is not None else None
-        # The diagnostics stream's own file-facts group (S1) -- the same
+        # The diagnostics stream's own file-facts group -- the same
         # load-time facts the Workspace record states in its own words,
         # restated here from the same ``session.load_record``/``document.
         # validation_reach``. Empty with no document, so no group renders.

@@ -91,8 +91,8 @@ class DocumentIdentity:
     identity through this value object rather than the raw dict, keeping
     knowledge of the BPX Header shape inside ``core``. Carries all five
     Header fields -- ``Description`` and ``References`` included, so the
-    file record can state what a file is (transparency track finding 6;
-    ``References`` is shown as *Citation* per decision D1).
+    file record can state what a file is; ``References`` is shown as
+    *Citation*.
     """
 
     title: str

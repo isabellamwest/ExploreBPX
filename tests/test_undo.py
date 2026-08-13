@@ -1,8 +1,7 @@
 """Undo and redo: value edits are undoable/redoable, both reachable from the
 toolbar.
 
-Phase 4a of the input-system redesign added Undo. Two defects were covered
-there:
+These tests guard against two defects:
 
   - ``DocumentSession.apply_value`` rebuilt the document without recording
     history, so a committed value edit -- the single most common mutation in

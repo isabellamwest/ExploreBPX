@@ -1,4 +1,4 @@
-"""ValidationEmptyState (Phase 4): the guided empty state for a zero-run
+"""ValidationEmptyState: the guided empty state for a zero-run
 Validation section.
 
 Driven end to end through AppDriver (a real MainWindow, offscreen), like
@@ -119,7 +119,7 @@ def test_add_experiment_creates_a_run_and_reveals_its_card(
     assert main_window._state.active.document.raw["Validation"]["1C discharge"] == {}
     assert d.undo_enabled() is True
     # The Inspector lands on the new (empty) run's card -- a brand-new run
-    # has none of its four keys yet, so this is the Phase 3 dropzone card.
+    # has none of its four keys yet, so this is the dropzone card.
     assert d.experiment_dropzone_shown() is True
     assert d.experiment_card().run_path == ("Validation", "1C discharge")
 

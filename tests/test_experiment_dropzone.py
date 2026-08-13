@@ -434,7 +434,7 @@ def test_compare_dialog_shows_no_active_group_for_a_single_run_document(
 
 
 # ---------------------------------------------------------------------------
-# Preview band (V2/V18): the run's own data, live from the draft
+# Preview band: the run's own data, live from the draft
 # ---------------------------------------------------------------------------
 
 
@@ -480,7 +480,7 @@ def test_preview_band_reflects_an_uncommitted_draft_edit_live(
 def test_preview_band_hidden_on_an_empty_run_and_appears_with_the_first_value(
     app_driver, tmp_path, valid_spm_dict
 ):
-    """V18: while the dropzone shows, the band does not -- a fully empty run
+    """While the dropzone shows, the band does not -- a fully empty run
     must never stack the dropzone, an empty grid and empty charts."""
     workfile = _write_doc(tmp_path, valid_spm_dict, {"New run": {}})
     d = app_driver
@@ -519,7 +519,7 @@ def test_preview_band_omits_temperature_without_the_column(
 def test_preview_band_empty_texts_name_the_missing_array(
     app_driver, tmp_path, valid_spm_dict
 ):
-    """V18 wording: an empty Y column names itself; a Y column with values
+    """An empty Y column names itself; a Y column with values
     but no Time to pair against says exactly that. Preview wording, never
     the compare dialog's."""
     workfile = _write_doc(
@@ -562,7 +562,7 @@ def test_preview_band_empty_texts_name_the_missing_array(
 
 
 # ---------------------------------------------------------------------------
-# Drag affordance (V16): dashed accent border + tint only while a file drag
+# Drag affordance: dashed accent border + tint only while a file drag
 # is over the dropzone, invisible otherwise
 # ---------------------------------------------------------------------------
 

@@ -16,17 +16,15 @@ what ``DiagnosticsPanel.refresh`` receives today (``raw``/``model``/
 ``partition``/``tasks``, all already computed once in
 ``main_window._refresh_all``) and returns an ordered :class:`PageBuckets` --
 one :class:`SectionBucket` per rail entry, an optional Document bucket
-first when occupied, everything else in document order. Nothing is lost
-(F3): every visible diagnostic and every task lands in exactly one bucket --
+first when occupied, everything else in document order. Nothing is lost:
+every visible diagnostic and every task lands in exactly one bucket --
 there is no drop path, and the module's own totals are summed FROM the
-buckets, never read from ``partition``/``tasks`` directly, so a caller cannot
-render a strip that disagrees with the rail (F3's own reconciliation
-invariant).
+buckets, never read from ``partition``/``tasks`` directly, so a caller
+cannot render a strip that disagrees with the rail.
 
-Assignment rule (F3), reusing one existing normalization for
-both diagnostics and tasks. ``diagnostics_panel._relative_location`` already
-established the shape of the rule for Issues display (see the
-diffusivity-warning-bug memory note): strip a leading ``"Parameterisation"``
+The assignment rule reuses one existing normalization for both diagnostics
+and tasks. ``diagnostics_panel._relative_location`` already established the
+shape of the rule for Issues display: strip a leading ``"Parameterisation"``
 -- a structural wrapper -- but keep ``"Header"``/``"State"``/``"Validation"``
 in full, since each of those names a real, human-meaningful section on its
 own. :func:`_bucket_path_for` generalises that exact rule from a bare label
@@ -35,14 +33,14 @@ to the canonical path Stage B still needs for ``completion_for`` lookups.
 That alone is enough whenever a path is already *canonical* -- a resolved
 parameter's own ``.path``, or a task's, both always carry their true prefix.
 It is NOT enough for an unresolved diagnostic's raw, validator-derived
-``loc``: V4's asymmetric convention means a ``Header``- or
+``loc``: the validator's own asymmetric convention means a ``Header``- or
 ``Parameterisation``-owned diagnostic that never resolved to an existing
 parameter (its target field is exactly what is missing) arrives with that
 prefix already stripped by the validator itself -- the same fact
 ``completion._STRIPPED_LOC_PREFIXES``/``_nav_path_candidates`` exists to
-reverse for absorption matching. :func:`_resolve_bucket_path` is F3's three
-tiers made concrete, reusing that same fact rather than a second scheme:
-"display section when the path resolves" is
+reverse for absorption matching. :func:`_resolve_bucket_path` makes that
+rule's three tiers concrete, reusing that same fact rather than a second
+scheme: "display section when the path resolves" is
 :func:`_bucket_path_for` applied directly whenever the path's own presumed
 parent already exists in ``raw`` (no stripping occurred, or none needs
 correcting); "else nearest existing ancestor's bucket" tries reinstating
@@ -77,7 +75,7 @@ DOCUMENT_BUCKET_PATH: tuple[str, ...] = ()
 @dataclass(frozen=True)
 class SectionBucket:
     """One rail entry's content: a section's Issues + Outstanding, already
-    resolved to exactly the rows the pane needs (F2's banded group boxes).
+    resolved to exactly the rows the pane's banded group boxes need.
 
     ``issues`` are already display-merged (the float/int union-pair
     collapse) at the whole-page level before bucketing -- callers must not
@@ -123,9 +121,9 @@ class PageBuckets:
 
     Totals are summed FROM ``buckets`` -- never read back from ``partition``/
     ``tasks`` -- so the summary strip and the rail can never disagree with
-    the pane's own content (F3's reconciliation invariant; the badge itself
-    still derives from ``partition`` directly, but must equal
-    these same totals by construction).
+    the pane's own content; the badge itself still derives from
+    ``partition`` directly, but must equal these same totals by
+    construction.
     """
 
     buckets: tuple[SectionBucket, ...]
@@ -230,15 +228,15 @@ def _expected_aliases(path: tuple[str, ...], model: str | None, value: object) -
 
 
 def _resolve_bucket_path(raw: dict, model: str | None, path: tuple[str, ...]) -> tuple[str, ...]:
-    """F3's assignment rule for one path -- see the module docstring for the
-    reasoning; this is its concrete implementation.
+    """The bucket-assignment rule for one path -- see the module docstring
+    for the reasoning; this is its concrete implementation.
 
     ``path`` is either a diagnostic's nav_path or a task's owning path
     (:func:`_task_owning_path`). The fast path handles every already-
     canonical path (a resolved parameter's ``.path``, or any task path): if
     the section the naive interpretation names already exists in ``raw``,
     that interpretation is correct and no schema lookup is needed. The slow
-    path only ever runs for an unresolved, V4-stripped diagnostic loc (its
+    path only ever runs for an unresolved, prefix-stripped diagnostic loc (its
     presumed section does not exist -- almost always because the leaf itself
     is exactly what is missing): it tries reinstating each prefix the
     validator is known to drop (``"Header"``, then ``"Parameterisation"``)
@@ -323,8 +321,8 @@ def _bucket_order(
     3. ``merged_visible``, in document order -- a safety net for a
        diagnostic naming a bucket neither pass above introduced. In practice
        this never fires for a resolvable path (its section already exists in
-       ``raw`` or was already forced by a task), but F3 promises no drop
-       path, so it is not skipped.
+       ``raw`` or was already forced by a task), but nothing here may drop
+       a path, so it is not skipped.
 
     :data:`DOCUMENT_BUCKET_PATH` is collected like any other bucket path
     here; :func:`bucket_page_content` moves it to the front.
@@ -361,7 +359,7 @@ def bucket_page_content(
     tasks: tuple[CompletionTask, ...],
 ) -> PageBuckets:
     """Bucket a document's post-absorption diagnostics and completion tasks
-    into the Validation page rail's per-section content (F2/F3).
+    into the Validation page rail's per-section content.
 
     ``raw``/``model``/``partition``/``tasks`` are exactly what
     ``main_window._refresh_all`` already computes once per refresh

@@ -1,4 +1,4 @@
-"""Driver-level tests for the completion track, through the real ``MainWindow``.
+"""Driver-level tests for parameter completion, through the real ``MainWindow``.
 
 Covers: the null-field result matrix (required-expected / optional-expected /
 custom), absorbed validator messages surfacing as Outstanding secondary text,

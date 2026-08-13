@@ -5,8 +5,7 @@ A pure chooser: it holds no app state and never pins anything itself --
 accepting simply reports :meth:`selected_set_id` and the caller routes it through
 ``AppState.pin_reference_set``. The sets carry no ``Validation`` runs
 (PyBaMM parameter sets hold no cycling data), which is why this exists
-apart from the run-comparison ``DatabaseExamplesDialog``; see the
-"Bundled PyBaMM parameter sets" entry in ``docs/future.md``.
+apart from the run-comparison ``DatabaseExamplesDialog``.
 
 **Layout.** Picker rows on the left (curated order, short title + muted
 model; selection is a purple border plus a small plain tick -- the standing
@@ -213,10 +212,9 @@ class ReferenceLibraryDialog(QDialog):
     def _build_footer(self) -> QHBoxLayout:
         footer = QHBoxLayout()
         # Pin language, and the truth about what pinning does: it *appends*,
-        # up to MAX_PINNED_REFERENCES. This footer still promised the
-        # single-slot behaviour ("replaces any docked reference") that the
-        # multi-reference track retired, which is the one thing a hint must
-        # never do.
+        # up to MAX_PINNED_REFERENCES. A hint must never promise the
+        # single-slot behaviour ("replaces any docked reference") that
+        # pinning does not have.
         hint = QLabel(
             f"Pins as a read-only reference · up to {MAX_PINNED_REFERENCES} at once"
         )

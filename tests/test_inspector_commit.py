@@ -1,6 +1,5 @@
 """Tests for InspectorPanel's commit-only-when-dirty guard and the live
-Issues-tab count during preview (docs/architecture.md "Editing
-Architecture" / "Inspector pane").
+Issues-tab count during preview.
 """
 
 from __future__ import annotations
@@ -260,7 +259,7 @@ def test_issues_section_restores_on_escape(qtbot, spm_workfile):
 # original and the ``is_dirty`` check alone would stop the commit -- the guard
 # never gets to decide. Stubbing produces the state the guard actually exists
 # for: blocked **and** different from the committed value. That is the state
-# Phase 4c's MaterialMapBody reaches with duplicate map keys.
+# MaterialMapBody reaches with duplicate map keys.
 # ---------------------------------------------------------------------------
 
 

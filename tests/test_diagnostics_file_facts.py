@@ -1,6 +1,5 @@
-"""The diagnostics stream's file-facts group (transparency track Phase 4,
-S1 -- see ``PLAN-transparency.md``): the load-time facts a person needs
-before trusting the diagnostics beneath, restated in the stream's own
+"""The diagnostics stream's file-facts group: the load-time facts a person
+needs before trusting the diagnostics beneath, restated in the stream's own
 fold-header grammar ahead of every bucket.
 
 Two layers: :func:`~ui_qt.file_facts.file_facts` itself (pure, no Qt --
@@ -172,7 +171,7 @@ def test_group_folds_on_click_and_survives_a_refresh(app_driver, fixtures_dir):
 
 
 def test_new_scaffold_shows_the_parameterisation_reach_fact(app_driver):
-    """Every fresh New scaffold aborts at Parameterisation (H2) -- the
+    """Every fresh New scaffold aborts at Parameterisation -- the
     reach fact shows under "untitled.json" even with no ``LoadRecord`` at
     all."""
     d = app_driver

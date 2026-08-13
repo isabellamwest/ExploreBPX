@@ -564,7 +564,7 @@ class SourceView(QAbstractScrollArea):
         #: line index, so it survives re-renders, folds and edits; arrow
         #: keys move it and a row click places it directly.
         self._selected: tuple[str, ...] | None = None
-        #: False while the main document is read-only (D3): rows render
+        #: False while the main document is read-only: rows render
         #: without their ← pull affordance. Refreshed by every set_rows.
         self._pull_enabled = True
         #: The just-pulled row's path while its gutter "Used" tag shows
@@ -604,7 +604,7 @@ class SourceView(QAbstractScrollArea):
     ) -> None:
         """Replace the rendered rows, pruning fold state for paths that no
         longer exist (a removed section must not haunt the closed set).
-        ``pull_enabled`` False (a read-only main, D3) renders every row
+        ``pull_enabled`` False (a read-only main) renders every row
         without its ← pull affordance."""
         self._rows = rows
         self._two_pane = two_pane

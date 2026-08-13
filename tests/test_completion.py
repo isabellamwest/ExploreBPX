@@ -1,7 +1,10 @@
 """Tests for the pure completion query (``core.completion``).
 
-Pure Python throughout -- no Qt. These tests hold implementation to the
-verified facts and locked decisions.
+Pure Python throughout -- no Qt. These tests hold implementation to bpx's
+actual validator behaviour: a ``mode="before"`` validator can raise before
+pydantic ever reaches a model's own required-field checks, so the
+validator's own issue list can miss a missing field that completion still
+must report.
 """
 
 from __future__ import annotations
@@ -29,16 +32,15 @@ def test_keystone_cell_field_deletion_invisible_to_validator(valid_spm_dict):
     ``mode="before"`` validator (a deprecated-fields check) that raises
     before pydantic ever checks Cell's own required fields.
 
-    Re-baselined for bpx 1.1.1: this used to read the nmc fixture, which
-    tripped the check via its own pre-existing deprecated
-    ``'Initial temperature [K]'``/``'Ambient temperature [K]'`` fields --
-    but that fixture is a legacy BPX v0.x object (``Header.BPX`` < 1), and
-    bpx 1.1.1 auto-converts those cleanly (probed directly against the real
-    validator: it now validates with warnings only), so it no longer trips
-    this premise. A deprecated field is injected directly into a genuinely-v1
-    document instead (``Header.BPX`` >= 1, so bpx does not treat it as
-    legacy) -- the injected field is what trips the validator, not legacy
-    conversion.
+    A deprecated field is injected directly into a genuinely-v1 document
+    (``Header.BPX`` >= 1, so bpx does not treat it as legacy), so that the
+    injected field itself is what trips the validator, not legacy
+    conversion. The nmc fixture's own pre-existing deprecated
+    ``'Initial temperature [K]'``/``'Ambient temperature [K]'`` fields
+    don't serve this purpose: that fixture is a legacy BPX v0.x object
+    (``Header.BPX`` < 1), and bpx 1.1.1 auto-converts those cleanly (probed
+    directly against the real validator: it now validates with warnings
+    only).
     """
     raw = copy.deepcopy(valid_spm_dict)
     raw["Parameterisation"]["Cell"]["Ambient temperature [K]"] = 298.15

@@ -1,9 +1,8 @@
 """Diagnostics page: summary strip + one scrolling stream.
 
-See ``ui_qt.diagnostics_panel``'s module docstring and ``PLAN-diagnostics-
-stream.md`` for the full design. A bad *string* in a FloatInt field
-(float_parsing + int_parsing) merges to one displayed row, so its badge
-count and its rows agree.
+See ``ui_qt.diagnostics_panel``'s module docstring for the full design. A
+bad *string* in a FloatInt field (float_parsing + int_parsing) merges to
+one displayed row, so its badge count and its rows agree.
 """
 
 from __future__ import annotations
@@ -83,13 +82,13 @@ def test_stream_lists_only_non_clean_buckets_with_the_clear_line_naming_the_rest
     d = app_driver
     d.open(many_issues_path)
     # Cell/Negative electrode/Positive electrode carry errors; Header/State
-    # are untouched -- clean buckets never get a header (D3).
+    # are untouched -- clean buckets never get a header.
     assert d.diagnostics_stream_section_headers() == [
         "Cell  2 errors",
         "Negative electrode  1 error",
         "Positive electrode  1 error",
     ]
-    # Split by what the run judged (H2, both directions): the abort happened
+    # Split by what the run judged, in both directions: the abort happened
     # in Parameterisation, so Header really was checked and stays "clear",
     # while State was never reached and reads "not checked".
     assert d.diagnostics_clear_line_text() == "1 section clear · 1 not checked"
@@ -97,7 +96,7 @@ def test_stream_lists_only_non_clean_buckets_with_the_clear_line_naming_the_rest
 
 def test_clear_bucket_shows_no_header(app_driver, many_issues_path):
     """A clean bucket renders no header at all -- not even one with an
-    empty suffix (D3): it's on the clear line instead."""
+    empty suffix: it's on the clear line instead."""
     d = app_driver
     d.open(many_issues_path)
     assert "Header" not in " ".join(d.diagnostics_stream_headers())
@@ -140,7 +139,7 @@ def test_document_bucket_appears_only_when_occupied(app_driver, valid_spm_path, 
     headers = d.diagnostics_stream_section_headers()
     assert any(header.startswith("Document") for header in headers)
     # Document sits first among SECTION buckets, occupied buckets in
-    # document order after it (the file-facts group, S1, sits ahead of
+    # document order after it (the file-facts group sits ahead of
     # every bucket including Document -- covered in
     # test_diagnostics_file_facts.py, not here).
     assert headers[0].startswith("Document")
@@ -253,7 +252,7 @@ def test_issue_rows_carry_the_severity_role_for_the_delegate_icon(app_driver, ma
 
 def test_declare_model_only_header_shows_no_ratio(app_driver, tmp_path):
     """DECLARE_MODEL is not itself a section-shape fact -- its header must
-    show no outstanding ratio at all (D5/states table)."""
+    show no outstanding ratio at all."""
     from core import document_factory
 
     raw = document_factory.create("SPM", title="probe")
@@ -301,12 +300,11 @@ def test_fully_clean_document_shows_the_all_clear_row_and_clear_line(app_driver,
 def test_partial_and_fully_clear_all_clear_row_shows_the_partial_notice_as_line_2(
     app_driver, tmp_path
 ):
-    """Amended D9 (2026-08-05 review finding): under Partial there is no
-    completion target, so "N of N sections complete and valid" is a false
-    claim even when the page is genuinely error/warning/outstanding-free --
-    line 1 (the plain check + "No issues, nothing incomplete") is
-    unchanged, but line 2 becomes the Partial notice, and it must not ALSO
-    render as its own separate row."""
+    """Under Partial there is no completion target, so "N of N sections
+    complete and valid" is a false claim even when the page is genuinely
+    error/warning/outstanding-free -- line 1 (the plain check + "No
+    issues, nothing incomplete") is unchanged, but line 2 becomes the
+    Partial notice, and it must not ALSO render as its own separate row."""
     from core import document_factory
 
     from ui_qt import style
@@ -335,7 +333,7 @@ def test_one_error_in_one_section_leaves_the_rest_clear(app_driver, tmp_path, va
     assert d.diagnostics_stream_section_headers() == ["Cell  1 error"]
     total = len(d._w._diagnostics._buckets.buckets)
     # The Cell error aborts bpx at Parameterisation: every other bucket that
-    # stage judged stays "clear", while State was never reached (H2).
+    # stage judged stays "clear", while State was never reached.
     assert d.diagnostics_clear_line_text() == f"{total - 2} sections clear · 1 not checked"
 
 
@@ -355,14 +353,12 @@ def test_clear_line_expands_to_one_row_per_clear_bucket(app_driver, many_issues_
 
 
 def test_clear_row_is_html_based_muted_no_accent_and_compact(app_driver, tmp_path, valid_spm_dict):
-    """Review finding: the clear line's own rows used to be a bespoke
-    custom paint that rendered tall on screen, with accent-tinted digits.
-    They now reuse the same HTML-document row machinery every other
-    single-line row (e.g. the OPTIONAL sub-head) uses -- D4 pins them as
-    "one quiet muted line ... same compact height as other rows" -- proven
-    here structurally: the row carries an HTML_ROLE fragment (not the
-    deleted bespoke paint path), every colour in it is the muted grey
-    (never ACCENT), and its delegate sizeHint matches an ordinary
+    """The clear line's own rows reuse the same HTML-document row machinery
+    every other single-line row (e.g. the OPTIONAL sub-head) uses, not a
+    bespoke custom paint: "one quiet muted line ... same compact height as
+    other rows" -- proven here structurally: the row carries an HTML_ROLE
+    fragment (not a bespoke paint path), every colour in it is the muted
+    grey (never ACCENT), and its delegate sizeHint matches an ordinary
     HTML-based single-line row's (the OPTIONAL sub-head, computed in this
     same environment so the comparison can't be thrown off by a synthetic
     QStyleOptionViewItem's own font/metrics) -- not the taller banded
@@ -574,7 +570,7 @@ def test_fold_does_not_leak_into_the_next_opened_document(
 
 
 def test_clear_line_fold_state_and_chips_reset_on_a_new_document(app_driver, many_issues_path, monkeypatch):
-    """D11: opening a *different* document resets folds, the clear line and
+    """Opening a *different* document resets folds, the clear line and
     the chips -- covers the clear-line half specifically (folds/chips are
     covered elsewhere)."""
     d = app_driver
@@ -595,7 +591,7 @@ def test_clear_line_fold_state_and_chips_reset_on_a_new_document(app_driver, man
     assert d.diagnostics_clear_section_texts() == []
 
 
-# --- collapse all / expand all (D15) ----------------------------------------
+# --- collapse all / expand all -----------------------------------------
 
 
 def test_collapse_all_hidden_with_fewer_than_two_rendered_sections(app_driver, tmp_path, valid_spm_dict):
@@ -766,7 +762,7 @@ def test_ratio_words_absent_children_only():
 def _bucket2(**overrides):
     """Like ``_bucket`` but also lets error/warning counts vary -- ``_bucket``
     pins both at 0, which every pre-existing ``_ratio_words`` test wants but
-    the D5 suffix tests need to vary."""
+    the fold-header suffix tests need to vary."""
     from core.page_buckets import SectionBucket
 
     fields = dict(
@@ -846,9 +842,10 @@ def test_clear_line_text_singular_and_plural():
 
 
 def test_clear_line_never_says_clear_after_an_aborted_run():
-    """H2, both directions: a bucket beyond an aborted run's reach was never
+    """A bucket beyond an aborted run's reach was never
     examined and reads "not checked", while a bucket the run did judge keeps
-    its earned "clear" -- the line names both counts when they coexist."""
+    its earned "clear" -- the line names both counts when they coexist,
+    in both directions."""
     from ui_qt.diagnostics_panel import _clear_line_text
 
     assert _clear_line_text(0, 1) == "1 section not checked"
@@ -890,7 +887,7 @@ def test_filter_column_items_are_flat_text_on_one_left_edge(app_driver, many_iss
     from ui_qt import style
 
     d = app_driver
-    d.open(many_issues_path)  # enough sections that "Collapse all" renders at all (D15)
+    d.open(many_issues_path)  # enough sections that "Collapse all" renders at all
     side = d._w._diagnostics._side
     side.layout().activate()  # the driver's window is never shown, so geometry is otherwise unset
     items = (side._collapse_all, side._errors, side._warnings, side._outstanding)
@@ -942,7 +939,7 @@ def test_task_row_tooltip_is_task_kind_derived(app_driver):
 
 
 def test_strip_chip_tooltips_reflect_counts_and_say_they_filter(app_driver, many_issues_path):
-    """Counts stay truthful (F8), and the suffix is the one place the chips
+    """Counts stay truthful, and the suffix is the one place the chips
     admit to being click-to-filter toggles -- including the off state."""
     from ui_qt import style
 
@@ -986,7 +983,7 @@ def test_task_glyph_is_muted_grey_not_bold(app_driver):
     """A task row's ring/half-filled mark must render in the same grey
     (#57606a) family as the issue dots -- the shared dot family, rendered
     muted rather than swept into the bold name span the way a text glyph
-    used to be."""
+    is."""
     from ui_qt import diagnostics_panel as dp
     from ui_qt import icons, parameter_row, style
 

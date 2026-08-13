@@ -355,10 +355,10 @@ class _GridView(QTableView):
 class _PendingBar(QWidget):
     """The "Unsaved changes · Apply · Discard" strip under a dirty grid.
 
-    The grid's draft/commit cycle used to be invisible: Enter-to-apply and
-    Esc-to-discard existed only in a collapsed hint. This bar is the visible
-    face of that state -- a small dot, the words, and the two halves of the
-    keyboard contract as clickable buttons with their keys named.
+    The grid's draft/commit cycle needs a visible face beyond the
+    keyboard-only Enter-to-apply/Esc-to-discard contract: a small dot, the
+    words, and the two halves of that contract as clickable buttons with
+    their keys named.
 
     Display and mouse access only: the bar owns no commit logic. The owning
     card shows/hides it from its real dirty state and wires the buttons back

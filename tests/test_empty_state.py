@@ -49,8 +49,8 @@ def test_validation_page_shows_no_document_message(app_driver):
 def test_validation_page_shows_no_issues_message_for_a_clean_document(
     app_driver, valid_spm_path
 ):
-    """The full-page placeholder is gone; the stream redesign renders no
-    header at all for a clean bucket (D3) -- proved here directly on the
+    """The full-page placeholder is gone; the stream renders no
+    header at all for a clean bucket -- proved here directly on the
     bucket data -- while the document-wide claim itself (nothing anywhere)
     shows in the summary strip's totals."""
     d = app_driver

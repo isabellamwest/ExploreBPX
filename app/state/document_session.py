@@ -23,9 +23,9 @@ from core.validation import ValidatorDiagnostic
 
 
 class ReadOnlyDocumentError(RuntimeError):
-    """Raised when a mutation reaches a read-only session (decision D3's
-    "Open as-is, read-only"). The UI disables every editing affordance
-    first; this refusal is the guarantee behind them."""
+    """Raised when a mutation reaches a session opened via the "Open as-is,
+    read-only" path. The UI disables every editing affordance first; this
+    refusal is the guarantee behind them."""
 
 
 @dataclass(frozen=True)
@@ -115,9 +115,9 @@ class DocumentSession:
         #: from source content (a New scaffold) -- the record states what the
         #: load did, and a scaffold had no load.
         self.load_record: LoadRecord | None = None
-        #: True for a session that shows a file without ever changing it
-        #: (decision D3's "Open as-is, read-only"). ``execute_command`` and
-        #: ``save`` refuse outright -- the state-layer guarantee behind
+        #: True for a session that shows a file without ever changing it,
+        #: opened via the "Open as-is, read-only" path. ``execute_command``
+        #: and ``save`` refuse outright -- the state-layer guarantee behind
         #: every disabled affordance in the UI.
         self.read_only: bool = False
 
@@ -297,8 +297,7 @@ class DocumentSession:
         its siblings), but the result is scoped to the diagnostics that attach
         to ``path``. Document- and object-level issues -- a Header deprecation
         warning, say -- are deliberately excluded: they belong to the Validation
-        workspace, not to a parameter's validity badge or Issues tab (see the
-        Diagnostics page section of docs/architecture.md).
+        workspace, not to a parameter's validity badge or Issues tab.
 
         A full candidate :class:`BPXDocument` is derived rather than
         suffix-matching the raw diagnostics here, so live preview attaches
@@ -356,8 +355,8 @@ class DocumentSession:
         if self.document is None:
             raise ValueError("No document loaded")
         if self.read_only:
-            # Even writing identical content back would normalise the file
-            # (H3); a read-only session never has a backing file, but the
+            # Even writing identical content back would normalise the file;
+            # a read-only session never has a backing file, but the
             # refusal must not depend on that staying true.
             raise ReadOnlyDocumentError("The session is read-only: it is never saved.")
         if self.backing_file is None:
@@ -381,7 +380,7 @@ class DocumentSession:
     def stale_mtime(self) -> float | None:
         """The backing file's current on-disk mtime when it no longer
         matches the recorded one -- the fact behind the stale-on-disk Save
-        block (transparency plan H6).
+        block.
 
         ``None`` when there is nothing to compare: no backing file, no load
         record, a record without disk facts, or a backing file gone from

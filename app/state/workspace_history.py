@@ -56,8 +56,8 @@ MAX_RECENT_WORKSPACES = 8
 #: through one path, because a version-2 record simply always has a main.
 SCHEMA_VERSION = 3
 
-#: How the main document was opened -- the D3 legacy intents plus the
-#: everyday default. Restoring replays the recorded mode instead of
+#: How the main document was opened -- the legacy-file open intents plus
+#: the everyday default. Restoring replays the recorded mode instead of
 #: re-asking a question the user already answered.
 MAIN_MODES = ("normal", "read_only", "converted_copy")
 

@@ -1,19 +1,18 @@
 """The record of how a document actually came off its source (frontend-agnostic).
 
-Transparency track Phase 3 (PLAN-transparency.md): the load-time facts a
-person needs to trust what the app shows them -- the format the loader
-actually used, whether the source is a legacy BPX v0.x object that ``bpx``
-only judges after converting, how far checking reached on the loaded
-content, whether the source text carries YAML comments a save would destroy
-(decision D4), and what the file on disk looked like (decision D5).
+The load-time facts a person needs to trust what the app shows them -- the
+format the loader actually used, whether the source is a legacy BPX v0.x
+object that ``bpx`` only judges after converting, how far checking reached
+on the loaded content, whether the source text carries YAML comments a save
+would destroy, and what the file on disk looked like.
 
 Every fact is about the moment of loading, so a record never mutates with
 edits -- the live answer to "how far has checking reached *now*" is
 :attr:`core.document.BPXDocument.validation_reach`, re-derived on every
 rebuild; :attr:`LoadRecord.checked` is that answer for the content as
-loaded. Phase 4 puts these facts on screen (the file record's *Read as* /
+loaded. These facts are put on screen in the file record's *Read as* /
 *Checked* rows and the diagnostics stream's pinned file-facts group, headed
-by the file's own name); this module deliberately knows nothing about how
+by the file's own name; this module deliberately knows nothing about how
 they are shown.
 """
 
@@ -59,23 +58,22 @@ class LoadRecord:
 
     #: The format the loader actually read, ``"json"`` or ``"yaml"`` --
     #: carried from the load's own decision
-    #: (:func:`core.bpx_gateway.format_for_filename`), never re-derived
-    #: (transparency track finding 5).
+    #: (:func:`core.bpx_gateway.format_for_filename`), never re-derived.
     fmt: str
     #: True when the source is detectably a legacy BPX v0.x object, which
-    #: ``bpx`` judges only after converting a copy (finding 1) -- the fact
-    #: decision D3's open prompt is built on.
+    #: ``bpx`` judges only after converting a copy -- the fact the legacy-file
+    #: open prompt is built on.
     is_legacy: bool
-    #: How far ``bpx``'s staged checking reached on the content as loaded
-    #: (finding 4). The live per-edit answer is the document's own
+    #: How far ``bpx``'s staged checking reached on the content as loaded.
+    #: The live per-edit answer is the document's own
     #: ``validation_reach``; this is the load-time snapshot.
     checked: CheckReach
     #: True when the YAML source text contains at least one comment, which
-    #: a save through ``yaml.safe_dump`` would silently destroy (finding 2,
-    #: decision D4). Always False for JSON, which has no comments.
+    #: a save through ``yaml.safe_dump`` would silently destroy. Always
+    #: False for JSON, which has no comments.
     has_yaml_comments: bool
-    #: Disk facts at load time (decision D5), for the file record and the
-    #: stale-on-disk check. ``None`` when no file backs the content.
+    #: Disk facts at load time, for the file record and the stale-on-disk
+    #: check. ``None`` when no file backs the content.
     size_bytes: int | None = None
     mtime: float | None = None
     #: The path the content was read from, as given to :meth:`capture` --

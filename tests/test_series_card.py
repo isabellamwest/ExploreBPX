@@ -1,4 +1,4 @@
-"""SeriesCard + NumericGrid: Phase 4b of the input-system redesign.
+"""SeriesCard + NumericGrid: the grid editor for series parameters.
 
 Covers the grid foundation (raw-object cells, add/remove rows, no coercion),
 the SeriesCard built on it, the registry's representability predicate, and the

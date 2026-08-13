@@ -53,7 +53,7 @@ def test_breadcrumb_object_click_clears_parameter(valid_spm_bytes):
 
 def test_open_captures_the_load_record(spm_workfile):
     """Opening captures the load-time facts once, from the same bytes the
-    document was built from -- the record Phase 4's file record renders."""
+    document was built from -- the record the file-facts group renders."""
     from core.bpx_gateway import CheckReach
 
     state = AppState()
@@ -275,7 +275,7 @@ def test_new_document_unknown_model_leaves_previous_session_intact(valid_spm_pat
 
 
 # ---------------------------------------------------------------------------
-# pin_reference / remove_reference (multi-reference Phase 1)
+# pin_reference / remove_reference
 # ---------------------------------------------------------------------------
 
 def test_pin_reference_pins_a_snapshot(nmc_pouch_cell_path):

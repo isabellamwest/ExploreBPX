@@ -9,7 +9,7 @@ to be repeated beside every number.
 
 Identity is derived from **pin order**, never stored: colour is
 ``style.REFERENCE_BADGES[index]`` and the letters are recomputed for the
-whole list on every pin change (decision D1 -- removing an earlier pin
+whole list on every pin change (removing an earlier pin
 shifts the later colours, and no extra state exists to go stale). The
 letters are the identity of last resort: colour alone must never be the
 only thing telling two references apart, which is why every badge carries

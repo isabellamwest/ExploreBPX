@@ -1,12 +1,11 @@
-"""Tests for the rail-redesign bucketing layer (``core.page_buckets``).
+"""Tests for the rail bucketing layer (``core.page_buckets``).
 
-Stage A of the rail redesign: pure Python throughout, no Qt.
-The point of this module is F3's reconciliation invariant -- every visible
-diagnostic and every task lands in exactly ONE rail bucket, so the strip
-totals, the rail badges and the All-sections view can never disagree. Every
-test below checks that invariant at the identity level (which bucket holds
-which exact diagnostic/task object), not just aggregate counts, per the
-brief.
+Pure Python throughout, no Qt. The point of this module is the
+reconciliation invariant -- every visible diagnostic and every task lands
+in exactly ONE rail bucket, so the strip totals, the rail badges and the
+All-sections view can never disagree. Every test below checks that
+invariant at the identity level (which bucket holds which exact
+diagnostic/task object), not just aggregate counts.
 """
 
 from __future__ import annotations
@@ -37,12 +36,12 @@ def _bucket_page(raw: dict, model: str | None = None):
 
 
 def _assert_reconciled(tasks: tuple[CompletionTask, ...], partition: PartitionedIssues, result) -> None:
-    """F3's own regression test, factored out: totals agree, and every
-    visible diagnostic / every task appears in EXACTLY ONE bucket (identity,
-    not just count -- ``PydanticErrorDiagnostic`` is a frozen dataclass over
-    a dict and is not guaranteed hashable/orderable, so membership is
-    checked by object identity via ``id()``, and duplication is checked the
-    same way)."""
+    """The reconciliation invariant's own regression test, factored out:
+    totals agree, and every visible diagnostic / every task appears in
+    EXACTLY ONE bucket (identity, not just count -- ``PydanticErrorDiagnostic``
+    is a frozen dataclass over a dict and is not guaranteed
+    hashable/orderable, so membership is checked by object identity via
+    ``id()``, and duplication is checked the same way)."""
     merged_visible = merge_union_pairs_by_location(partition.visible)
 
     assert result.error_count == partition.error_count
@@ -164,12 +163,12 @@ def test_absent_required_section_is_one_absent_bucket():
 
 def test_state_absent_from_fresh_scaffold_yields_no_bucket_task_or_diagnostic():
     """bpx 1.1.1 made ``State`` schema-optional (``Field(None, alias="State")``)
-    and deleted the root validator that used to demand it for every concrete
-    model (obsoleting the old "corrected V1" story this test used to pin):
-    a fresh scaffold never has ``State`` at all (``document_factory`` no
-    longer adds it), ``document_completion`` raises no task for its absence,
-    and the real validator raises no diagnostic either -- so, unlike every
-    other schema-required section, there is no ``State`` bucket at all."""
+    and deleted the root validator that formerly demanded it for every
+    concrete model: a fresh scaffold never has ``State`` at all
+    (``document_factory`` no longer adds it), ``document_completion``
+    raises no task for its absence, and the real validator raises no
+    diagnostic either -- so, unlike every other schema-required section,
+    there is no ``State`` bucket at all."""
     raw = document_factory.create("SPM", title="probe")
     assert "State" not in raw
     _doc, tasks, partition, result = _bucket_page(raw, "SPM")
@@ -179,11 +178,11 @@ def test_state_absent_from_fresh_scaffold_yields_no_bucket_task_or_diagnostic():
 
 
 def test_partial_model_has_no_tasks_and_stripped_locs_land_correctly():
-    """The reviewed defect this stage found and fixed: under Partial, the
-    validator's own union-branch ``missing`` diagnostics for a sparse
-    electrode carry a V4-stripped loc (``('Negative electrode', <field>)``,
-    no ``Parameterisation`` prefix, since the field never resolves to an
-    existing parameter) -- a naive "first path segment is the bucket" rule
+    """Under Partial, the validator's own union-branch ``missing``
+    diagnostics for a sparse electrode carry a stripped loc
+    (``('Negative electrode', <field>)``, no ``Parameterisation`` prefix,
+    since the field never resolves to an existing parameter) -- a naive
+    "first path segment is the bucket" rule
     would create a bogus standalone ``('Negative electrode',)`` bucket
     alongside the real ``('Parameterisation', 'Negative electrode')`` one
     that already exists from the raw walk. Both must land in the SAME bucket.
@@ -251,7 +250,7 @@ def test_garbage_model_plus_extra_header_field_both_land_in_header():
 
 
 # ---------------------------------------------------------------------------
-# Document-bucket fallback (F3's third tier)
+# Document-bucket fallback
 # ---------------------------------------------------------------------------
 
 
@@ -310,7 +309,7 @@ def test_document_bucket_absent_when_unoccupied():
 def test_document_bucket_first_when_occupied(fixtures_dir):
     """The nmc fixture carries a ``PythonWarningDiagnostic`` (no ``.loc`` at
     all -- nav_path ``()``), which lands in the Document bucket; it must
-    render first per F2."""
+    render first."""
     raw = json.loads((fixtures_dir / "nmc_pouch_cell_BPX.json").read_text("utf-8"))
     _doc, tasks, partition, result = _bucket_page(raw)
     assert result.buckets[0].path == DOCUMENT_BUCKET_PATH
@@ -362,13 +361,13 @@ def test_keystone_nmc_cell_field_deletion_still_reconciles(valid_spm_dict):
     baseline leaves the validator's own diagnostics unchanged when a required
     Cell field is also deleted, while completion still reports the task.
 
-    Re-baselined for bpx 1.1.1: the nmc fixture this used to read is a legacy
+    A deprecated field is injected directly into a genuinely-v1 document
+    (``Header.BPX`` >= 1, so bpx does not treat it as legacy), so that the
+    injected field itself is what trips ``Cell``'s validator, not legacy
+    conversion. The nmc fixture doesn't serve this purpose: it is a legacy
     BPX v0.x object (``Header.BPX`` < 1), and bpx 1.1.1 auto-converts those
     cleanly (probed directly -- it now validates with warnings only, no
-    ``value_error``), so it no longer trips the premise. A deprecated field
-    is injected directly into a genuinely-v1 document instead (``Header.BPX``
-    >= 1, so bpx does not treat it as legacy) -- the injected field is what
-    trips ``Cell``'s validator, not legacy conversion.
+    ``value_error``).
     """
     raw = copy.deepcopy(valid_spm_dict)
     raw["Parameterisation"]["Cell"]["Ambient temperature [K]"] = 298.15

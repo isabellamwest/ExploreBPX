@@ -1,7 +1,7 @@
 """``MultiColumnGrid``: N independently-lengthed, all-editable columns.
 
-Phase 0 of the multi-column-editable grid: a pure widget-layer capability,
-not yet wired into any card. Each column maps to one BPX array, so a length
+A pure widget-layer capability, not yet wired into any card. Each column
+maps to one BPX array, so a length
 mismatch between columns is the ordinary case -- never padded, truncated, or
 equalised (see ``_MultiColumnGridModel``'s docstring in ``ui_qt.cards.grid``).
 """
@@ -429,7 +429,7 @@ def test_add_toolbar_widget_is_a_noop_when_read_only():
 
 
 # ----------------------------------------------------------------------
-# Per-column clipboard paste (D7)
+# Per-column clipboard paste
 # ----------------------------------------------------------------------
 
 

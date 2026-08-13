@@ -346,7 +346,7 @@ def _tree_with_cell():
 def test_tree_display_text_carries_no_differ_suffix():
     """The old text-appended "≠ N" label suffix is gone, and so is the
     numeric count that replaced it -- the mark is the painted gutter bar and
-    nothing else (design rule 6)."""
+    nothing else."""
     root, _header, _parameterisation, cell = _tree_with_cell()
     model = BpxTreeModel(root, comparisons=[_comparison_with_differ_count(_CELL_PATH, 3)])
     cell_index = model.index(0, 0, model.index(1, 0))

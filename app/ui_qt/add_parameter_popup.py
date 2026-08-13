@@ -189,9 +189,9 @@ def suggestion_row_html(alias: str, meta, tier: str, required: bool) -> str:
     kind/unit/"Required" hints ``suggestion_row_text`` renders as plain text --
     muted, except the "Required" tag itself.
 
-    Shared with :mod:`ui_qt.parameter_list`'s "fields to add" group (Phase 3
-    of the completion track) so the two "here is a field you could add"
-    surfaces speak one visual language, not two independently-drifting ones.
+    Shared with :mod:`ui_qt.parameter_list`'s "fields to add" group so the
+    two "here is a field you could add" surfaces speak one visual
+    language, not two independently-drifting ones.
 
     Requiredness colours **only that tag**, never the name: a required field
     is a suggested one, and recolouring its name would split the suggested

@@ -69,17 +69,17 @@ class AppDriver:
     def open(self, path: Path | str) -> "AppDriver":
         """Open a document by path (equivalent to File > Open).
 
-        A detectably legacy v0.x *path* raises the real (blocking) D3
+        A detectably legacy v0.x *path* raises the real (blocking) legacy-open
         prompt -- a legacy test must use :meth:`open_as_is` or stub
         ``_ask_legacy_intent`` itself."""
         self._w.open_document(Path(path))
         return self
 
     def open_as_is(self, path: Path | str) -> "AppDriver":
-        """Open a legacy v0.x file as the main document, answering the D3
-        prompt with "Open as-is, read-only" -- the state Phase 4's legacy
-        record/stream facts describe. The prompt seam is stubbed for this
-        one call (the ``_ask_open_intent`` monkeypatch convention)."""
+        """Open a legacy v0.x file as the main document, answering the
+        legacy-open prompt with "Open as-is, read-only". The prompt seam is
+        stubbed for this one call (the ``_ask_open_intent`` monkeypatch
+        convention)."""
         from ui_qt.main_window import LegacyIntent
 
         self._w._ask_legacy_intent = lambda *args: LegacyIntent.AS_IS_READ_ONLY
@@ -146,10 +146,9 @@ class AppDriver:
     # -- Diagnostics page: strip + one scrolling stream ---------------------
     #
     # The default surface for driver reads is the stream (``_stream``) --
-    # the page's only renderer now (the old rail + single-section/"All
-    # sections" pair is gone, PLAN-diagnostics-stream.md). It always
-    # contains every issue/task row that survives the current chip filter,
-    # so ``_validation_rows``/``validation_issue_texts``/``outstanding_
+    # the page's only renderer. It always contains every issue/task row
+    # that survives the current chip filter, so
+    # ``_validation_rows``/``validation_issue_texts``/``outstanding_
     # tasks``/etc. below all read it directly. Stream-specific state (fold
     # headers, the clear line, the all-clear row, collapse-all) gets its
     # own ``diagnostics_*``-prefixed methods further down.
@@ -207,7 +206,7 @@ class AppDriver:
         """Text of every stream sub-head row, in order -- today only ever
         "K optional parameters unfilled" (the required group's own former ratio
         sub-head is gone: that ratio now lives in the section's own fold
-        header, D5). See :meth:`diagnostics_stream_subhead_texts` for the
+        header). See :meth:`diagnostics_stream_subhead_texts` for the
         same read under its new name."""
         return [item.text() for item in self._validation_rows("subhead")]
 
@@ -256,7 +255,7 @@ class AppDriver:
 
     def all_sections_fold_headers(self) -> list[tuple[str, bool]]:
         """``(section_label, collapsed)`` for every rendered SECTION bucket's
-        fold header, in display order -- the file-facts group (S1) is not a
+        fold header, in display order -- the file-facts group is not a
         section and is excluded, matching this method's own name."""
         from ui_qt import diagnostics_panel as dp
 
@@ -335,16 +334,16 @@ class AppDriver:
 
     def diagnostics_stream_headers(self) -> list[str]:
         """Every rendered fold-header's text, chevron stripped, in display
-        order -- a section bucket's own (label plus its D5 suffix, e.g.
-        "State  1 error · 2 of 5 remaining") *and*, when it renders, the
-        file-facts group's (S1) ahead of every one of them."""
+        order -- a section bucket's own (label plus its remaining-count
+        suffix, e.g. "State  1 error · 2 of 5 remaining") *and*, when it
+        renders, the file-facts group's ahead of every one of them."""
         return [_strip_chevron(item.text()) for item in self._validation_rows("fold_header")]
 
     def diagnostics_stream_section_headers(self) -> list[str]:
         """Like :meth:`diagnostics_stream_headers`, but SECTION buckets
-        only -- the file-facts group (S1) excluded -- for assertions about
-        section-bucket rendering that predate S1 and are unaffected by
-        whether a document also happens to carry a file fact."""
+        only -- the file-facts group excluded -- for assertions about
+        section-bucket rendering that are unaffected by whether a document
+        also happens to carry a file fact."""
         from ui_qt import diagnostics_panel as dp
 
         return [
@@ -363,7 +362,7 @@ class AppDriver:
         return [item.text() for item in self._validation_rows("subhead")]
 
     def diagnostics_file_facts_header(self) -> str | None:
-        """The file-facts group's own fold-header text (S1), chevron
+        """The file-facts group's own fold-header text, chevron
         stripped, e.g. "nmc_pouch_cell_BPX.json  1 note" -- or ``None``
         while the group isn't rendered at all (no fact for the open
         document)."""
@@ -419,7 +418,7 @@ class AppDriver:
         return [lst.item(i).text() for i in range(lst.count()) if lst.item(i).data(dp._KIND_ROLE) == "clear_row"]
 
     def diagnostics_all_clear_text(self) -> str | None:
-        """The D9 pinned all-clear row's plain text (both lines, "\\n"
+        """The pinned all-clear row's plain text (both lines, "\\n"
         joined), or ``None`` while it isn't rendered."""
         from ui_qt import diagnostics_panel as dp
 
@@ -431,7 +430,7 @@ class AppDriver:
         return None
 
     def diagnostics_collapse_all_text(self) -> str | None:
-        """The filter column's D15 affordance label ("Collapse all"/
+        """The filter column's collapse-all affordance label ("Collapse all"/
         "Expand all"), or ``None`` while it is hidden."""
         label = self._w._diagnostics._side._collapse_all
         return None if label.isHidden() else label.text()
@@ -453,7 +452,7 @@ class AppDriver:
         return self
 
     def diagnostics_chip_is_enabled(self, name: str) -> bool:
-        """False for a zero-count chip (D13) -- disabled, so a click does
+        """False for a zero-count chip -- disabled, so a click does
         nothing (Qt withholds the mouse event entirely)."""
         return self._diagnostics_chip(name).isEnabled()
 

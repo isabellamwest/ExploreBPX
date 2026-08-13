@@ -93,7 +93,7 @@ def test_build_pins_pairs_snapshots_with_identity_and_comparison():
 
 
 def test_removing_an_earlier_pin_shifts_the_later_colours():
-    """Decision D1: colour is the current list index, so identity is
+    """Colour is the current list index, so identity is
     recomputed rather than stored -- nothing can go stale."""
     references = [_snapshot("a.json"), _snapshot("b.json"), _snapshot("c.json")]
 

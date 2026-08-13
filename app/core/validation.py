@@ -153,7 +153,7 @@ def input_fact(diagnostic: ValidatorDiagnostic) -> str | None:
 #
 # A nullable ``FloatInt`` field holding a bad/``null`` value is a union of two
 # branches (``float`` and ``int``), so pydantic raises once per branch --
-# ``float_type`` *and* ``int_type`` for the exact same input (V5). Both are
+# ``float_type`` *and* ``int_type`` for the exact same input. Both are
 # real, and neither is dropped from ``parameter.issues``/absorption/the
 # validator's own output; these helpers only decide how many *rows* a UI
 # paints for that one underlying problem. Display-only: callers pass the
@@ -162,7 +162,7 @@ def input_fact(diagnostic: ValidatorDiagnostic) -> str | None:
 #: The FloatInt union raises one error per branch, so a single bad value
 #: draws a matched (float, int) pair. There are two variants, by *how* the
 #: value is wrong: ``float_type``/``int_type`` for an empty or wrong-typed
-#: value (V5, e.g. committed ``null`` or a list), and
+#: value (e.g. committed ``null`` or a list), and
 #: ``float_parsing``/``int_parsing`` for a value of the right shape that
 #: won't parse (a bad string typed into the field). Each is one underlying
 #: problem; both collapse to their float branch's message ("Input should be

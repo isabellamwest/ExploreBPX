@@ -153,7 +153,7 @@ def test_field_meta_unknown_alias_is_none():
 
 
 def test_field_meta_electrolyte_conductivity_is_its_own_field():
-    """Finding 1/2: Electrolyte's "Conductivity [S.m-1]" must not pick up the
+    """Electrolyte's "Conductivity [S.m-1]" must not pick up the
     electrode's description or lose its function-capable type -- the two
     definitions share an alias but not a meaning."""
     meta = bpx_gateway.field_meta(("Parameterisation", "Electrolyte", "Conductivity [S.m-1]"))
@@ -168,7 +168,7 @@ def test_field_meta_electrode_conductivity_is_scalar_only():
 
 
 def test_field_meta_diffusivity_activation_energy_differs_by_section():
-    """Finding 3: the same alias describes electrolyte diffusion in one
+    """The same alias describes electrolyte diffusion in one
     section and particle diffusion in another."""
     electrolyte = bpx_gateway.field_meta(
         ("Parameterisation", "Electrolyte", "Diffusivity activation energy [J.mol-1]")
@@ -214,7 +214,7 @@ def test_field_meta_validation_run_resolves_experiment_schema():
 
 
 def test_build_tree_electrolyte_conductivity_is_a_function_end_to_end(fixtures_dir):
-    """Finding 2, end-to-end: with correct per-section metadata, the
+    """End-to-end: with correct per-section metadata, the
     Electrolyte's function-valued "Conductivity [S.m-1]" in this example file
     renders as a FUNCTION parameter, not a SCALAR one. This example file does
     not fully validate against bpx 1.1.0 (a renamed alias elsewhere) -- build_tree
@@ -248,7 +248,7 @@ def test_build_tree_validation_parameters_have_descriptions_end_to_end(fixtures_
 
 
 def test_field_meta_degradation_and_thermal_fields_have_no_fabricated_description():
-    """Finding 5: fields with no schema description must not fabricate one
+    """Fields with no schema description must not fabricate one
     from the pydantic auto-title (e.g. "LLI" -> "Lli")."""
     lli = bpx_gateway.field_meta(("State", "Degradation", "LLI"))
     assert lli.description == ""
@@ -260,7 +260,7 @@ def test_field_meta_degradation_and_thermal_fields_have_no_fabricated_descriptio
 
 
 def test_searchable_parameters_excludes_section_container_aliases():
-    """Finding 4: section/container names swept up by the old flat index must
+    """Section/container names swept up by the old flat index must
     not appear as addable "parameters"."""
     pool = bpx_gateway.searchable_parameters()
     junk = {
@@ -794,9 +794,9 @@ def test_is_legacy_false_when_version_not_detectable(valid_spm_dict):
 def test_validate_auto_converts_legacy_and_warns(legacy_v0_dict):
     """bpx judges a v0.x object only after converting a copy of it: the run
     completes against the *converted* document and the only trace is the
-    conversion warning (transparency track finding 1). Pins that
-    ``is_legacy`` and bpx's own convert-on-parse can never silently
-    diverge, and that the warning stays recognisable."""
+    conversion warning. Pins that ``is_legacy`` and bpx's own
+    convert-on-parse can never silently diverge, and that the warning
+    stays recognisable."""
     result = bpx_gateway.validate(legacy_v0_dict)
     assert result.completed is True
     assert any(

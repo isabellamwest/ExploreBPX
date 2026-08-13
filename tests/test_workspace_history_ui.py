@@ -591,8 +591,8 @@ def test_launch_reopens_a_named_workspace_by_its_name(relaunch, spm_workfile):
 
 
 def test_launch_replays_the_recorded_open_mode(relaunch, fixtures_dir):
-    """A file opened as-is comes back as-is: the D3 prompt exists to learn
-    intent, and the record already holds the answer."""
+    """A file opened as-is comes back as-is: the legacy-open prompt exists
+    to learn intent, and the record already holds the answer."""
     first = relaunch()
     first.open_as_is(fixtures_dir / "nmc_pouch_cell_BPX.json")
     assert first._w._state.active.read_only is True

@@ -48,8 +48,8 @@ class AppState:
     and an ordered list of pinned ReferenceSnapshots (frozen, read-only files
     compared against it). Pinning **appends**: up to
     ``MAX_PINNED_REFERENCES`` references coexist, ordered by pin time, and
-    the order is the identity the UI layer colours and letters them by (see
-    ``PLAN-multi-reference.md``). Nothing here knows about badges.
+    the order is the identity the UI layer colours and letters them by.
+    Nothing here knows about badges.
     """
 
     def __init__(self, history: WorkspaceHistory | None = None) -> None:
@@ -62,7 +62,7 @@ class AppState:
         #: nothing.
         self.history = history
         #: What the history should call the current main document: set by
-        #: the three real opens (path + D3 mode), cleared when the session
+        #: the three real opens (path + open mode), cleared when the session
         #: has no on-disk identity (scaffolds, clones, closed). While
         #: ``None``, reference changes leave the workspace record untouched
         #: -- a scaffold session must not erase a restorable workspace.
@@ -71,8 +71,8 @@ class AppState:
     @property
     def reference(self) -> ReferenceSnapshot | None:
         """The first pinned reference, or ``None`` -- a compatibility shim
-        for call sites not yet converted to ``references`` (the Source page,
-        Phase 2). Read-only: mutators below assign ``self.references``
+        for call sites not yet converted to ``references`` (the Source page).
+        Read-only: mutators below assign ``self.references``
         directly.
         """
         return self.references[0] if self.references else None
@@ -121,9 +121,9 @@ class AppState:
     def legacy_version(self, path: Path) -> str | None:
         """The file's own ``Header.BPX`` version when *path* holds a
         detectably legacy v0.x object, else ``None`` -- the cheap look the
-        D3 open prompt decides from. No session is touched and nothing is
-        validated; the chosen open re-reads the file, and that read is the
-        one that counts.
+        legacy-file open prompt decides from. No session is touched and
+        nothing is validated; the chosen open re-reads the file, and that
+        read is the one that counts.
 
         Raises ``core.bpx_gateway.LoadError`` / ``OSError`` exactly like
         :meth:`open`, so a caller's error handling covers both.
@@ -132,13 +132,13 @@ class AppState:
         return bpx_gateway.legacy_version(raw)
 
     def open_read_only(self, path: Path) -> None:
-        """Open *path* as-is, read-only (decision D3's second path).
+        """Open *path* as-is, read-only.
 
         The raw content is installed unconverted, ``read_only`` is set so
         no command can execute, and no backing file is adopted -- this
         session never writes *path*. For a legacy object ``bpx`` still
         checks a converted copy internally; the record's Read as / Checked
-        rows state that, verbatim Phase 4.
+        rows state that plainly.
         """
         data = path.read_bytes()
         document = BPXDocument.from_bytes(data, path.name)
@@ -150,7 +150,7 @@ class AppState:
 
     def open_converted_copy(self, path: Path) -> None:
         """Open a converted v1.x copy of legacy *path* as a new unsaved
-        document (decision D3's primary path).
+        document.
 
         The copy is named "{stem} (converted){suffix}", keeps the source's
         format, and has no backing file with ``dirty`` set -- the
@@ -274,7 +274,7 @@ class AppState:
 
         Raises ``core.bpx_gateway.LoadError``/``OSError`` exactly as
         ``ReferenceSnapshot.load`` does; on failure the pinned snapshot is
-        left untouched (the caller surfaces the error -- C3).
+        left untouched, and the caller surfaces the error.
 
         A library-set reference (``path`` is None) is a quiet no-op: a
         bundled set is immutable, so there is nothing on disk to reload. So

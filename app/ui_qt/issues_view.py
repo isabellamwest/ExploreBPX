@@ -68,7 +68,7 @@ class IssuesView(QWidget):
         *path* is the owning parameter's path, carried on every row for
         activation; ``None`` (no parameter shown) only ever arrives with no
         issues. A committed-null ``FloatInt`` value's ``float_type``+
-        ``int_type`` pair (V5) displays as one merged row; the returned
+        ``int_type`` pair displays as one merged row; the returned
         count (used for the Issues section's header count) follows the
         same merge.
         """

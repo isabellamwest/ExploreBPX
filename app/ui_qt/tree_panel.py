@@ -71,7 +71,7 @@ class _TreeItemDelegate(QStyledItemDelegate):
       (:func:`ui_qt.parameter_row.paint_ref_bar`) and colours as the
       parameter list's own bar. Bar only, no number beside it: with several
       references pinned, a single differ count cannot say which reference it
-      counts (multi-reference design rule 6).
+      counts.
     - For a node flagged via :data:`ui_qt.parameter_row.SEVERITY_ROLE`
       (errors only, *page-visible* per
       ``core.completion.visible_error_section_paths`` -- absorbed/
@@ -145,8 +145,9 @@ class TreePanel(QWidget):
 
     def __init__(self) -> None:
         super().__init__()
-        #: True while the active session refuses edits (D3's "Open as-is"):
-        #: the context menu is structural mutation only, so it opens empty.
+        #: True while the active session refuses edits (opened via the
+        #: "Open as-is, read-only" path): the context menu is structural
+        #: mutation only, so it opens empty.
         self._read_only = False
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -162,7 +163,7 @@ class TreePanel(QWidget):
         layout.addWidget(self._view)
 
         self._root: TreeNode | None = None
-        #: Reference comparisons (multi-reference track), remembered across a
+        #: Reference comparisons, remembered across a
         #: ``set_root`` rebuild so a freshly-opened document immediately
         #: shows the still-docked references' gutter bars/differ counts. See
         #: ``set_comparison``.
@@ -193,7 +194,7 @@ class TreePanel(QWidget):
         model.refresh_warning_markers()
 
     def set_comparison(self, comparisons: list[ComparisonResult]) -> None:
-        """Set the reference comparisons (multi-reference track) and repaint
+        """Set the reference comparisons and repaint
         every section's gutter bar/differ count -- called by ``MainWindow``
         on every document change and every reference dock/undock/hide
         toggle."""

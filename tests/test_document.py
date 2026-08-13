@@ -14,7 +14,7 @@ def test_valid_document(valid_spm_bytes):
 
 def test_identity_reads_description_and_references(valid_spm_dict):
     """The record surfaces all five Header fields: Description and
-    References (shown as Citation, D1) included -- finding 6."""
+    References (shown as Citation) included."""
     valid_spm_dict["Header"]["Description"] = "Pouch cell"
     valid_spm_dict["Header"]["References"] = "Chen et al 2020"
     document = BPXDocument.from_raw(valid_spm_dict, filename="a.json", fmt="json")

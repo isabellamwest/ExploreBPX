@@ -1,4 +1,5 @@
-"""ModalCard + mode bodies: Phase 4c of the input-system redesign.
+"""ModalCard + mode bodies: the mode-switching editor for union-typed BPX
+fields.
 
 Covers the mode strip's construction-time decisions for a union-typed BPX
 field (FunctionCard's FloatInt | Function | InterpolatedTable, plus a

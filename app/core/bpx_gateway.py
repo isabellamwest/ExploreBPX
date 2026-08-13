@@ -111,7 +111,7 @@ class CheckReach(Enum):
     later section unvalidated (a bad Header masks the whole body; a bad
     Parameterisation masks State/Validation). Each member names the last
     stage that was actually judged, so a caller can state honestly what was
-    and was not examined (transparency track finding 4):
+    and was not examined:
 
     * ``NOT_RUN`` -- ``bpx`` died before producing any field-level judgement
       at all; nothing was checked.
@@ -165,8 +165,7 @@ def format_for_filename(filename: str) -> str:
 
     The whole of the extension-to-format rule, in one place: the loader
     reads by it and ``DocumentSession.save`` writes by it, so the two can
-    never diverge over which extensions count as YAML (transparency track
-    finding 5 -- the decision used to be made independently in both).
+    never diverge over which extensions count as YAML.
     """
     return "yaml" if filename.lower().endswith(YAML_EXTENSIONS) else "json"
 
@@ -227,8 +226,8 @@ def convert_legacy(raw: dict) -> dict:
 
     Exactly the conversion ``bpx`` applies internally before judging a
     legacy object (``bpx._migrations.convert_v0_to_v1``), exposed so the
-    app can offer a converted *copy* explicitly (decision D3) instead of
-    hiding the conversion inside validation. Only meaningful for a dict
+    app can offer a converted *copy* explicitly instead of hiding the
+    conversion inside validation. Only meaningful for a dict
     :func:`is_legacy` accepted; ``bpx`` documents the result as
     approximate -- State synthesised, cross-version semantics uncorrected.
     """
@@ -240,8 +239,8 @@ def legacy_version(raw: dict) -> str | None:
     legacy (:func:`is_legacy`), else ``None``.
 
     The same field ``core.document``'s identity reads; spelled here too so
-    the D3 open prompt can name the version from a cheap parse, without
-    building a document. :func:`is_legacy` accepting *raw* implies the
+    the legacy-file open prompt can name the version from a cheap parse,
+    without building a document. :func:`is_legacy` accepting *raw* implies the
     field parsed, so the ``"0.x"`` fallback is a belt for a ``bpx``
     upgrade loosening that rule, mirroring the record's own fallback
     wording ("a BPX 0.x file").
@@ -333,7 +332,7 @@ def section_checked(section: str | None, reach: CheckReach) -> bool:
     This is the one place the app may ask "was this section checked":
     surfaces that soften an absent diagnostic into "clear"/"Valid" must
     consult it so an aborted run's unexamined sections are never dressed
-    as judged ones (H2), and judged ones never dressed as unexamined.
+    as judged ones, and judged ones never dressed as unexamined.
     """
     if section == "Header":
         required = CheckReach.HEADER

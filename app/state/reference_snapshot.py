@@ -58,8 +58,8 @@ class ReferenceSnapshot:
     bpx_version: str | None = None
     #: The citation shown in the record's Citation row: a bundled set's
     #: curated catalog ``references`` field, or a file reference's own
-    #: ``Header.References`` (decision D1: the spec field surfaces as
-    #: *Citation*). Empty when neither exists -- the row states the absence.
+    #: ``Header.References`` (the spec field surfaces as *Citation*). Empty
+    #: when neither exists -- the row states the absence.
     citation: str = ""
     #: The file's ``Header.Title`` and ``Header.Description``, for the
     #: record's Title/Description rows (``filename`` stays the row-head

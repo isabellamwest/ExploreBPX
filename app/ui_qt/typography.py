@@ -298,10 +298,10 @@ SYMBOL_OPTICAL_SCALE = 1.0
 def points(pixels: int) -> float:
     """Convert a rung to the *points* matplotlib's mathtext renderer wants.
 
-    Symbols used to be sized in points while every other size in the app was
-    in pixels, so a card header's symbol asked for 13.0pt -- 17.3px -- beside
-    a 15px title, a third too large, and the two scales would have drifted
-    further apart at any other DPI. Callers now pass a rung and never see a
-    point size.
+    Every other size in the app is in pixels; this is the one place a size
+    needs to be in points instead, so it goes through the same rung-based
+    scale as everything else rather than an independent point size that
+    could drift out of step at another DPI. Callers pass a rung and never
+    see a point size.
     """
     return pixels * _POINTS_PER_PIXEL * SYMBOL_OPTICAL_SCALE

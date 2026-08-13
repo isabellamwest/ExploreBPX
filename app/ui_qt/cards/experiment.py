@@ -340,10 +340,10 @@ class ExperimentCard(QWidget):
             body_layout.addWidget(self._import_message)
 
         # Live preview band: one accent curve per array against Time, fed
-        # from the grid's current draft (V2). Values only, never a
+        # from the grid's current draft. Values only, never a
         # judgement -- non-plottable cells are simply skipped, exactly as
         # the compare dialog skips them. Hidden while the dropzone shows so
-        # an empty run never stacks empty states (V18); redraws are
+        # an empty run never stacks empty states; redraws are
         # coalesced through ``_preview_timer``.
         self._preview_band = QWidget()
         self._preview_band.setObjectName("ExperimentPreviewBand")
@@ -557,7 +557,7 @@ class ExperimentCard(QWidget):
         Each panel pairs ``min(len(Time), len(Y))`` samples through the
         shared ``chart_axes.series_pairs`` contract. Empty-state wording is
         per panel and factual: which array has no values, or that there is
-        no Time to plot it against (V18) -- never the compare dialog's
+        no Time to plot it against -- never the compare dialog's
         comparison wording.
         """
         snapshot = self._own_run_snapshot()

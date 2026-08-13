@@ -52,12 +52,12 @@ class BpxTreeModel(QAbstractItemModel):
         super().__init__()
         self._root = root
         self._is_expanded = is_expanded or (lambda _index: False)
-        #: Reference comparisons (multi-reference track), one per pinned
+        #: Reference comparisons, one per pinned
         #: reference, or empty with none docked (or decoration hidden). See
         #: ``set_comparison``.
         self._comparisons: list[ComparisonResult] = list(comparisons) if comparisons else []
         #: Section paths whose dot should show: page-visible errors only
-        #: (``core.completion.visible_error_section_paths``, decisions P/G).
+        #: (``core.completion.visible_error_section_paths``).
         #: The marker deliberately does NOT read ``node.has_direct_errors``/
         #: ``parameter.has_errors`` -- those are validator-verbatim and
         #: include absorbed (outstanding) diagnostics, so a merely-unfilled
@@ -160,7 +160,7 @@ class BpxTreeModel(QAbstractItemModel):
         return False
 
     def _ref_bar(self, index: QModelIndex, node: TreeNode) -> str | None:
-        """This node's reference gutter-bar variant (design rule 6): an
+        """This node's reference gutter-bar variant: an
         expanded row reads its own section only; a collapsed row rolls up
         self plus every descendant section (same prefix-match idiom as
         :meth:`_shows_error_marker`), so a purple rail on a collapsed parent

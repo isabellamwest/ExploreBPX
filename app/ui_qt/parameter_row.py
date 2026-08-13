@@ -268,12 +268,11 @@ def compose_issue_row_html(location: str, message: str, detail: str | None = Non
 
     Splitting where (location) from what (message) is the core move here --
     a full-width run-on sentence per issue becomes a scannable header with its
-    detail beneath. Severity used to be a bracketed ``[ERROR]``/``[WARN]``
-    text tag on the first line; a delegate-painted icon (see
-    :data:`SEVERITY_ROLE`) replaced it, reading clearly at a glance without
-    competing with the location text for space --
-    callers set that role alongside this HTML, they no longer pass severity
-    in here. Shared by the Diagnostics page's Issues section and the
+    detail beneath. Severity is a delegate-painted icon (see
+    :data:`SEVERITY_ROLE`), not text in this HTML -- it reads clearly at a
+    glance without competing with the location text for space; callers set
+    that role alongside this HTML rather than passing severity in here.
+    Shared by the Diagnostics page's Issues section and the
     Inspector's Issues tab so the two issue surfaces read as one system; the
     tab passes an empty *location* (it is already scoped to one parameter),
     which drops the row to a single message line rather than an empty first
