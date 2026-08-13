@@ -166,10 +166,12 @@ BORDER_FAINT = "#dde2e8"
 #: one step darker than the app's usual ``#e7ecf1`` banded-header tone.
 HEADER_BAND_STRONG = "#dbe2e9"
 #: Chart grid lines (both QtCharts widgets: ``TablePreview`` and
-#: ``MultiSeriesChart``). Lighter than ``BORDER`` so the grid recedes behind
-#: the data; named here so the two charts draw from one source instead of
-#: re-declaring it locally (they once drifted apart doing exactly that).
-CHART_GRID = "#eaeef2"
+#: ``MultiSeriesChart``). The faint-hairline tone: present enough that a
+#: value can actually be traced to an axis, still lighter than ``BORDER``
+#: so the grid recedes behind the data; named here so the two charts draw
+#: from one source instead of re-declaring it locally (they once drifted
+#: apart doing exactly that).
+CHART_GRID = BORDER_FAINT
 
 # ---------------------------------------------------------------------------
 # Tooltip vocabulary: the app's four completion/severity

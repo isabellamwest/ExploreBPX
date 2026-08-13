@@ -18,12 +18,12 @@ import math
 from dataclasses import dataclass
 from typing import Sequence
 
-from PySide6.QtCore import QMargins, QPointF
+from PySide6.QtCore import QMargins, QPointF, Qt
 from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPen
 from PySide6.QtWidgets import QFrame, QGraphicsEllipseItem, QToolTip
 
 from .. import typography
-from ..style import CHART_GRID, MUTED
+from ..style import BORDER, CHART_GRID, MUTED
 
 try:  # Mirrors each chart widget's own QtCharts import guard -- see above.
     from PySide6.QtCharts import QChartView
@@ -57,13 +57,42 @@ def as_plot_number(value: object) -> float | None:
     return None
 
 
+def series_pairs(
+    x_values: Sequence[object] | None, y_values: Sequence[object] | None
+) -> list[tuple[float, float]]:
+    """Numeric ``(x, y)`` pairs from two raw columns, paired index by index
+    up to the shorter column, x-sorted, with non-plottable cells dropped
+    (:func:`as_plot_number`) -- the one pairing contract every chart fed
+    from raw Validation arrays uses (the compare dialog and the experiment
+    card's preview band alike). Never a judgement: the grid and the
+    validator remain the only places a bad cell is flagged."""
+    pairs = []
+    for x, y in zip(x_values or [], y_values or []):
+        px, py = as_plot_number(x), as_plot_number(y)
+        if px is not None and py is not None:
+            pairs.append((px, py))
+    pairs.sort(key=lambda point: point[0])
+    return pairs
+
+
 def setup_chart(chart) -> None:
     """The app's ``QChart`` baseline: no built-in legend (each widget's host
     already labels the data -- the grid header, or the dialog's removable
-    chips), no background, no margins."""
+    chips), no background, no margins, and a hairline box around the plot
+    area.
+
+    The box is the classic framed scientific plot: a single ``BORDER``
+    rectangle enclosing exactly the data region, drawn by the chart itself
+    (transparent plot-area brush, pen only). The axes' own edge lines are
+    switched off in :func:`style_axis` so the frame is drawn once, not
+    doubled along the left and bottom edges.
+    """
     chart.legend().setVisible(False)
     chart.setBackgroundVisible(False)
     chart.setMargins(QMargins(0, 0, 0, 0))
+    chart.setPlotAreaBackgroundBrush(QBrush(Qt.NoBrush))
+    chart.setPlotAreaBackgroundPen(QPen(QColor(BORDER), 1))
+    chart.setPlotAreaBackgroundVisible(True)
 
 
 #: The tallest a responsive chart view may grow (see ``setup_chart_view``)
@@ -125,7 +154,15 @@ def style_axis(axis, widget_font: QFont) -> None:
     *widget_font* is the owning widget's font -- a bare ``QFont()`` takes the
     *application* default rather than the widget's, so axis fonts built from
     it could silently drift from the rest of the UI.
+
+    The axis' own edge line is off: the plot area's hairline frame (see
+    :func:`setup_chart`) already draws all four edges, and a second, darker
+    QtCharts default line under two of them read as a smudge. Grid lines are
+    set visible explicitly -- they are the frame's interior and the reason a
+    value can be traced to a tick without a ruler.
     """
+    axis.setLineVisible(False)
+    axis.setGridLineVisible(True)
     axis.setGridLineColor(QColor(CHART_GRID))
     axis.setLabelsColor(QColor(MUTED))
     labels_font = typography.sized(widget_font, typography.META)

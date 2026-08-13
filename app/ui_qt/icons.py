@@ -240,6 +240,15 @@ def html_img(svg: str, *, color: str = _MUTED, size: int = 13, lift: int | None 
     return fragment
 
 
+def dot_pixmap(color: str, size: int = 13) -> QPixmap:
+    """The app's standard filled dot as a bare pixmap, for surfaces that
+    take a ``QPixmap`` directly (e.g. a table item's ``DecorationRole``)
+    rather than rich text or a painter. Same :data:`DOT` glyph and default
+    13px box as every other dot in the app, so a series swatch in a table
+    reads as the same mark as the swatch beside a chart."""
+    return _render_pixmap(DOT, color, size)
+
+
 def activity_icon(svg: str) -> QIcon:
     """Build one QIcon carrying both of an activity button's states.
 
