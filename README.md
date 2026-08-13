@@ -65,27 +65,59 @@ pip install -r app/requirements.txt
 python app/main_qt.py
 ```
 
-Then open your own BPX file, dock a set from the reference library, or use
-**New** to scaffold a document for a chosen model.
+Then open your own BPX file, dock a set from the reference library, or start
+a new document for a chosen model from the Workspace board.
 
-## Architecture
+## Design
 
-Strict one-way layering - `ui_qt → state → core → bpx` - keeps all business
-logic independent of the frontend. `core/bpx_gateway.py` is the only module
-that imports `bpx` (pinned `bpx==1.1.1`), and the UI is driven by the schema
-metadata `bpx` publishes, so new parameters in future BPX versions appear
-automatically. A boundary test enforces the layering.
+A few principles shape the whole app:
+
+- **The raw document is the source of truth.** The editable state is the raw
+  BPX dictionary, so invalid and partially edited documents remain fully
+  representable. The parsed model, the object tree and all validation issues
+  are derived from it.
+- **Validation belongs to `bpx`.** Explore_BPX owns presentation only.
+  Validation semantics and messages come from the official package and are
+  surfaced faithfully, never modified or "corrected".
+- **Completion is distinct from validation.** Validation answers whether the
+  data satisfies BPX rules; completion answers whether a document is finished.
+  A work-in-progress document is not the same thing as an incorrect one.
+- **Never invent scientific values.** The app never writes placeholder values
+  to make a document look complete or valid; exported BPX contains only data
+  the user is prepared to claim.
+- **The unit of work is a workspace** - one editable main document plus up to
+  four read-only references, remembered between launches.
+
+### Architecture
+
+Strict one-way layering keeps all business logic independent of the frontend:
+
+```text
+ui_qt  →  state  →  core  →  bpx
+```
+
+| Layer | Responsibility |
+|---|---|
+| `app/ui_qt/` | PySide6 frontend: renders state, collects input, coordinates navigation. |
+| `app/state/` | Frontend-agnostic session state: active document, selection, undo, workspaces. |
+| `app/core/` | BPX integration, document model, validation, editing primitives, commands. |
+| `bpx` | The official BPX package, pinned as a dependency. |
+
+`core/` and `state/` never import a UI framework, and
+`core/bpx_gateway.py` is the only module that imports `bpx` (pinned
+`bpx==1.1.1`). The UI is driven by the schema metadata `bpx` publishes, so
+new parameters in future BPX versions appear automatically. A boundary test
+(`tests/test_boundaries.py`) enforces the layering.
+
+Every mutation travels one command spine (`core/commands.py` →
+`core/editing.py` → `core/command_service.py`), so all edits - value changes
+included - are previewed, guarded and undoable in exactly the same way.
 
 ```text
 app/        the application: core / state / ui_qt
-docs/       design reference
 tests/      headless test suite
 scripts/    offline dev tools (reference-library generator)
 ```
-
-See [docs/architecture.md](docs/architecture.md) for the full design —
-principles, domain model, module map and UI shell — and
-[docs/future.md](docs/future.md) for the ideas backlog.
 
 ## Testing
 
