@@ -13,6 +13,7 @@ from pathlib import Path
 
 from core import reference_library
 from core.bpx_gateway import load_raw
+from core.completion import partitioned_counts
 from core.document import BPXDocument
 from core.load_record import LoadRecord
 
@@ -21,10 +22,16 @@ from core.load_record import LoadRecord
 class ReferenceSnapshot:
     """An immutable, read-only reference document loaded once at open time.
 
-    ``model``/counts/validity are derived through :class:`core.document.
-    BPXDocument` -- the same helper the main document's own identity and
-    Workspace tile counts come from -- so a reference is judged identically
-    to a main document, never by ad hoc parsing here.
+    ``model`` is derived through :class:`core.document.BPXDocument` -- the
+    same helper the main document's own identity comes from.
+    ``error_count``/``warning_count`` go one step further, through
+    :func:`core.completion.partitioned_counts` (completion-task absorption
+    then union-pair merging) rather than ``BPXDocument.error_count``/
+    ``warning_count`` directly -- those raw properties count pre-absorption
+    diagnostics and would let a missing-required-field file read as an
+    "error" here while the very same file, opened as the main document,
+    reads as an outstanding task. So a reference is judged identically to a
+    main document, never by ad hoc parsing here.
 
     A snapshot has exactly one origin: a file on disk (``path`` set,
     ``set_id`` None) or a bundled reference-library set (``set_id`` set,
@@ -78,13 +85,14 @@ class ReferenceSnapshot:
         raw, fmt = load_raw(data, path.name)
         document = BPXDocument.from_raw(raw, filename=path.name, fmt=fmt)
         identity = document.identity
+        error_count, warning_count = partitioned_counts(document)
         return cls(
             raw=raw,
             path=path,
             filename=path.name,
             model=identity.model or None,
-            error_count=document.error_count,
-            warning_count=document.warning_count,
+            error_count=error_count,
+            warning_count=warning_count,
             section_count=document.section_count,
             parameter_count=document.parameter_count,
             mtime=path.stat().st_mtime,
@@ -114,13 +122,14 @@ class ReferenceSnapshot:
         raw = reference_library.load_reference_raw(set_id)
         document = BPXDocument.from_raw(raw, filename=ref_set.short_title, fmt="json")
         identity = document.identity
+        error_count, warning_count = partitioned_counts(document)
         return cls(
             raw=raw,
             path=None,
             filename=ref_set.short_title,
             model=identity.model or None,
-            error_count=document.error_count,
-            warning_count=document.warning_count,
+            error_count=error_count,
+            warning_count=warning_count,
             section_count=document.section_count,
             parameter_count=document.parameter_count,
             mtime=None,

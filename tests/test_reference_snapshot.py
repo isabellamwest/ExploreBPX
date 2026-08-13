@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from core import bpx_gateway
+import json
+
+from core import bpx_gateway, completion
+from core.document import BPXDocument
 from state.reference_snapshot import ReferenceSnapshot
 
 
@@ -41,9 +44,11 @@ def test_load_reports_no_model_as_none(tmp_path):
 
 def test_load_reports_errors_for_an_invalid_file(nmc_pouch_cell_path, tmp_path):
     """Breaking a copy of a real bundled file surfaces a real validator error,
-    never an invented one."""
-    import json
-
+    never an invented one -- and the count matches the same
+    ``core.completion`` derivation the main document path uses, not the raw
+    pre-absorption ``BPXDocument.error_count`` (an undeclared Model is a
+    ``DECLARE_MODEL`` task, which ``partition_issues`` never absorbs, so the
+    diagnostic stays a real, visible error either way)."""
     raw = json.loads(nmc_pouch_cell_path.read_text("utf-8"))
     del raw["Header"]["Model"]
     broken = tmp_path / "broken.json"
@@ -51,7 +56,38 @@ def test_load_reports_errors_for_an_invalid_file(nmc_pouch_cell_path, tmp_path):
 
     snapshot = ReferenceSnapshot.load(broken)
 
-    assert snapshot.error_count >= 1
+    document = BPXDocument.from_raw(raw, filename="broken.json", fmt="json")
+    expected_errors, expected_warnings = completion.partitioned_counts(document)
+    assert expected_errors >= 1
+    assert snapshot.error_count == expected_errors
+    assert snapshot.warning_count == expected_warnings
+
+
+def test_reference_and_main_document_agree_on_a_missing_required_field(
+    valid_spm_path, tmp_path
+):
+    """The defect this guards: a required field deleted from a file used to
+    read as an "error" when the file was pinned as a reference (raw,
+    pre-absorption ``BPXDocument.error_count``) while the very same file, as
+    the main document, absorbed it into an Outstanding task and showed zero
+    errors. A reference must reach the same verdict as a main document."""
+    raw = json.loads(valid_spm_path.read_text("utf-8"))
+    del raw["Parameterisation"]["Cell"]["Electrode area [m2]"]
+    broken = tmp_path / "missing_required_field.json"
+    broken.write_text(json.dumps(raw), encoding="utf-8")
+
+    snapshot = ReferenceSnapshot.load(broken)
+
+    document = BPXDocument.from_raw(raw, filename="missing_required_field.json", fmt="json")
+    tasks = completion.document_completion(raw)
+    partition = completion.partition_issues(document, tasks)
+    # The missing field is absorbed into an Outstanding task, not a visible
+    # error -- proven against the raw, pre-absorption count too, so this
+    # test would have failed against the old implementation.
+    assert document.error_count == 1
+    assert partition.error_count == 0
+    assert snapshot.error_count == partition.error_count == 0
+    assert snapshot.warning_count == partition.warning_count == 0
 
 
 def test_load_raises_load_error_for_unparseable_content(tmp_path):

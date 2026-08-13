@@ -403,6 +403,22 @@ def partition_issues(document: "BPXDocument", tasks: tuple[CompletionTask, ...])
     )
 
 
+def partitioned_counts(document: "BPXDocument") -> tuple[int, int]:
+    """Return ``(error_count, warning_count)`` the same way the main
+    document path derives its user-facing counts: :func:`document_completion`
+    then :func:`partition_issues` over ``document``. The one shared entry
+    point for any caller that needs a document's error/warning counts --
+    including :class:`state.reference_snapshot.ReferenceSnapshot`, so a file
+    pinned as a reference can never disagree with itself opened as a main
+    document. Pre-absorption ``document.error_count``/``warning_count`` is
+    deliberately never used for a user-facing count -- see
+    :func:`partition_issues`.
+    """
+    tasks = document_completion(document.raw)
+    partition = partition_issues(document, tasks)
+    return partition.error_count, partition.warning_count
+
+
 def visible_issue_severities(
     document: "BPXDocument | None", partition: PartitionedIssues | None
 ) -> dict[tuple[str, ...], str]:
