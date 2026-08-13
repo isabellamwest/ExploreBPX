@@ -49,6 +49,15 @@ PROVENANCE = (
     "parameter values unmodified."
 )
 
+#: Where the samples actually come from: About:Energy's public
+#: parameterisation repository, the source ``NOTICE.md`` records and
+#: ``scripts/build_example_library.py`` pins. Stated so a provenance
+#: surface can offer navigation to the data, not just name it.
+SOURCE_URL = (
+    "https://github.com/About-Energy-OpenSource/"
+    "About-Energy-BPX-Parameterisation"
+)
+
 #: A short, curated picker label per bundled document stem -- the files'
 #: own ``Header.Title`` values are full sentences ("Parameterisation example
 #: of an NMC111|graphite 12.5 Ah pouch cell"), fine for a document but too

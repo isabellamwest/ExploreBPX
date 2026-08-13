@@ -49,6 +49,7 @@ from PySide6.QtWidgets import (
 from core.bpx_gateway import LoadError, expected_fields
 from core.example_library import (
     PROVENANCE as SAMPLE_PROVENANCE,
+    SOURCE_URL as SAMPLE_SOURCE_URL,
     ExampleRun,
     list_example_runs,
     load_example_run,
@@ -519,9 +520,15 @@ class DatabaseExamplesDialog(QDialog):
         layout.addStretch(1)
 
         # The samples' provenance, owed wherever they are offered: a MICRO
-        # line at the rail foot, with the full statement on hover.
-        provenance = QLabel("Samples: About:Energy · CC BY-SA 4.0")
+        # line at the rail foot, with the full statement on hover and the
+        # source repository itself one click away.
+        provenance = QLabel(
+            f'Samples: <a href="{SAMPLE_SOURCE_URL}">About:Energy</a>'
+            " · CC BY-SA 4.0"
+        )
         provenance.setObjectName("CompareSampleProvenance")
+        provenance.setTextFormat(Qt.RichText)
+        provenance.setOpenExternalLinks(True)
         provenance.setStyleSheet(
             f"color: {MUTED}; {typography.size_qss(typography.MICRO)}"
         )

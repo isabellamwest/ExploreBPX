@@ -711,7 +711,7 @@ def test_opened_file_group_carries_the_opened_file_caption(tmp_path):
 
 
 def test_rail_foot_states_sample_provenance_with_the_full_statement_on_hover():
-    from core.example_library import PROVENANCE
+    from core.example_library import PROVENANCE, SOURCE_URL
     from PySide6.QtWidgets import QLabel
 
     dialog = DatabaseExamplesDialog()
@@ -721,7 +721,11 @@ def test_rail_foot_states_sample_provenance_with_the_full_statement_on_hover():
         w for w in rail.findChildren(QLabel)
         if w.objectName() == "CompareSampleProvenance"
     )
-    assert foot.text() == "Samples: About:Energy · CC BY-SA 4.0"
+    assert foot.text() == (
+        f'Samples: <a href="{SOURCE_URL}">About:Energy</a> · CC BY-SA 4.0'
+    )
+    assert foot.openExternalLinks()
+    assert SOURCE_URL.startswith("https://")
     assert foot.toolTip() == PROVENANCE
     assert "CC BY-SA 4.0" in PROVENANCE
     assert "About:Energy" in PROVENANCE
