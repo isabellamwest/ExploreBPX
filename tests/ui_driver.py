@@ -2587,6 +2587,35 @@ class AppDriver:
     def experiment_sample_count_text(self) -> str:
         return self.experiment_card()._sample_count_chip.text()
 
+    def experiment_preview_visible(self) -> bool:
+        """Whether the card's preview band is meant to be showing
+        (``isVisibleTo`` -- layout truth, headless-safe)."""
+        card = self.experiment_card()
+        return card._preview_band.isVisibleTo(card)
+
+    def experiment_preview_panels(self) -> tuple[str, ...]:
+        """The band's panel aliases, in band order."""
+        return tuple(self.experiment_card()._preview_panels)
+
+    def experiment_preview_series(self, alias: str) -> list[tuple[float, float]]:
+        """The (x, y) pairs the *alias* panel currently draws -- the data
+        handed to the chart, the only thing assertable headless."""
+        panel = self.experiment_card()._preview_panels[alias]
+        meta = panel._series_meta.get("draft")
+        return list(meta[2]) if meta else []
+
+    def experiment_preview_empty_text(self, alias: str) -> str:
+        return self.experiment_card()._preview_panels[alias]._empty.text()
+
+    def flush_experiment_preview(self) -> "AppDriver":
+        """Fire the band's pending coalesced redraw now, if one is queued --
+        deterministic stand-in for waiting out the 120ms timer."""
+        card = self.experiment_card()
+        if card._preview_timer.isActive():
+            card._preview_timer.stop()
+            card._refresh_preview()
+        return self
+
     def click_experiment_dropzone_browse(self) -> "AppDriver":
         dropzone = self.experiment_card()._dropzone
         assert dropzone is not None, "No dropzone is currently shown."

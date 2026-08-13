@@ -372,3 +372,270 @@ def test_toolbar_database_examples_reflects_an_uncommitted_edit_live(
     dialog = d.open_database_examples_dialog_from_toolbar()
 
     assert dialog._added["__you__"].data["Voltage [V]"] == [9.9, 4.0, 3.9]
+
+
+# ---------------------------------------------------------------------------
+# The dialog's "this file" group: the document's other runs, threaded through
+# Inspector -> ExperimentCard -> DatabaseExamplesDialog
+# ---------------------------------------------------------------------------
+
+
+def test_compare_dialog_lists_the_documents_other_runs_committed_values(
+    app_driver, tmp_path, valid_spm_dict
+):
+    """The dialog's first picker group is the document's OTHER runs
+    (committed values, the compared run itself excluded) -- comparing your
+    C/20 against your 1C no longer needs a save-and-reopen round trip."""
+    workfile = _write_doc(
+        tmp_path,
+        valid_spm_dict,
+        {
+            "C/20 discharge": {
+                "Time [s]": [0, 100],
+                "Current [A]": [-0.6, -0.6],
+                "Voltage [V]": [4.1, 4.0],
+            },
+            "1C discharge": {
+                "Time [s]": [0, 10],
+                "Current [A]": [-12.0, -12.0],
+                "Voltage [V]": [4.0, 3.5],
+            },
+        },
+        name="my_cell.json",
+    )
+    d = app_driver
+    d.open(workfile).go_to(("Validation", "C/20 discharge"))
+
+    dialog = d.open_database_examples_dialog_from_toolbar()
+    try:
+        assert "active::1C discharge" in dialog._picker_rows
+        # The compared run itself is the anchor, never a picker row.
+        assert "active::C/20 discharge" not in dialog._picker_rows
+        # Committed values flow through; the label follows the one rule.
+        dialog._picker_rows["active::1C discharge"].clicked.emit()
+        added = dialog._added["active::1C discharge"]
+        assert added.data["Voltage [V]"] == [4.0, 3.5]
+        assert added.label == "my_cell · 1C discharge"
+    finally:
+        dialog.close()
+
+
+def test_compare_dialog_shows_no_active_group_for_a_single_run_document(
+    app_driver, spm_with_validation_path
+):
+    d = app_driver
+    d.open(spm_with_validation_path).go_to(("Validation", "C/20 discharge"))
+
+    dialog = d.open_database_examples_dialog_from_toolbar()
+    try:
+        assert not any(rid.startswith("active::") for rid in dialog._picker_rows)
+    finally:
+        dialog.close()
+
+
+# ---------------------------------------------------------------------------
+# Preview band (V2/V18): the run's own data, live from the draft
+# ---------------------------------------------------------------------------
+
+
+def test_preview_band_shows_committed_values_per_panel(
+    app_driver, spm_with_validation_path
+):
+    d = app_driver
+    d.open(spm_with_validation_path).go_to(_RUN)
+
+    assert d.experiment_preview_visible() is True
+    assert d.experiment_preview_panels() == (
+        "Voltage [V]",
+        "Current [A]",
+        "Temperature [K]",
+    )
+    assert d.experiment_preview_series("Voltage [V]") == [
+        (0.0, 4.1),
+        (100.0, 4.0),
+        (200.0, 3.9),
+    ]
+    assert d.experiment_preview_series("Current [A]") == [
+        (0.0, -0.6),
+        (100.0, -0.6),
+        (200.0, -0.6),
+    ]
+
+
+def test_preview_band_reflects_an_uncommitted_draft_edit_live(
+    app_driver, spm_with_validation_path
+):
+    """The band previews the draft, not only the committed value -- and the
+    edit stays a draft (nothing committed by drawing it)."""
+    d = app_driver
+    d.open(spm_with_validation_path).go_to(_RUN)
+
+    d.set_experiment_cell("Voltage [V]", 1, "3.5")
+    d.flush_experiment_preview()
+
+    assert d.experiment_preview_series("Voltage [V]")[1] == (100.0, 3.5)
+    assert d.experiment_card_is_dirty() is True
+
+
+def test_preview_band_hidden_on_an_empty_run_and_appears_with_the_first_value(
+    app_driver, tmp_path, valid_spm_dict
+):
+    """V18: while the dropzone shows, the band does not -- a fully empty run
+    must never stack the dropzone, an empty grid and empty charts."""
+    workfile = _write_doc(tmp_path, valid_spm_dict, {"New run": {}})
+    d = app_driver
+    d.open(workfile).go_to(("Validation", "New run"))
+
+    assert d.experiment_dropzone_shown() is True
+    assert d.experiment_preview_visible() is False
+
+    d.experiment_card()._grid.insert_cell()
+    d.set_experiment_cell("Time [s]", 0, "0")
+
+    assert d.experiment_dropzone_shown() is False
+    assert d.experiment_preview_visible() is True
+
+
+def test_preview_band_omits_temperature_without_the_column(
+    app_driver, tmp_path, valid_spm_dict
+):
+    workfile = _write_doc(
+        tmp_path,
+        valid_spm_dict,
+        {
+            "Run": {
+                "Time [s]": [0, 1],
+                "Current [A]": [-1.0, -1.0],
+                "Voltage [V]": [4.0, 3.9],
+            }
+        },
+    )
+    d = app_driver
+    d.open(workfile).go_to(("Validation", "Run"))
+
+    assert d.experiment_preview_panels() == ("Voltage [V]", "Current [A]")
+
+
+def test_preview_band_empty_texts_name_the_missing_array(
+    app_driver, tmp_path, valid_spm_dict
+):
+    """V18 wording: an empty Y column names itself; a Y column with values
+    but no Time to pair against says exactly that. Preview wording, never
+    the compare dialog's."""
+    workfile = _write_doc(
+        tmp_path,
+        valid_spm_dict,
+        {
+            "Run": {
+                "Time [s]": [0, 1],
+                "Current [A]": [-1.0, -1.0],
+                "Voltage [V]": [],
+            }
+        },
+    )
+    d = app_driver
+    d.open(workfile).go_to(("Validation", "Run"))
+
+    assert d.experiment_preview_series("Voltage [V]") == []
+    assert d.experiment_preview_empty_text("Voltage [V]") == "No Voltage [V] values yet."
+
+    workfile2 = _write_doc(
+        tmp_path,
+        valid_spm_dict,
+        {
+            "Run": {
+                "Time [s]": [],
+                "Current [A]": [],
+                "Voltage [V]": [4.0, 3.9],
+            }
+        },
+        name="doc2.json",
+    )
+    d.open(workfile2).go_to(("Validation", "Run"))
+
+    assert d.experiment_preview_series("Voltage [V]") == []
+    assert (
+        d.experiment_preview_empty_text("Voltage [V]")
+        == "No Time [s] values to plot against."
+    )
+    assert d.experiment_preview_empty_text("Current [A]") == "No Current [A] values yet."
+
+
+# ---------------------------------------------------------------------------
+# Drag affordance (V16): dashed accent border + tint only while a file drag
+# is over the dropzone, invisible otherwise
+# ---------------------------------------------------------------------------
+
+
+def _drag_enter_event(path):
+    """A real ``QDragEnterEvent`` for *path*, returned WITH its mime data --
+    the event does not own the ``QMimeData``, so the caller must hold the
+    second element alive for the event's lifetime (a released mime leaves
+    ``event.mimeData()`` a dangling wrapper and crashes the run)."""
+    from PySide6.QtCore import QMimeData, QPoint, QUrl, Qt
+    from PySide6.QtGui import QDragEnterEvent
+
+    mime = QMimeData()
+    mime.setUrls([QUrl.fromLocalFile(str(path))])
+    event = QDragEnterEvent(
+        QPoint(0, 0), Qt.CopyAction, mime, Qt.LeftButton, Qt.NoModifier
+    )
+    return event, mime
+
+
+def test_dropzone_affordance_flips_during_a_csv_drag_and_never_at_rest(
+    app_driver, tmp_path, valid_spm_dict
+):
+    from PySide6.QtGui import QDragLeaveEvent
+
+    workfile = _write_doc(tmp_path, valid_spm_dict, {"New run": {}})
+    d = app_driver
+    d.open(workfile).go_to(("Validation", "New run"))
+
+    dropzone = d.experiment_card()._dropzone
+    assert dropzone.styleSheet() == ""
+
+    csv_path = tmp_path / "data.csv"
+    csv_path.write_text("Time [s],Current [A]\n0,-1\n", encoding="utf-8")
+    event, _mime = _drag_enter_event(csv_path)
+    dropzone.dragEnterEvent(event)
+    assert "dashed" in dropzone.styleSheet()
+
+    dropzone.dragLeaveEvent(QDragLeaveEvent())
+    assert dropzone.styleSheet() == ""
+
+
+def test_dropzone_affordance_ignores_a_non_csv_drag(
+    app_driver, tmp_path, valid_spm_dict
+):
+    workfile = _write_doc(tmp_path, valid_spm_dict, {"New run": {}})
+    d = app_driver
+    d.open(workfile).go_to(("Validation", "New run"))
+
+    dropzone = d.experiment_card()._dropzone
+    other = tmp_path / "not_data.pdf"
+    other.write_text("x", encoding="utf-8")
+    event, _mime = _drag_enter_event(other)
+    dropzone.dragEnterEvent(event)
+
+    assert dropzone.styleSheet() == ""
+
+
+def test_dropzone_affordance_clears_after_a_real_drop(
+    app_driver, monkeypatch, tmp_path, valid_spm_dict
+):
+    workfile = _write_doc(tmp_path, valid_spm_dict, {"New run": {}})
+    csv_path = tmp_path / "data.csv"
+    csv_path.write_text("Time [s],Current [A],Voltage [V]\n0,-1,4\n50,-1,3.9\n", encoding="utf-8")
+    _stub_dialog(monkeypatch, (0, 1, 2))
+
+    d = app_driver
+    d.open(workfile).go_to(("Validation", "New run"))
+    dropzone = d.experiment_card()._dropzone
+    event, _mime = _drag_enter_event(csv_path)
+    dropzone.dragEnterEvent(event)
+    assert "dashed" in dropzone.styleSheet()
+
+    d.drop_file_on_experiment_dropzone(csv_path)
+
+    assert dropzone.styleSheet() == ""

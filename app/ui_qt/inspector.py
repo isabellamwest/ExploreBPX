@@ -479,8 +479,22 @@ class InspectorPanel(QWidget):
         document_name = (
             session.backing_file.name if session.backing_file else session.document.filename
         )
+        # The document's other runs (committed values), for the compare
+        # dialog's "this file" picker group. Built here because the card
+        # deliberately never sees the session; shallow-copied so the dialog
+        # can never mutate the document's own run dicts.
+        raw_validation = session.document.raw.get("Validation")
+        sibling_runs: dict[str, dict] = {}
+        if isinstance(raw_validation, dict):
+            for name, run_value in raw_validation.items():
+                if str(name) != run_path[-1] and isinstance(run_value, dict):
+                    sibling_runs[str(name)] = dict(run_value)
         card = ExperimentCard(
-            node, focused_alias, document_name=document_name, read_only=self._read_only
+            node,
+            focused_alias,
+            document_name=document_name,
+            read_only=self._read_only,
+            sibling_runs=sibling_runs,
         )
         card.bulk_commit_requested.connect(self._on_bulk_commit)
         self._set_surface(card, fills=False)

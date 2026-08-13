@@ -33,7 +33,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QMimeData, Qt, Signal
+from PySide6.QtCore import QEvent, QMimeData, Qt, QTimer, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -54,11 +54,13 @@ from core.tree_model import ParameterItem, TreeNode
 from core.values import values_equal
 
 from .. import typography
-from ..style import ERROR, MUTED
+from ..style import ACCENT, ACCENT_TINT, ERROR, MUTED
 from .cell_issues import experiment_cells
+from .chart_axes import as_plot_number, series_pairs
 from .csv_dialog import CsvImportDialog
 from .database_examples_dialog import DatabaseExamplesDialog
 from .grid import MultiColumnGrid
+from .multi_series_chart import MultiSeriesChart
 from .page import page_content, page_header
 
 #: The Experiment array aliases in the schema's own field order, derived
@@ -97,6 +99,24 @@ def _short_alias(alias: str) -> str:
 #: filter this card and ``_CsvDropzone`` both use), so a drag-and-drop only
 #: ever accepts a file the pipeline can do something with.
 _CSV_EXTENSIONS = (".csv", ".tsv", ".txt")
+
+#: The preview band's x-axis column and its panel order -- this card's
+#: display choices (Voltage is the headline curve, Temperature joins only
+#: when the column exists), not a schema restatement; the aliases
+#: themselves are checked against ``KNOWN_ALIASES`` at band construction.
+_TIME_ALIAS = "Time [s]"
+_PREVIEW_PANEL_ORDER = ("Voltage [V]", "Current [A]", "Temperature [K]")
+
+#: Preview panel height: below ``chart_axes._TALL_CHART_HEIGHT`` would drop
+#: to 3 y-ticks; at 190 each panel earns the 5-tick scale. Width-responsive
+#: growth never engages at 2-3 panels across a 960px page, so this is the
+#: effective fixed height.
+_PREVIEW_HEIGHT = 190
+
+#: How long the preview waits after the last draft change before redrawing
+#: -- typing into a 1000-point run must never redraw three charts per
+#: keystroke.
+_PREVIEW_COALESCE_MS = 120
 
 
 def _first_csv_file(mime_data: QMimeData) -> Path | None:
@@ -158,14 +178,34 @@ class _CsvDropzone(QFrame):
             self.csv_path_chosen.emit(path)
 
     # --- drag-and-drop --------------------------------------------------
+    #
+    # The drop affordance (dashed accent border + tint) exists only while a
+    # usable file drag is actually over the widget -- an affordance, not
+    # copy: at rest the dropzone is a plain button row, and a drag of
+    # something the pipeline can't read gets no invitation.
+
+    def _set_drag_active(self, active: bool) -> None:
+        if active:
+            self.setStyleSheet(
+                f"QFrame#ExperimentDropzone {{ border: 1px dashed {ACCENT}; "
+                f"border-radius: 6px; background: {ACCENT_TINT}; }}"
+            )
+        else:
+            self.setStyleSheet("")
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802
         if _first_csv_file(event.mimeData()) is not None:
+            self._set_drag_active(True)
             event.acceptProposedAction()
         else:
             event.ignore()
 
+    def dragLeaveEvent(self, event) -> None:  # noqa: N802
+        self._set_drag_active(False)
+        super().dragLeaveEvent(event)
+
     def dropEvent(self, event: QDropEvent) -> None:  # noqa: N802
+        self._set_drag_active(False)
         path = _first_csv_file(event.mimeData())
         if path is None:
             event.ignore()
@@ -190,6 +230,7 @@ class ExperimentCard(QWidget):
         focused_alias: str | None = None,
         read_only: bool = False,
         document_name: str = "",
+        sibling_runs: dict[str, dict] | None = None,
     ) -> None:
         super().__init__()
         self.run_path = tuple(run.path)
@@ -199,6 +240,11 @@ class ExperimentCard(QWidget):
         #: run's own series in :meth:`_open_database_examples`.
         self._run_label = run.label
         self._document_name = document_name
+        #: The document's OTHER runs (committed values, this run excluded),
+        #: handed straight to the compare dialog as its "this file" picker
+        #: group -- built by the Inspector, which owns the session this card
+        #: deliberately does not see.
+        self._sibling_runs: dict[str, dict] = dict(sibling_runs or {})
 
         by_alias = {
             parameter.label: parameter
@@ -293,6 +339,33 @@ class ExperimentCard(QWidget):
             self._import_message.hide()
             body_layout.addWidget(self._import_message)
 
+        # Live preview band: one accent curve per array against Time, fed
+        # from the grid's current draft (V2). Values only, never a
+        # judgement -- non-plottable cells are simply skipped, exactly as
+        # the compare dialog skips them. Hidden while the dropzone shows so
+        # an empty run never stacks empty states (V18); redraws are
+        # coalesced through ``_preview_timer``.
+        self._preview_band = QWidget()
+        self._preview_band.setObjectName("ExperimentPreviewBand")
+        band_layout = QHBoxLayout(self._preview_band)
+        band_layout.setContentsMargins(0, 0, 0, 6)
+        band_layout.setSpacing(8)
+        column_aliases = tuple(parameter.label for parameter in self._columns)
+        self._preview_panels: dict[str, MultiSeriesChart] = {}
+        for alias in _PREVIEW_PANEL_ORDER:
+            if alias not in column_aliases or alias not in KNOWN_ALIASES:
+                continue
+            panel = MultiSeriesChart(height=_PREVIEW_HEIGHT)
+            panel.set_axis_titles(_TIME_ALIAS, alias)
+            band_layout.addWidget(panel, 1)
+            self._preview_panels[alias] = panel
+        self._preview_band.setVisible(False)
+        body_layout.addWidget(self._preview_band)
+        self._preview_timer = QTimer(self)
+        self._preview_timer.setSingleShot(True)
+        self._preview_timer.setInterval(_PREVIEW_COALESCE_MS)
+        self._preview_timer.timeout.connect(self._refresh_preview)
+
         headers = tuple(parameter.label for parameter in self._columns)
         self._grid = MultiColumnGrid(headers, read_only=read_only)
         for index, values in enumerate(self._originals):
@@ -357,6 +430,10 @@ class ExperimentCard(QWidget):
             self._grid.discard_clicked.connect(self._revert)
 
         self._refresh_derived_state()
+        # First paint immediately: a freshly revealed card must not show
+        # blank panels for a coalescing interval.
+        self._preview_timer.stop()
+        self._refresh_preview()
         self._install_keyboard_handler(self._grid.focus_widget())
 
     # ------------------------------------------------------------------
@@ -416,6 +493,14 @@ class ExperimentCard(QWidget):
         ``commit_open_subeditor`` is."""
         return self._grid
 
+    def focus_alias(self, alias: str) -> None:
+        """Focus *alias*'s grid column if this card has it (a placeholder
+        row's click lands here); silently nothing otherwise -- Temperature
+        has no column while absent, only its "+" button."""
+        headers = tuple(parameter.label for parameter in self._columns)
+        if alias in headers:
+            self._grid.focus_column(headers.index(alias))
+
     def _revert(self) -> None:
         for index, original in enumerate(self._originals):
             self._grid.set_column_values(index, original)
@@ -456,6 +541,41 @@ class ExperimentCard(QWidget):
         # would commit (a no-op on a read-only grid, which builds no bar).
         self._grid.set_pending(self.is_dirty)
         self._sample_count_chip.setText(self._sample_count_text())
+        # Preview band: visibility flips instantly with the first/last value
+        # (it must appear the moment the dropzone goes, with no 120ms hole),
+        # while the redraw itself stays coalesced behind the timer.
+        has_values = any(
+            self._grid.column_length(index) > 0
+            for index in range(self._grid.column_count)
+        )
+        self._preview_band.setVisible(has_values and bool(self._preview_panels))
+        self._preview_timer.start()
+
+    def _refresh_preview(self) -> None:
+        """Redraw every preview panel from the grid's current draft.
+
+        Each panel pairs ``min(len(Time), len(Y))`` samples through the
+        shared ``chart_axes.series_pairs`` contract. Empty-state wording is
+        per panel and factual: which array has no values, or that there is
+        no Time to plot it against (V18) -- never the compare dialog's
+        comparison wording.
+        """
+        snapshot = self._own_run_snapshot()
+        time_values = snapshot.get(_TIME_ALIAS) or []
+        for alias, panel in self._preview_panels.items():
+            y_values = snapshot.get(alias) or []
+            pairs = series_pairs(time_values, y_values)
+            if not pairs:
+                y_plottable = any(as_plot_number(v) is not None for v in y_values)
+                if not y_values:
+                    panel.set_empty_text(f"No {alias} values yet.")
+                elif not y_plottable:
+                    panel.set_empty_text(f"No plottable {alias} values.")
+                else:
+                    panel.set_empty_text(
+                        f"No {_TIME_ALIAS} values to plot against."
+                    )
+            panel.set_series("draft", pairs, ACCENT, width=2.0, name=self._run_label)
 
     def _sample_count_text(self) -> str:
         """"Time 120 · Current 120 · Voltage 118" -- one entry per column,
@@ -552,20 +672,25 @@ class ExperimentCard(QWidget):
             for index, parameter in enumerate(self._columns)
         }
 
+    def _document_display_name(self) -> str:
+        """The document's display stem ("my_cell"), or "Active file" for an
+        unsaved document with no real name yet -- the one naming rule for
+        both the own-series label and the dialog's this-file group."""
+        stem = Path(self._document_name).stem
+        return stem if stem and stem.lower() != "untitled" else "Active file"
+
     def _own_series_label(self) -> str:
         """This run's own series label in the compare dialog: "<file> ·
-        <run>", reading like the reference runs rather than "You". Falls
-        back to "Active file" for an unsaved document with no real name
-        yet."""
-        stem = Path(self._document_name).stem
-        name = stem if stem and stem.lower() != "untitled" else "Active file"
-        return f"{name} · {self._run_label}"
+        <run>", reading like the other runs rather than "You"."""
+        return f"{self._document_display_name()} · {self._run_label}"
 
     def _open_database_examples(self) -> None:
         dialog = DatabaseExamplesDialog(
             self._own_run_snapshot(),
             self._own_series_label(),
             run_label=self._run_label,
+            document_runs=self._sibling_runs,
+            document_label=self._document_display_name(),
             parent=self,
         )
         dialog.exec()
