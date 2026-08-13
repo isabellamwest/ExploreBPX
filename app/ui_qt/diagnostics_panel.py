@@ -939,16 +939,22 @@ class _StreamView(QWidget):
         self._list = ActivatingList()
         self._list.setObjectName("DiagnosticsStreamList")
         # Same column discipline as cards/page.py's content body: the list
-        # itself stops at the page measure (the layout hugs it left), so the
-        # hover/selection washes, the header rules and the scrollbar all end
-        # at the edge the delegate already wraps text against. Full-bleed,
-        # a maximised window painted window-wide hover under 960px text.
+        # itself stops at the page measure, so the hover/selection washes,
+        # the header rules and the scrollbar all end at the edge the delegate
+        # already wraps text against. Full-bleed, a maximised window painted
+        # window-wide hover under 960px text. Unlike the Inspector (whose
+        # rail anchors a left-hugged column), this is a bare full-width page,
+        # so the capped column centres in the leftover width -- a QHBox does
+        # that for a lone capped child on its own (see the summary strip's
+        # note below), keeping the chips strip and the stream on one axis.
         self._list.setMaximumWidth(style.PAGE_MEASURE)
         self._list.setWordWrap(True)
         self._list.setItemDelegate(_DiagnosticsRowDelegate(self._list))
         self._list.itemActivated.connect(self._on_activated)
         self._list.itemClicked.connect(self._on_clicked)
-        layout.addWidget(self._list)
+        row = QHBoxLayout()
+        row.addWidget(self._list)
+        layout.addLayout(row)
 
         self._collapsed: set[tuple[str, ...]] = set()
         self._clear_expanded = False
@@ -1233,11 +1239,11 @@ class _SummaryStrip(QWidget):
         # backgrounds, so this row stays transparent on the wash.)
         row = QWidget()
         row.setMaximumWidth(style.PAGE_MEASURE)
+        # No trailing stretch: a QHBox centres a lone width-capped child in
+        # the leftover width (unlike a QVBoxLayout, which hugs it left --
+        # see cards/page.py), and the stream below centres the same way, so
+        # the chips stay directly above the rows they filter.
         outer.addWidget(row)
-        # Explicit trailing stretch: unlike a QVBoxLayout (which hugs a
-        # width-capped child left on its own, see cards/page.py), a QHBox
-        # centres the lone capped child in the leftover width.
-        outer.addStretch(1)
         layout = QHBoxLayout(row)
         layout.setContentsMargins(style.SPACING_SM, 0, style.SPACING_SM, 0)
         layout.setSpacing(10)

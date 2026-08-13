@@ -430,6 +430,45 @@ def test_partial_notice_renders_once_above_the_clear_line_when_nothing_outstandi
     assert messages[0].text() == _MSG_PARTIAL_NO_TARGET
 
 
+# --- centred column ---------------------------------------------------------
+
+
+def test_stream_and_strip_columns_centre_in_a_wide_page(qtbot):
+    """On a page wider than ``PAGE_MEASURE`` the capped stream list and the
+    strip's content row both centre in the leftover width (and stay on one
+    axis) instead of hugging left with dead space to the right. Widgets are
+    shown at an explicit width: an unshown offscreen window reads a default
+    geometry, not the resized one."""
+    from PySide6.QtWidgets import QApplication
+
+    from ui_qt import style
+    from ui_qt.diagnostics_panel import _StreamView, _SummaryStrip
+
+    wide = style.PAGE_MEASURE + 400
+
+    stream = _StreamView()
+    qtbot.addWidget(stream)
+    stream.resize(wide, 400)
+    stream.show()
+    QApplication.processEvents()
+    lst = stream._list
+    assert lst.width() == style.PAGE_MEASURE
+    left_gap = lst.x()
+    right_gap = stream.width() - (lst.x() + lst.width())
+    assert abs(left_gap - right_gap) <= 1
+
+    strip = _SummaryStrip()
+    qtbot.addWidget(strip)
+    strip.resize(wide, strip.sizeHint().height())
+    strip.show()
+    QApplication.processEvents()
+    row = strip._errors.parentWidget()
+    assert row.width() == style.PAGE_MEASURE
+    left_gap = row.x()
+    right_gap = strip.width() - (row.x() + row.width())
+    assert abs(left_gap - right_gap) <= 1
+
+
 # --- fold + collapse-all ----------------------------------------------------
 
 
