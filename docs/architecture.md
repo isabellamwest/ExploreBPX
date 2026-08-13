@@ -245,6 +245,28 @@ navigate to locations rather than filtering or replacing the hierarchy.
   (typed: scalar, text, boolean, table or series); actions on an existing row
   (rename, duplicate, move, remove) live in its context menu. A collapsed
   `▸ N fields to add` line lists schema-expected fields still absent.
+  List-valued tooltips summarise ("series · 12 values"), never dump JSON.
+- **Validation runs** — one editor (`ExperimentCard`) per run: a multi-column
+  grid in schema order beneath a live **preview band** — Voltage and Current
+  (and Temperature once that column exists) against Time, drawn from the
+  current draft through a ~120 ms coalescing timer, hidden while the empty
+  run's CSV dropzone shows (the dropzone itself gains a dashed accent
+  affordance only while a usable file drag is over it). The parameter list
+  mirrors the grid's schema order: a missing schema array renders as a muted
+  "not in file" placeholder row (clicking focuses its column, writing
+  nothing; a reference ghost row for the same key wins), custom keys follow
+  in file order and alone keep Move up/down. The bare `Validation` node
+  lists one navigable row per run — its count equals those rows — and its
+  "+ Add" opens the experiment-name popup. **Compare…** opens a modal,
+  stateless viewer titled `Compare · <run>`: a "Compare with" rail of the
+  active document's other runs (committed values, the compared run
+  excluded), the bundled About:Energy sample runs, and any file opened into
+  the dialog — every group under an origin caption, the samples' CC BY-SA
+  4.0 provenance stated at the rail foot. Charts overlay up to four picked
+  runs plus the card's own draft (labelled `<stem> · <run>`, never "You");
+  an explicit run selector drives Table mode; chips are legend and removal
+  only. The word "reference" never appears in this dialog — it belongs to
+  the pinned-reference system.
 - **Inspector** — the selected parameter's work surface, one scrolling page:
   the editing card for its kind on top (tables plot a live chart preview
   beside the grid), then an **Issues** section that appears only while the
@@ -298,7 +320,13 @@ navigate to locations rather than filtering or replacing the hierarchy.
   simply no ＋ left to click. Each card offers a route out so the page is
   never a dead end ("Edit its parameters ▸", "N errors · why? ▸", "N values
   differ ▸"). A workspace whose files have moved opens anyway, with a banner
-  naming each one and offering Locate…/Remove.
+  naming each one and offering Locate…/Remove. Provenance stays visible
+  after pinning: a slot's tooltip names its origin (the file's path, or
+  "Reference library"), and the expanded record's From row either shows the
+  path with its captured disk facts or names the Reference library and
+  expands the derived-from-PyBaMM provenance statement; the record's Read
+  as / Checked rows expand their consequence sentences (YAML comments,
+  legacy conversion) exactly like the main document's record.
 - **The start surface** — with no main open, the Main slot carries every way
   to fill it inline: "Open a file…", the recent files that still exist
   beneath it (the same act, pre-filled), then the New-document models each
