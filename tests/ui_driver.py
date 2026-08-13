@@ -316,8 +316,8 @@ class AppDriver:
 
     # -- Diagnostics stream: headers, clear line, all-clear, collapse-all --
 
-    def diagnostics_strip_counts(self) -> tuple[int, int, int]:
-        """``(errors, warnings, outstanding)`` -- the summary strip's own
+    def diagnostics_filter_counts(self) -> tuple[int, int, int]:
+        """``(errors, warnings, outstanding)`` -- the filter column's own
         totals, straight from the ``PageBuckets`` the stream also renders
         from, so these can never disagree."""
         buckets = self._w._diagnostics._buckets
@@ -431,14 +431,14 @@ class AppDriver:
         return None
 
     def diagnostics_collapse_all_text(self) -> str | None:
-        """The strip's D15 affordance label ("Collapse all"/"Expand all"),
-        or ``None`` while it is hidden."""
-        label = self._w._diagnostics._strip._collapse_all
+        """The filter column's D15 affordance label ("Collapse all"/
+        "Expand all"), or ``None`` while it is hidden."""
+        label = self._w._diagnostics._side._collapse_all
         return None if label.isHidden() else label.text()
 
     def diagnostics_toggle_collapse_all(self) -> "AppDriver":
-        """Click the strip's Collapse all/Expand all affordance."""
-        self._qtbot.mouseClick(self._w._diagnostics._strip._collapse_all, Qt.LeftButton)
+        """Click the filter column's Collapse all/Expand all affordance."""
+        self._qtbot.mouseClick(self._w._diagnostics._side._collapse_all, Qt.LeftButton)
         return self
 
     # -- Diagnostics filters ------------------------------------------------
@@ -448,7 +448,7 @@ class AppDriver:
         return self._diagnostics_chip(name).is_on()
 
     def diagnostics_toggle_chip(self, name: str) -> "AppDriver":
-        """Click the named strip chip, as a real mouse click would."""
+        """Click the named filter, as a real mouse click would."""
         self._qtbot.mouseClick(self._diagnostics_chip(name), Qt.LeftButton)
         return self
 
@@ -458,7 +458,7 @@ class AppDriver:
         return self._diagnostics_chip(name).isEnabled()
 
     def _diagnostics_chip(self, name: str):
-        strip = self._w._diagnostics._strip
+        strip = self._w._diagnostics._side
         return {"errors": strip._errors, "warnings": strip._warnings, "outstanding": strip._outstanding}[name]
 
     def fields_to_add_current_alias(self) -> str | None:

@@ -58,7 +58,7 @@ def test_validation_page_shows_no_issues_message_for_a_clean_document(
 
     assert d.validation_message() is None
     assert d.validation_issue_count() == 0
-    assert d.diagnostics_strip_counts() == (0, 0, 0)
+    assert d.diagnostics_filter_counts() == (0, 0, 0)
 
     header = d.diagnostics_bucket("Header")
     assert header.error_count == 0 and header.warning_count == 0

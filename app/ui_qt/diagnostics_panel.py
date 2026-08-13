@@ -1,4 +1,4 @@
-"""Diagnostics page: summary strip + one scrolling stream, built on
+"""Diagnostics page: one scrolling stream + a filter column, built on
 ``core.page_buckets``. "One stream" redesign (see ``PLAN-diagnostics-
 stream.md`` at the repo root for the full, decision-numbered spec) --
 replaces the previous rail + two-renderer (single-section pane / "All
@@ -14,10 +14,11 @@ own module docstring).
 
 Layout:
 
-* A **summary strip** across the top -- three toggleable count-filter
-  chips (errors, warnings, outstanding), counts from ``PageBuckets``
-  totals, plus a "Collapse all"/"Expand all" text affordance at the right
-  end once two or more sections render (D15).
+* A **filter column** down the right -- a "Collapse all"/"Expand all"
+  affordance shown once two or more sections render (D15), then a "FILTER"
+  category label over three toggleable count filters (errors, warnings,
+  outstanding), counts from ``PageBuckets`` totals. Fixed width, flat text,
+  one left edge: four peer items, not a control band.
 * A **file-facts group** (S1, transparency track Phase 4 --
   ``PLAN-transparency.md``) ahead of every bucket: the stream's own
   statement of the load-time facts ``core.load_record.LoadRecord``/
@@ -70,7 +71,7 @@ so "no attachment point -> no-op" needs no special-casing here.
 
 View state (one primary document, no module-level globals) lives on this
 panel instance: the per-section fold set, the clear line's own
-expanded/collapsed flag, and the strip's chip filter state (D11). All of it
+expanded/collapsed flag, and the column's chip filter state (D11). All of it
 persists across an ordinary ``refresh`` (a commit, undo/redo) and resets
 via :meth:`reset_view_state`, called by ``MainWindow`` only when a
 *different* document replaces the session (open/new) -- mirrors the
@@ -112,6 +113,11 @@ from .file_facts import FileFact
 from .parameter_row import ParameterRowDelegate
 
 _MSG_NO_DOCUMENT = "No document open"
+#: The filter column's fixed width -- the same 250px the app's other
+#: secondary columns use (``reference_library_dialog``'s picker,
+#: ``cards/database_examples_dialog``'s compare-with rail), so a page that
+#: gained a side column doesn't invent a second column measure.
+_COLUMN_WIDTH = 250
 #: Pinned Partial-model notice. A bucket alone cannot tell "Partial, so
 #: nothing is ever tracked" apart from "concrete model, fully filled,
 #: nothing remaining" -- both look identical from bucket data (zero
@@ -167,7 +173,7 @@ _FOLD_COLLAPSED_ROLE = Qt.UserRole + 303  # "fold_header" rows only
 # ---------------------------------------------------------------------------
 # View-only filtering. Rows are hidden by ``_add_section`` (below) after it
 # already has its bucket's true, unfiltered content in hand -- ``core.page_
-# buckets`` is never touched, so strip counts/the app badge/the reconciliation
+# buckets`` is never touched, so the column's counts/the app badge/the reconciliation
 # test all keep reading the same unfiltered ``PageBuckets`` this module
 # always has. ``_FilterState`` and the two visibility predicates below are
 # the one shared, pure "does this row survive the filter" rule the stream
@@ -922,7 +928,7 @@ class _StreamView(QWidget):
     issue_activated = Signal(tuple)
     task_activated = Signal(object)
     #: Emitted whenever a *per-section* fold toggles (a header click), so
-    #: :class:`DiagnosticsPanel` can refresh the strip's D15 label -- the
+    #: :class:`DiagnosticsPanel` can refresh the column's D15 label -- the
     #: label depends on the fold set, and a header click re-renders only
     #: this widget, not the whole panel, so without this signal the label
     #: goes stale (fold every section one by one and it still reads
@@ -942,18 +948,25 @@ class _StreamView(QWidget):
         # itself stops at the page measure, so the hover/selection washes,
         # the header rules and the scrollbar all end at the edge the delegate
         # already wraps text against. Full-bleed, a maximised window painted
-        # window-wide hover under 960px text. Unlike the Inspector (whose
-        # rail anchors a left-hugged column), this is a bare full-width page,
-        # so the capped column centres in the leftover width -- a QHBox does
-        # that for a lone capped child on its own (see the summary strip's
-        # note below), keeping the chips strip and the stream on one axis.
+        # window-wide hover under 960px text. The column hugs the left (the
+        # trailing stretch below -- a QHBox would otherwise centre a lone
+        # capped child), like the Inspector's rail-anchored column: the
+        # filter column now holds the page's right side, and a stream
+        # centred in what is left would drift away from it as the window
+        # widens.
         self._list.setMaximumWidth(style.PAGE_MEASURE)
         self._list.setWordWrap(True)
         self._list.setItemDelegate(_DiagnosticsRowDelegate(self._list))
         self._list.itemActivated.connect(self._on_activated)
         self._list.itemClicked.connect(self._on_clicked)
         row = QHBoxLayout()
-        row.addWidget(self._list)
+        # Stretch 1 on the list, 0 on the spacer -- the same trick
+        # page_header.set_trailing_accessory uses: the list takes the width
+        # first (up to its cap) and only what is left over goes to the
+        # spacer that holds it against the left edge. A bare addStretch(1)
+        # would split the width evenly and shrink the list to its size hint.
+        row.addWidget(self._list, 1)
+        row.addStretch(0)
         layout.addLayout(row)
 
         self._collapsed: set[tuple[str, ...]] = set()
@@ -1046,7 +1059,7 @@ class _StreamView(QWidget):
                     _add_clear_row(self._list, bucket, judged[bucket.path], reach)
 
     def collapse_all_label(self) -> str | None:
-        """D15's strip affordance label -- ``None`` hides it (fewer than two
+        """D15's fold affordance label -- ``None`` hides it (fewer than two
         rendered sections to fold, nothing to collapse); otherwise
         "Collapse all" while any rendered section is expanded, else
         "Expand all"."""
@@ -1118,13 +1131,18 @@ def _chip_html(svg: str, color: str, text: str, *, on: bool) -> str:
 
 
 class _FilterChip(QLabel):
-    """One strip chip, also a click-toggle filter. Stays a ``QLabel``
-    (not a ``QPushButton``) so it keeps rendering its rich-text icon+count
-    content (a coloured dot plus text, :func:`_chip_html`) -- native Qt
-    buttons render ``text()`` as plain text, not HTML. Interactivity is
-    layered on with :meth:`mousePressEvent` and a dynamic "off" QSS
-    property, the same pattern ``QPushButton#AddParameterCreate``'s own
-    "selected" property already uses in this stylesheet."""
+    """One filter item in the side column, also a click-toggle filter.
+    Stays a ``QLabel`` (not a ``QPushButton``) so it keeps rendering its
+    rich-text icon+count content (a coloured dot plus text,
+    :func:`_chip_html`) -- native Qt buttons render ``text()`` as plain
+    text, not HTML. Interactivity is layered on with
+    :meth:`mousePressEvent`.
+
+    Flat text, no card: in the side column these sit at the same level as
+    "Collapse all" under a "FILTER" category label, and a border here would
+    make four peer items read as two kinds of thing. Their whole visual
+    state is therefore carried by :func:`_chip_html`'s own colours -- an
+    off (or zero-count) filter mutes both its dot and its text."""
 
     toggled = Signal(bool)
 
@@ -1139,28 +1157,20 @@ class _FilterChip(QLabel):
 
     def set_on(self, on: bool) -> None:
         """Set the toggle state without emitting :attr:`toggled` -- used by
-        programmatic resets (:meth:`_SummaryStrip.reset_filters`), which
+        programmatic resets (:meth:`_FilterColumn.reset_filters`), which
         must not re-enter the filter-change/render path while a *different*
         document's buckets are still being assembled."""
         self._on = on
-        self._refresh_visual_state()
 
     def set_zero_count(self, zero: bool) -> None:
-        """D13: a chip whose unfiltered count is zero paints the same muted
-        "off" look as a toggled-off chip (via ``chipOff``) *and* is
-        genuinely disabled -- Qt withholds mouse events from a disabled
-        widget, so :meth:`mousePressEvent` never even fires. This is purely
-        a paint/interaction decision layered on top of :attr:`_on`, which
+        """D13: a chip whose unfiltered count is zero is genuinely disabled
+        -- Qt withholds mouse events from a disabled widget, so
+        :meth:`mousePressEvent` never even fires. Its muted look comes from
+        :func:`_chip_html` like any other off state. This is purely a
+        paint/interaction decision layered on top of :attr:`_on`, which
         keeps meaning "the user's own filter choice" regardless of whether
         the current document happens to have anything for it to filter."""
         self.setEnabled(not zero)
-        self._refresh_visual_state()
-
-    def _refresh_visual_state(self) -> None:
-        off_look = (not self._on) or not self.isEnabled()
-        self.setProperty("chipOff", off_look)
-        self.style().unpolish(self)
-        self.style().polish(self)
 
     def mousePressEvent(self, event) -> None:  # noqa: N802 -- Qt override
         if not self.isEnabled():
@@ -1173,15 +1183,15 @@ class _FilterChip(QLabel):
 
 
 class _CollapseAllLink(QLabel):
-    """D15's strip affordance ("Collapse all"/"Expand all"). Styled as a
-    quiet bordered chip like its ``_FilterChip`` neighbours -- the app-wide
-    affordance rule says an action wears a chip and only navigation is flat
-    link-blue text, and as plain blue text this was a third interaction
-    style on one strip. Stays a ``QLabel`` for the same reason
-    ``_FilterChip`` does (a native ``QPushButton`` would work here too,
-    since this label carries no rich-text content, but sharing the
-    click-via-``mousePressEvent`` idiom keeps the strip's two
-    interactive-label kinds consistent)."""
+    """D15's fold-everything affordance ("Collapse all"/"Expand all"), the
+    side column's first item. Flat text like its ``_FilterChip``
+    neighbours: it is a peer of the three filters, not a control standing
+    over them, so it wears no chip -- the app-wide "an action wears a chip"
+    rule buys nothing in a column where every item is one level. Stays a
+    ``QLabel`` for the same reason ``_FilterChip`` does (a native
+    ``QPushButton`` would work here too, since this label carries no
+    rich-text content, but sharing the click-via-``mousePressEvent`` idiom
+    keeps the column's two interactive-label kinds consistent)."""
 
     clicked = Signal()
 
@@ -1197,21 +1207,29 @@ class _CollapseAllLink(QLabel):
         self.clicked.emit()
 
 
-class _SummaryStrip(QWidget):
-    """Top band: three toggleable count-filter chips, each its own
-    bordered, rounded card on the shaded strip band ("boxes/shading to
-    make regions distinguishable"), plus the D15 "Collapse all"/"Expand
-    all" text affordance at the right end. Filtering here is purely a VIEW
-    concern -- this widget owns the filter *state* (chip on/off) and
-    reports it via :meth:`filter_state`; it never touches counts, badges
-    or buckets itself (:class:`DiagnosticsPanel` reads the state and
-    re-renders the stream -- filtering stays view-only). Likewise the
-    collapse-all label is a dumb affordance: :class:`DiagnosticsPanel`
-    decides its text/visibility from the stream's own fold state
-    (:meth:`~_StreamView.collapse_all_label`) and reacts to its click; this
-    widget only paints whatever label it is given and emits the click.
-    The companion text-filter field was removed; the chips are the whole
-    filter surface."""
+class _FilterColumn(QWidget):
+    """The page's right-hand column: "Collapse all", then a "FILTER"
+    category label over the three toggleable count filters. Every item sits
+    flush to one left edge at one level -- the label is a *category*, not a
+    header for a control group, so the fold affordance and the three
+    filters read as four peer items rather than a chip above a box.
+
+    Fixed width and gutter follow the app's existing secondary columns (the
+    reference-library / compare-with pickers, the workspace rail): a column
+    that resized with its counts would reflow the stream beside it every
+    time a document's error count crossed a digit. Its own wash is what
+    sets it off from the stream -- deliberately no divider, which would
+    draw a line up into the page header above.
+
+    Filtering here is purely a VIEW concern -- this widget owns the filter
+    *state* (chip on/off) and reports it via :meth:`filter_state`; it never
+    touches counts, badges or buckets itself (:class:`DiagnosticsPanel`
+    reads the state and re-renders the stream -- filtering stays
+    view-only). Likewise the collapse-all label is a dumb affordance:
+    :class:`DiagnosticsPanel` decides its text/visibility from the stream's
+    own fold state (:meth:`~_StreamView.collapse_all_label`) and reacts to
+    its click; this widget only paints whatever label it is given and emits
+    the click."""
 
     #: Emitted whenever a chip is toggled -- DiagnosticsPanel re-renders
     #: only the *stream* on this signal (never a full ``refresh()``), so
@@ -1223,32 +1241,29 @@ class _SummaryStrip(QWidget):
 
     def __init__(self) -> None:
         super().__init__()
-        self.setObjectName("DiagnosticsSummaryStrip")
-        # A plain QWidget subclass ignores stylesheet background/border
-        # unless told to paint them (see ActivityBar/PageHeader's own note);
-        # without this the strip's border-bottom silently never draws.
+        self.setObjectName("DiagnosticsFilterColumn")
+        # A plain QWidget subclass ignores stylesheet backgrounds unless
+        # told to paint them (see ActivityBar/PageHeader's own note);
+        # without this the column's wash silently never draws.
         self.setAttribute(Qt.WA_StyledBackground, True)
-        outer = QHBoxLayout(self)
-        outer.setContentsMargins(style.SPACING_SM, 8, style.SPACING_SM, 8)
-        outer.setSpacing(0)
-
-        # The strip's wash stays full-bleed, but its content row shares the
-        # stream's column: unbounded, a maximised window pinned "Collapse
-        # all" against the far window edge, a thousand pixels from the
-        # headers it folds. (A plain QWidget never paints stylesheet
-        # backgrounds, so this row stays transparent on the wash.)
-        row = QWidget()
-        row.setMaximumWidth(style.PAGE_MEASURE)
-        # No trailing stretch: a QHBox centres a lone width-capped child in
-        # the leftover width (unlike a QVBoxLayout, which hugs it left --
-        # see cards/page.py), and the stream below centres the same way, so
-        # the chips stay directly above the rows they filter.
-        outer.addWidget(row)
-        layout = QHBoxLayout(row)
-        layout.setContentsMargins(style.SPACING_SM, 0, style.SPACING_SM, 0)
-        layout.setSpacing(10)
+        self.setFixedWidth(_COLUMN_WIDTH)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(style.SPACING_LG, 12, style.SPACING_LG, 12)
+        layout.setSpacing(6)
 
         self._counts = (0, 0, 0)
+
+        self._collapse_all = _CollapseAllLink()
+        self._collapse_all.clicked.connect(self.collapse_all_clicked)
+        layout.addWidget(self._collapse_all)
+
+        # The category's own breathing room, carried by the label rather
+        # than a spacer item: with "Collapse all" hidden (fewer than two
+        # foldable sections) a spacer would still hold its gap, leaving the
+        # column's first item pushed down by chrome that is not there.
+        self._category = typography.panel_title("Filter")
+        self._category.setContentsMargins(0, style.SPACING_MD, 0, 0)
+        layout.addWidget(self._category)
 
         self._errors = _FilterChip()
         self._warnings = _FilterChip()
@@ -1258,10 +1273,6 @@ class _SummaryStrip(QWidget):
             layout.addWidget(chip)
 
         layout.addStretch(1)
-
-        self._collapse_all = _CollapseAllLink()
-        self._collapse_all.clicked.connect(self.collapse_all_clicked)
-        layout.addWidget(self._collapse_all)
 
     def set_counts(self, errors: int, warnings: int, outstanding: int) -> None:
         self._counts = (errors, warnings, outstanding)
@@ -1344,10 +1355,10 @@ class _SummaryStrip(QWidget):
 
 
 class DiagnosticsPanel(QWidget):
-    """Renders the Diagnostics page: summary strip + one scrolling stream.
+    """Renders the Diagnostics page: one scrolling stream + a filter column.
 
     Shows an explanatory placeholder instead of the page only when there is
-    no document at all -- once a document is open, the strip/stream are
+    no document at all -- once a document is open, the stream/column are
     always present (mirrors the Inspector's Issues tab convention of never
     showing a truly blank area).
     """
@@ -1364,20 +1375,23 @@ class DiagnosticsPanel(QWidget):
         self._stack = QStackedWidget()
 
         content = QWidget()
-        content_layout = QVBoxLayout(content)
+        # Two columns, not a band over a stream: the stream takes the room
+        # that is left (and hugs the left edge itself, see _StreamView),
+        # the filter column is fixed beside it.
+        content_layout = QHBoxLayout(content)
         content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(0)
-
-        self._strip = _SummaryStrip()
-        self._strip.filters_changed.connect(self._on_filters_changed)
-        self._strip.collapse_all_clicked.connect(self._on_collapse_all_clicked)
-        content_layout.addWidget(self._strip)
 
         self._stream = _StreamView()
         self._stream.issue_activated.connect(self.issue_activated)
         self._stream.task_activated.connect(self.task_activated)
         self._stream.folds_changed.connect(self._on_folds_changed)
         content_layout.addWidget(self._stream, 1)
+
+        self._side = _FilterColumn()
+        self._side.filters_changed.connect(self._on_filters_changed)
+        self._side.collapse_all_clicked.connect(self._on_collapse_all_clicked)
+        content_layout.addWidget(self._side)
 
         self._stack.addWidget(content)
 
@@ -1399,7 +1413,7 @@ class DiagnosticsPanel(QWidget):
 
     def reset_view_state(self) -> None:
         self._stream.reset_fold_state()
-        self._strip.reset_filters()
+        self._side.reset_filters()
 
     def refresh(
         self,
@@ -1410,7 +1424,7 @@ class DiagnosticsPanel(QWidget):
         facts: tuple[FileFact, ...] = (),
         reach: CheckReach = CheckReach.COMPLETE,
     ) -> None:
-        """Rebuild the strip and stream from one derivation point's output.
+        """Rebuild the stream and column from one derivation point's output.
 
         *buckets* is ``core.page_buckets.bucket_page_content``'s result --
         computed once in ``main_window._refresh_all`` alongside the rail
@@ -1437,14 +1451,14 @@ class DiagnosticsPanel(QWidget):
             self._placeholder.setText(_MSG_NO_DOCUMENT)
             self._stack.setCurrentIndex(1)
             return
-        self._strip.set_counts(buckets.error_count, buckets.warning_count, buckets.outstanding_count)
+        self._side.set_counts(buckets.error_count, buckets.warning_count, buckets.outstanding_count)
         self._stack.setCurrentIndex(0)
         self._render_stream()
 
     def _on_filters_changed(self) -> None:
         """A chip toggled -- re-render only
         the stream, never a full ``refresh()``: filters are view-only and
-        must never re-enter the document-wide refresh path (strip counts
+        must never re-enter the document-wide refresh path (the column's counts
         and the app badge are untouched by this call)."""
         self._render_stream()
 
@@ -1455,15 +1469,15 @@ class DiagnosticsPanel(QWidget):
     def _on_folds_changed(self) -> None:
         """A per-section fold toggled directly (a header click, not the
         collapse-all affordance) -- ``_StreamView`` already re-rendered
-        itself; only the strip's D15 label can be stale, so refresh just
+        itself; only the column's D15 label can be stale, so refresh just
         that, the same narrow update :meth:`_render_stream` does at the end
         of every other path that can move the fold set."""
-        self._strip.set_collapse_all_label(self._stream.collapse_all_label())
+        self._side.set_collapse_all_label(self._stream.collapse_all_label())
 
     def _render_stream(self) -> None:
         if self._buckets is None:
             return
-        filters = self._strip.filter_state()
+        filters = self._side.filter_state()
         self._stream.render(
             self._buckets,
             self._partition,
@@ -1473,4 +1487,4 @@ class DiagnosticsPanel(QWidget):
             self._facts,
             self._reach,
         )
-        self._strip.set_collapse_all_label(self._stream.collapse_all_label())
+        self._side.set_collapse_all_label(self._stream.collapse_all_label())

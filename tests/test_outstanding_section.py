@@ -71,7 +71,7 @@ def test_state1_fresh_skeleton(app_driver, tmp_path):
     d.open(_skeleton_path(tmp_path))
 
     assert d.validation_issue_count() == 0
-    assert d.diagnostics_strip_counts() == (0, 0, 5 + 9 + 9)
+    assert d.diagnostics_filter_counts() == (0, 0, 5 + 9 + 9)
     assert d.validation_badge_count() == 0
     assert d.validation_badge_severity() is None
 
@@ -211,7 +211,7 @@ def test_state4_done(app_driver, valid_spm_path):
     d = app_driver
     d.open(valid_spm_path)
 
-    assert d.diagnostics_strip_counts() == (0, 0, 0)
+    assert d.diagnostics_filter_counts() == (0, 0, 0)
     assert d.diagnostics_stream_headers() == []
     total = len(d._w._diagnostics._buckets.buckets)
     assert d.diagnostics_all_clear_text() == (

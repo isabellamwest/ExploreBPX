@@ -98,7 +98,7 @@ def test_error_chip_off_hides_error_rows_but_not_counts(app_driver, two_cell_err
     assert d.diagnostics_stream_issue_texts() == []
     assert d.validation_issue_texts() == []
     assert d.diagnostics_bucket("Cell").error_count == 2
-    assert d.diagnostics_strip_counts()[0] == 2
+    assert d.diagnostics_filter_counts()[0] == 2
     assert d.validation_badge_count() == 2
 
 
@@ -130,7 +130,7 @@ def test_outstanding_chip_off_hides_required_and_optional_task_rows(app_driver, 
 def test_chip_toggle_never_changes_the_strip_or_the_bucket_data(app_driver, two_cell_errors_path):
     d = app_driver
     d.open(two_cell_errors_path)
-    before = d.diagnostics_strip_counts()
+    before = d.diagnostics_filter_counts()
     buckets_before = {
         label: d.diagnostics_bucket(label)
         for label in ("Header", "Cell", "Negative electrode", "Positive electrode", "State")
@@ -140,7 +140,7 @@ def test_chip_toggle_never_changes_the_strip_or_the_bucket_data(app_driver, two_
     d.diagnostics_toggle_chip("warnings")
     d.diagnostics_toggle_chip("outstanding")
 
-    assert d.diagnostics_strip_counts() == before
+    assert d.diagnostics_filter_counts() == before
     for label, bucket_before in buckets_before.items():
         bucket_after = d.diagnostics_bucket(label)
         assert (bucket_after.error_count, bucket_after.warning_count, bucket_after.outstanding_count) == (
@@ -160,7 +160,7 @@ def test_chip_toggle_never_changes_the_strip_or_the_bucket_data(app_driver, two_
 def test_zero_count_chip_is_disabled_and_a_click_does_nothing(app_driver, many_issues_path):
     d = app_driver
     d.open(many_issues_path)  # errors only -- zero outstanding
-    assert d.diagnostics_strip_counts()[2] == 0
+    assert d.diagnostics_filter_counts()[2] == 0
     assert d.diagnostics_chip_is_enabled("outstanding") is False
     assert d.diagnostics_chip_is_enabled("errors") is True
 
@@ -305,7 +305,7 @@ def test_activation_navigates_to_the_correct_visible_row_while_filtered(app_driv
 def test_all_chips_off_buckets_and_badges_still_reconcile(app_driver, two_cell_errors_path):
     d = app_driver
     d.open(two_cell_errors_path)
-    errors, warnings, outstanding = d.diagnostics_strip_counts()
+    errors, warnings, outstanding = d.diagnostics_filter_counts()
     app_badge = d.validation_badge_count()
     app_severity = d.validation_badge_severity()
 
@@ -315,7 +315,7 @@ def test_all_chips_off_buckets_and_badges_still_reconcile(app_driver, two_cell_e
 
     assert d._validation_rows("issue") == []
     assert d._validation_rows("task") == []
-    assert d.diagnostics_strip_counts() == (errors, warnings, outstanding)
+    assert d.diagnostics_filter_counts() == (errors, warnings, outstanding)
     assert d.validation_badge_count() == app_badge
     assert d.validation_badge_severity() == app_severity
 
@@ -365,7 +365,7 @@ def test_reconciliation_holds_with_one_chip_off(app_driver, many_issues_path):
     d.open(many_issues_path)
     d.diagnostics_toggle_chip("errors")
 
-    _reconcile(d, d._w._diagnostics._strip.filter_state())
+    _reconcile(d, d._w._diagnostics._side.filter_state())
 
 
 def test_reconciliation_holds_with_every_chip_off(app_driver, many_issues_path):
@@ -376,7 +376,7 @@ def test_reconciliation_holds_with_every_chip_off(app_driver, many_issues_path):
     d.diagnostics_toggle_chip("outstanding")
 
     assert d.diagnostics_stream_section_headers() == []  # everything suppressed
-    _reconcile(d, d._w._diagnostics._strip.filter_state())
+    _reconcile(d, d._w._diagnostics._side.filter_state())
 
 
 def test_chip_toggles_on_left_click_only(qtbot):

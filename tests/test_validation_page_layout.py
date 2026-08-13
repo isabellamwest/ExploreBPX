@@ -44,9 +44,9 @@ def test_strip_counts_wording(qtbot):
     per side -- the direct descendant of the old page-header count-suffix
     helpers, now rendered as three always-visible chips instead of a
     conditional header suffix."""
-    from ui_qt.diagnostics_panel import _SummaryStrip
+    from ui_qt.diagnostics_panel import _FilterColumn
 
-    strip = _SummaryStrip()
+    strip = _FilterColumn()
     qtbot.addWidget(strip)
 
     strip.set_counts(0, 0, 0)
@@ -70,7 +70,7 @@ def test_strip_totals_match_the_app_rail_badge(app_driver, many_issues_path):
     disagree."""
     d = app_driver
     d.open(many_issues_path)
-    errors, warnings, _outstanding = d.diagnostics_strip_counts()
+    errors, warnings, _outstanding = d.diagnostics_filter_counts()
     assert errors + warnings == d.validation_badge_count()
 
 
@@ -433,40 +433,35 @@ def test_partial_notice_renders_once_above_the_clear_line_when_nothing_outstandi
 # --- centred column ---------------------------------------------------------
 
 
-def test_stream_and_strip_columns_centre_in_a_wide_page(qtbot):
-    """On a page wider than ``PAGE_MEASURE`` the capped stream list and the
-    strip's content row both centre in the leftover width (and stay on one
-    axis) instead of hugging left with dead space to the right. Widgets are
-    shown at an explicit width: an unshown offscreen window reads a default
-    geometry, not the resized one."""
+def test_stream_hugs_the_left_and_the_filter_column_holds_the_right(qtbot):
+    """The two-column page: on a window wider than ``PAGE_MEASURE`` the
+    capped stream list hugs the left edge (it no longer centres -- the
+    filter column now owns the right side, and a centred stream would drift
+    away from it as the window widens), and the column keeps its fixed
+    width there. Widgets are shown at an explicit width: an unshown
+    offscreen window reads a default geometry, not the resized one."""
     from PySide6.QtWidgets import QApplication
 
     from ui_qt import style
-    from ui_qt.diagnostics_panel import _StreamView, _SummaryStrip
+    from ui_qt.diagnostics_panel import _COLUMN_WIDTH, DiagnosticsPanel
 
     wide = style.PAGE_MEASURE + 400
 
-    stream = _StreamView()
-    qtbot.addWidget(stream)
-    stream.resize(wide, 400)
-    stream.show()
+    panel = DiagnosticsPanel()
+    qtbot.addWidget(panel)
+    panel._stack.setCurrentIndex(0)  # the content page, not the no-document placeholder
+    panel.resize(wide, 400)
+    panel.show()
     QApplication.processEvents()
-    lst = stream._list
-    assert lst.width() == style.PAGE_MEASURE
-    left_gap = lst.x()
-    right_gap = stream.width() - (lst.x() + lst.width())
-    assert abs(left_gap - right_gap) <= 1
 
-    strip = _SummaryStrip()
-    qtbot.addWidget(strip)
-    strip.resize(wide, strip.sizeHint().height())
-    strip.show()
-    QApplication.processEvents()
-    row = strip._errors.parentWidget()
-    assert row.width() == style.PAGE_MEASURE
-    left_gap = row.x()
-    right_gap = strip.width() - (row.x() + row.width())
-    assert abs(left_gap - right_gap) <= 1
+    lst = panel._stream._list
+    assert lst.width() == style.PAGE_MEASURE
+    # Left gap is the stream's own small gutter, not half the leftover width.
+    assert lst.mapTo(panel, lst.rect().topLeft()).x() <= style.SPACING_SM
+
+    side = panel._side
+    assert side.width() == _COLUMN_WIDTH
+    assert side.x() + side.width() == panel.width()  # flush to the page's right edge
 
 
 # --- fold + collapse-all ----------------------------------------------------
@@ -887,15 +882,26 @@ def test_task_row_action_text_is_a_separate_right_aligned_role(app_driver):
     assert "· Go to ▸" not in task_item.text()  # plain text no longer parenthesises it with REQUIRED
 
 
-def test_summary_strip_chips_are_bordered_boxes(app_driver, valid_spm_path):
-    """The wireframe calls for "boxes/shading to make regions distinguishable"
-    -- plain coloured text is not enough; each chip must be its own
-    QSS-styled card."""
+def test_filter_column_items_are_flat_text_on_one_left_edge(app_driver, many_issues_path):
+    """The agreed wireframe: "Collapse all" and the three filters are peer
+    items under a category label, so they carry no chip border and all four
+    align on the column's single left gutter (the FILTER label included --
+    it labels the group, it does not indent it)."""
+    from ui_qt import style
+
     d = app_driver
-    d.open(valid_spm_path)
-    strip = d._w._diagnostics._strip
-    for chip in (strip._errors, strip._warnings, strip._outstanding):
-        assert chip.objectName() == "DiagnosticsChip"
+    d.open(many_issues_path)  # enough sections that "Collapse all" renders at all (D15)
+    side = d._w._diagnostics._side
+    side.layout().activate()  # the driver's window is never shown, so geometry is otherwise unset
+    items = (side._collapse_all, side._errors, side._warnings, side._outstanding)
+
+    for item in items:
+        assert item.objectName() in ("DiagnosticsCollapseAll", "DiagnosticsChip")
+        # Flat text: nothing in the stylesheet gives these a border or a card.
+        rule = style.STYLESHEET.split(f"QLabel#{item.objectName()} {{")[1].split("}")[0]
+        assert "border" not in rule and "background" not in rule
+
+    assert {item.x() for item in (*items, side._category)} == {style.SPACING_LG}
 
 
 def test_fold_header_glyph_flips_with_collapsed_state(app_driver):
@@ -942,8 +948,8 @@ def test_strip_chip_tooltips_reflect_counts_and_say_they_filter(app_driver, many
 
     d = app_driver
     d.open(many_issues_path)
-    strip = d._w._diagnostics._strip
-    errors, warnings, outstanding = d.diagnostics_strip_counts()
+    strip = d._w._diagnostics._side
+    errors, warnings, outstanding = d.diagnostics_filter_counts()
 
     assert strip._errors.toolTip() == f"{style.error_count_tooltip(errors)} · click to hide"
     assert strip._warnings.toolTip() == f"{style.warning_count_tooltip(warnings)} · click to hide"

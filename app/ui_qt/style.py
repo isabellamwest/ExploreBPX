@@ -664,7 +664,8 @@ QLabel#ComparisonStripIdentity { color: #6f42c1; font-weight: ${semibold}; font-
    top padding optically aligns the 11px caps label with the first text
    line of the taller value beside it. The "same as main" faint style
    reuses the app's muted-text tone via a dynamic property, the same
-   pattern QLabel#DiagnosticsChip[chipOff="true"] already uses below. */
+   pattern QPushButton#AddParameterCreate[selected="true"] already uses
+   below. */
 QLabel#MainFileHeading { color: #57606a; font-weight: ${semibold}; font-size: ${meta}px; padding-top: 7px; }
 QLabel#ReferenceFileHeading { color: #6f42c1; font-weight: ${semibold}; font-size: ${meta}px; padding-top: 7px; }
 QFrame#ReferenceValueBox { border: none; border-radius: 4px; background: #e7ecf1; }
@@ -754,42 +755,26 @@ QListWidget#SearchPopupList {
 }
 QListWidget#SearchPopupList::item { padding: 6px 8px; border-radius: 4px; }
 QListWidget#SearchPopupList::item:selected { background: #cfe4fc; color: #1f2328; }
-/* The Diagnostics page: a summary strip (chips + the D15 Collapse all/
-   Expand all affordance) over one scrolling stream list -- the "one
-   stream" redesign (PLAN-diagnostics-stream.md), no rail, no separate
-   detail pane. Fold headers/the clear line are delegate-painted caps rows
-   ruled with a single hairline on the plain page (the old shaded band
-   fill read too heavy repeated once per section; whitespace inside the
-   header row separates sections now). Only the chip borders keep
-   BORDER_STRONG (#a5b1bd): a bordered chip is a control and earns the
-   darker step, while the page's dividers (the strip's bottom edge here,
-   the painted rules in diagnostics_panel.py) stay on the ordinary
-   #b9c4ce -- repeated once per section, the darker line read too heavy. */
-QWidget#DiagnosticsSummaryStrip { background: #e7ecf1; border-bottom: 1px solid #b9c4ce; }
-/* One strip chip: a small bordered, rounded card on the shaded strip
-   band, distinct from the flat text it replaced. Each chip is a
-   click-toggle filter; its "off" state is a dynamic QSS property
-   (chipOff="true", set via setProperty + style().polish(), the same
-   pattern QPushButton#AddParameterCreate's own "selected" property already
-   uses below) -- a visibly muted/pressed-out card, never a hidden one
-   (toggling never removes the chip itself, only what it filters). */
-QLabel#DiagnosticsChip {
-    background: #ffffff; border: 1px solid #a5b1bd; border-radius: 6px; padding: 4px 10px;
-}
-QLabel#DiagnosticsChip[chipOff="true"] { background: #e2e7ec; border: 1px solid #b9c4ce; }
-/* D13: a chip whose unfiltered count is zero is also actually disabled
-   (Qt withholds mouse events from a disabled widget, so the cursor/click
-   both go away) -- it must not look pressable, since it filters nothing. */
-QLabel#DiagnosticsChip:disabled { background: #dfe5eb; border: 1px solid #cdd5dd; }
-/* D15's fold-everything affordance: a quiet bordered chip like its strip
-   neighbours (app-wide affordance rule: an *action* wears a chip; only
-   navigation is flat link-blue text -- as plain blue text this read as a
-   third interaction style on one strip). Muted, never accent: it is the
-   quietest thing on the band. */
-QLabel#DiagnosticsCollapseAll {
-    background: #ffffff; border: 1px solid #a5b1bd; border-radius: 6px;
-    padding: 4px 10px; color: #57606a;
-}
+/* The Diagnostics page: one scrolling stream list beside a right-hand
+   filter column -- the "one stream" redesign (PLAN-diagnostics-stream.md),
+   no rail, no separate detail pane. Fold headers/the clear line are
+   delegate-painted caps rows ruled with a single hairline on the plain
+   page (the old shaded band fill read too heavy repeated once per section;
+   whitespace inside the header row separates sections now). The filter
+   column is set off by its wash alone -- the app's standard band tone, the
+   same one the old summary strip wore -- and by no rule: a divider between
+   the two columns would run straight up into the page header above it. */
+QWidget#DiagnosticsFilterColumn { background: #e7ecf1; }
+/* The filter column's items -- "Collapse all" and the three filters -- are
+   flat text at one level under a PanelTitle "FILTER" category label. No
+   card, no border: they are peers, and a box around three of the four
+   would say otherwise. A chip's off/zero-count state is therefore carried
+   entirely by its own rich-text colours (_chip_html mutes both the dot and
+   the count), never by a background swap -- toggling still never removes
+   the chip itself, only what it filters. Padding only, so the items align
+   on the column's gutter. */
+QLabel#DiagnosticsChip { padding: 2px 0; }
+QLabel#DiagnosticsCollapseAll { padding: 2px 0; color: #57606a; }
 /* The one stream list: same row rhythm as everywhere else in the app.
    Fold headers/the clear line are delegate-painted bands
    (_DiagnosticsRowDelegate) that ignore this hover/selected styling --
