@@ -182,6 +182,11 @@ def merge_union_pair(diagnostics: Sequence[ValidatorDiagnostic]) -> tuple[Valida
     :func:`merge_union_pairs_by_location` for a mixed, multi-parameter list.
     Every diagnostic that isn't part of a complete pair passes through
     unchanged, in its original order.
+
+    Any displayed *count* for an issues list must come from ``len()`` of
+    this function's result, not ``len(diagnostics)`` -- an unmerged length
+    once disagreed with the rendered list for a committed-null FloatInt
+    parameter.
     """
     types = {getattr(d, "error_type", None) for d in diagnostics}
     drop = {

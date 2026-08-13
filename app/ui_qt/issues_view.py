@@ -30,24 +30,6 @@ from .parameter_row import ParameterRowDelegate
 _PATH_ROLE = 256  # Qt.UserRole
 
 
-def issue_count(issues) -> int:
-    """The number of rows :meth:`IssuesView.show_issues` would render for
-    *issues* -- i.e. the merged count, after collapsing a
-    committed-null ``FloatInt``'s ``float_type``+``int_type`` pair (V5) to
-    one displayed row.
-
-    The single source of truth for "how many rows does this list show":
-    any caller that displays a count for an issues list that did *not* go
-    through :meth:`show_issues` itself MUST route the count through this
-    function rather than ``len(issues)`` -- two call-sites in
-    ``inspector.py`` once pushed the unmerged length into the tab badge,
-    so the badge and the list disagreed for a committed-null FloatInt
-    parameter. Keeping one function used by both the list-builder and every
-    count-setter is what makes that drift impossible to reintroduce.
-    """
-    return len(merge_union_pair(issues))
-
-
 class IssuesView(QWidget):
     """Lists validation issues for the currently shown parameter."""
 
