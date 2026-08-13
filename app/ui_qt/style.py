@@ -690,10 +690,17 @@ QPushButton#PullButton {
 QPushButton#PullButton:hover:!disabled { color: #5a3399; background: #ece2f6; }
 QPushButton#PullButton:disabled { color: #8c959f; font-weight: ${regular}; }
 QLabel#GhostCardHeading { color: #6f42c1; font-weight: ${semibold}; font-size: ${meta}px; }
-/* Source page toolbar: the fold-all toggle sits left in both modes;
-   single-pane also shows the main file's identity + the purple docking
-   hint. The bordered button reuses the reference tile's flat treatment. */
-QLabel#SourceFileLabel { color: #57606a; font-size: ${meta}px; }
+/* Source page identity: role words stay quiet (the card ledger's
+   Main/Reference tones), the filename is the defined semibold every other
+   identity surface gives a file's name (dark like BoardSlotName; reference
+   purple like ComparisonStripIdentity), and the model trails as a muted
+   detail. The fold-all toggle lives in the page-header bar, right-locked;
+   its bordered face reuses the reference tile's flat treatment. */
+QLabel#SourcePaneRole { color: #57606a; font-weight: ${semibold}; font-size: ${meta}px; }
+QLabel#SourcePaneRoleReference { color: #6f42c1; font-weight: ${semibold}; font-size: ${meta}px; }
+QLabel#SourceFileName { font-weight: ${semibold}; font-size: ${meta}px; }
+QLabel#SourceReferenceName { color: #6f42c1; font-weight: ${semibold}; font-size: ${meta}px; }
+QLabel#SourceFileModel { color: #57606a; font-size: ${meta}px; }
 QLabel#SourceHint { color: #6f42c1; font-size: ${meta}px; }
 QPushButton#SourceFoldButton {
     background: #ffffff; border: 1px solid #b9c4ce; border-radius: 4px;

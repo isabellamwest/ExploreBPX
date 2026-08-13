@@ -559,14 +559,31 @@ class AppDriver:
         empty with no reference docked (chips are a two-pane signal)."""
         return self._w._source._view.chipped_texts()
 
+    def _source_identity(self, *labels) -> str:
+        """One pane-side identity read: the role/name/model labels joined
+        "  ·  ", skipping hidden ones (a missing model shows no label). The
+        page renders them as separate styled labels; the driver re-joins
+        them so tests keep asserting one domain-level string."""
+        parts = []
+        for label in labels:
+            if label.isHidden():
+                continue
+            # full_text(): the name labels elide, so text() may be shortened.
+            text = label.full_text() if hasattr(label, "full_text") else label.text()
+            if text:
+                parts.append(text)
+        return "  ·  ".join(parts)
+
     def source_pane_headers(self) -> tuple[str, str] | None:
-        """The two pane-header labels ("Main · …", "Reference · …"), or
-        ``None`` while the header row is hidden (no reference docked)."""
+        """The two pane-header identities ("Main  ·  …", "Reference  ·  …"),
+        or ``None`` while the header row is hidden (no reference docked)."""
         page = self._w._source
         if page._pane_head.isHidden():
             return None
-        # full_text(): the heads elide, so text() may be shortened.
-        return (page._main_head.full_text(), page._ref_head.full_text())
+        return (
+            self._source_identity(page._main_role, page._main_head, page._main_model),
+            self._source_identity(page._ref_role, page._ref_head, page._ref_model),
+        )
 
     def source_hint_visible(self) -> bool:
         """Whether the "Open a reference to compare…" toolbar hint is shown.
@@ -594,10 +611,12 @@ class AppDriver:
         )
 
     def source_file_label(self) -> str | None:
-        """The single-pane toolbar's "filename · model" label text, or
+        """The single-pane identity strip's "filename  ·  model" read, or
         ``None`` while it is hidden (two-pane mode, or no document)."""
-        label = self._w._source._file_label
-        return None if label.isHidden() else label.full_text()
+        page = self._w._source
+        if page._file_label.isHidden():
+            return None
+        return self._source_identity(page._file_label, page._file_model)
 
     def source_selected_path(self) -> tuple | None:
         """The Source view's selected row path (last clicked/revealed row),
@@ -605,13 +624,25 @@ class AppDriver:
         return self._w._source._view.selected_path()
 
     def source_fold_button_text(self) -> str:
-        """The toolbar's fold-all button label ("▾ Collapse Parameters" /
-        "▸ Expand Parameters"), tracking the fold state of every
-        multi-line (dict/list) parameter value; sections don't count."""
+        """The fold-all button label ("▾ Collapse Parameters" / "▸ Expand
+        Parameters"), tracking the fold state of every multi-line
+        (dict/list) parameter value; sections don't count."""
         return self._w._source._fold_button.text()
 
+    def source_fold_button_visible(self) -> bool:
+        """Whether the fold-all toggle is shown. It lives in the shared
+        page-header bar, so it must hide whenever the Source page is not
+        the current one (and while no document is open)."""
+        return not self._w._source._fold_button.isHidden()
+
+    def source_fold_button_docked_in_header(self) -> bool:
+        """Whether the fold-all toggle is parented into the window's
+        page-header bar -- the structural fact behind "the button sits in
+        the bar that says Source"."""
+        return self._w._source._fold_button.parent() is self._w._page_header
+
     def source_toggle_fold_all(self) -> "AppDriver":
-        """Click the Source toolbar's fold-all toggle."""
+        """Click the Source page's fold-all toggle (in the page-header bar)."""
         self._w._source._fold_button.click()
         return self
 
@@ -625,9 +656,10 @@ class AppDriver:
         return self._w._source._stale_text.text()
 
     def source_reference_header_text(self) -> str:
-        """The reference pane's header ("Reference 1 of 3  ·  chen.json  ·
-        SPM")."""
-        return self._w._source._ref_head.full_text()
+        """The reference pane's header identity ("Reference  ·  chen.json
+        ·  SPM"), re-joined from its role/name/model labels."""
+        page = self._w._source
+        return self._source_identity(page._ref_role, page._ref_head, page._ref_model)
 
     def source_reference_badge_letters(self) -> str | None:
         """The letters of the reference pane's *selected* badge, or ``None``

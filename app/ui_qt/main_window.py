@@ -443,6 +443,11 @@ class MainWindow(QMainWindow):
         # reference surfaces.
         self._comparison_strip = ComparisonStrip()
         self._page_header.set_accessory(self._comparison_strip)
+        # The Source page's fold-all toggle docks at the bar's right edge:
+        # the page builds and drives it, the bar only places it. Shown only
+        # while the Source page is current (see _show_page), the same
+        # page-gating the comparison chips use.
+        self._page_header.set_trailing_accessory(self._source.fold_button())
         content = QWidget()
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(0, 0, 0, 0)
@@ -589,6 +594,7 @@ class MainWindow(QMainWindow):
         self._activity_bar.select(page_index)
         self._page_header.set_title(self._activity_bar.label_for(page_index))
         self._comparison_strip.set_page_active(page_index == _EDITOR_PAGE_INDEX)
+        self._source.set_page_active(page_index == _SOURCE_PAGE_INDEX)
         # Stale-on-disk is checked on notice, never watched;
         # entering the Source page is one of the two notice points (the
         # other is window activation, see ``changeEvent``).

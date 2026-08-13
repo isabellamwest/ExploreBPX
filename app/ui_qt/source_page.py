@@ -2,8 +2,8 @@
 
 With no reference docked the page shows one full-width pane of the main
 file -- monospace, collapsible section headers, "n parameters" sizes, and a
-quiet toolbar hint that docking a reference turns the page into a split
-comparison. With a reference docked the same rows render as two panes
+quiet identity-strip hint that docking a reference turns the page into a
+split comparison. With a reference docked the same rows render as two panes
 aligned line by line: a centre gutter column separates them, a flat grey
 block marks a key one side lacks, reference-only rows read in the
 reference purple, and fillable keys grey out with no value. Section and
@@ -1164,14 +1164,11 @@ class SourceView(QAbstractScrollArea):
         super().mouseDoubleClickEvent(event)
 
 
-def _pane_header_text(role: str, filename: str, model: str | None) -> str:
-    parts = [part for part in (role, filename, model) if part]
-    return "  ·  ".join(parts)
-
-
 class SourcePage(QWidget):
-    """The Source rail page: toolbar strip + pane headers + the raw-JSON
-    view (one pane, or two aligned panes with a reference docked)."""
+    """The Source rail page: identity strip + pane headers + the raw-JSON
+    view (one pane, or two aligned panes with a reference docked). Its
+    fold-all toggle is built here but docked by MainWindow into the shared
+    page-header bar, right-locked beside the page title."""
 
     #: Re-emitted from the view's ← gutter clicks: (path, is_section).
     #: MainWindow runs the shared pull command; the page never mutates.
@@ -1197,55 +1194,81 @@ class SourcePage(QWidget):
         self._view.pull_requested.connect(self.pull_requested)
         self._view.navigate_requested.connect(self.navigate_requested)
 
-        # Single-pane toolbar: the main file's identity on the
-        # left, the docking hint on the right. Both hide in two-pane mode,
-        # leaving only the fold-all button and the pane headers.
-        # Both elide under pressure: the identity is a filename and the hint
-        # is the first thing a narrow toolbar should give up, not clip.
-        self._file_label = ElidedLabel("SourceFileLabel")
-        self._hint = ElidedLabel("SourceHint")
-        self._hint.setText("Open a reference to compare…")
-
-        # Fold-all toggle: left-aligned in both single- and two-pane modes,
-        # so the rest of the toolbar never reshuffles around it. It acts on
-        # closable tables only (sections fold via their own carets); label
-        # and caret track the view's table fold state via
+        # Fold-all toggle: built and driven here (its label tracks the
+        # view's table fold state) but never laid out here -- MainWindow
+        # docks it into the page-header bar's trailing slot, the same
+        # docking the Editor's comparison chips use, so it sits right-locked
+        # in the bar that names the page. It acts on closable tables only
+        # (sections fold via their own carets); label and caret follow
         # ``fold_state_changed`` -- "Expand" whenever any table is folded,
-        # "Collapse" only once every table is open.
+        # "Collapse" only once every table is open. Shown only while the
+        # Source page is current *and* a document is open: the bar is shared
+        # by every page, so ``set_page_active`` must gate what ``refresh``
+        # alone cannot know.
         self._fold_button = QPushButton()
         self._fold_button.setObjectName("SourceFoldButton")
         self._fold_button.clicked.connect(self._on_fold_toggle)
         self._view.fold_state_changed.connect(self._update_fold_button)
         self._update_fold_button()
+        self._has_document = False
+        #: True by default, exactly like ComparisonStrip: a bare page (unit
+        #: tests) is its own current page; MainWindow corrects it on every
+        #: page switch.
+        self._page_active = True
+        self._update_fold_visible()
 
-        toolbar = QWidget()
-        toolbar_layout = QHBoxLayout(toolbar)
+        # Single-pane identity strip: the main file's name in the defined
+        # semibold every other identity surface uses (the board's main
+        # card, the comparison chips), its model as a muted detail beside
+        # it, and the docking hint on the right. All single-pane chrome:
+        # two-pane mode replaces the strip with the pane headers.
+        # Name and hint elide under pressure; the model detail never does.
+        self._file_label = ElidedLabel("SourceFileName")
+        self._file_model = QLabel()
+        self._file_model.setObjectName("SourceFileModel")
+        self._hint = ElidedLabel("SourceHint")
+        self._hint.setText("Open a reference to compare…")
+
+        self._toolbar = QWidget()
+        toolbar_layout = QHBoxLayout(self._toolbar)
         toolbar_layout.setContentsMargins(10, 6, 10, 6)
         toolbar_layout.setSpacing(8)
-        toolbar_layout.addWidget(self._fold_button)
         toolbar_layout.addWidget(self._file_label)
+        toolbar_layout.addWidget(self._file_model)
         toolbar_layout.addStretch(1)
         toolbar_layout.addWidget(self._hint)
         # Everything mode-dependent starts hidden; ``refresh`` shows the
         # right set for the current mode.
-        for control in (self._file_label, self._hint, self._fold_button):
+        self._toolbar.setVisible(False)
+        for control in (self._file_label, self._file_model, self._hint):
             control.setVisible(False)
 
-        # Elided: each head carries a filename, and the two share one row.
-        self._main_head = ElidedLabel()
-        self._main_head.setStyleSheet(
-            f"color: {style.MUTED}; {typography.size_qss(typography.META)} "
-            f"{typography.semibold_qss()}"
-        )
-        self._ref_head = ElidedLabel()
-        self._ref_head.setStyleSheet(
-            f"color: {style.REFERENCE}; {typography.size_qss(typography.META)} "
-            f"{typography.semibold_qss()}"
-        )
+        # Pane headers, one row shared by both panes. Each side leads with
+        # its quiet role word, then the filename in the same defined
+        # semibold as the single-pane strip (reference purple on the
+        # reference side), then the model as a muted detail. Only the
+        # names elide: the role words and models are short and fixed.
+        self._main_role = QLabel("Main")
+        self._main_role.setObjectName("SourcePaneRole")
+        self._main_head = ElidedLabel("SourceFileName")
+        self._main_model = QLabel()
+        self._main_model.setObjectName("SourceFileModel")
+        self._ref_role = QLabel("Reference")
+        self._ref_role.setObjectName("SourcePaneRoleReference")
+        self._ref_head = ElidedLabel("SourceReferenceName")
+        self._ref_model = QLabel()
+        self._ref_model.setObjectName("SourceFileModel")
         self._pane_head = QWidget()
         head_layout = QHBoxLayout(self._pane_head)
         head_layout.setContentsMargins(10, 2, 10, 2)
-        head_layout.addWidget(self._main_head, 1)
+        main_side = QHBoxLayout()
+        main_side.setContentsMargins(0, 0, 0, 0)
+        main_side.setSpacing(6)
+        main_side.addWidget(self._main_role)
+        main_side.addWidget(self._main_head)
+        main_side.addWidget(self._main_model)
+        main_side.addStretch(1)
+        head_layout.addLayout(main_side, 1)
         gutter_spacer = QWidget()
         gutter_spacer.setFixedWidth(_GUTTER_PX)
         head_layout.addWidget(gutter_spacer)
@@ -1262,7 +1285,10 @@ class SourcePage(QWidget):
         ref_side.setContentsMargins(0, 0, 0, 0)
         ref_side.setSpacing(6)
         ref_side.addLayout(self._ref_badge_slot)
-        ref_side.addWidget(self._ref_head, 1)
+        ref_side.addWidget(self._ref_role)
+        ref_side.addWidget(self._ref_head)
+        ref_side.addWidget(self._ref_model)
+        ref_side.addStretch(1)
         head_layout.addLayout(ref_side, 1)
         self._pane_head.setVisible(False)
 
@@ -1290,7 +1316,7 @@ class SourcePage(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        layout.addWidget(toolbar)
+        layout.addWidget(self._toolbar)
         layout.addWidget(self._pane_head)
         layout.addWidget(self._stale_band)
         layout.addWidget(self._view, 1)
@@ -1325,29 +1351,32 @@ class SourcePage(QWidget):
         two_pane = main_raw is not None and reference is not None
         single_pane = main_raw is not None and reference is None
         self._hint.setVisible(single_pane)
+        self._file_label.setText(main_name if single_pane else "")
         self._file_label.setVisible(single_pane)
-        self._file_label.setText(
-            "  ·  ".join(part for part in (main_name, main_model) if part)
-            if single_pane
-            else ""
-        )
-        self._fold_button.setVisible(main_raw is not None)
-        self._pane_head.setVisible(two_pane)
+        self._file_model.setText((main_model or "") if single_pane else "")
+        self._file_model.setVisible(single_pane and bool(main_model))
+        # Texts land before the strip shows: a first layout pass against
+        # the empty construction text would size the labels to nothing.
+        self._toolbar.setVisible(single_pane)
+        self._has_document = main_raw is not None
+        self._update_fold_visible()
         if not two_pane:
             # The band is a two-pane notice; an undocked/replaced reference
             # takes it with it (a fresh dock re-checks from MainWindow).
             self._stale_band.setVisible(False)
         self._set_reference_badges(pins if two_pane else [])
         if two_pane:
-            self._main_head.setText(
-                _pane_header_text("Main", main_name, main_model)
-            )
-            self._ref_head.setText(
-                _pane_header_text("Reference", reference.filename, reference.model)
-            )
+            self._main_head.setText(main_name)
+            self._main_model.setVisible(bool(main_model))
+            self._main_model.setText(main_model or "")
+            self._ref_head.setText(reference.filename)
+            self._ref_model.setVisible(bool(reference.model))
+            self._ref_model.setText(reference.model or "")
             # Origin on hover: the header names the reference; where it came
             # from (a bundled library set, or which file on disk) is the
-            # transparency fact the pane otherwise never states.
+            # transparency fact the pane otherwise never states. Set after
+            # the name: ``ElidedLabel.setText`` resets the tooltip to its
+            # own full text, and the origin must win.
             if reference.set_id is not None:
                 self._ref_head.setToolTip("Reference library")
             elif reference.path is not None:
@@ -1357,6 +1386,9 @@ class SourcePage(QWidget):
             rows = build_rows(main_raw, reference.raw)
         else:
             rows = build_rows(main_raw) if main_raw is not None else []
+        # Shown only after its texts are set, for the same first-layout
+        # reason as the single-pane strip above.
+        self._pane_head.setVisible(two_pane)
         self._view.set_rows(rows, two_pane=two_pane, pull_enabled=pull_enabled)
 
     def selected_reference_index(self) -> int:
@@ -1391,6 +1423,22 @@ class SourcePage(QWidget):
             other.setChecked(position == index)
         if index != self._selected_reference:
             self.reference_selected.emit(index)
+
+    def fold_button(self) -> QPushButton:
+        """The fold-all toggle, for MainWindow to dock into the page-header
+        bar's trailing slot -- the page builds and drives it (label, fold
+        action, visibility) but never lays it out."""
+        return self._fold_button
+
+    def set_page_active(self, active: bool) -> None:
+        """Tell the page whether it is the window's current page. The fold
+        button renders only then: it sits in the bar every page shares, and
+        must not outlive the page it acts on."""
+        self._page_active = active
+        self._update_fold_visible()
+
+    def _update_fold_visible(self) -> None:
+        self._fold_button.setVisible(self._has_document and self._page_active)
 
     def _on_fold_toggle(self) -> None:
         self._view.set_tables_folded(self._view.all_tables_expanded())

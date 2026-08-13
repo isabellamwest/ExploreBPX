@@ -476,8 +476,14 @@ def test_pane_headers_show_roles_names_and_models(qtbot):
         main_model="DFN",
     )
     assert not page._pane_head.isHidden()
-    assert page._main_head.full_text() == "Main  ·  nmc.json  ·  DFN"
-    assert page._ref_head.full_text() == "Reference  ·  lfp.json  ·  SPMe"
+    # Role, name and model are separate labels now: the quiet role word,
+    # the defined semibold filename, the muted model detail.
+    assert page._main_role.text() == "Main"
+    assert page._main_head.full_text() == "nmc.json"
+    assert page._main_model.text() == "DFN"
+    assert page._ref_role.text() == "Reference"
+    assert page._ref_head.full_text() == "lfp.json"
+    assert page._ref_model.text() == "SPMe"
 
 
 def test_two_pane_page_still_has_no_input_widget(qtbot):
@@ -938,52 +944,63 @@ def test_enter_pulls_the_selected_difference(app_driver, tmp_path, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Toolbar (fold-all toggle, single-pane label) + stale band.
+# Identity strip (single-pane name/model/hint) + fold-all toggle + stale band.
 # ---------------------------------------------------------------------------
 
 _CAPACITY = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
 _LOWER_CUTOFF = ("Parameterisation", "Cell", "Lower voltage cut-off [V]")
 
 
-def test_toolbar_single_pane_shows_label_hint_and_fold_button(qtbot):
+def test_identity_strip_single_pane_shows_name_model_hint_and_fold_button(qtbot):
     page = SourcePage()
     qtbot.addWidget(page)
 
     page.refresh(_DOC, main_name="main.json", main_model="SPM")
 
+    assert not page._toolbar.isHidden()
     assert not page._file_label.isHidden()
-    assert page._file_label.text() == "main.json  ·  SPM"
+    assert page._file_label.full_text() == "main.json"
+    assert not page._file_model.isHidden()
+    assert page._file_model.text() == "SPM"
     assert not page._hint.isHidden()
+    # A bare page is its own current page (no MainWindow to gate it), so
+    # the fold button shows as soon as there is a document.
     assert not page._fold_button.isHidden()
     assert page._fold_button.text() == "▾ Collapse Parameters"
 
 
-def test_toolbar_two_pane_shows_fold_button_only(qtbot):
+def test_identity_strip_hides_in_two_pane_mode(qtbot):
+    """With a reference docked the pane headers carry both identities, so
+    the whole single-pane strip goes, not just its labels -- an empty band
+    above the headers would be dead space."""
     page = _two_pane(qtbot, _DOC_MAIN_ONLY, _REF)
 
+    assert page._toolbar.isHidden()
     assert page._file_label.isHidden()
     assert page._hint.isHidden()
     assert not page._fold_button.isHidden()
 
 
-def test_toolbar_empty_without_a_document(qtbot):
+def test_identity_strip_and_fold_button_hide_without_a_document(qtbot):
     page = SourcePage()
     qtbot.addWidget(page)
 
     page.refresh(None)
 
+    assert page._toolbar.isHidden()
     assert page._file_label.isHidden()
     assert page._hint.isHidden()
     assert page._fold_button.isHidden()
 
 
-def test_single_pane_label_omits_a_missing_model(qtbot):
+def test_single_pane_strip_omits_a_missing_model(qtbot):
     page = SourcePage()
     qtbot.addWidget(page)
 
     page.refresh(_DOC, main_name="main.json", main_model=None)
 
-    assert page._file_label.text() == "main.json"
+    assert page._file_label.full_text() == "main.json"
+    assert page._file_model.isHidden()
 
 
 _DOC_WITH_TABLE = {
@@ -1046,6 +1063,25 @@ def test_fold_button_ignores_section_folds(qtbot):
     texts = page._view.line_texts()
     assert '"T": table' in texts
     assert '"BPX": "1.0.0"' not in texts
+
+
+def test_fold_button_docks_in_the_page_header_and_follows_the_page(
+    app_driver, tmp_path
+):
+    """The fold-all toggle lives in the window's page-header bar (the bar
+    that says SOURCE), so it must render only while the Source page is
+    current -- every page shares that bar."""
+    d = app_driver.open(_write(tmp_path, "main.json", _DOC_MAIN_ONLY))
+    d.show_view("Source")
+
+    assert d.source_fold_button_docked_in_header()
+    assert d.source_fold_button_visible()
+
+    d.show_view("Editor")
+    assert not d.source_fold_button_visible()
+
+    d.show_view("Source")
+    assert d.source_fold_button_visible()
 
 
 def test_pane_click_places_the_selection(qtbot):

@@ -35,6 +35,10 @@ class PageHeader(QWidget):
         # this bar keeps its own QSS size/colour via PageHeaderTitle).
         self._title.setFont(apply_caps_spacing(self._title.font()))
         layout.addWidget(self._title)
+        #: The accessory slot, held by index: ``set_accessory`` swaps this
+        #: stretch for its widget, and the index stays right however many
+        #: trailing accessories follow it.
+        self._accessory_index = layout.count()
         layout.addStretch(1)
 
         self._raw_title = ""
@@ -48,8 +52,21 @@ class PageHeader(QWidget):
         spacer competing at the same stretch would halve it.
         """
         layout = self.layout()
-        layout.takeAt(layout.count() - 1)
-        layout.addWidget(widget, 1)
+        layout.takeAt(self._accessory_index)
+        layout.insertWidget(self._accessory_index, widget, 1)
+
+    def set_trailing_accessory(self, widget: QWidget) -> None:
+        """Dock *widget* at the bar's right edge, inside the 16px margin.
+
+        The zero-stretch expanding spacer before it takes over only while
+        no stretch-1 item is visible: with the accessory shown (the Editor's
+        chips) it yields all leftover width to it, and with the accessory
+        hidden (any other page) it is what keeps the trailing widget pinned
+        right instead of drifting after the title.
+        """
+        layout = self.layout()
+        layout.addStretch(0)
+        layout.addWidget(widget)
 
     def set_title(self, text: str) -> None:
         """Set the page name shown, displayed upper-cased."""

@@ -37,6 +37,12 @@ class ElidedLabel(QLabel):
         self._full_text = text
         self.setToolTip(text)
         self._apply_elision()
+        # Unconditionally: sizeHint derives from the *full* text, but
+        # QLabel.setText short-circuits when the elided render is unchanged
+        # -- e.g. a label squeezed to nothing elides every text to "" -- and
+        # then no layout ever learns the hint grew, leaving the label stuck
+        # at its squeezed width however much room the row has.
+        self.updateGeometry()
 
     def full_text(self) -> str:
         return self._full_text
