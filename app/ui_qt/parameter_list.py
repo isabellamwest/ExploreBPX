@@ -50,12 +50,13 @@ from core.compare import (
     merged_row_state,
 )
 from core.completion import MissingField
-from core.parameter_types import classify
-from core.tree_model import TreeNode
+from core.parameter_types import ParameterKind, classify
+from core.tree_model import ParameterItem, TreeNode
 
 from . import parameter_row, style, typography
 from .add_parameter_popup import AddParameterPopup, suggestion_row_html, suggestion_row_text
-from .cards.experiment import is_validation_run_path
+from .cards.experiment import KNOWN_ALIASES, is_validation_run_path
+from .name_popup import NamePopup
 from .reference_identity import ReferencePin
 from .group_box import TintedSectionHeader
 from .parameter_row import ParameterRowDelegate
@@ -144,16 +145,28 @@ class ParameterListPanel(QWidget):
     #: from ``parameter_selected`` because a ghost row names no real
     #: document parameter for ``NavigationService`` to resolve.
     ghost_selected = Signal(tuple, str)
+    #: (run_path, alias): a run's muted placeholder row (a schema array not
+    #: in the file) was clicked -- it names no parameter either; the window
+    #: opens the run's card focused on that column, writing nothing.
+    placeholder_selected = Signal(tuple, str)
+    #: (section_path, name): create a named child section -- the
+    #: ``("Validation",)`` container's "+ Add", whose only sensible add is
+    #: an experiment (same command path as the tree's "Add experiment…").
+    add_section_requested = Signal(tuple, str)
 
-    #: Item-data roles marking a synthetic "fields to add" row -- a group
-    #: header or one field suggestion -- as distinct from a real parameter
-    #: row. Every synthetic row also sets role 256 (the parameter-path role
-    #: real rows carry) to ``None``, so the selection/removal/context-menu
-    #: handlers -- which all read role 256 -- treat a synthetic row as
-    #: "nothing to act on" instead of acting on a bogus path.
-    _GROUP_ROW_KIND_ROLE = Qt.UserRole + 300  # "header" | "suggestion" | "ghost"
+    #: Item-data roles marking a synthetic row -- a "fields to add" group
+    #: header or suggestion, a reference ghost, a run's placeholder array,
+    #: or the Validation container's run rows -- as distinct from a real
+    #: parameter row. Every synthetic row also sets role 256 (the
+    #: parameter-path role real rows carry) to ``None``, so the selection/
+    #: removal/context-menu handlers -- which all read role 256 -- treat a
+    #: synthetic row as "nothing to act on" instead of acting on a bogus
+    #: path.
+    _GROUP_ROW_KIND_ROLE = Qt.UserRole + 300  # "header" | "suggestion" | "ghost" | "placeholder" | "run"
     _GROUP_ROW_ALIAS_ROLE = Qt.UserRole + 301  # suggestion rows only
     _GHOST_KEY_ROLE = Qt.UserRole + 302  # ghost rows only: the reference-only key
+    _PLACEHOLDER_ALIAS_ROLE = Qt.UserRole + 303  # placeholder rows only
+    _RUN_PATH_ROLE = Qt.UserRole + 304  # container run rows only: the run's path
 
     def __init__(self) -> None:
         super().__init__()
@@ -197,6 +210,14 @@ class ParameterListPanel(QWidget):
         self._add_button.setCursor(Qt.PointingHandCursor)
         self._add_button.setEnabled(False)
         self._add_button.clicked.connect(self._open_add_popup)
+
+        #: The experiment-name popup the ``("Validation",)`` container's
+        #: "+ Add" opens instead of the parameter popup -- creating
+        #: experiments is the only sensible add there (the parameter popup's
+        #: Suggested group is empty for the container, and its "Other
+        #: parameters" would write non-Validation keys under Validation).
+        self._name_popup = NamePopup(self)
+        self._name_popup.name_chosen.connect(self._on_experiment_name_chosen)
 
         suffix = QWidget()
         suffix_layout = QHBoxLayout(suffix)
@@ -279,18 +300,21 @@ class ParameterListPanel(QWidget):
             for pin in self._pins
         ]
 
-    def _reference_tooltip_lines(self, rows: list[RowDiff | None]) -> list[str]:
+    def _reference_tooltip_lines(
+        self, rows: list[RowDiff | None], kind: ParameterKind
+    ) -> list[str]:
         """One "<names>: <value>" line per distinct reference value, in the
         order the values were first pinned.
 
         Names, not badge letters: a tooltip is plain text with no colour to
         carry, so the file's own name is the only identity that survives
-        there.
+        there. Values render kind-aware (``hover_value_text``): a reference
+        series line reads "Chen2020: series · 60 values", never a JSON dump.
         """
         lines = []
         for group in group_reference_values(rows):
             names = ", ".join(self._pins[index].name for index in group.indices)
-            lines.append(f"{names}: {parameter_row.value_tooltip(group.value)}")
+            lines.append(f"{names}: {parameter_row.hover_value_text(group.value, kind)}")
         return lines
 
     def set_read_only(self, read_only: bool) -> None:
@@ -312,49 +336,137 @@ class ParameterListPanel(QWidget):
             return
         self._header.show()
         self._header.set_title(node.label)
+        if node.path == ("Validation",):
+            # The container's contents are its runs, not parameters -- one
+            # navigable row per run, and a count that equals the rows below
+            # it (the parameter count here is always zero and read as a
+            # contradiction over a populated column).
+            self._count_label.setText(str(len(node.children)))
+            for child in node.children:
+                self._list.addItem(self._make_run_item(child))
+            return
         # Same count the tree's own whole-document total aggregates per
         # section (``Document.parameter_count``: the sum, across every
         # section, of ``len(node.parameters)``) -- real rows only, not the
         # ghost rows or "fields to add" suggestions appended below.
         self._count_label.setText(str(len(node.parameters)))
-        for parameter in node.parameters:
-            severity = self._visible_issue_severities.get(parameter.path)
-            is_empty = parameter.value is None
-            item = QListWidgetItem(parameter.label)
-            item.setData(256, parameter.path)
-            item.setData(
-                parameter_row.HTML_ROLE,
-                parameter_row.build_parameter_row_html(
-                    parameter.label, severity=severity, is_empty=is_empty
-                ),
-            )
-            # Right-aligned value preview (raw-verbatim, delegate-elided);
-            # the tooltip carries the full committed value so an elided
-            # 20-decimal mantissa is still one hover away.
-            preview, ghost = parameter_row.value_preview(parameter.value, parameter.kind)
-            item.setData(parameter_row.VALUE_ROLE, preview)
-            item.setData(parameter_row.VALUE_GHOST_ROLE, ghost)
-            if not is_empty:
-                item.setToolTip(parameter_row.value_tooltip(parameter.value))
-            if self._pins:
-                rows = self._rows_for(node.path, parameter.path[-1])
-                state = merged_row_state(rows)
-                variant = _ROW_BAR_VARIANTS.get(state) if state is not None else None
-                if variant is not None:
-                    item.setData(parameter_row.REF_BAR_ROLE, variant)
-                if variant == "differs":
-                    # The list says "differs"; the hover says from what, and
-                    # with several pinned, which references say what. The main
-                    # value's own tooltip line (set above) stays first.
-                    existing = item.toolTip()
-                    lines = ([existing] if existing else []) + self._reference_tooltip_lines(rows)
-                    item.setToolTip("\n".join(lines))
-            self._list.addItem(item)
-        self._append_ghost_rows(node)
+        if is_validation_run_path(node.path):
+            self._show_run_rows(node)
+        else:
+            for parameter in node.parameters:
+                self._list.addItem(self._make_parameter_item(node, parameter))
+            self._append_ghost_rows(node)
         if not self._read_only:
             # The group is one long invitation to add fields; a read-only
             # session offers no adds, so it is not appended at all.
             self._append_missing_fields_group(node, model)
+
+    def _make_parameter_item(
+        self, node: TreeNode, parameter: ParameterItem
+    ) -> QListWidgetItem:
+        severity = self._visible_issue_severities.get(parameter.path)
+        is_empty = parameter.value is None
+        item = QListWidgetItem(parameter.label)
+        item.setData(256, parameter.path)
+        item.setData(
+            parameter_row.HTML_ROLE,
+            parameter_row.build_parameter_row_html(
+                parameter.label, severity=severity, is_empty=is_empty
+            ),
+        )
+        # Right-aligned value preview (raw-verbatim, delegate-elided); the
+        # tooltip carries the committed value -- kind-aware, so a series
+        # summarises ("series · 12 values") rather than dumping JSON.
+        preview, ghost = parameter_row.value_preview(parameter.value, parameter.kind)
+        item.setData(parameter_row.VALUE_ROLE, preview)
+        item.setData(parameter_row.VALUE_GHOST_ROLE, ghost)
+        if not is_empty:
+            item.setToolTip(parameter_row.hover_value_text(parameter.value, parameter.kind))
+        if self._pins:
+            rows = self._rows_for(node.path, parameter.path[-1])
+            state = merged_row_state(rows)
+            variant = _ROW_BAR_VARIANTS.get(state) if state is not None else None
+            if variant is not None:
+                item.setData(parameter_row.REF_BAR_ROLE, variant)
+            if variant == "differs":
+                # The list says "differs"; the hover says from what, and
+                # with several pinned, which references say what. The main
+                # value's own tooltip line (set above) stays first.
+                existing = item.toolTip()
+                lines = ([existing] if existing else []) + self._reference_tooltip_lines(
+                    rows, parameter.kind
+                )
+                item.setToolTip("\n".join(lines))
+        return item
+
+    def _show_run_rows(self, node: TreeNode) -> None:
+        """A Validation run's rows, in the card's own order: the four schema
+        arrays first (each rendered as its real row, a reference ghost row,
+        or a muted placeholder -- ghost wins over placeholder, one row per
+        key, never both), then custom keys in file order, then any
+        non-schema reference-only keys. This is the same schema-first order
+        the run's grid always shows, ending the list/grid disagreement.
+        """
+        by_label = {p.label: p for p in node.parameters}
+        ghost_keys = (
+            frozenset(merged_ghost_keys(self._sections_for(node.path)))
+            if self._pins
+            else frozenset()
+        )
+        for alias in KNOWN_ALIASES:
+            parameter = by_label.get(alias)
+            if parameter is not None:
+                self._list.addItem(self._make_parameter_item(node, parameter))
+            elif alias in ghost_keys:
+                self._list.addItem(self._make_ghost_item(node.path, alias))
+            else:
+                self._list.addItem(self._make_placeholder_item(alias))
+        for parameter in node.parameters:
+            if parameter.label not in KNOWN_ALIASES:
+                self._list.addItem(self._make_parameter_item(node, parameter))
+        for key in sorted(ghost_keys):
+            if key not in KNOWN_ALIASES:
+                self._list.addItem(self._make_ghost_item(node.path, key))
+
+    def _make_run_item(self, run: TreeNode) -> QListWidgetItem:
+        """One navigable row per run under the ``("Validation",)`` container:
+        the run's name with its issue dot, and a muted "<n> arrays" meta (a
+        factual count of its list-valued parameters). Activation navigates
+        to the run's card; role 256 stays ``None`` so the parameter context
+        menu / Delete never treat a run as a parameter -- run management
+        lives on the tree node."""
+        severity = self._visible_issue_severities.get(run.path)
+        item = QListWidgetItem(run.label)
+        item.setData(256, None)
+        item.setData(self._GROUP_ROW_KIND_ROLE, "run")
+        item.setData(self._RUN_PATH_ROLE, tuple(run.path))
+        item.setData(
+            parameter_row.HTML_ROLE,
+            parameter_row.build_parameter_row_html(run.label, severity=severity, is_empty=False),
+        )
+        arrays = sum(1 for p in run.parameters if p.kind is ParameterKind.SERIES)
+        item.setData(parameter_row.VALUE_ROLE, f"{arrays} array{'s' if arrays != 1 else ''}")
+        item.setData(parameter_row.VALUE_GHOST_ROLE, True)
+        return item
+
+    def _make_placeholder_item(self, alias: str) -> QListWidgetItem:
+        """A run's muted placeholder row for a schema array not in the file:
+        ghost-grey label, "not in file" meta, no reference bar, no menu.
+        Mirrors the placeholder columns the run's card already shows;
+        clicking it focuses that column, and nothing is written until the
+        user types there."""
+        item = QListWidgetItem(alias)
+        item.setData(256, None)
+        item.setData(self._GROUP_ROW_KIND_ROLE, "placeholder")
+        item.setData(self._PLACEHOLDER_ALIAS_ROLE, alias)
+        item.setData(parameter_row.HTML_ROLE, parameter_row.build_ghost_row_html(alias))
+        item.setData(parameter_row.VALUE_ROLE, "not in file")
+        item.setData(parameter_row.VALUE_GHOST_ROLE, True)
+        item.setToolTip(
+            "Not in the file. Opens the run's grid column; nothing is "
+            "written until you type a value."
+        )
+        return item
 
     def _append_ghost_rows(self, node: TreeNode) -> None:
         """Append REF_ONLY ghost rows for this section, per the merge rule:
@@ -392,7 +504,7 @@ class ParameterListPanel(QWidget):
         # ghosts a null/derived-summary value.
         item.setData(parameter_row.VALUE_GHOST_ROLE, True)
         item.setData(parameter_row.REF_BAR_ROLE, "ref_only")
-        item.setToolTip("\n".join(self._reference_tooltip_lines(rows)))
+        item.setToolTip("\n".join(self._reference_tooltip_lines(rows, kind)))
         return item
 
     def _append_missing_fields_group(self, node: TreeNode, model: str | None) -> None:
@@ -563,6 +675,18 @@ class ParameterListPanel(QWidget):
             if self._node is not None:
                 self.ghost_selected.emit(self._node.path, item.data(self._GHOST_KEY_ROLE))
             return
+        if kind == "run":
+            # A container run row navigates like the tree's own run node --
+            # NavigationService resolves object paths, so the ordinary
+            # selection signal carries it.
+            self.parameter_selected.emit(item.data(self._RUN_PATH_ROLE))
+            return
+        if kind == "placeholder":
+            if self._node is not None:
+                self.placeholder_selected.emit(
+                    self._node.path, item.data(self._PLACEHOLDER_ALIAS_ROLE)
+                )
+            return
         self.parameter_selected.emit(item.data(256))
 
     def _on_context_menu_requested(self, pos: QPoint) -> None:
@@ -592,8 +716,14 @@ class ParameterListPanel(QWidget):
         """The legal row actions for the real parameter at *path*, in the
         order the design specifies: Rename…/Duplicate (only where the
         backend allows -- ``core.structure``), a separator, Move up/down
-        (always offered, disabled at the first/last real row), a separator,
-        then the unchanged Remove parameter.
+        (disabled at the first/last movable sibling), a separator, then the
+        unchanged Remove parameter.
+
+        Under a Validation run, Move up/down disappears entirely for the
+        schema arrays: their order is fixed by the schema everywhere it is
+        shown (the grid, this list), so offering to shuffle only the JSON
+        was pure noise. Custom keys keep it, positioned among the custom
+        keys the list actually displays.
         """
         menu = QMenu(self)
         parameters = self._node.parameters if self._node is not None else ()
@@ -609,35 +739,40 @@ class ParameterListPanel(QWidget):
             duplicate_action.triggered.connect(
                 lambda _checked=False, p=path: self.duplicate_parameter_requested.emit(p)
             )
-        if not menu.isEmpty():
-            menu.addSeparator()
 
-        index = self._real_parameter_index(path)
-        last_index = len(self._node.parameters) - 1 if self._node is not None else -1
-        move_up = menu.addAction("Move up")
-        move_up.setEnabled(index is not None and index > 0)
-        move_up.triggered.connect(
-            lambda _checked=False, p=path: self.move_parameter_requested.emit(p, "up")
-        )
-        move_down = menu.addAction("Move down")
-        move_down.setEnabled(index is not None and index < last_index)
-        move_down.triggered.connect(
-            lambda _checked=False, p=path: self.move_parameter_requested.emit(p, "down")
-        )
+        siblings = self._movable_siblings(path)
+        if siblings is not None:
+            if not menu.isEmpty():
+                menu.addSeparator()
+            index = next((i for i, p in enumerate(siblings) if p.path == path), None)
+            last_index = len(siblings) - 1
+            move_up = menu.addAction("Move up")
+            move_up.setEnabled(index is not None and index > 0)
+            move_up.triggered.connect(
+                lambda _checked=False, p=path: self.move_parameter_requested.emit(p, "up")
+            )
+            move_down = menu.addAction("Move down")
+            move_down.setEnabled(index is not None and index < last_index)
+            move_down.triggered.connect(
+                lambda _checked=False, p=path: self.move_parameter_requested.emit(p, "down")
+            )
 
         menu.addSeparator()
         menu.addAction(self._remove_action)
         return menu
 
-    def _real_parameter_index(self, path: tuple[str, ...]) -> int | None:
-        """*path*'s position among ``self._node.parameters`` (real rows only,
-        in the same order the list renders them), or ``None`` if not found."""
+    def _movable_siblings(self, path: tuple[str, ...]) -> list | None:
+        """The sibling list Move up/down positions *path* within, in display
+        order -- or ``None`` when the row offers no Move at all (a schema
+        array under a run). Under a run the movable set is the custom keys
+        only; everywhere else it is every real row."""
         if self._node is None:
-            return None
-        for index, parameter in enumerate(self._node.parameters):
-            if parameter.path == path:
-                return index
-        return None
+            return []
+        if is_validation_run_path(self._node.path):
+            if path[-1] in KNOWN_ALIASES:
+                return None
+            return [p for p in self._node.parameters if p.label not in KNOWN_ALIASES]
+        return list(self._node.parameters)
 
     def _remove_current_parameter(self) -> None:
         """Request removal of whichever row is current.
@@ -661,6 +796,13 @@ class ParameterListPanel(QWidget):
     def _open_add_popup(self) -> None:
         if self._node is None:
             return
+        if self._node.path == ("Validation",):
+            # The container's only sensible add is an experiment -- same
+            # popup and command path as the tree's "Add experiment…".
+            taken = frozenset(child.label for child in self._node.children)
+            anchor = self._add_button.mapToGlobal(self._add_button.rect().bottomLeft())
+            self._name_popup.open_at(anchor, "New experiment name…", taken=taken)
+            return
         existing = {parameter.label for parameter in self._node.parameters}
         self._popup.open_for_section(
             self._add_button,
@@ -670,6 +812,9 @@ class ParameterListPanel(QWidget):
             self._model,
             self._node.value,
         )
+
+    def _on_experiment_name_chosen(self, name: str) -> None:
+        self.add_section_requested.emit(("Validation",), name)
 
     def _on_custom_parameter_requested(self, key: str, seed: object) -> None:
         if self._node is None:

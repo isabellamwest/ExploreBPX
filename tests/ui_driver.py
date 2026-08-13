@@ -1232,6 +1232,81 @@ class AppDriver:
                 return item.data(parameter_row.REF_BAR_ROLE)
         raise AssertionError(f"No ghost row for {key!r}.")
 
+    def parameter_list_rows(self) -> list[tuple[str, str]]:
+        """Every middle-column row as ``(kind, text)``, in list order --
+        kind ``""`` for a real parameter row, else the synthetic kind
+        ("header"/"suggestion"/"ghost"/"placeholder"/"run")."""
+        panel = self._w._params
+        lst = panel._list
+        rows = []
+        for i in range(lst.count()):
+            item = lst.item(i)
+            rows.append((item.data(panel._GROUP_ROW_KIND_ROLE) or "", item.text()))
+        return rows
+
+    def parameter_list_count_text(self) -> str:
+        """The middle column header's count label, verbatim."""
+        return self._w._params._count_label.text()
+
+    def click_placeholder_row(self, alias: str) -> "AppDriver":
+        """Click the run's muted placeholder row for *alias*."""
+        panel = self._w._params
+        lst = panel._list
+        for i in range(lst.count()):
+            item = lst.item(i)
+            if (
+                item.data(panel._GROUP_ROW_KIND_ROLE) == "placeholder"
+                and item.data(panel._PLACEHOLDER_ALIAS_ROLE) == alias
+            ):
+                lst.setCurrentItem(item)
+                lst.itemClicked.emit(item)
+                return self
+        raise AssertionError(f"No placeholder row for {alias!r}.")
+
+    def click_container_run_row(self, label: str) -> "AppDriver":
+        """Click the ``("Validation",)`` container's run row named *label*."""
+        panel = self._w._params
+        lst = panel._list
+        for i in range(lst.count()):
+            item = lst.item(i)
+            if item.data(panel._GROUP_ROW_KIND_ROLE) == "run" and item.text() == label:
+                lst.setCurrentItem(item)
+                lst.itemClicked.emit(item)
+                return self
+        raise AssertionError(f"No container run row named {label!r}.")
+
+    def row_menu_actions(self, label: str) -> list[tuple[str, bool]]:
+        """The context-menu entries for the real row starting with *label*,
+        as ``(text, enabled)`` -- built, never exec'd (QMenu.exec truly
+        blocks offscreen)."""
+        panel = self._w._params
+        lst = panel._list
+        for i in range(lst.count()):
+            item = lst.item(i)
+            path = item.data(256)
+            if path is not None and item.text().startswith(label):
+                menu = panel._build_row_menu(path)
+                return [
+                    (action.text(), action.isEnabled())
+                    for action in menu.actions()
+                    if not action.isSeparator()
+                ]
+        raise AssertionError(f"No real parameter row starting with {label!r}.")
+
+    def add_experiment_via_container_popup(self, name: str) -> "AppDriver":
+        """Click the middle column's "+ Add" on the ``("Validation",)``
+        container and confirm *name* in the experiment-name popup it opens."""
+        panel = self._w._params
+        self._qtbot.mouseClick(panel._add_button, Qt.LeftButton)
+        popup = panel._name_popup
+        assert not popup.isHidden(), "The experiment-name popup did not open."
+        self._qtbot.keyClicks(popup._input, name)
+        self._qtbot.keyClick(popup._input, Qt.Key_Return)
+        return self
+
+    def container_name_popup_open(self) -> bool:
+        return not self._w._params._name_popup.isHidden()
+
     def parameter_list_row_painted_colour(self, item_index: int, dx: int = 6, dy: int = 6) -> str:
         """The actual rendered pixel colour near the top-left of the row at
         *item_index* in the parameter list, real widths/window shown first.

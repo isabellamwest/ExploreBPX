@@ -307,6 +307,11 @@ class InspectorPanel(QWidget):
         node = self._selected_section()
         if node is None:
             return "Select an object from the structure to inspect + edit it."
+        if node.path == ("Validation",) and node.children:
+            # The container's list holds runs, not parameters -- the generic
+            # wording ("has no parameters yet") read as a contradiction over
+            # a populated column of run rows.
+            return "Select a run from the list to open its experiment."
         if not node.parameters:
             return f"{node.label} has no parameters yet. Add one from the list."
         return f"Select a parameter from {node.label} to inspect + edit it."
@@ -509,6 +514,13 @@ class InspectorPanel(QWidget):
             self._activate_sections(parameter, bpx_gateway.field_meta(parameter.path))
         else:
             self._deactivate_sections()
+
+    def focus_experiment_alias(self, alias: str) -> None:
+        """Focus *alias*'s grid column on the ExperimentCard currently
+        showing, if that is what is showing -- the second half of a
+        placeholder-row click (the first half navigated to the run)."""
+        if isinstance(self._card, ExperimentCard):
+            self._card.focus_alias(alias)
 
     def _show_validation_empty_state(self) -> None:
         """Build and show the guided empty state for a zero-run Validation

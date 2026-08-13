@@ -536,6 +536,8 @@ class MainWindow(QMainWindow):
         self._params.duplicate_parameter_requested.connect(self._on_duplicate_parameter_requested)
         self._params.move_parameter_requested.connect(self._on_move_parameter_requested)
         self._params.ghost_selected.connect(self._on_ghost_selected)
+        self._params.add_section_requested.connect(self._on_add_section_requested)
+        self._params.placeholder_selected.connect(self._on_placeholder_selected)
         self._diagnostics.issue_activated.connect(self._navigation.navigate)
         self._diagnostics.task_activated.connect(self._on_task_activated)
         self._inspector.issue_activated.connect(self._navigation.navigate)
@@ -1779,6 +1781,14 @@ class MainWindow(QMainWindow):
         read-only ghost card, bypassing ``NavigationService`` entirely (a
         ghost row names no real document parameter for it to resolve)."""
         self._inspector.show_ghost_parameter(tuple(section_path), key)
+
+    def _on_placeholder_selected(self, run_path: tuple, alias: str) -> None:
+        """A run's placeholder row (a schema array not in the file) was
+        clicked: open the run's card and focus that column. Nothing is
+        written -- the first committed value there goes through the card's
+        ordinary upsert path when the user types one."""
+        self._navigation.navigate(tuple(run_path))
+        self._inspector.focus_experiment_alias(alias)
 
     def _on_file_dropped(self, path: str) -> None:
         """Open a file dropped onto the Workspace page.

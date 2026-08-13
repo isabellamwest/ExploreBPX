@@ -247,6 +247,20 @@ def value_tooltip(value: object) -> str:
     return text
 
 
+def hover_value_text(value: object, kind: ParameterKind) -> str:
+    """Tooltip text for one committed value, kind-aware.
+
+    A list is summarised by its own preview text ("series · 12 values") --
+    never a truncated JSON dump, and never first/last endpoints, which read
+    as a range and mislead for a non-monotonic series; the card is one
+    click away for the data itself. Everything else stays
+    :func:`value_tooltip`'s capped verbatim JSON.
+    """
+    if isinstance(value, list):
+        return value_preview(value, kind)[0]
+    return value_tooltip(value)
+
+
 def compose_issue_row_html(location: str, message: str, detail: str | None = None) -> str:
     """Compose an issue row's rich-text fragment: the bold location on the
     first line, the validator's verbatim message (muted, smaller) on the
