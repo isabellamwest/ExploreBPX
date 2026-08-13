@@ -13,6 +13,13 @@ import yaml
 
 
 def to_json(raw: dict, indent: int = 2) -> bytes:
+    # Deliberately permissive: json.dumps emits bare NaN/Infinity/-Infinity
+    # tokens for non-finite floats. That is valid for Python's own json
+    # module and for bpx's loader (both round-trip it), but not RFC 8259
+    # JSON, so a strict external consumer would reject the file. Blocking
+    # the save here would be stricter than the bpx validator itself, which
+    # is the one thing this app must never be -- see "Validator fidelity"
+    # in the project guide. Kept permissive on purpose.
     return json.dumps(raw, indent=indent, ensure_ascii=False).encode("utf-8")
 
 
