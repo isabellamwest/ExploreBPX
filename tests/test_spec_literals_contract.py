@@ -164,6 +164,16 @@ def test_B6_top_level_partition_matches_the_schema_root(schema):
     assert protected.isdisjoint(optional)
 
 
+def test_B8_model_descriptors_cover_exactly_the_model_enum(model_enum):
+    """The workspace panel's ``_MODEL_DESCRIPTORS`` blurbs are keyed by model
+    name for the New-document board; pin its key set to the schema's own
+    model enum so a new upstream model (silently rendered with no
+    description, per the dict's own comment) fails loudly here instead."""
+    from ui_qt.workspace_panel import _MODEL_DESCRIPTORS
+
+    assert set(_MODEL_DESCRIPTORS) == set(model_enum)
+
+
 def test_B7_every_state_child_has_a_section_definition_entry(defs):
     """``_SECTION_DEFS`` maps each State child by literal path. Pin the map
     to the State definition's own properties (both directions: a new child
