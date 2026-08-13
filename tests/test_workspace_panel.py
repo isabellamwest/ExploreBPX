@@ -234,6 +234,53 @@ def test_an_empty_board_shows_the_start_surface_not_an_empty_card(app_driver):
     assert not d.workspace_record_visible()
 
 
+def test_every_board_card_is_the_same_height(app_driver, valid_spm_path):
+    """The main card, a pinned reference and the empty slots draw one row.
+
+    Their own hints differ (a role line against a badge, and an empty slot
+    holding only its ＋), so left alone the row had three bottom edges.
+    """
+    d = app_driver
+    d.open(valid_spm_path)
+    d.dock_library_reference("pybamm/chen2020")
+
+    heights = d.board_card_heights()
+    assert len(heights) == 5, "main card plus four slots"
+    assert len(set(heights)) == 1, f"ragged board row: {heights}"
+
+
+def test_the_slots_level_with_each_other_not_with_the_start_surface(app_driver):
+    """With nothing open the slots still share one height -- but the start
+    surface is a page of ways to open a file, and an empty slot stretched to
+    *that* is an emphatic frame around nothing."""
+    d = app_driver
+    d.dock_library_reference("pybamm/chen2020")
+
+    heights = d.board_card_heights()
+    assert len(heights) == 4, "no main card on the board"
+    assert len(set(heights)) == 1, f"ragged slots: {heights}"
+    assert heights[0] < d._w._workspace._start_surface.height()
+
+
+def test_a_long_main_filename_elides_and_leaves_the_row_level(
+    app_driver, valid_spm_dict, tmp_path
+):
+    """A wrapped filename grew the main card by a line and left the slots
+    beside it short, so the card elides and keeps the whole name in reach."""
+    import json
+
+    long_name = tmp_path / ("nmc_pouch_cell_" + "very_long_" * 6 + "revision.json")
+    long_name.write_text(json.dumps(valid_spm_dict), encoding="utf-8")
+    d = app_driver
+    d.open(long_name)
+
+    assert d.workspace_main_name() == long_name.name
+    card_name = d._w._workspace._main_card._name
+    assert card_name.text() != long_name.name, "shown text is elided"
+    assert card_name.toolTip() == long_name.name
+    assert len(set(d.board_card_heights())) == 1
+
+
 def test_start_surface_offers_exactly_the_supported_models(app_driver):
     assert sorted(app_driver.workspace_new_model_options()) == sorted(SUPPORTED_MODELS)
 

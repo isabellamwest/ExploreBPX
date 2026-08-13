@@ -99,9 +99,10 @@ _RAIL_WIDTH = 280
 #: gutter rung, not a width of its own.
 _SECTION_GAP = SPACING_LG
 
-#: How tall an empty reference slot stays. The slots are top-aligned, so
-#: without a floor a slot holding only its ＋ would shrink to the button and
-#: stop reading as a place a reference goes.
+#: How tall an empty reference slot stays *before* the row is levelled. The
+#: slots are top-aligned, so without a floor a slot holding only its ＋ would
+#: shrink to the button and stop reading as a place a reference goes.
+#: ``_level_board_cards`` raises it to whatever the tallest card asks for.
 _EMPTY_SLOT_HEIGHT = 56
 
 #: The measure every section on this page is capped at -- one right edge for
@@ -876,6 +877,18 @@ class ReferenceRecordPanel(QWidget):
         return self._checked_value
 
 
+def _card_height(card: QWidget) -> int:
+    """How tall a board card will actually draw.
+
+    The layout's own formula rather than the size hint alone, because that
+    is what decides the drawn height: ``QWidgetItem`` expands a widget's
+    hint by its *minimum* size hint. The two agree on today's cards; a card
+    whose children ever carry minimums of their own would be levelled to the
+    wrong number without this.
+    """
+    return max(card.sizeHint().height(), card.minimumSizeHint().height())
+
+
 class _MainCard(QFrame):
     """The board's main document: the one editable file, and the two ways
     out of this page that belong to it.
@@ -907,9 +920,12 @@ class _MainCard(QFrame):
         name_row = QHBoxLayout()
         name_row.setContentsMargins(0, 0, 0, 0)
         name_row.setSpacing(6)
-        self._name = QLabel(_INFO_PANEL_EMPTY_STATE_TEXT)
-        self._name.setObjectName("BoardMainName")
-        self._name.setWordWrap(True)
+        # Elided, not wrapped, for the reference slots' own reason (see
+        # ``_ReferenceSlot``): a wrapped filename grew the card by a line and
+        # left the slots beside it short. The whole name is a hover away, and
+        # spelled out in the strip below and in the window title.
+        self._name = _ElidedLabel("BoardMainName")
+        self._name.setText(_INFO_PANEL_EMPTY_STATE_TEXT)
         name_row.addWidget(self._name)
         # A document that has never been written is a plain fact about where
         # it lives, not a problem with it -- so a muted word, never a warning
@@ -951,6 +967,10 @@ class _MainCard(QFrame):
         routes.addWidget(self._issue_route)
         routes.addStretch(1)
         layout.addLayout(routes)
+        # Surplus height belongs under the last row, not shared out between
+        # them: the row is levelled to its tallest card, and a card that is
+        # not the tallest must not answer by loosening its own lines.
+        layout.addStretch(1)
 
     def set_missing(self) -> None:
         """The workspace's recorded main is not on disk. The card states the
@@ -1012,7 +1032,9 @@ class _MainCard(QFrame):
         return self._badge.text()
 
     def name_text(self) -> str:
-        return self._name.text()
+        # The full name, never the elided one: this is what the app is
+        # asked "which document is open?", not what fits today's width.
+        return self._name.full_text()
 
 
 class _ReferenceSlot(QFrame):
@@ -1097,6 +1119,10 @@ class _ReferenceSlot(QFrame):
         self._diff_route.setCursor(Qt.PointingHandCursor)
         self._diff_route.clicked.connect(self._emit_diff)
         filled.addWidget(self._diff_route, 0, Qt.AlignLeft)
+        # The main card's rule, for the same reason: a slot levelled up to a
+        # taller neighbour packs its rows at the top and leaves the surplus
+        # below, rather than opening gaps between name, model and route.
+        filled.addStretch(1)
 
         self._filled.hide()
         self._layout.addWidget(self._filled)
@@ -1763,7 +1789,11 @@ class WorkspacePanel(QWidget):
         self._main_card = _MainCard()
         self._main_card.edit_requested.connect(self.edit_requested)
         self._main_card.diagnostics_requested.connect(self.diagnostics_requested)
-        board.addWidget(self._main_card, _MAIN_CARD_STRETCH)
+        # Top-aligned like the slots, so the levelled height is the last word
+        # on how tall a card is. Left to fill the row the main card answered
+        # any spare vertical space alone -- 476 px beside 87 px slots when the
+        # row was handed the page's leftover height.
+        board.addWidget(self._main_card, _MAIN_CARD_STRETCH, Qt.AlignTop)
 
         # The same flex slot, in the other state, and a wider share of the
         # row while nothing is pinned (see the stretch constants, and
@@ -1990,6 +2020,7 @@ class WorkspacePanel(QWidget):
             # saying it has nothing to say. The board above already states
             # the absence, and states it as an invitation.
             self._main_section.hide()
+            self._level_board_cards()
             return
 
         self._main_card.setVisible(True)
@@ -2064,6 +2095,9 @@ class WorkspacePanel(QWidget):
             read_only,
             never_saved,
         )
+        # Last, because it measures what everything above has just put in the
+        # cards.
+        self._level_board_cards()
 
     def _set_references(
         self, references: list[ReferenceSnapshot], differ_counts: list[int]
@@ -2117,6 +2151,54 @@ class WorkspacePanel(QWidget):
             self._reference_record.show()
         else:
             self._reference_record.hide()
+
+    def _level_board_cards(self) -> None:
+        """One height for every card on the board row.
+
+        The cards hold different things -- the main card spends a line on its
+        role where a slot spends it on a badge, and an empty slot holds only
+        its ＋ -- so their own hints came out at 85, 78 and 56 px, three
+        bottom edges across one row of tiles. The tallest card sets the
+        height and the rest are floored to it.
+
+        Measured over the *cards* only. The start surface stands in the same
+        row and is a page's worth of ways to open a file; levelling an empty
+        slot up to that is the tall dashed column around nothing that the
+        slots are top-aligned to avoid.
+
+        Run on every refresh *and* on every resize. A card filled before the
+        page has been shown is measured before the stylesheet has reached
+        its new badge, and answers 61 px for a card that goes on to draw 69;
+        the resize pass, which happens after all that, is the one that gets
+        it right. A card's own hint does not move with its minimum, so
+        measuring again on an already-levelled row cannot ratchet it.
+        """
+        cards = [self._main_card, *self._slots]
+        height = max(
+            [_EMPTY_SLOT_HEIGHT]
+            + [_card_height(card) for card in cards if not card.isHidden()]
+        )
+        for card in cards:
+            # Only on a real change, or the relayout this triggers would ask
+            # for another levelling pass for ever.
+            if card.minimumHeight() != height:
+                card.setMinimumHeight(height)
+
+    def event(self, event) -> bool:
+        """Level the row before Qt re-lays the page out.
+
+        ``refresh`` alone is too early: a slot filled while the page is
+        still unshown is measured before the stylesheet has reached its new
+        badge, and reports 61 px for a card that goes on to draw 69. The
+        layout request that follows the polish is the moment the numbers are
+        finally true, and the no-change guard in ``_level_board_cards`` is
+        what stops the levelling from requesting a layout for ever.
+        """
+        # A layout request can reach the panel while it is still building
+        # itself, before the board exists to be levelled.
+        if event.type() == QEvent.LayoutRequest and hasattr(self, "_main_card"):
+            self._level_board_cards()
+        return super().event(event)
 
     def _on_slot_selected(self, snapshot: ReferenceSnapshot) -> None:
         """Clicking a slot opens its record beneath the board; clicking the

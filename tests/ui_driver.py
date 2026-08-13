@@ -978,6 +978,31 @@ class AppDriver:
         card = self._w._workspace._main_card
         return "" if card.isHidden() else card.name_text()
 
+    def board_card_heights(self) -> list[int]:
+        """The rendered height of every card on the board row -- the main
+        card when it is on the board, then the four reference slots.
+
+        Laid out first: the heights are what the row actually draws, not
+        what the widgets asked for, and the offscreen suite never pumps an
+        event loop long enough to settle the board on its own.
+        """
+        from PySide6.QtWidgets import QApplication
+
+        ws = self._w._workspace
+        # The suite's window is never shown, and an unshown window never runs
+        # a layout pass at all -- every widget still reads QWidget's default
+        # 480 px. Shown (offscreen), the page lays out for real; activating
+        # from the window down rather than from the board out, because the
+        # row alone would lay out inside whatever stale height its section
+        # still has.
+        self._w.show()
+        for _ in range(3):
+            self._w.layout().activate()
+            QApplication.processEvents()
+        cards = [] if ws._main_card.isHidden() else [ws._main_card]
+        cards.extend(ws._slots)
+        return [card.height() for card in cards]
+
     def workspace_record_visible(self) -> bool:
         """Whether the main document's fact plaque is on the page.
 

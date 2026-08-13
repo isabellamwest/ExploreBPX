@@ -317,7 +317,12 @@ navigate to locations rather than filtering or replacing the hierarchy.
   (click to rename, refused inline if the name is in use), then the
   **board**: the main card beside four reference slots. The slots *are* the
   drawn cap, so there is no counter and no dock buttons — at four there is
-  simply no ＋ left to click. Each card offers a route out so the page is
+  simply no ＋ left to click. Every card on the row draws at one height, the
+  tallest card's, measured over the cards alone: the start surface stands in
+  the same row and levelling an empty slot up to *that* would frame nothing
+  emphatically. Both card kinds elide their names rather than wrap, because a
+  wrapped name grew its own card and left its neighbours short.
+  Each card offers a route out so the page is
   never a dead end ("Edit its parameters ▸", "N errors · why? ▸", "N values
   differ ▸"). A workspace whose files have moved opens anyway, with a banner
   naming each one and offering Locate…/Remove. Provenance stays visible
