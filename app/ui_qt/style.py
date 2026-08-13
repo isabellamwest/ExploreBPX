@@ -149,10 +149,6 @@ DEFAULT_TEXT = "#1f2328"
 #: the stylesheet below): quieter than ``MUTED`` so a placeholder reads as
 #: "nothing here", not as a value.
 GHOST_TEXT = "#8c959f"
-#: Diagnostics stream band fill (fold headers and the clear line): a grey
-#: band distinct from the white rows. The name survives the rail it was
-#: born on.
-RAIL_BG = "#dfe5eb"
 #: One step darker than the app's usual ``#b9c4ce`` border tone, used only
 #: on the Diagnostics page's own chrome (group-box border, rail's right
 #: edge, strip's bottom edge, chip borders) so those regions read a touch
@@ -754,13 +750,14 @@ QListWidget#SearchPopupList::item:selected { background: #cfe4fc; color: #1f2328
 /* The Diagnostics page: a summary strip (chips + the D15 Collapse all/
    Expand all affordance) over one scrolling stream list -- the "one
    stream" redesign (PLAN-diagnostics-stream.md), no rail, no separate
-   detail pane. Fold-header/clear-line bands paint on RAIL_BG (the name
-   predates this redesign; the constant itself just means "a band one
-   shade off white"). Only the chip borders keep BORDER_STRONG (#a5b1bd):
-   a bordered chip is a control and earns the darker step, while the
-   page's dividers (the strip's bottom edge here, the painted band
-   hairlines in diagnostics_panel.py) stay on the ordinary #b9c4ce --
-   repeated once per section, the darker line read too heavy. */
+   detail pane. Fold headers/the clear line are delegate-painted caps rows
+   ruled with a single hairline on the plain page (the old shaded band
+   fill read too heavy repeated once per section; whitespace inside the
+   header row separates sections now). Only the chip borders keep
+   BORDER_STRONG (#a5b1bd): a bordered chip is a control and earns the
+   darker step, while the page's dividers (the strip's bottom edge here,
+   the painted rules in diagnostics_panel.py) stay on the ordinary
+   #b9c4ce -- repeated once per section, the darker line read too heavy. */
 QWidget#DiagnosticsSummaryStrip { background: #e7ecf1; border-bottom: 1px solid #b9c4ce; }
 /* One strip chip: a small bordered, rounded card on the shaded strip
    band, distinct from the flat text it replaced. Each chip is a

@@ -728,18 +728,25 @@ class _DiagnosticsRowDelegate(ParameterRowDelegate):
     Only actionable rows (issue/task) show hover/selection -- a message/
     subhead/clear_row/all_clear row paints flat whatever the mouse does,
     since a highlight promises interaction and activating one is a
-    structural no-op. The two banded header kinds (:attr:`_BAND_KINDS`) get
-    their own custom paint on a shaded background band: a per-section
-    ``fold_header`` splits bold label from muted suffix (D5, no badges);
-    the page-wide ``clear_summary`` row paints its own already-composed
-    plain text, single tier. A ``clear_row`` also gets custom paint --
+    structural no-op. The two ruled header kinds (:attr:`_BAND_KINDS`) get
+    their own custom paint -- caps text plus one boundary hairline on the
+    plain page, whitespace above doing the separating a filled band once
+    did: a per-section ``fold_header`` splits bold label from muted suffix
+    (D5, no badges); the page-wide ``clear_summary`` row paints its own
+    already-composed plain text, single tier. A ``clear_row`` also gets
+    custom paint --
     plain text, muted, italic only when its bucket is absent -- so an
     absent section's italic is drawn from the row's own real font rather
     than a font substituted via ``QListWidgetItem.setFont``.
     """
 
     _INTERACTIVE_KINDS = frozenset({"issue", "task"})
-    _FOLD_HEADER_HEIGHT = 30
+    #: Total header-row height: :attr:`_HEADER_AIR` of deliberate
+    #: whitespace over a text tier -- the air, not a filled band, is what
+    #: separates one section from the last.
+    _FOLD_HEADER_HEIGHT = 40
+    #: The whitespace share of :attr:`_FOLD_HEADER_HEIGHT`, above the text.
+    _HEADER_AIR = 12
     _BAND_KINDS = frozenset({"fold_header", "clear_summary"})
     #: The widest a stream row's *content* gets, however wide the window is.
     #: A validator message ran the full bleed -- around 200 characters a line
@@ -788,17 +795,17 @@ class _DiagnosticsRowDelegate(ParameterRowDelegate):
             return QSize(int(self._available_width(option)), self._FOLD_HEADER_HEIGHT)
         return super().sizeHint(option, index)
 
-    def _band_ground(self, painter, option, *, edge_at_top: bool) -> None:
-        """Fill a band's shaded ground plus its 1px boundary hairline
-        (concept-B contrast pass: the wash alone vanished on ordinary
-        Windows panels, so every band also draws a line that cannot). A
-        fold header's hairline sits on its bottom edge, against the rows it
-        opens; the clear line's sits on its top edge, against the rows
-        above it. The line is the app's ordinary ``BORDER`` tone, not
-        ``BORDER_STRONG`` -- at one per section the darker step made the
-        dividers the loudest thing on the page."""
+    def _hairline(self, painter, option, *, edge_at_top: bool) -> None:
+        """A header's single 1px boundary rule -- all that survives of the
+        old shaded band, whose fill read too heavy repeated once per
+        section. The rule is the half that stays for a reason the contrast
+        pass already paid for: a wash alone vanished on ordinary Windows
+        panels, a line cannot. A fold header's rule sits on its bottom
+        edge, under its own title; the clear line's sits on its top edge,
+        against the rows above it. The line is the app's ordinary
+        ``BORDER`` tone, not ``BORDER_STRONG`` -- at one per section the
+        darker step made the dividers the loudest thing on the page."""
         painter.save()
-        painter.fillRect(option.rect, QColor(style.RAIL_BG))
         edge_y = option.rect.top() if edge_at_top else option.rect.bottom()
         painter.fillRect(
             QRect(option.rect.left(), edge_y, option.rect.width(), 1),
@@ -817,10 +824,10 @@ class _DiagnosticsRowDelegate(ParameterRowDelegate):
         )
 
     def _paint_band(self, painter, option, text: str) -> None:
-        """The shared shaded-band background both banded header kinds
-        paint on; :meth:`_paint_fold_header` layers its own two-tier text
-        on top of this instead of using *text* directly."""
-        self._band_ground(painter, option, edge_at_top=True)
+        """The page-wide clear line: one muted caps row, ruled on its top
+        edge against the stream above it; :meth:`_paint_fold_header` is
+        the per-section variant with its own two-tier text."""
+        self._hairline(painter, option, edge_at_top=True)
         painter.save()
         font = self._caps_font(option)
         painter.setFont(font)
@@ -840,12 +847,16 @@ class _DiagnosticsRowDelegate(ParameterRowDelegate):
         label_text = f"{chevron}  {header.label.upper()}"
         suffix = header.suffix
 
-        self._band_ground(painter, option, edge_at_top=False)
+        self._hairline(painter, option, edge_at_top=False)
 
+        # The row's top ``_HEADER_AIR`` is deliberate whitespace -- the
+        # inter-section gap lives inside the header row -- so both text
+        # tiers centre in the zone below it, just above the bottom rule.
+        zone = option.rect.adjusted(0, self._HEADER_AIR, 0, 0)
         font = self._caps_font(option)
         metrics = QFontMetrics(font)
         suffix_font = typography.sized(option.font, typography.META)
-        label_rect = option.rect.adjusted(self._h_pad, 0, -self._h_pad, 0)
+        label_rect = zone.adjusted(self._h_pad, 0, -self._h_pad, 0)
         # The label gives way before the suffix vanishes: reserve the suffix
         # its natural width (never more than half the band), elide the label
         # into the rest. Unelided, a long section name pushed suffix_x past
@@ -870,7 +881,7 @@ class _DiagnosticsRowDelegate(ParameterRowDelegate):
             painter.setPen(QColor(style.MUTED))
             suffix_x = label_rect.left() + metrics.horizontalAdvance(label_elided) + 10
             suffix_rect = QRect(
-                suffix_x, option.rect.top(), max(option.rect.right() - self._h_pad - suffix_x, 0), option.rect.height()
+                suffix_x, zone.top(), max(zone.right() - self._h_pad - suffix_x, 0), zone.height()
             )
             elided = QFontMetrics(suffix_font).elidedText(suffix, Qt.ElideRight, suffix_rect.width())
             painter.drawText(suffix_rect, Qt.AlignVCenter | Qt.AlignLeft, elided)
@@ -922,11 +933,17 @@ class _StreamView(QWidget):
     def __init__(self) -> None:
         super().__init__()
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 4, 0, 4)
+        layout.setContentsMargins(style.SPACING_SM, 4, style.SPACING_SM, 4)
         layout.setSpacing(0)
 
         self._list = ActivatingList()
         self._list.setObjectName("DiagnosticsStreamList")
+        # Same column discipline as cards/page.py's content body: the list
+        # itself stops at the page measure (the layout hugs it left), so the
+        # hover/selection washes, the header rules and the scrollbar all end
+        # at the edge the delegate already wraps text against. Full-bleed,
+        # a maximised window painted window-wide hover under 960px text.
+        self._list.setMaximumWidth(style.PAGE_MEASURE)
         self._list.setWordWrap(True)
         self._list.setItemDelegate(_DiagnosticsRowDelegate(self._list))
         self._list.itemActivated.connect(self._on_activated)
@@ -1205,8 +1222,24 @@ class _SummaryStrip(QWidget):
         # unless told to paint them (see ActivityBar/PageHeader's own note);
         # without this the strip's border-bottom silently never draws.
         self.setAttribute(Qt.WA_StyledBackground, True)
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(16, 8, 16, 8)
+        outer = QHBoxLayout(self)
+        outer.setContentsMargins(style.SPACING_SM, 8, style.SPACING_SM, 8)
+        outer.setSpacing(0)
+
+        # The strip's wash stays full-bleed, but its content row shares the
+        # stream's column: unbounded, a maximised window pinned "Collapse
+        # all" against the far window edge, a thousand pixels from the
+        # headers it folds. (A plain QWidget never paints stylesheet
+        # backgrounds, so this row stays transparent on the wash.)
+        row = QWidget()
+        row.setMaximumWidth(style.PAGE_MEASURE)
+        outer.addWidget(row)
+        # Explicit trailing stretch: unlike a QVBoxLayout (which hugs a
+        # width-capped child left on its own, see cards/page.py), a QHBox
+        # centres the lone capped child in the leftover width.
+        outer.addStretch(1)
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(style.SPACING_SM, 0, style.SPACING_SM, 0)
         layout.setSpacing(10)
 
         self._counts = (0, 0, 0)
