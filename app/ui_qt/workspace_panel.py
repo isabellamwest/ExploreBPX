@@ -52,6 +52,7 @@ from core.bpx_gateway import BPX_VERSION, SUPPORTED_EXTENSIONS, CheckReach
 from core.document import BPXDocument
 from core.document_factory import SUPPORTED_MODELS
 from core.load_record import LoadRecord
+from core.reference_library import PROVENANCE as LIBRARY_PROVENANCE
 from state.app_state import MAX_PINNED_REFERENCES
 from state.reference_snapshot import ReferenceSnapshot
 
@@ -325,6 +326,19 @@ def _stamp_text(mtime: float) -> str:
     if stamped.year == datetime.now().year:
         return f"{stamped.day} {stamped:%b %H:%M}"
     return f"{stamped.day} {stamped:%b %Y %H:%M}"
+
+
+def _fact_with_detail(value_html: str, detail: str) -> str:
+    """A record row's rich text: the value, then *detail* as a muted META
+    second line when there is one -- the same rendering an expanded
+    ``_ExpandableFact`` uses, minus the toggle (the reference record states
+    its details outright; see ``ReferenceRecordPanel``)."""
+    if not detail:
+        return value_html
+    return (
+        f"{value_html}<br/><span style='color:{MUTED}; "
+        f"font-size:{typography.META}px'>{detail}</span>"
+    )
 
 
 def _read_as_fact(record: LoadRecord | None, fmt: str) -> tuple[str, str]:
@@ -696,30 +710,57 @@ class ReferenceRecordPanel(QWidget):
         head_row.addStretch(1)
         outer.addWidget(head)
 
-        body = QWidget()
-        outer.addWidget(body)
         self._form = form = _record_form()
         # The shared recipe carries no side insets (the strip's section
         # gutter indents it there); this panel is its own washed surface,
-        # so the card-interior inset lives here.
+        # so the card-interior inset lives here. The form sits directly on
+        # the panel's own column -- no wrapper widget -- so a row growing
+        # (an _ExpandableFact toggling its detail open) propagates height-
+        # for-width straight up to the section instead of clipping the
+        # rows above it (geometry-probed: the wrapped Description lost
+        # exactly the detail's added lines).
         form.setContentsMargins(12, 6, 12, 8)
-        body.setLayout(form)
+        outer.addLayout(form)
 
+        # Every detail sentence in this record is stated directly as a muted
+        # second line inside its row's own always-visible label, set before
+        # the panel shows -- never toggled open later. This panel opens on a
+        # slot click, so it already *is* the detail surface; and growing a
+        # row after the pane has measured is precisely the geometry failure
+        # ``_ExpandableFact``'s docstring records (probed again here: an
+        # expansion's added lines were taken out of the wrapped Description
+        # row above instead of growing the panel).
         self._values: dict[str, QLabel] = {}
-        for key in ("Title", "Description", "Citation", "Model", "Read as", "Contents"):
+        for key in ("Title", "Description", "Citation", "Model"):
             value = _detail_value("-")
             self._values[key] = value
             _add_record_row(form, key, value)
 
+        # Read as states its comment consequence exactly like the main
+        # document's row -- the detail used to be computed here and thrown
+        # away, leaving a reference's record quieter than the same fact on
+        # the main file.
+        self._read_as = _detail_value("-")
+        _add_record_row(form, "Read as", self._read_as)
+
+        contents = _detail_value("-")
+        self._values["Contents"] = contents
+        _add_record_row(form, "Contents", contents)
+
         self._checked_dot = _validity_dot_label()
+        # Carries the legacy "what did bpx actually judge" sentence for the
+        # same reason as Read as: computed facts are shown, not discarded.
         self._checked_text = QLabel()
         self._checked_text.setObjectName("DocInfoBadge")
         self._checked_text.setWordWrap(True)
+        #: The Checked row's first line alone (no detail sentence), for the
+        #: ``validity_text`` seam -- tests pin these words exactly.
+        self._checked_value = ""
         checked = QWidget()
         checked_row = QHBoxLayout(checked)
         checked_row.setContentsMargins(0, 0, 0, 0)
         checked_row.setSpacing(6)
-        checked_row.addWidget(self._checked_dot, 0, Qt.AlignVCenter)
+        checked_row.addWidget(self._checked_dot, 0, Qt.AlignTop)
         checked_row.addWidget(self._checked_text, 1, Qt.AlignVCenter)
         _add_record_row(form, "Checked", checked)
 
@@ -727,6 +768,13 @@ class ReferenceRecordPanel(QWidget):
         from_row = QHBoxLayout(self._from)
         from_row.setContentsMargins(0, 0, 0, 0)
         from_row.setSpacing(6)
+        #: The From row for a bundled set: names the origin and states the
+        #: library's provenance beneath it -- the sentence the library
+        #: dialog shows before pinning used to vanish the moment the pin
+        #: landed.
+        self._from_fact = _detail_value("")
+        self._from_fact.hide()
+        from_row.addWidget(self._from_fact, 1)
         self._from_path = _PathLabel("")
         from_row.addWidget(self._from_path, 1)
         self._from_meta = QLabel()
@@ -758,8 +806,8 @@ class ReferenceRecordPanel(QWidget):
         self._values["Model"].setText(
             _model_row_text(snapshot.model, snapshot.bpx_version)
         )
-        read_as, _comment_detail = _read_as_fact(record, "json")
-        self._values["Read as"].setText(read_as)
+        read_as, comment_detail = _read_as_fact(record, "json")
+        self._read_as.setText(_fact_with_detail(read_as, comment_detail))
         self._values["Contents"].setText(
             f"{snapshot.section_count} sections · {snapshot.parameter_count} parameters"
         )
@@ -768,12 +816,16 @@ class ReferenceRecordPanel(QWidget):
         # verdict. The dot goes MUTED for anything short of a completed run
         # -- zero errors from an aborted run is not a verdict (H2).
         reach = record.checked if record is not None else CheckReach.COMPLETE
+        is_legacy = record.is_legacy if record is not None else False
+        self._checked_value = _checked_row_text(
+            reach, snapshot.error_count, snapshot.warning_count, is_legacy
+        )
         self._checked_text.setText(
-            _checked_row_text(
-                reach,
-                snapshot.error_count,
-                snapshot.warning_count,
-                record.is_legacy if record is not None else False,
+            _fact_with_detail(
+                self._checked_value,
+                _legacy_checked_detail(snapshot.filename, snapshot.bpx_version)
+                if is_legacy
+                else "",
             )
         )
         if reach is CheckReach.COMPLETE:
@@ -787,15 +839,25 @@ class ReferenceRecordPanel(QWidget):
         # exists when the image shares a line with text).
         self._checked_dot.setText(icons.html_img(icons.DOT, color=colour, lift=0))
 
-        # From: a bundled set came from the reference library; a file names
-        # its path plus the disk facts captured at pin time.
+        # From: a bundled set names the library and states its provenance
+        # beneath (derived from PyBaMM, BSD 3-Clause -- retained after
+        # pinning, not only in the pre-pin dialog); a file names its path
+        # plus the disk facts captured at pin time.
         if snapshot.set_id is not None:
-            self._from_path.set_path("Reference library")
+            self._from_fact.setText(
+                _fact_with_detail("Reference library", LIBRARY_PROVENANCE)
+            )
+            self._from_fact.show()
+            self._from_path.hide()
             self._from_meta.hide()
         elif snapshot.path is None:
+            self._from_fact.hide()
+            self._from_path.show()
             self._from_path.set_path("-")
             self._from_meta.hide()
         else:
+            self._from_fact.hide()
+            self._from_path.show()
             self._from_path.set_path(str(snapshot.path))
             has_disk_facts = (
                 record is not None
@@ -809,8 +871,9 @@ class ReferenceRecordPanel(QWidget):
             self._from_meta.setVisible(has_disk_facts)
 
     def validity_text(self) -> str:
-        """The Checked row's words -- the test and driver seam."""
-        return self._checked_text.text()
+        """The Checked row's first line alone (never the legacy detail
+        sentence beneath it) -- the test and driver seam."""
+        return self._checked_value
 
 
 class _MainCard(QFrame):
@@ -1067,7 +1130,18 @@ class _ReferenceSlot(QFrame):
         self._add_button.hide()
         self._filled.show()
         self.setCursor(Qt.PointingHandCursor)
-        self.setToolTip(snapshot.filename)
+        # Name plus origin: a bundled set and a user file look identical on
+        # the slot, so the hover says which this is (the record below has
+        # the full story).
+        if snapshot.set_id is not None:
+            origin = "Reference library"
+        elif snapshot.path is not None:
+            origin = str(snapshot.path)
+        else:
+            origin = ""
+        self.setToolTip(
+            f"{snapshot.filename}\n{origin}" if origin else snapshot.filename
+        )
 
         while self._badge_layout.count():
             item = self._badge_layout.takeAt(0)

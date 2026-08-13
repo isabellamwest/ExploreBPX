@@ -33,21 +33,39 @@ _DOC = {
 class _SnapshotStub:
     """The slice of ``ReferenceSnapshot`` the Source page consumes."""
 
-    def __init__(self, raw, filename="reference.json", model="SPM", path=Path("reference.json")):
+    def __init__(
+        self,
+        raw,
+        filename="reference.json",
+        model="SPM",
+        path=Path("reference.json"),
+        set_id=None,
+    ):
         self.raw = raw
         self.filename = filename
         self.model = model
-        # A file-backed reference by default; pass ``path=None`` to stand in
-        # for a bundled library set.
+        # A file-backed reference by default; pass ``path=None`` and a
+        # ``set_id`` to stand in for a bundled library set (the pane header's
+        # origin tooltip reads both).
         self.path = path
+        self.set_id = set_id
 
 
 class _RefStub:
     """The slice of ``ui_qt.reference_identity.ReferencePin`` the Source page
     consumes: a snapshot plus the badge identity its pin order gives it."""
 
-    def __init__(self, raw, filename="reference.json", model="SPM", path=Path("reference.json")):
-        self.snapshot = _SnapshotStub(raw, filename=filename, model=model, path=path)
+    def __init__(
+        self,
+        raw,
+        filename="reference.json",
+        model="SPM",
+        path=Path("reference.json"),
+        set_id=None,
+    ):
+        self.snapshot = _SnapshotStub(
+            raw, filename=filename, model=model, path=path, set_id=set_id
+        )
         self.index = 0
         self.comparison = None
         self.letters = "Re"

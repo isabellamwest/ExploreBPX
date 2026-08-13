@@ -1345,6 +1345,15 @@ class SourcePage(QWidget):
             self._ref_head.setText(
                 _pane_header_text("Reference", reference.filename, reference.model)
             )
+            # Origin on hover: the header names the reference; where it came
+            # from (a bundled library set, or which file on disk) is the
+            # transparency fact the pane otherwise never states.
+            if reference.set_id is not None:
+                self._ref_head.setToolTip("Reference library")
+            elif reference.path is not None:
+                self._ref_head.setToolTip(str(reference.path))
+            else:
+                self._ref_head.setToolTip("")
             rows = build_rows(main_raw, reference.raw)
         else:
             rows = build_rows(main_raw) if main_raw is not None else []

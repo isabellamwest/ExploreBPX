@@ -694,3 +694,57 @@ def test_chart_legend_badge_tooltip_names_the_domain(table_pins):
     assert tooltip.startswith("marquis.json")
     assert "domain 0 – 0.5" in tooltip
     assert "2 points" in tooltip
+
+
+# ---------------------------------------------------------------------------
+# Provenance: where a reference came from stays visible after pinning
+# ---------------------------------------------------------------------------
+
+
+def test_library_pin_record_retains_the_provenance_statement(
+    app_driver, tmp_path
+):
+    """The library dialog's provenance sentence used to vanish the moment
+    the pin landed; the record's From row now names the library and states
+    the same sentence directly beneath it (always visible -- growing a row
+    after the pane has measured is the geometry trap this pane documents)."""
+    from core.reference_library import PROVENANCE, list_reference_sets
+
+    d = app_driver
+    d.open(_write(tmp_path, "main.json", _MAIN))
+    set_id = list_reference_sets()[0].id
+    d._w._dock_reference_set(set_id)
+    d.click_reference_row(0)
+
+    record = d._w._workspace._reference_record
+    assert record._from_fact.isHidden() is False
+    assert record._from_path.isHidden() is True
+    assert record._from_fact.text().startswith("Reference library")
+    assert PROVENANCE in record._from_fact.text()
+
+
+def test_file_pin_slot_tooltip_names_the_path_and_library_pin_names_the_library(
+    app_driver, tmp_path, monkeypatch
+):
+    from core.reference_library import list_reference_sets
+
+    d = app_driver
+    d.open(_write(tmp_path, "main.json", _MAIN))
+    ref_path = _write(tmp_path, "chen.json", _REF_A)
+    _pin(d, monkeypatch, ref_path)
+    d._w._dock_reference_set(list_reference_sets()[0].id)
+
+    slots = d._reference_rows()
+    assert str(ref_path) in slots[0].toolTip()
+    assert "Reference library" in slots[1].toolTip()
+
+
+def test_source_page_reference_header_carries_the_origin_on_hover(
+    app_driver, tmp_path, monkeypatch
+):
+    d = app_driver
+    d.open(_write(tmp_path, "main.json", _MAIN))
+    ref_path = _write(tmp_path, "chen.json", _REF_A)
+    _pin(d, monkeypatch, ref_path)
+
+    assert d._w._source._ref_head.toolTip() == str(ref_path)
