@@ -413,6 +413,17 @@ def test_values_equal_distinguishes_json_types():
     assert values_equal(None, "") is False
 
 
+def test_values_equal_treats_nan_as_equal_to_nan():
+    """``parse_value`` admits ``"nan"`` as a float, so retyping an identical
+    NaN must stay a no-op (the documented retype-commits-nothing contract),
+    even though ``nan == nan`` is False in Python."""
+    nan = float("nan")
+    assert values_equal(nan, float("nan")) is True
+    assert values_equal(nan, 5.0) is False
+    assert values_equal(5.0, nan) is False
+    assert values_equal(nan, "nan") is False
+
+
 def test_untouched_card_is_never_dirty_even_when_it_cannot_render_the_original():
     """A card whose widget cannot faithfully hold the stored value still must
     not report an edit the user never made.

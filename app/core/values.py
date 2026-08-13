@@ -21,6 +21,8 @@ grid cell's no-op check must answer it identically.
 
 from __future__ import annotations
 
+import math
+
 
 def format_value(value: object) -> str:
     """Render a raw value for display in a text input or grid cell."""
@@ -78,5 +80,13 @@ def values_equal(a: object, b: object) -> bool:
     typing ``5.0`` over a stored ``5`` -- as a no-op and silently skip the
     commit. Equality here requires the runtime types to match exactly as well as
     the values comparing equal.
+
+    NaN needs its own clause: ``parse_value`` deliberately admits ``"nan"`` as a
+    float, but ``nan == nan`` is False, so without it retyping an identical NaN
+    would read as a real edit and pollute the undo history with no-op commits.
     """
-    return type(a) is type(b) and a == b
+    if type(a) is not type(b):
+        return False
+    if isinstance(a, float) and math.isnan(a):
+        return math.isnan(b)  # type: ignore[arg-type]
+    return a == b
