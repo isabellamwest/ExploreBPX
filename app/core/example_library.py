@@ -37,6 +37,18 @@ _SOURCES: tuple[_Source, ...] = (
     _Source("about_energy", "Sample data", _ASSETS / "about_energy"),
 )
 
+#: One honest sentence of provenance for the bundled samples, shown wherever
+#: they are offered (mirrors ``core.reference_library.PROVENANCE`` for the
+#: pinnable parameter sets). The facts restate ``about_energy/NOTICE.md``:
+#: source, licence, and the one modification that matters to a reader of the
+#: preview (runs rebuilt from the upstream validation data, downsampled).
+PROVENANCE = (
+    "Sample runs from About:Energy's public BPX parameterisations "
+    "(aboutenergy.io), CC BY-SA 4.0. Validation runs rebuilt from their "
+    "full-resolution validation data, downsampled to at most 1000 points; "
+    "parameter values unmodified."
+)
+
 #: A short, curated picker label per bundled document stem -- the files'
 #: own ``Header.Title`` values are full sentences ("Parameterisation example
 #: of an NMC111|graphite 12.5 Ah pouch cell"), fine for a document but too

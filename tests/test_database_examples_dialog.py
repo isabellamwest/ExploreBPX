@@ -240,23 +240,35 @@ def test_default_table_selection_is_the_first_added_run_without_you():
     assert dialog._selected_table_id == run.id
 
 
-def test_clicking_a_chip_selects_it_for_the_table():
+def test_the_run_selector_drives_the_table_and_chips_carry_no_selection():
+    """Table mode's explicit run selector replaced the chip selection ring:
+    chips are legend + removal only (no ring, no selection state), and the
+    selector combo is the one control choosing what the table shows. It is
+    visible only in Table mode."""
     dialog = DatabaseExamplesDialog(_OWN_RUN)
     run = _first_run()
     dialog._toggle_run(run)
     assert dialog._selected_table_id == "__you__"
 
-    dialog._select_table_series(run.id)
+    # Chips no longer know selection at all.
+    assert not hasattr(dialog._chips[run.id], "is_selected")
 
-    assert dialog._selected_table_id == run.id
-    # The selection ring means "shown in the table", so it paints only in
-    # Table mode -- in Chart mode the choice is remembered but unmarked.
-    assert dialog._chips[run.id].is_selected is False
+    # The selector lists every added run (add order) and only shows in
+    # Table mode.
+    selector = dialog._table_run_selector
+    assert [selector.itemData(i) for i in range(selector.count())] == ["__you__", run.id]
+    assert selector.isHidden() is True
     dialog._on_mode_clicked(1)
-    assert dialog._chips[run.id].is_selected is True
+    assert selector.isHidden() is False
+
+    # Choosing a run in the combo drives the table selection.
+    selector.setCurrentIndex(selector.findData(run.id))
+    assert dialog._selected_table_id == run.id
+
     dialog._on_mode_clicked(0)
-    assert dialog._chips[run.id].is_selected is False
-    assert dialog._chips["__you__"].is_selected is False
+    assert selector.isHidden() is True
+    # The choice survives leaving Table mode.
+    assert dialog._selected_table_id == run.id
 
 
 def test_removing_the_selected_series_falls_back_to_the_default():
@@ -376,13 +388,13 @@ def test_own_run_carries_line_width_three_and_reference_runs_carry_two():
 def test_window_title_names_the_run_when_a_run_label_is_given():
     dialog = DatabaseExamplesDialog(run_label="C/20 discharge")
 
-    assert dialog.windowTitle() == "Compare · Experiment · C/20 discharge"
+    assert dialog.windowTitle() == "Compare · C/20 discharge"
 
 
 def test_window_title_is_generic_without_a_run_label():
     dialog = DatabaseExamplesDialog()
 
-    assert dialog.windowTitle() == "Compare · Experiment"
+    assert dialog.windowTitle() == "Compare"
 
 
 # ---------------------------------------------------------------------------
@@ -615,3 +627,205 @@ def test_add_reference_file_with_invalid_json_surfaces_the_gateways_wording(tmp_
     # Verbatim gateway wording (see bpx_gateway.load_raw) -- this dialog
     # never rewords a decode failure.
     assert "not valid JSON" in dialog._file_message.text()
+
+
+# ---------------------------------------------------------------------------
+# Rail wording, origin captions and sample provenance
+# ---------------------------------------------------------------------------
+
+
+def _rail_widget(dialog):
+    """The picker rail's inner container (the rail scroll area's widget)."""
+    return dialog._picker_scroll.widget()
+
+
+def test_rail_heading_is_compare_with_and_no_rail_string_says_reference():
+    """"Reference" belongs to the pinned purple reference system (a
+    different feature); this dialog's rail never uses the word."""
+    from PySide6.QtWidgets import QLabel
+
+    dialog = DatabaseExamplesDialog(_OWN_RUN)
+    rail = _rail_widget(dialog)
+
+    labels = [w.text() for w in rail.findChildren(QLabel)]
+    buttons = [w.text() for w in rail.findChildren(QPushButton)]
+    assert any(text == "COMPARE WITH" for text in labels)
+    for text in labels + buttons:
+        assert "reference" not in text.lower()
+
+
+def test_cap_message_states_the_limit_without_saying_reference(monkeypatch):
+    dialog = DatabaseExamplesDialog()
+    runs = list_example_runs()
+    for run in runs[:MAX_REFERENCE_RUNS]:
+        dialog._toggle_run(run)
+
+    dialog._toggle_run(runs[MAX_REFERENCE_RUNS])
+
+    assert not dialog._cap_message.isHidden()
+    assert dialog._cap_message.text() == (
+        f"Up to {MAX_REFERENCE_RUNS} runs at a time. Remove one to add another."
+    )
+
+
+def test_bundled_groups_carry_the_about_energy_origin_caption():
+    from PySide6.QtWidgets import QLabel
+
+    dialog = DatabaseExamplesDialog()
+    rail = _rail_widget(dialog)
+
+    captions = [
+        w.text()
+        for w in rail.findChildren(QLabel)
+        if w.objectName() == "CompareGroupOrigin"
+    ]
+    # One caption per bundled document group (NMC pouch cell, LFP 18650 cell).
+    assert captions == ["Sample data · About:Energy", "Sample data · About:Energy"]
+
+
+def test_opened_file_group_carries_the_opened_file_caption(tmp_path):
+    from PySide6.QtWidgets import QLabel
+
+    payload = {
+        "Header": {"BPX": "0.1.0", "Title": "My Test Cell", "Model": "DFN"},
+        "Validation": {
+            "My run": {
+                "Time [s]": [0, 1, 2],
+                "Current [A]": [-2.0, -2.0, -2.0],
+                "Voltage [V]": [4.2, 4.1, 4.0],
+            },
+        },
+    }
+    path = tmp_path / "my_cell.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    dialog = DatabaseExamplesDialog()
+    dialog._add_reference_file(str(path))
+
+    captions = [
+        w.text()
+        for w in dialog.findChildren(QLabel)
+        if w.objectName() == "CompareGroupOrigin"
+    ]
+    assert "Opened file" in captions
+
+
+def test_rail_foot_states_sample_provenance_with_the_full_statement_on_hover():
+    from core.example_library import PROVENANCE
+    from PySide6.QtWidgets import QLabel
+
+    dialog = DatabaseExamplesDialog()
+    rail = _rail_widget(dialog)
+
+    foot = next(
+        w for w in rail.findChildren(QLabel)
+        if w.objectName() == "CompareSampleProvenance"
+    )
+    assert foot.text() == "Samples: About:Energy · CC BY-SA 4.0"
+    assert foot.toolTip() == PROVENANCE
+    assert "CC BY-SA 4.0" in PROVENANCE
+    assert "About:Energy" in PROVENANCE
+
+
+# ---------------------------------------------------------------------------
+# The active document's own runs ("this file" group)
+# ---------------------------------------------------------------------------
+
+_SIBLING_RUNS = {
+    "1C discharge": {
+        "Time [s]": [0, 10, 20],
+        "Current [A]": [-2.4, -2.4, -2.4],
+        "Voltage [V]": [4.0, 3.7, 3.4],
+    },
+    "2C discharge": {
+        "Time [s]": [0, 5],
+        "Current [A]": [-4.8, -4.8],
+        "Voltage [V]": [3.9, 3.2],
+    },
+}
+
+
+def test_document_runs_form_the_first_picker_group_named_by_the_stem():
+    from PySide6.QtWidgets import QLabel
+
+    dialog = DatabaseExamplesDialog(
+        _OWN_RUN,
+        "my_cell · C/20 discharge",
+        run_label="C/20 discharge",
+        document_runs=_SIBLING_RUNS,
+        document_label="my_cell",
+    )
+    rail = _rail_widget(dialog)
+
+    headings = [
+        w.text() for w in rail.findChildren(QLabel) if w.objectName() == "Heading"
+    ]
+    # The active document's group comes before both bundled sample groups.
+    assert headings[0] == "my_cell"
+    captions = [
+        w.text()
+        for w in rail.findChildren(QLabel)
+        if w.objectName() == "CompareGroupOrigin"
+    ]
+    assert captions[0] == "Active file"
+    assert "active::1C discharge" in dialog._picker_rows
+    assert "active::2C discharge" in dialog._picker_rows
+
+
+def test_document_run_add_remove_round_trip_uses_the_given_committed_values():
+    dialog = DatabaseExamplesDialog(
+        _OWN_RUN,
+        "my_cell · C/20 discharge",
+        document_runs=_SIBLING_RUNS,
+        document_label="my_cell",
+    )
+    # Toggle through the picker row itself -- the same click path a user takes.
+    row = dialog._picker_rows["active::1C discharge"]
+    row.clicked.emit()
+
+    added = dialog._added["active::1C discharge"]
+    assert added.label == "my_cell · 1C discharge"
+    assert added.data["Voltage [V]"] == [4.0, 3.7, 3.4]
+
+    row.clicked.emit()
+    assert "active::1C discharge" not in dialog._added
+
+
+def test_document_runs_count_toward_the_cap():
+    dialog = DatabaseExamplesDialog(
+        document_runs=_SIBLING_RUNS, document_label="my_cell"
+    )
+    dialog._picker_rows["active::1C discharge"].clicked.emit()
+    dialog._picker_rows["active::2C discharge"].clicked.emit()
+    for run in list_example_runs()[: MAX_REFERENCE_RUNS - 2]:
+        dialog._toggle_run(run)
+
+    dialog._toggle_run(list_example_runs()[MAX_REFERENCE_RUNS - 2])
+
+    assert not dialog._cap_message.isHidden()
+
+
+def test_unsaved_document_group_heads_as_active_file_without_duplicate_caption():
+    from PySide6.QtWidgets import QLabel
+
+    dialog = DatabaseExamplesDialog(
+        _OWN_RUN, "Active file · run", document_runs=_SIBLING_RUNS
+    )
+    rail = _rail_widget(dialog)
+
+    headings = [
+        w.text() for w in rail.findChildren(QLabel) if w.objectName() == "Heading"
+    ]
+    assert headings[0] == "Active file"
+
+
+def test_without_document_runs_no_active_file_group_appears():
+    from PySide6.QtWidgets import QLabel
+
+    dialog = DatabaseExamplesDialog(_OWN_RUN, "my_cell · run")
+    rail = _rail_widget(dialog)
+
+    headings = [
+        w.text() for w in rail.findChildren(QLabel) if w.objectName() == "Heading"
+    ]
+    assert all(h in ("NMC pouch cell", "LFP 18650 cell") for h in headings)

@@ -6,12 +6,15 @@ with no persistence or state-layer object of any kind. It exists purely to
 let a modeller eyeball their own run beside reference runs from
 :mod:`core.example_library` or any BPX file they open.
 
-**Layout.** A picker on the left (bundled sample runs, then user-opened
-files, then "Open BPX file…"); clicking a row adds or removes it from the
+**Layout.** A "Compare with" picker on the left (the active document's other
+runs first, then bundled sample runs, then user-opened files, then "Open BPX
+file…"), every group under a one-line origin caption and the rail footed by
+the samples' provenance line; clicking a row adds or removes it from the
 comparison. On the right, a Chart/Table toggle and a removable-chip legend
 over either three stacked :class:`~.multi_series_chart.MultiSeriesChart`
 small multiples (Voltage, Current, Temperature against Time) with a
-key-numbers table beneath, or a single read-only table of the selected run.
+key-numbers table beneath, or a single read-only table of the run chosen in
+the Table-mode run selector.
 
 **Colour policy.** "You" (the card's own live draft) always renders in
 ``ACCENT`` and never takes a slot in ``_REFERENCE_COLORS``; reference runs
@@ -26,6 +29,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
+    QComboBox,
     QDialog,
     QFileDialog,
     QFrame,
@@ -44,6 +48,7 @@ from PySide6.QtWidgets import (
 
 from core.bpx_gateway import LoadError, expected_fields
 from core.example_library import (
+    PROVENANCE as SAMPLE_PROVENANCE,
     ExampleRun,
     list_example_runs,
     load_example_run,
@@ -54,9 +59,10 @@ from core.values import format_value
 from .. import typography
 from ..elided_label import ElidedLabel
 from ..file_filters import BPX_FILTER_WITH_ALL
-from ..style import ACCENT, BORDER, CHART_SERIES, ERROR, MUTED
+from ..icons import dot_pixmap
+from ..style import ACCENT, BORDER, BORDER_FAINT, CHART_SERIES, ERROR, MUTED
 from ..typography import panel_title
-from .chart_axes import as_plot_number
+from .chart_axes import as_plot_number, series_pairs
 from .modal import ModeStrip
 from .multi_series_chart import MultiSeriesChart
 
@@ -114,22 +120,10 @@ class _AddedSeries:
 
 
 def _points(data: dict[str, list], y_key: str) -> list[tuple[float, float]]:
-    """Numeric ``(Time, y)`` pairs from *data*, x-sorted -- the exact
-    contract ``MultiSeriesChart.set_series`` documents. A non-numeric,
-    non-finite or missing cell is dropped (``chart_axes.as_plot_number``,
-    the same judgement ``TablePreview`` applies), never plotted as garbage
-    or coerced: this is a read-only comparison viewer, not a validity
-    judgement, so the grid and the validator remain the only places a bad
-    cell is ever flagged."""
-    time = data.get(_TIME) or []
-    values = data.get(y_key) or []
-    pairs = []
-    for t, v in zip(time, values):
-        x, y = as_plot_number(t), as_plot_number(v)
-        if x is not None and y is not None:
-            pairs.append((x, y))
-    pairs.sort(key=lambda point: point[0])
-    return pairs
+    """Numeric ``(Time, y)`` pairs from *data*, x-sorted -- the shared
+    pairing contract (``chart_axes.series_pairs``, also the experiment
+    card's preview band contract), applied to this dialog's raw run shape."""
+    return series_pairs(data.get(_TIME), data.get(y_key))
 
 
 def _numeric(values: object) -> list[float]:
@@ -234,17 +228,17 @@ class _PickerRow(QFrame):
 
 class _LegendChip(QFrame):
     """One legend entry: colour swatch + label, over the added series'
-    ``series_id``. Clicking the chip body selects it for Table mode; a
-    *removable* chip also carries a trailing "x" that drops it from the
-    comparison -- two independent click targets on one small widget, so
-    removing never gets mistaken for selecting.
+    ``series_id``. Its two jobs are legend-near-the-charts and per-run
+    removal -- a *removable* chip carries a trailing "x" that drops it from
+    the comparison. It carries no selection state: what Table mode shows is
+    the run selector's job (see ``DatabaseExamplesDialog._build_viewer``),
+    so a chip never wears a ring that means nothing in Chart mode.
 
     The active document's own run is **not** removable: it is the anchor the
     whole dialog compares against, and -- unlike a reference run -- it has no
     picker row to add it back from, so removing it would be irreversible.
     Its chip therefore has no "x"."""
 
-    clicked = Signal()
     remove_requested = Signal()
 
     def __init__(
@@ -260,7 +254,10 @@ class _LegendChip(QFrame):
         self.color = color
         self.removable = removable
         self.setObjectName("DatabaseExampleChip")
-        self.setCursor(Qt.PointingHandCursor)
+        self.setStyleSheet(
+            f"QFrame#DatabaseExampleChip {{ border: 1px solid {BORDER}; "
+            "border-radius: 6px; background: #ffffff; }"
+        )
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(6, 2, 4 if removable else 8, 2)
@@ -285,52 +282,34 @@ class _LegendChip(QFrame):
             remove.clicked.connect(lambda checked=False: self.remove_requested.emit())
             layout.addWidget(remove)
 
-        self._selected = False
-        self.set_selected(False)
-
-    def mousePressEvent(self, event) -> None:  # noqa: N802
-        if event.button() == Qt.LeftButton:
-            self.clicked.emit()
-        super().mousePressEvent(event)
-
-    def set_selected(self, selected: bool) -> None:
-        self._selected = selected
-        border = f"2px solid {ACCENT}" if selected else f"1px solid {BORDER}"
-        self.setStyleSheet(
-            f"QFrame#DatabaseExampleChip {{ border: {border}; border-radius: 6px; "
-            "background: #ffffff; }"
-        )
-
-    @property
-    def is_selected(self) -> bool:
-        return self._selected
-
-
-#: A lower responsive-height ceiling than chart_axes.CHART_HEIGHT_CEILING's
-#: default 280: three of these stack in one dialog fixed at 760px tall
-#: (``DatabaseExamplesDialog.__init__``), above the key-numbers table, so
-#: each must stay short enough that all three still fit without outgrowing
-#: the dialog.
-_STACKED_CHART_CEILING = 220
-
 
 class _ChartPage(QWidget):
     """Three stacked small multiples, one per array, sharing Time [s] as
     their x-axis, with the key-numbers table beneath. The Temperature
     panel's own visibility is the caller's call (not every added series has
-    one) -- this page just owns the widgets."""
+    one) -- this page just owns the widgets.
+
+    Top-aligned with no stretch item: every child states its own height
+    (the charts' responsive rule, the table's fixed fit), so slack in a
+    tall dialog collects quietly below the table instead of opening a band
+    between content and a floating Close button -- the Close now lives in
+    the dialog's real footer."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
+        layout.setAlignment(Qt.AlignTop)
 
-        self.voltage = MultiSeriesChart(height=180, ceiling=_STACKED_CHART_CEILING)
+        # Full-ceiling charts (chart_axes.CHART_HEIGHT_CEILING): the page
+        # scrolls, so three tall panels are read one after another rather
+        # than squeezed to fit one screen.
+        self.voltage = MultiSeriesChart(height=180)
         self.voltage.set_axis_titles(_TIME, "Voltage [V]")
-        self.current = MultiSeriesChart(height=180, ceiling=_STACKED_CHART_CEILING)
+        self.current = MultiSeriesChart(height=180)
         self.current.set_axis_titles(_TIME, "Current [A]")
-        self.temperature = MultiSeriesChart(height=180, ceiling=_STACKED_CHART_CEILING)
+        self.temperature = MultiSeriesChart(height=180)
         self.temperature.set_axis_titles(_TIME, _TEMPERATURE)
         # Each panel names its own missing array: the generic "No comparison
         # data yet." read as a contradiction on, say, the Current panel while
@@ -346,13 +325,25 @@ class _ChartPage(QWidget):
         self.numbers = _build_table()
         self.numbers.setObjectName("CompareNumbersTable")
         layout.addWidget(self.numbers)
-        layout.addStretch(1)
 
 
 def _build_table() -> QTableWidget:
+    """A read-only fact table in the app's chart-adjacent style: MICRO muted
+    semibold headers over a hairline, hairline rules between rows, no
+    vertical grid -- the conventional facts-table pairing for a chart."""
     table = QTableWidget(0, 0)
     table.setEditTriggers(QTableWidget.NoEditTriggers)
     table.setSelectionMode(QTableWidget.NoSelection)
+    table.setShowGrid(False)
+    table.setStyleSheet(
+        "QHeaderView::section { background: transparent; border: none;"
+        f" border-bottom: 1px solid {BORDER}; color: {MUTED};"
+        f" {typography.size_qss(typography.MICRO)} {typography.semibold_qss()}"
+        " padding: 2px 8px 3px 0; }"
+        f" QTableWidget {{ border: none; background: transparent; }}"
+        f" QTableWidget::item {{ border-bottom: 1px solid {BORDER_FAINT};"
+        " padding: 1px 8px 1px 0; }"
+    )
     return table
 
 
@@ -366,15 +357,21 @@ class DatabaseExamplesDialog(QDialog):
         own_run: dict[str, list] | None = None,
         own_label: str = "Active file",
         run_label: str = "",
+        document_runs: dict[str, dict] | None = None,
+        document_label: str = "",
         parent: QWidget | None = None,
     ) -> None:
+        """*document_runs* is the active document's OTHER runs (committed
+        values, the compared run itself excluded), keyed by run name --
+        they become the picker's first group so a file's own runs can be
+        compared against each other without a save-and-reopen round trip.
+        *document_label* heads that group (the file stem, or "Active file"
+        for an unsaved document)."""
         super().__init__(parent)
         # One separator convention ("·", matching the card title and legend
         # labels), and a fallback that is the same title minus the run.
-        self.setWindowTitle(
-            f"Compare · Experiment · {run_label}" if run_label else "Compare · Experiment"
-        )
-        self.resize(1000, 760)
+        self.setWindowTitle(f"Compare · {run_label}" if run_label else "Compare")
+        self.resize(1040, 840)
         self.setMinimumSize(720, 520)
 
         #: ``series_id -> _AddedSeries`` for every run currently in the
@@ -399,6 +396,10 @@ class DatabaseExamplesDialog(QDialog):
         #: identical group with no way to tell the two apart or remove
         #: either, so a repeat open is refused with a message instead.
         self._file_signatures: set[tuple[str, tuple[str, ...]]] = set()
+        #: The active document's other runs (committed values), for the
+        #: picker's first group -- see the constructor docstring.
+        self._document_runs: dict[str, dict] = dict(document_runs or {})
+        self._document_label = document_label or "Active file"
 
         layout = QVBoxLayout(self)
         body = QHBoxLayout()
@@ -406,6 +407,13 @@ class DatabaseExamplesDialog(QDialog):
         body.addLayout(self._build_viewer(), 1)
         layout.addLayout(body, 1)
 
+        # A real footer: hairline rule, then Close -- never a button
+        # floating in leftover space.
+        footer_rule = QFrame()
+        footer_rule.setObjectName("CompareFooterRule")
+        footer_rule.setFixedHeight(1)
+        footer_rule.setStyleSheet(f"background: {BORDER_FAINT};")
+        layout.addWidget(footer_rule)
         close_row = QHBoxLayout()
         close_row.addStretch(1)
         close_button = QPushButton("Close")
@@ -434,10 +442,30 @@ class DatabaseExamplesDialog(QDialog):
         layout.setContentsMargins(0, 0, 8, 0)
         layout.setSpacing(5)
 
-        # "Reference runs", not "Sample data": the rail also holds the
-        # user's own opened files, not only the bundled samples.
-        heading = panel_title("Reference runs")
+        # "Compare with", not "Reference runs": "reference" is the pinned
+        # purple reference system's word (a different feature), retired
+        # from every string in this dialog.
+        heading = panel_title("Compare with")
         layout.addWidget(heading)
+
+        # The active document's own other runs come first: comparing your
+        # C/2 against your 1C is the nearest possible comparison and used
+        # to require saving and re-opening the file.
+        this_file_runs = self._active_document_runs()
+        if this_file_runs:
+            # An unsaved document's group already heads "Active file"; a
+            # caption repeating it word for word would say nothing.
+            caption = "Active file" if self._document_label != "Active file" else ""
+            self._add_picker_group(
+                layout,
+                self._document_label,
+                this_file_runs,
+                caption=caption,
+                caption_tooltip=(
+                    "Values as applied to the document. The compared run "
+                    "itself follows your unapplied edits live."
+                ),
+            )
 
         runs_by_document: dict[str, list[ExampleRun]] = {}
         document_order: list[str] = []
@@ -449,7 +477,13 @@ class DatabaseExamplesDialog(QDialog):
 
         for document_id in document_order:
             runs = runs_by_document[document_id]
-            self._add_picker_group(layout, runs[0].short_title, runs)
+            self._add_picker_group(
+                layout,
+                runs[0].short_title,
+                runs,
+                caption="Sample data · About:Energy",
+                caption_tooltip=SAMPLE_PROVENANCE,
+            )
 
         # Muted (a stated limit, not an error) and placed right under the
         # picker rows it is about -- it used to sit red at the rail's very
@@ -484,23 +518,80 @@ class DatabaseExamplesDialog(QDialog):
         layout.addWidget(self._file_message)
         layout.addStretch(1)
 
+        # The samples' provenance, owed wherever they are offered: a MICRO
+        # line at the rail foot, with the full statement on hover.
+        provenance = QLabel("Samples: About:Energy · CC BY-SA 4.0")
+        provenance.setObjectName("CompareSampleProvenance")
+        provenance.setStyleSheet(
+            f"color: {MUTED}; {typography.size_qss(typography.MICRO)}"
+        )
+        provenance.setWordWrap(True)
+        provenance.setToolTip(SAMPLE_PROVENANCE)
+        layout.addWidget(provenance)
+
         # Scrollable so opened files can never push rows out of reach; the
-        # picker itself stays a fixed-width rail.
-        scroll = QScrollArea()
-        scroll.setWidget(container)
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.NoFrame)
-        scroll.setFixedWidth(_PICKER_WIDTH)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        return scroll
+        # picker itself stays a fixed-width rail. Kept as an attribute so
+        # tests can address the rail without guessing among the dialog's
+        # scroll areas.
+        self._picker_scroll = QScrollArea()
+        self._picker_scroll.setWidget(container)
+        self._picker_scroll.setWidgetResizable(True)
+        self._picker_scroll.setFrameShape(QFrame.NoFrame)
+        self._picker_scroll.setFixedWidth(_PICKER_WIDTH)
+        self._picker_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        return self._picker_scroll
+
+    def _active_document_runs(self) -> list[ExampleRun]:
+        """Picker metadata for the active document's other runs, mirroring
+        ``example_library._runs_from_raw``'s reading of a raw run dict.
+        Data is registered in ``_file_data`` under ids that can never
+        collide with a bundled id (which contains "/") or an opened-file id
+        ("file:<n>::…")."""
+        runs: list[ExampleRun] = []
+        for run_name, data in self._document_runs.items():
+            if not isinstance(data, dict):
+                continue
+            time_values = data.get(_TIME)
+            run = ExampleRun(
+                id=f"active::{run_name}",
+                document_id="active",
+                document_title=self._document_label,
+                short_title=self._document_label,
+                model="",
+                run_name=str(run_name),
+                point_count=len(time_values) if isinstance(time_values, list) else 0,
+                has_temperature=_TEMPERATURE in data,
+            )
+            self._file_data[run.id] = data
+            runs.append(run)
+        return runs
 
     def _add_picker_group(
-        self, layout: QVBoxLayout, heading: str, runs: list[ExampleRun]
+        self,
+        layout: QVBoxLayout,
+        heading: str,
+        runs: list[ExampleRun],
+        caption: str = "",
+        caption_tooltip: str = "",
     ) -> None:
         group_header = QLabel(heading)
         group_header.setObjectName("Heading")
         group_header.setWordWrap(True)
         layout.addWidget(group_header)
+        if caption:
+            # Origin caption: which of the three data origins this group's
+            # rows come from (the active document, bundled sample data, or
+            # a file opened into this dialog) -- stated per group, never
+            # left to be inferred from position.
+            caption_label = QLabel(caption)
+            caption_label.setObjectName("CompareGroupOrigin")
+            caption_label.setStyleSheet(
+                f"color: {MUTED}; {typography.size_qss(typography.MICRO)}"
+            )
+            caption_label.setWordWrap(True)
+            if caption_tooltip:
+                caption_label.setToolTip(caption_tooltip)
+            layout.addWidget(caption_label)
         for run in runs:
             row = _PickerRow(run)
             row.clicked.connect(lambda r=run: self._toggle_run(r))
@@ -517,6 +608,16 @@ class DatabaseExamplesDialog(QDialog):
         self._own_notice.setWordWrap(True)
         toolbar.addWidget(self._own_notice)
         toolbar.addStretch(1)
+        # Table mode's explicit run selector: which run the table shows is a
+        # stated control, not a chip ring that means nothing in Chart mode.
+        self._table_run_selector = QComboBox()
+        self._table_run_selector.setObjectName("CompareTableRunSelector")
+        self._table_run_selector.setToolTip("Which run the table shows")
+        self._table_run_selector.currentIndexChanged.connect(
+            self._on_table_run_selected
+        )
+        self._table_run_selector.hide()
+        toolbar.addWidget(self._table_run_selector)
         self._mode_strip = ModeStrip(("Chart", "Table"), self._on_mode_clicked)
         toolbar.addWidget(self._mode_strip)
         layout.addLayout(toolbar)
@@ -571,7 +672,7 @@ class DatabaseExamplesDialog(QDialog):
         slot = next((i for i, occupant in enumerate(self._reference_slots) if occupant is None), None)
         if slot is None:
             self._cap_message.setText(
-                f"Up to {MAX_REFERENCE_RUNS} reference runs at a time. Remove one to add another."
+                f"Up to {MAX_REFERENCE_RUNS} runs at a time. Remove one to add another."
             )
             self._cap_message.show()
             return
@@ -614,8 +715,15 @@ class DatabaseExamplesDialog(QDialog):
         if series_id not in self._added or series_id == self._selected_table_id:
             return
         self._selected_table_id = series_id
-        self._refresh_legend()
+        self._refresh_table_selector()
         self._refresh_table()
+
+    def _on_table_run_selected(self, index: int) -> None:
+        if index < 0:
+            return
+        series_id = self._table_run_selector.itemData(index)
+        if series_id is not None:
+            self._select_table_series(series_id)
 
     # ------------------------------------------------------------------
     # "Open BPX file…"
@@ -658,15 +766,15 @@ class DatabaseExamplesDialog(QDialog):
             return
         signature = (document.label, tuple(run.run_name for run in document.runs))
         if signature in self._file_signatures:
-            self._show_file_message(
-                f"{file_path.name} is already in the list of reference runs."
-            )
+            self._show_file_message(f"{file_path.name} is already in the list.")
             return
         self._file_signatures.add(signature)
         self._file_message.hide()
         for run in document.runs:
             self._file_data[run.id] = document.data[run.run_name]
-        self._add_picker_group(self._file_groups, document.label, list(document.runs))
+        self._add_picker_group(
+            self._file_groups, document.label, list(document.runs), caption="Opened file"
+        )
 
     def _show_file_message(self, message: str) -> None:
         self._file_message.setText(message)
@@ -678,10 +786,9 @@ class DatabaseExamplesDialog(QDialog):
 
     def _on_mode_clicked(self, index: int) -> None:
         self._view_mode = "table" if index == 1 else "chart"
-        # The legend repaints because the selection ring is Table-mode-only
-        # (see _refresh_legend) -- entering Table mode draws it, leaving
-        # clears it.
-        self._refresh_legend()
+        # The run selector only shows in Table mode -- chips are mode-blind
+        # (legend + removal in both modes) and need no repaint here.
+        self._refresh_table_selector()
         self._refresh_view()
 
     # ------------------------------------------------------------------
@@ -690,6 +797,7 @@ class DatabaseExamplesDialog(QDialog):
 
     def _refresh_all(self) -> None:
         self._refresh_legend()
+        self._refresh_table_selector()
         self._refresh_charts()
         self._refresh_numbers()
         self._refresh_table()
@@ -706,17 +814,26 @@ class DatabaseExamplesDialog(QDialog):
             chip = _LegendChip(
                 series_id, added.label, added.color, removable=series_id != _YOU_ID
             )
-            # The ring means "shown in the table", so it only paints in
-            # Table mode -- in Chart mode a clicked chip used to gain a ring
-            # that suggested a highlight the chart never draws.
-            chip.set_selected(
-                self._view_mode == "table" and series_id == self._selected_table_id
-            )
-            chip.clicked.connect(lambda sid=series_id: self._select_table_series(sid))
             chip.remove_requested.connect(lambda sid=series_id: self._remove_series(sid))
             self._legend_layout.addWidget(chip)
             self._chips[series_id] = chip
         self._legend_layout.addStretch(1)
+
+    def _refresh_table_selector(self) -> None:
+        """Repopulate the Table-mode run selector: one entry per added run,
+        in add order, current entry = the run the table shows. Visible only
+        in Table mode with at least one run added."""
+        selector = self._table_run_selector
+        selector.blockSignals(True)
+        selector.clear()
+        for series_id, added in self._added.items():
+            selector.addItem(added.label, series_id)
+        if self._selected_table_id is not None:
+            index = selector.findData(self._selected_table_id)
+            if index >= 0:
+                selector.setCurrentIndex(index)
+        selector.blockSignals(False)
+        selector.setVisible(self._view_mode == "table" and bool(self._added))
 
     def _refresh_charts(self) -> None:
         page = self._chart_page
@@ -750,11 +867,14 @@ class DatabaseExamplesDialog(QDialog):
         table.setHorizontalHeaderLabels(headers)
         table.setRowCount(len(self._added))
         table.verticalHeader().hide()
+        numerals = typography.mono(typography.META)
         for r, (series_id, added) in enumerate(self._added.items()):
             time = _numeric(added.data.get(_TIME))
             duration = _format_duration(max(time) - min(time)) if time else "-"
             name = QTableWidgetItem(added.label)
-            name.setData(Qt.DecorationRole, QColor(added.color))
+            # The same dot every legend swatch in the app uses, never a
+            # bare colour square.
+            name.setData(Qt.DecorationRole, dot_pixmap(added.color))
             # Points counts the plottable Time samples (the x-axis every
             # chart shares), not raw cells -- so it can never disagree with
             # the duration computed from the same list.
@@ -768,9 +888,14 @@ class DatabaseExamplesDialog(QDialog):
             for c, item in enumerate(cells):
                 if c > 0:
                     item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                    item.setFont(numerals)
                 table.setItem(r, c, item)
-        table.resizeColumnsToContents()
-        header_height = table.horizontalHeader().height()
+        # Width-aligned with the charts above: the Run column absorbs the
+        # slack, the numeric columns fit their contents.
+        header = table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(0, QHeaderView.Stretch)
+        header_height = header.height()
         rows_height = sum(table.rowHeight(r) for r in range(table.rowCount()))
         table.setFixedHeight(header_height + rows_height + 2 * table.frameWidth())
         table.setVisible(bool(self._added))
@@ -788,12 +913,14 @@ class DatabaseExamplesDialog(QDialog):
         table.setColumnCount(len(columns))
         table.setHorizontalHeaderLabels(columns)
         table.setRowCount(row_count)
+        numerals = typography.mono(typography.META)
         for c, key in enumerate(columns):
             values = data.get(key) or []
             for r in range(row_count):
                 value = values[r] if r < len(values) else None
                 item = QTableWidgetItem(format_value(value))
                 item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                item.setFont(numerals)
                 if value is not None and not isinstance(value, (int, float)):
                     item.setForeground(QColor(ERROR))
                 table.setItem(r, c, item)
