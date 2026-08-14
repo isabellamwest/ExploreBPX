@@ -104,19 +104,19 @@ ui_qt  →  state  →  core  →  bpx
 | `bpx` | The official BPX package, pinned as a dependency. |
 
 `core/` and `state/` never import a UI framework, and
-`core/bpx_gateway.py` is the only module that imports `bpx` (pinned
+`core/bpx_gateway.py` is the only module in `app/` that imports `bpx` (pinned
 `bpx==1.1.1`). The UI is driven by the schema metadata `bpx` publishes, so
 new parameters in future BPX versions appear automatically. A boundary test
 (`tests/test_boundaries.py`) enforces the layering.
 
 Every mutation travels one command spine (`core/commands.py` →
-`core/editing.py` → `core/command_service.py`), so all edits - value changes
+`core/command_service.py` → `core/editing.py`), so all edits - value changes
 included - are previewed, guarded and undoable in exactly the same way.
 
 ```text
-app/        the application: core / state / ui_qt
+app/        the application: core / state / ui_qt, plus bundled data
 tests/      headless test suite
-scripts/    offline dev tools (reference-library generator)
+scripts/    offline dev tools (reference- and example-library generators)
 ```
 
 ## Testing
@@ -127,6 +127,12 @@ uv run pytest            # or, with the venv active: python -m pytest
 
 The suite runs headless (offscreen Qt) and includes the boundary test that
 keeps `core/` and `state/` free of UI imports.
+
+## License
+
+BSD 3-Clause (see [LICENSE](LICENSE)). The bundled example parameter sets
+carry their own licenses and attributions - see the `NOTICE.md` files under
+`app/data/example_documents/`.
 
 ## Linting
 

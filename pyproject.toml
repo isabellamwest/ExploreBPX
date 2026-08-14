@@ -1,6 +1,10 @@
 [project]
 name = "explore-bpx"
 version = "0.1.0"
+description = "Desktop app for opening, inspecting, validating, comparing and editing BPX battery parameter files"
+authors = [{ name = "Isabella West" }]
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = [
     "bpx==1.1.1",
