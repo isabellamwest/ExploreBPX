@@ -86,8 +86,8 @@ class GroupBox(QFrame):
         if header_spacing is not None:
             self.header_layout.setSpacing(header_spacing)
 
-        self.title_label = title_widget if title_widget is not None else panel_title(
-            title, object_name=title_object_name
+        self.title_label = (
+            title_widget if title_widget is not None else panel_title(title, object_name=title_object_name)
         )
         self.header_layout.addWidget(self.title_label)
         if suffix is not None:
@@ -141,10 +141,10 @@ class _MeasureBoundVBox(QVBoxLayout):
         margins = self.contentsMargins()
         return min(width, self._measure + margins.left() + margins.right())
 
-    def heightForWidth(self, width: int) -> int:  # noqa: N802 - Qt naming
+    def heightForWidth(self, width: int) -> int:
         return super().heightForWidth(self._bound(width))
 
-    def minimumHeightForWidth(self, width: int) -> int:  # noqa: N802 - Qt naming
+    def minimumHeightForWidth(self, width: int) -> int:
         return super().minimumHeightForWidth(self._bound(width))
 
 
@@ -167,7 +167,7 @@ class _ClickableRow(QWidget):
         super().__init__()
         self._clickable = clickable
 
-    def mousePressEvent(self, event) -> None:  # noqa: N802 (Qt override)
+    def mousePressEvent(self, event) -> None:
         if self._clickable and event.button() == Qt.LeftButton:
             self.clicked.emit()
             return

@@ -43,7 +43,8 @@ def test_required_expected_null_is_grey_without_warning(app_driver, tmp_path, va
     assert d.parameter_row_is_grey("Lower voltage cut-off [V]")
     assert not d.parameter_row_has_warning_marker("Lower voltage cut-off [V]")
     cell = d.diagnostics_bucket("Cell")
-    assert cell.error_count == 0 and cell.warning_count == 0  # no issues -- absorbed
+    assert cell.error_count == 0
+    assert cell.warning_count == 0
     assert d.validation_badge_count() == 0
 
     task = next(t for t in d.outstanding_tasks() if t.path == _LOWER_CUTOFF)
@@ -61,7 +62,8 @@ def test_optional_expected_null_is_grey_without_warning(app_driver, tmp_path, va
     assert d.parameter_row_is_grey("Description")
     assert not d.parameter_row_has_warning_marker("Description")
     header = d.diagnostics_bucket("Header")
-    assert header.error_count == 0 and header.warning_count == 0  # no issues -- absorbed
+    assert header.error_count == 0
+    assert header.warning_count == 0
     assert d.validation_badge_count() == 0
 
     task = next(t for t in d.outstanding_tasks() if t.path == ("Header", "Description"))
@@ -220,9 +222,7 @@ def test_issues_section_row_appends_the_offending_value(app_driver, tmp_path, va
     test for why) -- shows the same " · input 1.5" suffix here as it does on
     the Diagnostics page, since both read ``core.validation.input_fact``."""
     raw = json.loads(json.dumps(valid_spm_dict))
-    raw["Parameterisation"]["Cell"][
-        "Number of electrode pairs connected in parallel to make a cell"
-    ] = 1.5
+    raw["Parameterisation"]["Cell"]["Number of electrode pairs connected in parallel to make a cell"] = 1.5
     d = app_driver
     d.open(_write(tmp_path, "fractional_electrode_count.json", raw))
     d.go_to(_CELL + ("Number of electrode pairs connected in parallel to make a cell",))
@@ -320,7 +320,8 @@ def test_value_removed_flow_turns_the_row_grey_and_calms_the_page(app_driver, va
     d.select_object(_CELL)
     assert not d.parameter_row_is_grey("Lower voltage cut-off [V]")
     cell = d.diagnostics_bucket("Cell")
-    assert cell.error_count == 0 and cell.warning_count == 0  # no issues
+    assert cell.error_count == 0
+    assert cell.warning_count == 0
     assert not any(t.path == _LOWER_CUTOFF for t in d.outstanding_tasks())
 
     d.go_to(_LOWER_CUTOFF)
@@ -330,7 +331,8 @@ def test_value_removed_flow_turns_the_row_grey_and_calms_the_page(app_driver, va
     assert d.parameter_row_is_grey("Lower voltage cut-off [V]")
     assert not d.parameter_row_has_warning_marker("Lower voltage cut-off [V]")
     cell = d.diagnostics_bucket("Cell")
-    assert cell.error_count == 0 and cell.warning_count == 0  # still calm -- absorbed
+    assert cell.error_count == 0
+    assert cell.warning_count == 0
     task = next(t for t in d.outstanding_tasks() if t.path == _LOWER_CUTOFF)
     assert task.kind is TaskKind.NULL_FIELD
     assert task.required is True

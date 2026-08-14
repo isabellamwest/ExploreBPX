@@ -49,20 +49,24 @@ from PySide6.QtWidgets import (
 from core.bpx_gateway import LoadError, expected_fields
 from core.example_library import (
     PROVENANCE as SAMPLE_PROVENANCE,
+)
+from core.example_library import (
     SOURCE_URL as SAMPLE_SOURCE_URL,
+)
+from core.example_library import (
     ExampleRun,
     list_example_runs,
     load_example_run,
     load_reference_document,
 )
 from core.values import format_value
+from ui_qt import typography
+from ui_qt.elided_label import ElidedLabel
+from ui_qt.file_filters import BPX_FILTER_WITH_ALL
+from ui_qt.icons import dot_pixmap
+from ui_qt.style import ACCENT, BORDER, BORDER_FAINT, CHART_SERIES, ERROR, MUTED
+from ui_qt.typography import panel_title
 
-from .. import typography
-from ..elided_label import ElidedLabel
-from ..file_filters import BPX_FILTER_WITH_ALL
-from ..icons import dot_pixmap
-from ..style import ACCENT, BORDER, BORDER_FAINT, CHART_SERIES, ERROR, MUTED
-from ..typography import panel_title
 from .chart_axes import as_plot_number, series_pairs
 from .modal import ModeStrip
 from .multi_series_chart import MultiSeriesChart
@@ -76,9 +80,7 @@ _TEMPERATURE = "Temperature [K]"
 #: would be a circular import. ``_TIME``/``_TEMPERATURE`` stay literal: they
 #: are this viewer's display choices (x-axis, optional column), not a schema
 #: restatement.
-_KNOWN_ALIASES = tuple(
-    f.alias for f in expected_fields(("Validation", "<run>"))
-)
+_KNOWN_ALIASES = tuple(f.alias for f in expected_fields(("Validation", "<run>")))
 
 #: The sentinel id for "You" (the card's own live draft) in every dict here
 #: keyed by series id -- distinct from any real ``ExampleRun.id``, which
@@ -131,11 +133,7 @@ def _numeric(values: object) -> list[float]:
     """The plottable numbers in one raw column, order preserved."""
     if not isinstance(values, list):
         return []
-    return [
-        number
-        for number in (as_plot_number(v) for v in values)
-        if number is not None
-    ]
+    return [number for number in (as_plot_number(v) for v in values) if number is not None]
 
 
 def _format_duration(seconds: float) -> str:
@@ -150,7 +148,7 @@ def _format_duration(seconds: float) -> str:
 
 
 def _format_range(values: list[float], unit: str) -> str:
-    """"2.9 to 4.19 V", collapsing to one value when the column never
+    """ "2.9 to 4.19 V", collapsing to one value when the column never
     varies. " to " rather than an en dash: current ranges are routinely
     negative-to-negative ("-12.5–-0.0058 A" is unreadable, seen in the
     real-app proof). "-" for a column with no numeric values (never a
@@ -198,12 +196,12 @@ class _PickerRow(QFrame):
 
         self.set_removed()
 
-    def mousePressEvent(self, event) -> None:  # noqa: N802
+    def mousePressEvent(self, event) -> None:
         if event.button() == Qt.LeftButton:
             self.clicked.emit()
         super().mousePressEvent(event)
 
-    def keyPressEvent(self, event) -> None:  # noqa: N802
+    def keyPressEvent(self, event) -> None:
         if event.key() in (Qt.Key_Space, Qt.Key_Return, Qt.Key_Enter):
             self.clicked.emit()
             return
@@ -211,19 +209,13 @@ class _PickerRow(QFrame):
 
     def set_removed(self) -> None:
         self._tick.hide()
-        self.setStyleSheet(
-            f"QFrame#ReferencePickerRow {{ border: 1px solid {BORDER}; "
-            "border-radius: 4px; }"
-        )
+        self.setStyleSheet(f"QFrame#ReferencePickerRow {{ border: 1px solid {BORDER}; border-radius: 4px; }}")
         self.setToolTip("Add to the comparison")
 
     def set_added(self, color: str) -> None:
         self._tick.setStyleSheet(f"color: {color}; {typography.semibold_qss()}")
         self._tick.show()
-        self.setStyleSheet(
-            f"QFrame#ReferencePickerRow {{ border: 2px solid {color}; "
-            "border-radius: 4px; }"
-        )
+        self.setStyleSheet(f"QFrame#ReferencePickerRow {{ border: 2px solid {color}; border-radius: 4px; }}")
         self.setToolTip("Remove from the comparison")
 
 
@@ -256,8 +248,7 @@ class _LegendChip(QFrame):
         self.removable = removable
         self.setObjectName("DatabaseExampleChip")
         self.setStyleSheet(
-            f"QFrame#DatabaseExampleChip {{ border: 1px solid {BORDER}; "
-            "border-radius: 6px; background: #ffffff; }"
+            f"QFrame#DatabaseExampleChip {{ border: 1px solid {BORDER}; border-radius: 6px; background: #ffffff; }}"
         )
 
         layout = QHBoxLayout(self)
@@ -463,8 +454,7 @@ class DatabaseExamplesDialog(QDialog):
                 this_file_runs,
                 caption=caption,
                 caption_tooltip=(
-                    "Values as applied to the document. The compared run "
-                    "itself follows your unapplied edits live."
+                    "Values as applied to the document. The compared run itself follows your unapplied edits live."
                 ),
             )
 
@@ -491,9 +481,7 @@ class DatabaseExamplesDialog(QDialog):
         # bottom, beside the "Open BPX file…" button, where it read as a
         # file-loading error.
         self._cap_message = QLabel("")
-        self._cap_message.setStyleSheet(
-            f"color: {MUTED}; {typography.size_qss(typography.META)}"
-        )
+        self._cap_message.setStyleSheet(f"color: {MUTED}; {typography.size_qss(typography.META)}")
         self._cap_message.setWordWrap(True)
         self._cap_message.hide()
         layout.addWidget(self._cap_message)
@@ -511,9 +499,7 @@ class DatabaseExamplesDialog(QDialog):
         layout.addWidget(open_button)
 
         self._file_message = QLabel("")
-        self._file_message.setStyleSheet(
-            f"color: {ERROR}; {typography.size_qss(typography.META)}"
-        )
+        self._file_message.setStyleSheet(f"color: {ERROR}; {typography.size_qss(typography.META)}")
         self._file_message.setWordWrap(True)
         self._file_message.hide()
         layout.addWidget(self._file_message)
@@ -522,16 +508,11 @@ class DatabaseExamplesDialog(QDialog):
         # The samples' provenance, owed wherever they are offered: a MICRO
         # line at the rail foot, with the full statement on hover and the
         # source repository itself one click away.
-        provenance = QLabel(
-            f'Samples: <a href="{SAMPLE_SOURCE_URL}">About:Energy</a>'
-            " · CC BY-SA 4.0"
-        )
+        provenance = QLabel(f'Samples: <a href="{SAMPLE_SOURCE_URL}">About:Energy</a> · CC BY-SA 4.0')
         provenance.setObjectName("CompareSampleProvenance")
         provenance.setTextFormat(Qt.RichText)
         provenance.setOpenExternalLinks(True)
-        provenance.setStyleSheet(
-            f"color: {MUTED}; {typography.size_qss(typography.MICRO)}"
-        )
+        provenance.setStyleSheet(f"color: {MUTED}; {typography.size_qss(typography.MICRO)}")
         provenance.setWordWrap(True)
         provenance.setToolTip(SAMPLE_PROVENANCE)
         layout.addWidget(provenance)
@@ -592,9 +573,7 @@ class DatabaseExamplesDialog(QDialog):
             # left to be inferred from position.
             caption_label = QLabel(caption)
             caption_label.setObjectName("CompareGroupOrigin")
-            caption_label.setStyleSheet(
-                f"color: {MUTED}; {typography.size_qss(typography.MICRO)}"
-            )
+            caption_label.setStyleSheet(f"color: {MUTED}; {typography.size_qss(typography.MICRO)}")
             caption_label.setWordWrap(True)
             if caption_tooltip:
                 caption_label.setToolTip(caption_tooltip)
@@ -620,9 +599,7 @@ class DatabaseExamplesDialog(QDialog):
         self._table_run_selector = QComboBox()
         self._table_run_selector.setObjectName("CompareTableRunSelector")
         self._table_run_selector.setToolTip("Which run the table shows")
-        self._table_run_selector.currentIndexChanged.connect(
-            self._on_table_run_selected
-        )
+        self._table_run_selector.currentIndexChanged.connect(self._on_table_run_selected)
         self._table_run_selector.hide()
         toolbar.addWidget(self._table_run_selector)
         self._mode_strip = ModeStrip(("Chart", "Table"), self._on_mode_clicked)
@@ -678,17 +655,13 @@ class DatabaseExamplesDialog(QDialog):
             return
         slot = next((i for i, occupant in enumerate(self._reference_slots) if occupant is None), None)
         if slot is None:
-            self._cap_message.setText(
-                f"Up to {MAX_REFERENCE_RUNS} runs at a time. Remove one to add another."
-            )
+            self._cap_message.setText(f"Up to {MAX_REFERENCE_RUNS} runs at a time. Remove one to add another.")
             self._cap_message.show()
             return
         self._cap_message.hide()
         self._reference_slots[slot] = run.id
         color = _REFERENCE_COLORS[slot]
-        self._added[run.id] = _AddedSeries(
-            f"{run.short_title} · {run.run_name}", self._run_data(run), color
-        )
+        self._added[run.id] = _AddedSeries(f"{run.short_title} · {run.run_name}", self._run_data(run), color)
         self._picker_rows[run.id].set_added(color)
         self._after_change()
 
@@ -757,9 +730,7 @@ class DatabaseExamplesDialog(QDialog):
         file_path = Path(path)
         self._file_count += 1
         try:
-            document = load_reference_document(
-                file_path.read_bytes(), file_path.name, f"file:{self._file_count}"
-            )
+            document = load_reference_document(file_path.read_bytes(), file_path.name, f"file:{self._file_count}")
         except OSError as exc:
             self._show_file_message(f"Could not read {file_path.name}: {exc}")
             return
@@ -767,9 +738,7 @@ class DatabaseExamplesDialog(QDialog):
             self._show_file_message(f"{file_path.name}: {exc}")
             return
         if not document.runs:
-            self._show_file_message(
-                f"{file_path.name} has no validation runs to compare."
-            )
+            self._show_file_message(f"{file_path.name} has no validation runs to compare.")
             return
         signature = (document.label, tuple(run.run_name for run in document.runs))
         if signature in self._file_signatures:
@@ -779,9 +748,7 @@ class DatabaseExamplesDialog(QDialog):
         self._file_message.hide()
         for run in document.runs:
             self._file_data[run.id] = document.data[run.run_name]
-        self._add_picker_group(
-            self._file_groups, document.label, list(document.runs), caption="Opened file"
-        )
+        self._add_picker_group(self._file_groups, document.label, list(document.runs), caption="Opened file")
 
     def _show_file_message(self, message: str) -> None:
         self._file_message.setText(message)
@@ -818,9 +785,7 @@ class DatabaseExamplesDialog(QDialog):
                 widget.deleteLater()
         self._chips = {}
         for series_id, added in self._added.items():
-            chip = _LegendChip(
-                series_id, added.label, added.color, removable=series_id != _YOU_ID
-            )
+            chip = _LegendChip(series_id, added.label, added.color, removable=series_id != _YOU_ID)
             chip.remove_requested.connect(lambda sid=series_id: self._remove_series(sid))
             self._legend_layout.addWidget(chip)
             self._chips[series_id] = chip
@@ -851,12 +816,8 @@ class DatabaseExamplesDialog(QDialog):
         page.temperature.setVisible(has_temperature and page.temperature.available)
         for series_id, added in self._added.items():
             width = _YOU_WIDTH if series_id == _YOU_ID else _REFERENCE_WIDTH
-            page.voltage.set_series(
-                series_id, _points(added.data, "Voltage [V]"), added.color, width, name=added.label
-            )
-            page.current.set_series(
-                series_id, _points(added.data, "Current [A]"), added.color, width, name=added.label
-            )
+            page.voltage.set_series(series_id, _points(added.data, "Voltage [V]"), added.color, width, name=added.label)
+            page.current.set_series(series_id, _points(added.data, "Current [A]"), added.color, width, name=added.label)
             if _TEMPERATURE in added.data:
                 page.temperature.set_series(
                     series_id, _points(added.data, _TEMPERATURE), added.color, width, name=added.label
@@ -875,7 +836,7 @@ class DatabaseExamplesDialog(QDialog):
         table.setRowCount(len(self._added))
         table.verticalHeader().hide()
         numerals = typography.mono(typography.META)
-        for r, (series_id, added) in enumerate(self._added.items()):
+        for r, (_series_id, added) in enumerate(self._added.items()):
             time = _numeric(added.data.get(_TIME))
             duration = _format_duration(max(time) - min(time)) if time else "-"
             name = QTableWidgetItem(added.label)

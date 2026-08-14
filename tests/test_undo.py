@@ -41,9 +41,7 @@ from core.commands import AddParameter, RemoveParameter, SetValue
 _CELL = ("Parameterisation", "Cell")
 _CAPACITY = _CELL + ("Nominal cell capacity [A.h]",)
 _REFERENCE_TEMPERATURE = _CELL + ("Reference temperature [K]",)
-_ELECTRODE_PAIRS = _CELL + (
-    "Number of electrode pairs connected in parallel to make a cell",
-)
+_ELECTRODE_PAIRS = _CELL + ("Number of electrode pairs connected in parallel to make a cell",)
 _MODEL = ("Header", "Model")
 _ORIGINAL_CAPACITY = 5
 
@@ -108,7 +106,7 @@ def test_apply_value_selects_the_edited_parameter(valid_spm_path):
 def test_apply_value_without_document_still_raises():
     from state.document_session import DocumentSession
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="No document loaded"):
         DocumentSession().apply_value(_CAPACITY, 1.0)
 
 
@@ -142,9 +140,7 @@ def test_undo_disabled_on_a_freshly_opened_document(app_driver, valid_spm_path):
     assert app_driver.undo_enabled() is False
 
 
-def test_undo_enabled_after_a_commit_and_disabled_once_the_stack_empties(
-    app_driver, spm_workfile
-):
+def test_undo_enabled_after_a_commit_and_disabled_once_the_stack_empties(app_driver, spm_workfile):
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(999.0).commit()
     assert app_driver.undo_enabled() is True
 
@@ -165,9 +161,7 @@ def test_undo_on_a_disabled_action_does_nothing(app_driver, valid_spm_path):
 # ----------------------------------------------------------------------
 
 
-def test_undo_reverts_a_committed_edit_and_keeps_the_card_open(
-    app_driver, spm_workfile, main_window
-):
+def test_undo_reverts_a_committed_edit_and_keeps_the_card_open(app_driver, spm_workfile, main_window):
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(999.0).commit()
     assert app_driver.field_value() == 999.0
 
@@ -178,9 +172,7 @@ def test_undo_reverts_a_committed_edit_and_keeps_the_card_open(
     assert main_window._state.active.selected_parameter_path == _CAPACITY
 
 
-def test_undo_returns_to_the_parameter_it_changed(
-    app_driver, spm_workfile, main_window
-):
+def test_undo_returns_to_the_parameter_it_changed(app_driver, spm_workfile, main_window):
     """Undo must never revert an off-screen parameter without revealing it.
 
     The user commits an edit, navigates elsewhere, then undoes. Restoring the
@@ -197,9 +189,7 @@ def test_undo_returns_to_the_parameter_it_changed(
     assert app_driver.field_value() == _ORIGINAL_CAPACITY
 
 
-def test_undo_of_an_added_parameter_returns_to_where_it_was_added(
-    app_driver, spm_workfile, main_window
-):
+def test_undo_of_an_added_parameter_returns_to_where_it_was_added(app_driver, spm_workfile, main_window):
     app_driver.open(spm_workfile).select_object(_CELL)
     session = main_window._state.active
 
@@ -215,9 +205,7 @@ def test_undo_of_an_added_parameter_returns_to_where_it_was_added(
     assert app_driver.showing_placeholder() is True
 
 
-def test_undo_of_a_removed_parameter_restores_and_reveals_it(
-    app_driver, spm_workfile, main_window
-):
+def test_undo_of_a_removed_parameter_restores_and_reveals_it(app_driver, spm_workfile, main_window):
     app_driver.open(spm_workfile).go_to(_REFERENCE_TEMPERATURE)
     session = main_window._state.active
 
@@ -230,9 +218,7 @@ def test_undo_of_a_removed_parameter_restores_and_reveals_it(
     assert app_driver.shown_parameter_path() == _REFERENCE_TEMPERATURE
 
 
-def test_undo_restores_selection_for_each_step_of_a_multi_step_history(
-    app_driver, spm_workfile, main_window
-):
+def test_undo_restores_selection_for_each_step_of_a_multi_step_history(app_driver, spm_workfile, main_window):
     """Each entry carries its own selection, not just the newest one."""
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(999.0).commit()
     app_driver.go_to(_REFERENCE_TEMPERATURE).edit_field(300.0).commit()
@@ -251,9 +237,7 @@ def test_undo_restores_selection_for_each_step_of_a_multi_step_history(
 # ----------------------------------------------------------------------
 
 
-def test_ctrl_z_with_a_focused_editor_undoes_typing_not_the_document(
-    app_driver, spm_workfile, main_window
-):
+def test_ctrl_z_with_a_focused_editor_undoes_typing_not_the_document(app_driver, spm_workfile, main_window):
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(999.0).commit()
     session = main_window._state.active
 
@@ -268,9 +252,7 @@ def test_ctrl_z_with_a_focused_editor_undoes_typing_not_the_document(
     assert app_driver.undo_enabled() is True
 
 
-def test_ctrl_z_falls_through_to_the_document_once_typing_is_exhausted(
-    app_driver, spm_workfile, main_window
-):
+def test_ctrl_z_falls_through_to_the_document_once_typing_is_exhausted(app_driver, spm_workfile, main_window):
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(999.0).commit()
     session = main_window._state.active
 
@@ -283,9 +265,7 @@ def test_ctrl_z_falls_through_to_the_document_once_typing_is_exhausted(
     assert _capacity(session) == _ORIGINAL_CAPACITY
 
 
-def test_ctrl_z_with_a_fresh_untyped_editor_focused_undoes_the_document(
-    app_driver, spm_workfile, main_window
-):
+def test_ctrl_z_with_a_fresh_untyped_editor_focused_undoes_the_document(app_driver, spm_workfile, main_window):
     """A freshly rebuilt card has no typing history, so Ctrl+Z reaches the document."""
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(999.0).commit()
     session = main_window._state.active
@@ -296,9 +276,7 @@ def test_ctrl_z_with_a_fresh_untyped_editor_focused_undoes_the_document(
     assert _capacity(session) == _ORIGINAL_CAPACITY
 
 
-def test_ctrl_z_in_the_search_box_undoes_the_query_not_the_document(
-    app_driver, spm_workfile, main_window
-):
+def test_ctrl_z_in_the_search_box_undoes_the_query_not_the_document(app_driver, spm_workfile, main_window):
     """The shortcut intercepts Ctrl+Z from the search box, so it must hand it back."""
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(999.0).commit()
     session = main_window._state.active
@@ -312,9 +290,7 @@ def test_ctrl_z_in_the_search_box_undoes_the_query_not_the_document(
     assert _capacity(session) == 999.0
 
 
-def test_the_undo_button_ignores_focus_and_undoes_the_document(
-    app_driver, spm_workfile, main_window
-):
+def test_the_undo_button_ignores_focus_and_undoes_the_document(app_driver, spm_workfile, main_window):
     """A toolbar button takes no focus, so Undo must not edit the search box."""
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(999.0).commit()
     session = main_window._state.active
@@ -326,9 +302,7 @@ def test_the_undo_button_ignores_focus_and_undoes_the_document(
     assert _capacity(session) == _ORIGINAL_CAPACITY
 
 
-def test_the_undo_button_ignores_a_focused_card_editor(
-    app_driver, spm_workfile, main_window
-):
+def test_the_undo_button_ignores_a_focused_card_editor(app_driver, spm_workfile, main_window):
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(999.0).commit()
     session = main_window._state.active
 
@@ -338,9 +312,7 @@ def test_the_undo_button_ignores_a_focused_card_editor(
     assert _capacity(session) == _ORIGINAL_CAPACITY
 
 
-def test_ctrl_z_undoes_typing_even_with_an_empty_document_history(
-    app_driver, valid_spm_path
-):
+def test_ctrl_z_undoes_typing_even_with_an_empty_document_history(app_driver, valid_spm_path):
     """The shortcut stays live when the Undo button is greyed out."""
     app_driver.open(valid_spm_path).go_to(_CAPACITY)
     assert app_driver.undo_enabled() is False
@@ -363,9 +335,7 @@ def test_ctrl_z_undoes_typing_even_with_an_empty_document_history(
 # are the regression tests for that.
 
 
-def test_ctrl_z_on_a_spinbox_draft_does_not_touch_the_document(
-    app_driver, spm_workfile, main_window
-):
+def test_ctrl_z_on_a_spinbox_draft_does_not_touch_the_document(app_driver, spm_workfile, main_window):
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(999.0).commit()
     session = main_window._state.active
 
@@ -382,9 +352,7 @@ def test_ctrl_z_on_a_spinbox_draft_does_not_touch_the_document(
     assert app_driver.undo_enabled() is True
 
 
-def test_ctrl_z_on_a_combobox_draft_does_not_touch_the_document(
-    app_driver, spm_workfile, main_window
-):
+def test_ctrl_z_on_a_combobox_draft_does_not_touch_the_document(app_driver, spm_workfile, main_window):
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(999.0).commit()
     session = main_window._state.active
 
@@ -397,9 +365,7 @@ def test_ctrl_z_on_a_combobox_draft_does_not_touch_the_document(
     assert app_driver.field_value() == "SPMe", "the draft was discarded"
 
 
-def test_ctrl_z_on_a_clean_spinbox_still_undoes_the_document(
-    app_driver, spm_workfile, main_window
-):
+def test_ctrl_z_on_a_clean_spinbox_still_undoes_the_document(app_driver, spm_workfile, main_window):
     """The guard is the uncommitted draft, not the widget type."""
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(999.0).commit()
     session = main_window._state.active
@@ -412,9 +378,7 @@ def test_ctrl_z_on_a_clean_spinbox_still_undoes_the_document(
     assert _capacity(session) == _ORIGINAL_CAPACITY
 
 
-def test_the_undo_button_still_reverts_the_document_past_a_draft(
-    app_driver, spm_workfile, main_window
-):
+def test_the_undo_button_still_reverts_the_document_past_a_draft(app_driver, spm_workfile, main_window):
     """Only Ctrl+Z is guarded; the button is an explicit document command."""
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(999.0).commit()
     session = main_window._state.active
@@ -556,26 +520,24 @@ def test_every_registered_shortcut_key_still_dispatches(spm_workfile):
     from pathlib import Path
 
     probe = Path(__file__).with_name("shortcut_dispatch_probe.py")
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: S603 - fixed args: our interpreter, our probe script
         [sys.executable, str(probe), str(spm_workfile)],
         capture_output=True,
         text=True,
         timeout=180,
+        check=False,  # the returncode is asserted with stderr attached below
     )
     assert result.returncode == 0, result.stderr
 
     # The probe prints one JSON line; bpx's pyparsing warnings share stdout.
-    report = json.loads(
-        next(line for line in result.stdout.splitlines() if line.startswith("{"))
-    )
+    report = json.loads(next(line for line in result.stdout.splitlines() if line.startswith("{")))
 
     # Without a genuinely active window nothing dispatches and every later
     # assertion would hold vacuously -- the exact failure this test replaced.
     assert report["active"] is True, "probe window never activated; result is void"
     assert report["keys"], "no shortcut keys were found to test"
     assert report["dead"] == [], (
-        f"registered key(s) that fired no handler: {report['dead']} -- "
-        f"claims: {report['claims']}"
+        f"registered key(s) that fired no handler: {report['dead']} -- claims: {report['claims']}"
     )
 
 
@@ -588,9 +550,7 @@ def test_redo_disabled_on_a_freshly_opened_document(app_driver, valid_spm_path):
     assert app_driver.redo_enabled() is False
 
 
-def test_redo_enabled_after_an_undo_and_disabled_once_the_stack_empties(
-    app_driver, spm_workfile
-):
+def test_redo_enabled_after_an_undo_and_disabled_once_the_stack_empties(app_driver, spm_workfile):
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(999.0).commit()
     assert app_driver.redo_enabled() is False
 
@@ -614,9 +574,7 @@ def test_redo_on_a_disabled_action_does_nothing(app_driver, valid_spm_path):
 # ----------------------------------------------------------------------
 
 
-def test_redo_reapplies_an_undone_edit_and_keeps_the_card_open(
-    app_driver, spm_workfile, main_window
-):
+def test_redo_reapplies_an_undone_edit_and_keeps_the_card_open(app_driver, spm_workfile, main_window):
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(999.0).commit()
     app_driver.undo()
     assert app_driver.field_value() == _ORIGINAL_CAPACITY
@@ -628,9 +586,7 @@ def test_redo_reapplies_an_undone_edit_and_keeps_the_card_open(
     assert main_window._state.active.selected_parameter_path == _CAPACITY
 
 
-def test_redo_returns_to_the_parameter_it_reapplied(
-    app_driver, spm_workfile, main_window
-):
+def test_redo_returns_to_the_parameter_it_reapplied(app_driver, spm_workfile, main_window):
     """Redo must never reapply an off-screen change without revealing it.
 
     Navigating away *before* undo (not after) is the ordering that actually
@@ -650,9 +606,7 @@ def test_redo_returns_to_the_parameter_it_reapplied(
     assert app_driver.field_value() == 999.0
 
 
-def test_a_new_commit_after_undo_disables_redo_through_the_ui(
-    app_driver, spm_workfile
-):
+def test_a_new_commit_after_undo_disables_redo_through_the_ui(app_driver, spm_workfile):
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(999.0).commit()
     app_driver.undo()
     assert app_driver.redo_enabled() is True
@@ -667,9 +621,7 @@ def test_a_new_commit_after_undo_disables_redo_through_the_ui(
 # ----------------------------------------------------------------------
 
 
-def test_ctrl_y_with_a_focused_editor_redoes_typing_not_the_document(
-    app_driver, spm_workfile, main_window
-):
+def test_ctrl_y_with_a_focused_editor_redoes_typing_not_the_document(app_driver, spm_workfile, main_window):
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(999.0).commit()
     session = main_window._state.active
 
@@ -695,9 +647,7 @@ def test_ctrl_shift_z_also_redoes_a_focused_editor(app_driver, spm_workfile):
     assert app_driver.field_text() == "999.0123"
 
 
-def test_ctrl_y_in_the_search_box_redoes_the_query_not_the_document(
-    app_driver, spm_workfile, main_window
-):
+def test_ctrl_y_in_the_search_box_redoes_the_query_not_the_document(app_driver, spm_workfile, main_window):
     """The shortcut intercepts Ctrl+Y from the search box, so it must hand it back."""
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(999.0).commit()
     app_driver.undo()
@@ -713,9 +663,7 @@ def test_ctrl_y_in_the_search_box_redoes_the_query_not_the_document(
     assert _capacity(session) == _ORIGINAL_CAPACITY
 
 
-def test_the_redo_button_ignores_focus_and_redoes_the_document(
-    app_driver, spm_workfile, main_window
-):
+def test_the_redo_button_ignores_focus_and_redoes_the_document(app_driver, spm_workfile, main_window):
     """A toolbar button takes no focus, so Redo must not edit the search box."""
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(999.0).commit()
     app_driver.undo()
@@ -728,9 +676,7 @@ def test_the_redo_button_ignores_focus_and_redoes_the_document(
     assert _capacity(session) == 999.0
 
 
-def test_the_redo_button_ignores_a_focused_card_editor(
-    app_driver, spm_workfile, main_window
-):
+def test_the_redo_button_ignores_a_focused_card_editor(app_driver, spm_workfile, main_window):
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(999.0).commit()
     app_driver.undo()
     session = main_window._state.active
@@ -750,9 +696,7 @@ def test_the_redo_button_ignores_a_focused_card_editor(
 # the user is not looking at.
 
 
-def test_ctrl_y_on_a_spinbox_draft_does_not_touch_the_document(
-    app_driver, spm_workfile, main_window
-):
+def test_ctrl_y_on_a_spinbox_draft_does_not_touch_the_document(app_driver, spm_workfile, main_window):
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(999.0).commit()
     app_driver.undo()
     session = main_window._state.active
@@ -770,9 +714,7 @@ def test_ctrl_y_on_a_spinbox_draft_does_not_touch_the_document(
     assert app_driver.redo_enabled() is True
 
 
-def test_the_redo_button_still_reapplies_the_document_past_a_draft(
-    app_driver, spm_workfile, main_window
-):
+def test_the_redo_button_still_reapplies_the_document_past_a_draft(app_driver, spm_workfile, main_window):
     """Only Ctrl+Y is guarded; the button is an explicit document command."""
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(999.0).commit()
     app_driver.undo()

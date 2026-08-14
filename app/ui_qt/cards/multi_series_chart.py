@@ -186,9 +186,7 @@ class MultiSeriesChart(QWidget):
         xs = [x for x, _ in points]
         ys = [y for _, y in points]
         fit_axis(self._axis_x, min(xs), max(xs))
-        fit_axis(
-            self._axis_y, min(ys), max(ys), tick_count=tick_count_for_height(self._view.height())
-        )
+        fit_axis(self._axis_y, min(ys), max(ys), tick_count=tick_count_for_height(self._view.height()))
 
     def _show_empty(self, empty: bool) -> None:
         self._view.setVisible(not empty)

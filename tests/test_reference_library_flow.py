@@ -27,14 +27,8 @@ def _entry(set_id: str):
 
 
 def _stub_library_dialog(monkeypatch, accepted: bool, set_id: str = _CHEN) -> None:
-    result = (
-        main_window_module.QDialog.Accepted
-        if accepted
-        else main_window_module.QDialog.Rejected
-    )
-    monkeypatch.setattr(
-        main_window_module.ReferenceLibraryDialog, "exec", lambda self: result
-    )
+    result = main_window_module.QDialog.Accepted if accepted else main_window_module.QDialog.Rejected
+    monkeypatch.setattr(main_window_module.ReferenceLibraryDialog, "exec", lambda self: result)
     monkeypatch.setattr(
         main_window_module.ReferenceLibraryDialog,
         "selected_set_id",
@@ -43,9 +37,7 @@ def _stub_library_dialog(monkeypatch, accepted: bool, set_id: str = _CHEN) -> No
 
 
 def _stub_open_dialog(monkeypatch, path) -> None:
-    monkeypatch.setattr(
-        main_window_module.QFileDialog, "getOpenFileName", lambda *a, **k: (str(path), "")
-    )
+    monkeypatch.setattr(main_window_module.QFileDialog, "getOpenFileName", lambda *a, **k: (str(path), ""))
 
 
 def test_library_button_docks_the_accepted_set(app_driver, monkeypatch):
@@ -98,9 +90,7 @@ def test_pinning_the_same_set_again_is_a_quiet_noop(app_driver):
     assert [reference.set_id for reference in d._w._state.references] == [_CHEN]
 
 
-def test_library_sets_and_file_references_pin_side_by_side(
-    app_driver, valid_spm_path, monkeypatch
-):
+def test_library_sets_and_file_references_pin_side_by_side(app_driver, valid_spm_path, monkeypatch):
     """A file reference and a library set coexist -- pinning appends, so
     neither evicts the other."""
     d = app_driver
@@ -112,9 +102,7 @@ def test_library_sets_and_file_references_pin_side_by_side(
     assert d.pinned_reference_names() == [valid_spm_path.name, _entry(_PRADA).short_title]
 
 
-def test_library_reference_powers_the_source_page_comparison(
-    app_driver, valid_spm_path
-):
+def test_library_reference_powers_the_source_page_comparison(app_driver, valid_spm_path):
     """The docked set is an ordinary reference downstream: the Source page
     goes two-pane, headed by the set's display title, with no stale band
     (nothing on disk to go stale against) and no ⇄ Make main."""

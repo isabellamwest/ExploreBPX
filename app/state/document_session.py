@@ -11,15 +11,19 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from core import bpx_gateway, command_service, editing, export
-from core.bpx_gateway import ValidationResult
 from core.commands import ChangeModel, Command, Preview, SetValue
 from core.document import BPXDocument
 from core.load_record import LoadRecord
-from core.tree_model import ParameterItem, TreeNode
-from core.validation import ValidatorDiagnostic
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from core.bpx_gateway import ValidationResult
+    from core.tree_model import ParameterItem, TreeNode
+    from core.validation import ValidatorDiagnostic
 
 
 class ReadOnlyDocumentError(RuntimeError):
@@ -143,14 +147,17 @@ class DocumentSession:
 
     @property
     def has_document(self) -> bool:
+        """True once a document is loaded into the session."""
         return self.document is not None
 
     @property
     def can_undo(self) -> bool:
+        """True while the undo stack holds at least one command."""
         return bool(self._undo_stack)
 
     @property
     def can_redo(self) -> bool:
+        """True while the redo stack holds at least one undone command."""
         return bool(self._redo_stack)
 
     def _selection(self) -> _Selection:
@@ -188,9 +195,7 @@ class DocumentSession:
         refusal is the guarantee, whatever the UI forgot to disable.
         """
         if self.read_only:
-            raise ReadOnlyDocumentError(
-                "The session is read-only: no command can execute."
-            )
+            raise ReadOnlyDocumentError("The session is read-only: no command can execute.")
         raw = {} if self.document is None else self.document.raw
         result = command_service.execute(raw, command)
         previous_document = self.document
@@ -265,18 +270,18 @@ class DocumentSession:
         self.selected_parameter_path = tuple(path)
 
     def selected_node(self) -> TreeNode | None:
+        """The selected object node, or None with no document or selection."""
         if self.document is None or self.selected_path is None:
             return None
         return self.document.find(self.selected_path)
 
     def selected_parameter(self) -> ParameterItem | None:
+        """The selected parameter, or None with no document or selection."""
         if self.document is None or self.selected_parameter_path is None:
             return None
         return self.document.find_parameter(self.selected_parameter_path)
 
-    def preview_value(
-        self, path: tuple[str, ...], value: object
-    ) -> ValidationResult:
+    def preview_value(self, path: tuple[str, ...], value: object) -> ValidationResult:
         """Validate a candidate edit without committing it (live preview).
 
         Builds a copy of the raw dict with ``value`` set at ``path`` and runs
@@ -288,9 +293,7 @@ class DocumentSession:
         candidate = editing.set_value(self.document.raw, path, value)
         return bpx_gateway.validate(candidate)
 
-    def preview_parameter(
-        self, path: tuple[str, ...], value: object
-    ) -> ParameterPreview:
+    def preview_parameter(self, path: tuple[str, ...], value: object) -> ParameterPreview:
         """Validate a candidate edit and return *this parameter's* verdict.
 
         The whole document is revalidated (a parameter's legality can depend on
@@ -310,9 +313,7 @@ class DocumentSession:
         if self.document is None:
             raise ValueError("No document loaded")
         candidate = editing.set_value(self.document.raw, path, value)
-        preview = BPXDocument.from_raw(
-            candidate, filename=self.document.filename, fmt=self.document.fmt
-        )
+        preview = BPXDocument.from_raw(candidate, filename=self.document.filename, fmt=self.document.fmt)
         parameter = preview.find_parameter(tuple(path))
         return ParameterPreview(
             issues=list(parameter.issues) if parameter is not None else [],

@@ -80,6 +80,7 @@ from __future__ import annotations
 
 import html as _html
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QRect, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetrics
@@ -107,8 +108,10 @@ from core.validation import Severity, input_fact, merge_union_pair
 
 from . import icons, parameter_row, style, typography
 from .activating_list import ActivatingList
-from .file_facts import FileFact
 from .parameter_row import ParameterRowDelegate
+
+if TYPE_CHECKING:
+    from .file_facts import FileFact
 
 _MSG_NO_DOCUMENT = "No document open"
 #: The filter column's fixed width -- the same 250px the app's other
@@ -203,9 +206,7 @@ def _issue_visible(diagnostic, filters: _FilterState) -> bool:
     is_error = diagnostic.severity == Severity.ERROR
     if is_error and not filters.error_on:
         return False
-    if not is_error and not filters.warning_on:
-        return False
-    return True
+    return not (not is_error and not filters.warning_on)
 
 
 def _task_visible(task: CompletionTask, filters: _FilterState) -> bool:
@@ -261,7 +262,7 @@ def _required_field_tasks(bucket: SectionBucket) -> tuple[CompletionTask, ...]:
 
 
 def _ratio_words(bucket: SectionBucket) -> str:
-    """"N of M remaining" / "section absent" / "N sections absent"
+    """ "N of M remaining" / "section absent" / "N sections absent"
     (Document's fallback: "N remaining") -- the outstanding part of a
     rendered (non-clear) section's header suffix
     (:func:`_section_header_suffix`); a *clear* bucket's own clear-row
@@ -314,9 +315,7 @@ def _absorbed_messages(task: CompletionTask, partition: PartitionedIssues | None
         return ()
     pairs = partition.absorbed_by_task.get(task, ())
     if task.kind in _MISSING_TASK_KINDS:
-        pairs = tuple(
-            pair for pair in pairs if getattr(pair[0], "error_type", None) != "missing"
-        )
+        pairs = tuple(pair for pair in pairs if getattr(pair[0], "error_type", None) != "missing")
     merged = merge_union_pair(tuple(diagnostic for diagnostic, _ in pairs))
     return tuple(diagnostic.message for diagnostic in merged)
 
@@ -370,7 +369,7 @@ def _task_row_html(task: CompletionTask, absorbed_messages: tuple[str, ...]) -> 
     (the same grey #57606a family) to harmonise with the issue rows' flat
     severity dots, rather than swept up in the bold name span."""
     glyph_img = icons.html_img(_task_glyph_svg(task), color=style.MUTED, size=parameter_row.MARK_BOX)
-    name, note, action = _task_label(task)
+    name, note, _action = _task_label(task)
     label = f"{name} · {note}" if note else name
     hints: list[tuple[str, str]] = []
     if task.required:
@@ -613,8 +612,7 @@ def _file_fact_html(fact: FileFact) -> str:
     dot_img = icons.html_img(icons.DOT, color=style.MUTED, size=parameter_row.MARK_BOX)
     headline = parameter_row.compose_row_html(fact.headline, [], name_color=style.DEFAULT_TEXT)
     detail = (
-        f'<span style="color:{style.MUTED}; {typography.size_qss(typography.META)}">'
-        f"{_html.escape(fact.sub)}</span>"
+        f'<span style="color:{style.MUTED}; {typography.size_qss(typography.META)}">{_html.escape(fact.sub)}</span>'
     )
     return f"{dot_img}  {headline}<br>{detail}"
 
@@ -662,7 +660,11 @@ def _add_all_clear_row(list_widget: QListWidget, total_buckets: int, *, model: s
     caller's if/elif in :meth:`_StreamView.render` guarantees that). The
     clear line still renders below this row, expandable as usual."""
     line1 = style.all_clear("No issues, nothing incomplete")
-    line2 = _MSG_PARTIAL_NO_TARGET if model == "Partial" else f"{total_buckets} of {total_buckets} sections complete and valid"
+    line2 = (
+        _MSG_PARTIAL_NO_TARGET
+        if model == "Partial"
+        else f"{total_buckets} of {total_buckets} sections complete and valid"
+    )
     html = (
         f'<span style="color:{style.DEFAULT_TEXT};">{_html.escape(line1)}</span><br>'
         f'<span style="color:{style.MUTED}; {typography.size_qss(typography.META)}">{_html.escape(line2)}</span>'
@@ -714,9 +716,7 @@ def _add_section(
         # would orphan a header for nothing, so it only renders when at
         # least one optional row survives.
         count = len(bucket.optional_tasks)
-        _add_subhead_row(
-            list_widget, f"{count} optional parameter{'s' if count != 1 else ''} unfilled"
-        )
+        _add_subhead_row(list_widget, f"{count} optional parameter{'s' if count != 1 else ''} unfilled")
         for task, absorbed in optional_rows:
             _add_task_row(list_widget, task, absorbed)
     return True
@@ -819,9 +819,7 @@ class _DiagnosticsRowDelegate(ParameterRowDelegate):
         header's own section title already wears (that header uppercases
         section labels too, the precedent for doing it here): structure in
         caps, validator text in sentence case, so the two never blur."""
-        return typography.apply_caps_spacing(
-            typography.semibold(typography.sized(option.font, typography.META))
-        )
+        return typography.apply_caps_spacing(typography.semibold(typography.sized(option.font, typography.META)))
 
     def _paint_band(self, painter, option, text: str) -> None:
         """The page-wide clear line: one muted caps row, ruled on its top
@@ -834,9 +832,7 @@ class _DiagnosticsRowDelegate(ParameterRowDelegate):
         painter.setPen(QColor(style.MUTED))
         text_rect = option.rect.adjusted(self._h_pad, 0, -self._h_pad, 0)
         # Elided, never clipped: drawText cuts mid-glyph at the rect edge.
-        elided = QFontMetrics(font).elidedText(
-            text.upper(), Qt.ElideRight, text_rect.width()
-        )
+        elided = QFontMetrics(font).elidedText(text.upper(), Qt.ElideRight, text_rect.width())
         painter.drawText(text_rect, Qt.AlignVCenter | Qt.AlignLeft, elided)
         painter.restore()
 
@@ -865,9 +861,7 @@ class _DiagnosticsRowDelegate(ParameterRowDelegate):
         if suffix:
             natural = QFontMetrics(suffix_font).horizontalAdvance(suffix)
             reserved = min(natural, label_rect.width() // 2) + 10
-        label_elided = metrics.elidedText(
-            label_text, Qt.ElideRight, max(label_rect.width() - reserved, 0)
-        )
+        label_elided = metrics.elidedText(label_text, Qt.ElideRight, max(label_rect.width() - reserved, 0))
 
         painter.save()
         painter.setFont(font)
@@ -880,9 +874,7 @@ class _DiagnosticsRowDelegate(ParameterRowDelegate):
             painter.setFont(suffix_font)
             painter.setPen(QColor(style.MUTED))
             suffix_x = label_rect.left() + metrics.horizontalAdvance(label_elided) + 10
-            suffix_rect = QRect(
-                suffix_x, zone.top(), max(zone.right() - self._h_pad - suffix_x, 0), zone.height()
-            )
+            suffix_rect = QRect(suffix_x, zone.top(), max(zone.right() - self._h_pad - suffix_x, 0), zone.height())
             elided = QFontMetrics(suffix_font).elidedText(suffix, Qt.ElideRight, suffix_rect.width())
             painter.drawText(suffix_rect, Qt.AlignVCenter | Qt.AlignLeft, elided)
             painter.restore()
@@ -1038,8 +1030,7 @@ class _StreamView(QWidget):
             # directions. The Document bucket's empty path asks about the
             # document level itself.
             judged = {
-                bucket.path: section_checked(bucket.path[0] if bucket.path else None, reach)
-                for bucket in clear_buckets
+                bucket.path: section_checked(bucket.path[0] if bucket.path else None, reach) for bucket in clear_buckets
             }
             checked_count = sum(1 for was in judged.values() if was)
             _add_clear_summary_row(
@@ -1168,7 +1159,7 @@ class _FilterChip(QLabel):
         the current document happens to have anything for it to filter."""
         self.setEnabled(not zero)
 
-    def mousePressEvent(self, event) -> None:  # noqa: N802 -- Qt override
+    def mousePressEvent(self, event) -> None:
         if not self.isEnabled():
             return
         if event.button() != Qt.LeftButton:
@@ -1196,7 +1187,7 @@ class _CollapseAllLink(QLabel):
         self.setObjectName("DiagnosticsCollapseAll")
         self.setCursor(Qt.PointingHandCursor)
 
-    def mousePressEvent(self, event) -> None:  # noqa: N802 -- Qt override
+    def mousePressEvent(self, event) -> None:
         if event.button() != Qt.LeftButton:
             super().mousePressEvent(event)
             return

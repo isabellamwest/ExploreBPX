@@ -21,12 +21,15 @@ them.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Sequence
-
-from core.compare import ComparisonResult
-from state.reference_snapshot import ReferenceSnapshot
+from typing import TYPE_CHECKING
 
 from . import style
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from core.compare import ComparisonResult
+    from state.reference_snapshot import ReferenceSnapshot
 
 #: Shown when a display name has no letters or digits at all to draw on --
 #: a badge must still be a badge, and the row beside it carries the name.
@@ -69,10 +72,7 @@ def badge_letters(names: Sequence[str]) -> list[str]:
     counts: dict[str, int] = {}
     for pair in initials:
         counts[pair] = counts.get(pair, 0) + 1
-    return [
-        pair if counts[pair] == 1 else f"{pair[0]}{index + 1}"
-        for index, pair in enumerate(initials)
-    ]
+    return [pair if counts[pair] == 1 else f"{pair[0]}{index + 1}" for index, pair in enumerate(initials)]
 
 
 @dataclass(frozen=True)

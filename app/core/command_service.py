@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import copy
 
-from . import editing, structure
+from . import document_factory, editing, structure
 from .commands import (
     AddParameter,
     AddSection,
@@ -31,7 +31,6 @@ from .commands import (
     SetValue,
     SetValues,
 )
-from . import document_factory
 
 
 class CommandError(Exception):
@@ -82,9 +81,7 @@ def execute(raw: dict, command: Command) -> CommandResult:
     if isinstance(command, PullParameter):
         updates = _pull_updates(raw, command.path, command.value)
         new = editing.set_values(raw, updates)
-        return CommandResult(
-            new, _pull_label(command.path, command.source_label), command.path[:-1], command.path
-        )
+        return CommandResult(new, _pull_label(command.path, command.source_label), command.path[:-1], command.path)
     if isinstance(command, PullSection):
         updates = _pull_updates(raw, command.path, command.value)
         new = editing.set_values(raw, updates)
@@ -94,9 +91,7 @@ def execute(raw: dict, command: Command) -> CommandResult:
             (path, {}) for path in _sections_to_add(raw, command.model)
         )
         new = editing.set_values(raw, updates)
-        return CommandResult(
-            new, "Change model", ("Header",), ("Header", "Model")
-        )
+        return CommandResult(new, "Change model", ("Header",), ("Header", "Model"))
     if isinstance(command, AddSection):
         new = editing.add_section(raw, command.parent_path, command.key)
         path = command.parent_path + (command.key,)
@@ -198,9 +193,7 @@ def _pull_label(path: tuple[str, ...], source_label: str) -> str:
     return f'Use "{key}"'
 
 
-def _pull_updates(
-    raw: dict, path: tuple[str, ...], value: object
-) -> tuple[tuple[tuple[str, ...], object], ...]:
+def _pull_updates(raw: dict, path: tuple[str, ...], value: object) -> tuple[tuple[tuple[str, ...], object], ...]:
     """The parents-first ``set_values`` batch for a "Copy up" pull
     (``PullParameter``/``PullSection``): any missing ancestor section as an
     empty object, then ``path`` itself set to a deep copy of ``value``.

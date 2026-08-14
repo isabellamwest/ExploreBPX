@@ -12,7 +12,7 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from ui_qt.workspace_panel import UNTITLED_WORKSPACE  # noqa: E402
+from ui_qt.workspace_panel import UNTITLED_WORKSPACE
 
 CHEN2020 = "pybamm/chen2020"
 
@@ -31,6 +31,7 @@ def relaunch(qtbot, history_path):
 
     def build():
         from ui_driver import AppDriver
+
         from state.workspace_history import WorkspaceHistory
         from ui_qt.main_window import MainWindow
 
@@ -58,9 +59,7 @@ def _name_workspace(driver, label, name):
 # opening starts a workspace; switching shelves it
 
 
-def test_opening_a_file_starts_a_workspace_that_survives_a_relaunch(
-    relaunch, spm_workfile
-):
+def test_opening_a_file_starts_a_workspace_that_survives_a_relaunch(relaunch, spm_workfile):
     first = relaunch()
     first.open(spm_workfile)
 
@@ -69,9 +68,7 @@ def test_opening_a_file_starts_a_workspace_that_survives_a_relaunch(
     assert fresh.named_workspace_labels() == []
 
 
-def test_switching_shelves_rather_than_discards(
-    relaunch, spm_workfile, second_workfile
-):
+def test_switching_shelves_rather_than_discards(relaunch, spm_workfile, second_workfile):
     """Nothing is discarded by a click: the workspace being left is already
     under Recent, so it is simply still there."""
     d = relaunch()
@@ -83,9 +80,7 @@ def test_switching_shelves_rather_than_discards(
     assert d.current_workspace_row_label() == second_workfile.name
 
 
-def test_opening_a_file_swaps_the_main_of_an_untitled_workspace(
-    relaunch, spm_workfile, second_workfile
-):
+def test_opening_a_file_swaps_the_main_of_an_untitled_workspace(relaunch, spm_workfile, second_workfile):
     d = relaunch()
     d.open(spm_workfile)
     d.dock_library_reference(CHEN2020)
@@ -97,9 +92,7 @@ def test_opening_a_file_swaps_the_main_of_an_untitled_workspace(
     assert d.workspace_row_reference_count(second_workfile.name) == 1
 
 
-def test_new_workspace_clears_the_board_for_a_separate_line_of_work(
-    relaunch, spm_workfile
-):
+def test_new_workspace_clears_the_board_for_a_separate_line_of_work(relaunch, spm_workfile):
     d = relaunch()
     d.open(spm_workfile)
     d.dock_library_reference(CHEN2020)
@@ -130,9 +123,7 @@ def test_the_board_header_invites_a_name_on_an_empty_workspace(relaunch):
     assert d.workspace_name_text() == "planning"
 
 
-def test_a_new_workspace_can_be_named_before_it_holds_anything(
-    relaunch, spm_workfile
-):
+def test_a_new_workspace_can_be_named_before_it_holds_anything(relaunch, spm_workfile):
     """Creation is instant, so naming does not have to wait for a document:
     the fresh row promotes out of Recent and survives a relaunch empty."""
     d = relaunch()
@@ -204,9 +195,7 @@ def test_an_empty_workspace_restores_to_the_start_surface(relaunch, spm_workfile
     assert fresh.missing_file_messages() == []
 
 
-def test_a_workspace_reopens_whole_from_its_rail_row(
-    relaunch, spm_workfile, second_workfile
-):
+def test_a_workspace_reopens_whole_from_its_rail_row(relaunch, spm_workfile, second_workfile):
     first = relaunch()
     first.open(spm_workfile)
     first.dock_library_reference(CHEN2020)
@@ -266,9 +255,7 @@ def test_the_board_header_renames_in_place(relaunch, spm_workfile):
     assert d.workspace_name_text() == "second name"
 
 
-def test_a_name_in_use_is_refused_inline_and_never_overwrites(
-    relaunch, spm_workfile, second_workfile
-):
+def test_a_name_in_use_is_refused_inline_and_never_overwrites(relaunch, spm_workfile, second_workfile):
     d = relaunch()
     d.open(spm_workfile)
     d.rename_workspace("study")
@@ -293,9 +280,7 @@ def test_an_untitled_workspace_invites_a_name(relaunch, spm_workfile):
 # rule 4: a workspace looks after itself
 
 
-def test_a_named_workspace_is_live_not_a_snapshot(
-    relaunch, spm_workfile, second_workfile
-):
+def test_a_named_workspace_is_live_not_a_snapshot(relaunch, spm_workfile, second_workfile):
     """The deliberate reversal of the old snapshot semantics. A pin after
     naming *is* part of the workspace -- there is no save step to wait for
     and nothing that can go stale."""
@@ -314,9 +299,7 @@ def test_a_named_workspace_is_live_not_a_snapshot(
     assert fresh.workspace_row_reference_count("study") == 1
 
 
-def test_opening_a_file_beside_a_named_workspace_leaves_it_alone(
-    relaunch, spm_workfile, second_workfile
-):
+def test_opening_a_file_beside_a_named_workspace_leaves_it_alone(relaunch, spm_workfile, second_workfile):
     """Naming is the act that says "stop rewriting this", so an ordinary
     open starts a fresh untitled workspace rather than swapping the named
     one's main."""
@@ -362,9 +345,7 @@ def test_every_row_offers_the_same_actions_on_hover(relaunch, spm_workfile):
 # missing files: open what is there, name what is not
 
 
-def test_a_missing_main_opens_the_rest_and_offers_locate(
-    relaunch, spm_workfile, second_workfile
-):
+def test_a_missing_main_opens_the_rest_and_offers_locate(relaunch, spm_workfile, second_workfile):
     """It used to refuse the whole workspace over one moved file, throwing
     away the arrangement the record exists to protect."""
     first = relaunch()
@@ -380,15 +361,11 @@ def test_a_missing_main_opens_the_rest_and_offers_locate(
     # The references came back even though the main did not.
     assert [ref.set_id for ref in fresh._w._state.references] == [CHEN2020]
     assert fresh._w._state.active is None
-    assert fresh.missing_file_messages() == [
-        f"Main not found: {spm_workfile.name}"
-    ]
+    assert fresh.missing_file_messages() == [f"Main not found: {spm_workfile.name}"]
     assert fresh.current_view_index() == 2  # landed where the banner is
 
 
-def test_locate_repoints_the_workspace_and_reopens_it(
-    relaunch, spm_workfile, second_workfile, tmp_path
-):
+def test_locate_repoints_the_workspace_and_reopens_it(relaunch, spm_workfile, second_workfile, tmp_path):
     first = relaunch()
     first.open(spm_workfile)
     first.click_new_workspace()
@@ -408,9 +385,7 @@ def test_locate_repoints_the_workspace_and_reopens_it(
     assert fresh.missing_file_messages() == []
 
 
-def test_a_missing_reference_is_named_and_can_be_forgotten(
-    relaunch, spm_workfile, second_workfile
-):
+def test_a_missing_reference_is_named_and_can_be_forgotten(relaunch, spm_workfile, second_workfile):
     first = relaunch()
     first.open(spm_workfile)
     first._w._open_reference_path(second_workfile)
@@ -421,9 +396,7 @@ def test_a_missing_reference_is_named_and_can_be_forgotten(
     fresh.click_workspace_row(spm_workfile.name)
 
     assert fresh._w._state.active.backing_file == spm_workfile  # main opened
-    assert fresh.missing_file_messages() == [
-        f"Reference not found: {second_workfile.name}"
-    ]
+    assert fresh.missing_file_messages() == [f"Reference not found: {second_workfile.name}"]
 
     fresh.click_missing_file_button(second_workfile.name, "Remove")
 
@@ -453,9 +426,7 @@ def test_dirty_guard_runs_before_a_restore(relaunch, spm_workfile, second_workfi
 # the board's routes out: the page must never be a dead end
 
 
-def test_the_main_card_routes_to_the_editor_and_to_its_errors(
-    relaunch, spm_workfile, invalid_bpx_path
-):
+def test_the_main_card_routes_to_the_editor_and_to_its_errors(relaunch, spm_workfile, invalid_bpx_path):
     d = relaunch()
     d.open(spm_workfile)
     d.show_view("Workspace")
@@ -471,9 +442,7 @@ def test_the_main_card_routes_to_the_editor_and_to_its_errors(
     assert d.current_view_index() == 1
 
 
-def test_each_slot_names_how_much_differs_and_routes_to_the_diff(
-    relaunch, spm_workfile, second_workfile
-):
+def test_each_slot_names_how_much_differs_and_routes_to_the_diff(relaunch, spm_workfile, second_workfile):
     """The count was already computed for every comparison and shown
     nowhere but a tooltip. It is a route now -- and it must survive the
     recompute that lands after the page has refreshed."""
@@ -492,9 +461,7 @@ def test_each_slot_names_how_much_differs_and_routes_to_the_diff(
     assert d._w._source_reference_index == 1
 
 
-def test_the_counts_survive_a_relaunch_restore(
-    relaunch, spm_workfile, second_workfile
-):
+def test_the_counts_survive_a_relaunch_restore(relaunch, spm_workfile, second_workfile):
     first = relaunch()
     first.open(spm_workfile)
     first._w._open_reference_path(second_workfile)
@@ -505,9 +472,7 @@ def test_the_counts_survive_a_relaunch_restore(
     assert fresh.reference_diff_text(0) == "Identical ▸"
 
 
-def test_the_board_offers_no_name_when_there_is_no_workspace(
-    relaunch, spm_workfile
-):
+def test_the_board_offers_no_name_when_there_is_no_workspace(relaunch, spm_workfile):
     """An invitation that would silently do nothing is worse than none, so
     the header waits for a workspace to exist -- but only for that. Once one
     does, empty or not, it invites."""
@@ -525,9 +490,7 @@ def test_the_board_offers_no_name_when_there_is_no_workspace(
 # the board's ＋ menu, and the store's own honesty
 
 
-def test_the_plus_menu_offers_three_routes_including_recent_files(
-    relaunch, spm_workfile, second_workfile
-):
+def test_the_plus_menu_offers_three_routes_including_recent_files(relaunch, spm_workfile, second_workfile):
     """Recent *files* lost their rail rows and feed this menu instead."""
     d = relaunch()
     d.open(second_workfile)
@@ -559,9 +522,7 @@ def test_corrupt_history_resets_and_announces_itself(relaunch, history_path, qtb
 # launch: the workspace is handed back whole
 
 
-def test_launch_reopens_the_workspace_that_was_on_the_board(
-    relaunch, spm_workfile, second_workfile
-):
+def test_launch_reopens_the_workspace_that_was_on_the_board(relaunch, spm_workfile, second_workfile):
     """The workspace is the unit of work, so a relaunch hands it back whole
     rather than an empty page and the job of finding everything again."""
     first = relaunch()
@@ -603,9 +564,7 @@ def test_launch_replays_the_recorded_open_mode(relaunch, fixtures_dir):
     assert fresh._w._state.active.read_only is True
 
 
-def test_launch_after_new_workspace_starts_on_an_empty_board(
-    relaunch, spm_workfile
-):
+def test_launch_after_new_workspace_starts_on_an_empty_board(relaunch, spm_workfile):
     first = relaunch()
     first.open(spm_workfile)
     first.click_new_workspace()  # deliberately left nothing on the board
@@ -625,16 +584,12 @@ def test_launch_with_a_missing_main_never_refuses(relaunch, spm_workfile):
 
     fresh = relaunch()
 
-    assert fresh.missing_file_messages() == [
-        f"Main not found: {spm_workfile.name}"
-    ]
+    assert fresh.missing_file_messages() == [f"Main not found: {spm_workfile.name}"]
     assert [ref.set_id for ref in fresh._w._state.references] == [CHEN2020]
     assert fresh.current_view_index() == 2  # landed where the banner is
 
 
-def test_launch_with_an_unreadable_main_says_so_without_a_modal(
-    relaunch, spm_workfile, monkeypatch
-):
+def test_launch_with_an_unreadable_main_says_so_without_a_modal(relaunch, spm_workfile, monkeypatch):
     """A file that will not parse is not a file that is missing, and the
     banner must not call it one. Nor may it meet the user with a modal
     error before the window has settled."""
@@ -644,14 +599,10 @@ def test_launch_with_an_unreadable_main_says_so_without_a_modal(
     first.open(spm_workfile)
     spm_workfile.write_text("{not valid json", encoding="utf-8")
 
-    monkeypatch.setattr(
-        main_window_module.QMessageBox, "critical", _fail_if_called
-    )
+    monkeypatch.setattr(main_window_module.QMessageBox, "critical", _fail_if_called)
     fresh = relaunch()
 
-    assert fresh.missing_file_messages() == [
-        f"Main could not be read: {spm_workfile.name}"
-    ]
+    assert fresh.missing_file_messages() == [f"Main could not be read: {spm_workfile.name}"]
     assert fresh._w._state.active is None
 
 

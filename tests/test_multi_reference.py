@@ -58,8 +58,7 @@ def _write(tmp_path: Path, name: str, raw: dict) -> Path:
 def _strip_pins(*names: str) -> list:
     """Pins carrying only what the strip reads: identity and a comparison."""
     from state.reference_snapshot import ReferenceSnapshot
-    from ui_qt.reference_identity import badge_colour, badge_letters
-    from ui_qt.reference_identity import ReferencePin
+    from ui_qt.reference_identity import ReferencePin, badge_colour, badge_letters
 
     letters = badge_letters(list(names))
     return [
@@ -85,9 +84,7 @@ def _strip_pins(*names: str) -> list:
 
 
 def _pin(app_driver, monkeypatch, path: Path) -> None:
-    monkeypatch.setattr(
-        main_window_module.QFileDialog, "getOpenFileName", lambda *a, **k: (str(path), "")
-    )
+    monkeypatch.setattr(main_window_module.QFileDialog, "getOpenFileName", lambda *a, **k: (str(path), ""))
     app_driver.click_workspace_open_reference()
 
 
@@ -146,9 +143,7 @@ def test_removing_a_pin_shifts_the_later_badges(three_pins):
     assert d.empty_slot_count() == MAX_PINNED_REFERENCES - 2
 
 
-def test_the_last_slot_fills_and_there_is_no_plus_left_to_click(
-    app_driver, tmp_path, monkeypatch
-):
+def test_the_last_slot_fills_and_there_is_no_plus_left_to_click(app_driver, tmp_path, monkeypatch):
     """At the cap the ＋ simply is not there. Nothing has to explain itself,
     because nothing looks available -- the slots *are* the limit."""
     d = app_driver
@@ -193,7 +188,8 @@ def test_strip_shows_a_quiet_chip_per_pin(three_pins):
     # Counts are per reference and live only in the tooltip: okane carries an
     # extra key, so its ref-only count differs from the other two.
     tooltips = d.comparison_strip_chip_tooltips()
-    assert "1 differs" in tooltips[0] and "reference only" not in tooltips[0]
+    assert "1 differs" in tooltips[0]
+    assert "reference only" not in tooltips[0]
     assert "1 reference only" in tooltips[2]
 
 
@@ -346,7 +342,8 @@ def test_spread_scale_shows_labelled_divisions_not_a_caption(three_pins):
     d.go_to(_CAPACITY)
 
     spread = d._spread()
-    assert spread is not None and spread.is_active
+    assert spread is not None
+    assert spread.is_active
     divisions = spread._scale.divisions
     assert len(divisions) >= 3
     assert all(division.label for division in divisions)
@@ -394,8 +391,9 @@ def test_spread_scale_stacks_dots_that_would_hide_each_other(qtbot):
 def test_spread_scale_thins_division_labels_on_a_narrow_axis(qtbot):
     """Never let labels collide: at 30px, four decade labels ("1", "100",
     "10000", "1e+06") cannot all fit, so the visible set shrinks."""
-    from core.spread import build_spread
     from PySide6.QtGui import QFontMetrics
+
+    from core.spread import build_spread
     from ui_qt import typography
     from ui_qt.cards.spread_scale import SpreadScaleView
 
@@ -414,8 +412,9 @@ def test_spread_scale_thins_division_labels_on_a_narrow_axis(qtbot):
 
 
 def test_spread_scale_shows_every_division_label_with_room_to_spare(qtbot):
-    from core.spread import build_spread
     from PySide6.QtGui import QFontMetrics
+
+    from core.spread import build_spread
     from ui_qt import typography
     from ui_qt.cards.spread_scale import SpreadScaleView
 
@@ -546,16 +545,12 @@ def test_source_reload_acts_on_the_selected_reference(three_pins, tmp_path):
     d.click_source_reference_badge(1)
 
     changed = tmp_path / "marquis.json"
-    changed.write_text(
-        json.dumps(_document({"Nominal cell capacity [A.h]": 9.0})), encoding="utf-8"
-    )
+    changed.write_text(json.dumps(_document({"Nominal cell capacity [A.h]": 9.0})), encoding="utf-8")
     os.utime(changed, (time.time() + 10, time.time() + 10))
 
     d._w._on_reload_reference()
 
-    assert d._w._state.references[1].raw["Parameterisation"]["Cell"][
-        "Nominal cell capacity [A.h]"
-    ] == 9.0
+    assert d._w._state.references[1].raw["Parameterisation"]["Cell"]["Nominal cell capacity [A.h]"] == 9.0
     # The other pins are untouched by one reference's reload.
     assert d._w._state.references[0].filename == "chen.json"
 
@@ -571,9 +566,7 @@ def test_source_selector_is_a_single_badge_for_a_single_pin(app_driver, tmp_path
     assert d.source_reference_header_text().startswith("Reference  ·  chen.json")
 
 
-def test_stale_band_names_a_reference_that_is_not_the_one_shown(
-    three_pins, tmp_path, monkeypatch
-):
+def test_stale_band_names_a_reference_that_is_not_the_one_shown(three_pins, tmp_path, monkeypatch):
     """The band watches every pin, not just the one on screen -- a reference
     going stale off screen is exactly what a first-pin-only check would miss
     in silence."""
@@ -594,16 +587,13 @@ def test_stale_band_names_a_reference_that_is_not_the_one_shown(
     assert d.source_stale_band_text() == "marquis.json changed on disk"
 
 
-
 # ---------------------------------------------------------------------------
 # Chart overlay and the reference-grid selector
 # ---------------------------------------------------------------------------
 
 _TABLE_MAIN = {
     "Header": {"BPX": "1.0.0", "Title": "T", "Model": "SPM"},
-    "Parameterisation": {
-        "Negative electrode": {"OCP [V]": {"x": [0.0, 0.5, 1.0], "y": [1.0, 0.5, 0.1]}}
-    },
+    "Parameterisation": {"Negative electrode": {"OCP [V]": {"x": [0.0, 0.5, 1.0], "y": [1.0, 0.5, 0.1]}}},
 }
 
 
@@ -701,9 +691,7 @@ def test_chart_legend_badge_tooltip_names_the_domain(table_pins):
 # ---------------------------------------------------------------------------
 
 
-def test_library_pin_record_retains_the_provenance_statement(
-    app_driver, tmp_path
-):
+def test_library_pin_record_retains_the_provenance_statement(app_driver, tmp_path):
     """The library dialog's provenance sentence used to vanish the moment
     the pin landed; the record's From row now names the library and states
     the same sentence directly beneath it (always visible -- growing a row
@@ -723,9 +711,7 @@ def test_library_pin_record_retains_the_provenance_statement(
     assert PROVENANCE in record._from_fact.text()
 
 
-def test_file_pin_slot_tooltip_names_the_path_and_library_pin_names_the_library(
-    app_driver, tmp_path, monkeypatch
-):
+def test_file_pin_slot_tooltip_names_the_path_and_library_pin_names_the_library(app_driver, tmp_path, monkeypatch):
     from core.reference_library import list_reference_sets
 
     d = app_driver
@@ -739,9 +725,7 @@ def test_file_pin_slot_tooltip_names_the_path_and_library_pin_names_the_library(
     assert "Reference library" in slots[1].toolTip()
 
 
-def test_source_page_reference_header_carries_the_origin_on_hover(
-    app_driver, tmp_path, monkeypatch
-):
+def test_source_page_reference_header_carries_the_origin_on_hover(app_driver, tmp_path, monkeypatch):
     d = app_driver
     d.open(_write(tmp_path, "main.json", _MAIN))
     ref_path = _write(tmp_path, "chen.json", _REF_A)

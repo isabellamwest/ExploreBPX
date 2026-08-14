@@ -37,19 +37,15 @@ def _make_dirty(app_driver, spm_workfile) -> None:
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(6.0).commit()
 
 
-def test_export_default_proposes_copy_name_not_backing_file(
-    app_driver, spm_workfile, monkeypatch
-):
+def test_export_default_proposes_copy_name_not_backing_file(app_driver, spm_workfile, monkeypatch):
     app_driver.open(spm_workfile)
     captured = {}
 
-    def fake_get_save_file_name(parent, title, default, filter):
+    def fake_get_save_file_name(parent, title, default, filter):  # noqa: A002 - mirrors Qt's getSaveFileName signature
         captured["default"] = default
         return ("", "")
 
-    monkeypatch.setattr(
-        main_window_module.QFileDialog, "getSaveFileName", fake_get_save_file_name
-    )
+    monkeypatch.setattr(main_window_module.QFileDialog, "getSaveFileName", fake_get_save_file_name)
 
     app_driver._w._export_as("json")
 
@@ -58,20 +54,16 @@ def test_export_default_proposes_copy_name_not_backing_file(
     assert captured["default"] != str(spm_workfile)
 
 
-def test_export_as_yaml_proposes_yaml_extension_even_for_a_json_backing_file(
-    app_driver, spm_workfile, monkeypatch
-):
+def test_export_as_yaml_proposes_yaml_extension_even_for_a_json_backing_file(app_driver, spm_workfile, monkeypatch):
     app_driver.open(spm_workfile)
     captured = {}
 
-    def fake_get_save_file_name(parent, title, default, filter):
+    def fake_get_save_file_name(parent, title, default, filter):  # noqa: A002 - mirrors Qt's getSaveFileName signature
         captured["default"] = default
         captured["filter"] = filter
         return ("", "")
 
-    monkeypatch.setattr(
-        main_window_module.QFileDialog, "getSaveFileName", fake_get_save_file_name
-    )
+    monkeypatch.setattr(main_window_module.QFileDialog, "getSaveFileName", fake_get_save_file_name)
 
     app_driver._w._export_as("yaml")
 
@@ -80,9 +72,7 @@ def test_export_as_yaml_proposes_yaml_extension_even_for_a_json_backing_file(
     assert "yaml" in captured["filter"].lower()
 
 
-def test_export_leaves_dirty_and_backing_file_unchanged(
-    app_driver, spm_workfile, tmp_path, monkeypatch
-):
+def test_export_leaves_dirty_and_backing_file_unchanged(app_driver, spm_workfile, tmp_path, monkeypatch):
     _make_dirty(app_driver, spm_workfile)
     session = app_driver._w._state.active
     assert session.dirty is True
@@ -101,9 +91,7 @@ def test_export_leaves_dirty_and_backing_file_unchanged(
     assert export_path.exists()
 
 
-def test_export_writes_same_bytes_save_would_write(
-    app_driver, spm_workfile, tmp_path, monkeypatch
-):
+def test_export_writes_same_bytes_save_would_write(app_driver, spm_workfile, tmp_path, monkeypatch):
     _make_dirty(app_driver, spm_workfile)
     export_path = tmp_path / "exported.json"
 
@@ -118,21 +106,17 @@ def test_export_writes_same_bytes_save_would_write(
     assert export_path.read_bytes() == spm_workfile.read_bytes()
 
 
-def test_export_never_saved_document_falls_back_to_document_filename(
-    app_driver, monkeypatch
-):
+def test_export_never_saved_document_falls_back_to_document_filename(app_driver, monkeypatch):
     app_driver._w._new("SPM")
     session = app_driver._w._state.active
     assert session.backing_file is None
     captured = {}
 
-    def fake_get_save_file_name(parent, title, default, filter):
+    def fake_get_save_file_name(parent, title, default, filter):  # noqa: A002 - mirrors Qt's getSaveFileName signature
         captured["default"] = default
         return ("", "")
 
-    monkeypatch.setattr(
-        main_window_module.QFileDialog, "getSaveFileName", fake_get_save_file_name
-    )
+    monkeypatch.setattr(main_window_module.QFileDialog, "getSaveFileName", fake_get_save_file_name)
 
     app_driver._w._export_as("json")
 

@@ -25,6 +25,7 @@ import csv
 import io
 import re
 from dataclasses import dataclass
+from pathlib import Path
 
 from .paste import detect_delimiter
 from .values import parse_value
@@ -48,10 +49,12 @@ class CsvData:
 
     @property
     def column_count(self) -> int:
+        """How many columns the file yielded."""
         return len(self.columns)
 
     @property
     def row_count(self) -> int:
+        """How many data rows the file yielded (all columns are equal length)."""
         return len(self.columns[0]) if self.columns else 0
 
     def column_name(self, index: int) -> str:
@@ -69,7 +72,7 @@ def read_csv_file(path: str) -> CsvData:
     UTF-8 survives as a visible replacement character rather than aborting
     the import -- lives in one place.
     """
-    with open(path, encoding="utf-8-sig", errors="replace") as handle:
+    with Path(path).open(encoding="utf-8-sig", errors="replace") as handle:
         return read_csv_text(handle.read())
 
 
@@ -185,9 +188,7 @@ def _is_header_row(row: list[str]) -> bool:
     cells = [cell for cell in row if cell.strip()]
     if not cells:
         return False
-    return all(
-        not isinstance(parse_value(cell), (int, float)) for cell in cells
-    )
+    return all(not isinstance(parse_value(cell), (int, float)) for cell in cells)
 
 
 def _fallback_split(line: str, delimiter: str) -> list[str]:

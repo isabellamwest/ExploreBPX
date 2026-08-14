@@ -18,10 +18,10 @@ from __future__ import annotations
 
 from core import structure
 from core.values import is_grid_cell
+from ui_qt.style import FIXED_UNIT_TOOLTIP
 
-from ..style import FIXED_UNIT_TOOLTIP
 from .bodies import ExpressionBody, NumberBody, RawJsonBody, TableBody
-from .modal import RAW_MODE, Mode, ModalCard
+from .modal import RAW_MODE, ModalCard, Mode
 
 FLOAT_INT = "FloatInt"
 FUNCTION = "Function"

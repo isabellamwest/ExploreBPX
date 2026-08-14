@@ -13,9 +13,12 @@ import it without touching a widget.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from core.bpx_gateway import BPX_VERSION, CheckReach
-from core.load_record import LoadRecord
+
+if TYPE_CHECKING:
+    from core.load_record import LoadRecord
 
 
 @dataclass(frozen=True)

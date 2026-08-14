@@ -40,12 +40,10 @@ from ui_qt.style import CHART_SERIES
 def _qapp():
     from PySide6.QtWidgets import QApplication
 
-    yield QApplication.instance() or QApplication([])
+    return QApplication.instance() or QApplication([])
 
 
-requires_charts = pytest.mark.skipif(
-    not charts_available(), reason="QtCharts not available in this PySide6 build"
-)
+requires_charts = pytest.mark.skipif(not charts_available(), reason="QtCharts not available in this PySide6 build")
 
 
 def _series(name, points, visible=True, colour="#1f6feb"):
@@ -186,13 +184,13 @@ class _FakeAxis:
         self.calls: list[str] = []
         self.tick_count: int | None = None
 
-    def setRange(self, low, high) -> None:  # noqa: N802 (Qt-style name)
+    def setRange(self, low, high) -> None:
         self.calls.append("setRange")
 
-    def applyNiceNumbers(self) -> None:  # noqa: N802 (Qt-style name)
+    def applyNiceNumbers(self) -> None:
         self.calls.append("applyNiceNumbers")
 
-    def setTickCount(self, count: int) -> None:  # noqa: N802 (Qt-style name)
+    def setTickCount(self, count: int) -> None:
         self.calls.append("setTickCount")
         self.tick_count = count
 
@@ -240,8 +238,8 @@ def test_apply_nice_numbers_resets_a_tick_count_set_before_it():
 def _build_view():
     """A minimal chart + axes + view, styled the same way both real widgets
     build one -- enough to exercise ReadoutChartView on its own."""
-    from PySide6.QtCore import Qt
     from PySide6.QtCharts import QChart, QValueAxis
+    from PySide6.QtCore import Qt
 
     from ui_qt.cards.chart_axes import ReadoutChartView, fit_axis
 

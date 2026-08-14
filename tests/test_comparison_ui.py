@@ -22,7 +22,7 @@ import ui_qt.main_window as main_window_module
 from core.compare import ComparisonResult, RowDiff, RowState, SectionDiff, compare
 from core.tree_model import build_path_map, build_tree
 from state.reference_snapshot import ReferenceSnapshot
-from ui_qt import parameter_row, style, tree_model
+from ui_qt import parameter_row, style
 from ui_qt.comparison_strip import ComparisonStrip
 from ui_qt.parameter_list import ParameterListPanel
 from ui_qt.reference_identity import ReferencePin, badge_colour, badge_letters
@@ -64,9 +64,7 @@ MATCHING_MAIN_RAW = _document(_REF_CELL)
 
 
 def _stub_open_dialog(monkeypatch, path) -> None:
-    monkeypatch.setattr(
-        main_window_module.QFileDialog, "getOpenFileName", lambda *a, **k: (str(path), "")
-    )
+    monkeypatch.setattr(main_window_module.QFileDialog, "getOpenFileName", lambda *a, **k: (str(path), ""))
 
 
 @pytest.fixture
@@ -145,9 +143,7 @@ def panel(qtbot) -> ParameterListPanel:
 
 def _ghost_items(panel):
     lst = panel._list
-    return [
-        lst.item(i) for i in range(lst.count()) if lst.item(i).data(panel._GROUP_ROW_KIND_ROLE) == "ghost"
-    ]
+    return [lst.item(i) for i in range(lst.count()) if lst.item(i).data(panel._GROUP_ROW_KIND_ROLE) == "ghost"]
 
 
 def _real_item(panel, label: str):
@@ -211,7 +207,8 @@ def test_ghost_row_rendered_read_only_and_selectable(panel):
     assert ghost.data(parameter_row.REF_BAR_ROLE) == "ref_only"
     assert ghost.data(parameter_row.VALUE_GHOST_ROLE) is True  # italic, even for a plain scalar
     html = ghost.data(parameter_row.HTML_ROLE)
-    assert html.startswith("<i>") and html.endswith("</i>")  # ghosted end to end
+    assert html.startswith("<i>")
+    assert html.endswith("</i>")
     assert style.GHOST_TEXT in html
 
     # Selectable: clicking emits ghost_selected, never parameter_selected.
@@ -271,9 +268,7 @@ def test_strip_counts_live_in_the_chip_tooltip(qtbot):
 
     strip.set_state(_one_pin(MAIN_RAW, REF_RAW))
     assert strip._chips[0]._name.text() == "reference.json"
-    assert strip._chips[0].toolTip() == (
-        "reference.json · SPM · 2 differ · 1 reference only"
-    )
+    assert strip._chips[0].toolTip() == ("reference.json · SPM · 2 differ · 1 reference only")
 
     one_differ = ComparisonResult(
         sections={
@@ -347,7 +342,7 @@ def test_tree_display_text_carries_no_differ_suffix():
     """The old text-appended "≠ N" label suffix is gone, and so is the
     numeric count that replaced it -- the mark is the painted gutter bar and
     nothing else."""
-    root, _header, _parameterisation, cell = _tree_with_cell()
+    root, _header, _parameterisation, _cell = _tree_with_cell()
     model = BpxTreeModel(root, comparisons=[_comparison_with_differ_count(_CELL_PATH, 3)])
     cell_index = model.index(0, 0, model.index(1, 0))
 
@@ -471,9 +466,7 @@ def test_strip_appears_with_correct_counts_after_docking(app_driver, main_and_re
 
     assert app_driver.comparison_strip_visible()
     assert app_driver.comparison_strip_chip_names() == [ref_path.name]
-    assert app_driver.comparison_strip_chip_tooltips() == [
-        f"{ref_path.name} · SPM · 2 differ · 1 reference only"
-    ]
+    assert app_driver.comparison_strip_chip_tooltips() == [f"{ref_path.name} · SPM · 2 differ · 1 reference only"]
 
 
 def test_row_bar_end_to_end(app_driver, main_and_ref, monkeypatch):
@@ -537,7 +530,6 @@ def test_tree_differ_count_actually_paints(app_driver, main_and_ref, monkeypatch
     main_path, ref_path = main_and_ref
     app_driver.open(main_path)
     _dock_reference(app_driver, ref_path, monkeypatch)
-
 
 
 def test_merge_rule_end_to_end_both_ways(app_driver, main_and_ref, monkeypatch):
@@ -654,7 +646,7 @@ def test_clicking_pull_emits_its_source_index_and_does_not_dirty_the_card(app_dr
     app_driver.go_to(("Parameterisation", "Cell", "Nominal cell capacity [A.h]"))
 
     received: list = []
-    app_driver._w._inspector._card.pull_requested.connect(lambda index: received.append(index))
+    app_driver._w._inspector._card.pull_requested.connect(received.append)
 
     app_driver.click_pull()
 
@@ -710,7 +702,7 @@ def test_ghost_card_pull_emits_its_source_index(app_driver, main_and_ref, monkey
     app_driver.select_ghost_row("Electrode area [m2]")
 
     received: list = []
-    app_driver._w._inspector._card.pull_requested.connect(lambda index: received.append(index))
+    app_driver._w._inspector._card.pull_requested.connect(received.append)
 
     app_driver.click_pull()
 
@@ -734,21 +726,15 @@ def test_removing_reference_clears_everything_immediately(app_driver, main_and_r
     assert app_driver.tree_node_ref_bar(_CELL_PATH) is None
 
 
-def test_replacing_the_main_document_with_reference_docked_refreshes(
-    app_driver, main_and_ref, monkeypatch, tmp_path
-):
+def test_replacing_the_main_document_with_reference_docked_refreshes(app_driver, main_and_ref, monkeypatch, tmp_path):
     main_path, ref_path = main_and_ref
     app_driver.open(main_path)
     _dock_reference(app_driver, ref_path, monkeypatch)
-    assert app_driver.comparison_strip_chip_tooltips()[0].endswith(
-        "2 differ · 1 reference only"
-    )
+    assert app_driver.comparison_strip_chip_tooltips()[0].endswith("2 differ · 1 reference only")
 
     matching_main_path = tmp_path / "matches_reference.json"
     matching_main_path.write_text(json.dumps(MATCHING_MAIN_RAW), encoding="utf-8")
-    monkeypatch.setattr(
-        app_driver._w, "_ask_open_intent", lambda filename: main_window_module.OpenIntent.REPLACE_MAIN
-    )
+    monkeypatch.setattr(app_driver._w, "_ask_open_intent", lambda filename: main_window_module.OpenIntent.REPLACE_MAIN)
     _stub_open_dialog(monkeypatch, matching_main_path)
     app_driver.press_open_shortcut()
 
@@ -770,7 +756,6 @@ def test_no_reference_docked_is_structurally_todays_editor(app_driver, main_and_
 
     app_driver.go_to(("Parameterisation", "Cell", "Nominal cell capacity [A.h]"))
     assert not app_driver.reference_block_visible()
-
 
 
 # ---------------------------------------------------------------------------
@@ -832,9 +817,7 @@ def test_ghost_row_copy_up_adds_and_selects_the_real_parameter(app_driver, main_
     assert "Electrode area [m2]" not in app_driver.ghost_row_keys()
 
 
-def test_copy_up_supersedes_a_dirty_draft_and_undo_restores_the_prior_value(
-    app_driver, main_and_ref, monkeypatch
-):
+def test_copy_up_supersedes_a_dirty_draft_and_undo_restores_the_prior_value(app_driver, main_and_ref, monkeypatch):
     main_path, ref_path = main_and_ref
     app_driver.open(main_path)
     _dock_reference(app_driver, ref_path, monkeypatch)
@@ -900,10 +883,8 @@ def shape_change_main_and_ref(tmp_path) -> tuple[Path, Path]:
     return main_path, ref_path
 
 
-def test_copy_up_shape_change_scalar_to_table_reclassifies_the_card(
-    app_driver, shape_change_main_and_ref, monkeypatch
-):
-    """"Custom Note" carries no schema metadata (an undeclared alias), so its
+def test_copy_up_shape_change_scalar_to_table_reclassifies_the_card(app_driver, shape_change_main_and_ref, monkeypatch):
+    """ "Custom Note" carries no schema metadata (an undeclared alias), so its
     kind follows the stored value's shape -- a same-key pull that changes
     shape is copied verbatim, and the card re-classifies to match."""
     main_path, ref_path = shape_change_main_and_ref
@@ -937,6 +918,7 @@ def test_the_source_diff_chip_speaks_the_comparison_colour_not_a_severity():
     everywhere (gutter bars, badges, pull chips). The chip was an amber that
     argued it sat outside the warning family; beside WARNING_TINT on the
     same screen it did not."""
+
     def _hue_of(colour: str) -> float:
         return QColor(colour).hueF()
 

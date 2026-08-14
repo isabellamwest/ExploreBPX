@@ -10,6 +10,7 @@ import html
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QEvent, QSize, QStandardPaths, Qt, QTimer
 from PySide6.QtGui import QFontMetrics, QKeySequence, QShortcut
@@ -49,14 +50,13 @@ from core.commands import (
 from core.compare import ComparisonResult, compare
 from core.completion import TaskKind
 from state.app_state import AppState, PinReferenceOutcome
-from state.document_session import DocumentSession
-from state.reference_snapshot import ReferenceSnapshot
-from state.workspace_history import MainRecord, WorkspaceHistory, WorkspaceRecord
 
-from . import icons
+from . import icons, typography
 from .activity_bar import ActivityBar
 from .comparison_strip import ComparisonStrip
+from .diagnostics_panel import DiagnosticsPanel
 from .editor_page import EditorPage
+from .file_facts import file_facts
 from .file_filters import BPX_FILTER, export_filter
 from .inspector import InspectorPanel
 from .navigation import NavigationService, NavigationTarget
@@ -66,12 +66,9 @@ from .reference_identity import ReferencePin, build_pins
 from .reference_library_dialog import ReferenceLibraryDialog
 from .search import SearchBar
 from .source_page import SourcePage
-from . import typography
 from .style import ERROR, STYLESHEET
 from .toast import Toast
 from .tree_panel import TreePanel
-from .diagnostics_panel import DiagnosticsPanel
-from .file_facts import file_facts
 from .workspace_panel import (
     AT_CAP_MESSAGE,
     UNTITLED_WORKSPACE,
@@ -80,6 +77,11 @@ from .workspace_panel import (
     WorkspacePanel,
     WorkspaceRowView,
 )
+
+if TYPE_CHECKING:
+    from state.document_session import DocumentSession
+    from state.reference_snapshot import ReferenceSnapshot
+    from state.workspace_history import MainRecord, WorkspaceHistory, WorkspaceRecord
 
 _NO_DOCUMENT_TEXT = "No document"
 _EDITOR_PAGE_INDEX = 0  # QStackedWidget page hosting the tree/params/inspector
@@ -181,9 +183,7 @@ class _IdentityLabel(QLabel):
 
 
 class MainWindow(QMainWindow):
-    def __init__(
-        self, history: WorkspaceHistory | None = None, restore_session: bool = True
-    ) -> None:
+    def __init__(self, history: WorkspaceHistory | None = None, restore_session: bool = True) -> None:
         super().__init__()
         self.setWindowTitle("ExploreBPX")
         # Type comes from ui_qt.typography: the family on the application
@@ -241,9 +241,7 @@ class MainWindow(QMainWindow):
         self._source.reference_selected.connect(self._on_source_reference_selected)
         # Double-click Editor jump: the page's one Editor link,
         # through the shared NavigationService like every other navigation.
-        self._source.navigate_requested.connect(
-            lambda path: self._navigation.navigate(tuple(path))
-        )
+        self._source.navigate_requested.connect(lambda path: self._navigation.navigate(tuple(path)))
         self._search = SearchBar()
         self._activity_bar = ActivityBar()
         self._identity_label = _IdentityLabel()
@@ -261,9 +259,7 @@ class MainWindow(QMainWindow):
         #: label in _refuse_blocked_write), kept for _refresh_blocked_write_chip
         #: to rebuild the tooltip when only the reason changes.
         self._blocked_chip_sentence = ""
-        self._blocked_chip.linkActivated.connect(
-            lambda _href: self._show_page(_EDITOR_PAGE_INDEX)
-        )
+        self._blocked_chip.linkActivated.connect(lambda _href: self._show_page(_EDITOR_PAGE_INDEX))
         self._blocked_chip.hide()
 
         self._build_toolbar()
@@ -350,18 +346,10 @@ class MainWindow(QMainWindow):
         if redo_alt_sequence in QKeySequence.keyBindings(QKeySequence.Redo):
             self._redo_shortcut_alt = self._redo_shortcut
         else:
-            self._redo_shortcut_alt = QShortcut(
-                redo_alt_sequence, self, activated=self._redo
-            )
-        redo_primary_text = QKeySequence(QKeySequence.Redo).toString(
-            QKeySequence.NativeText
-        )
+            self._redo_shortcut_alt = QShortcut(redo_alt_sequence, self, activated=self._redo)
+        redo_primary_text = QKeySequence(QKeySequence.Redo).toString(QKeySequence.NativeText)
         redo_alt_text = redo_alt_sequence.toString(QKeySequence.NativeText)
-        redo_keys = (
-            redo_primary_text
-            if redo_alt_text == redo_primary_text
-            else f"{redo_primary_text}, {redo_alt_text}"
-        )
+        redo_keys = redo_primary_text if redo_alt_text == redo_primary_text else f"{redo_primary_text}, {redo_alt_text}"
         self._redo_action.setToolTip(f"Redo ({redo_keys})")
 
         bar.addSeparator()
@@ -415,8 +403,8 @@ class MainWindow(QMainWindow):
         self._stack = QStackedWidget()
         self._stack.addWidget(self._editor_page)  # _EDITOR_PAGE_INDEX
         self._stack.addWidget(self._diagnostics)  # _DIAGNOSTICS_PAGE_INDEX
-        self._stack.addWidget(self._workspace)   # _WORKSPACE_PAGE_INDEX
-        self._stack.addWidget(self._source)      # _SOURCE_PAGE_INDEX
+        self._stack.addWidget(self._workspace)  # _WORKSPACE_PAGE_INDEX
+        self._stack.addWidget(self._source)  # _SOURCE_PAGE_INDEX
 
         self._btn_workspace = self._activity_bar.add_view(
             "Workspace", page_index=_WORKSPACE_PAGE_INDEX, icon=icons.activity_icon(icons.WORKSPACE)
@@ -481,9 +469,7 @@ class MainWindow(QMainWindow):
         if history is not None and history.load_failed:
             QTimer.singleShot(
                 0,
-                lambda: self._toast.show_message(
-                    "Workspace history was unreadable and has been reset"
-                ),
+                lambda: self._toast.show_message("Workspace history was unreadable and has been reset"),
             )
 
     def _reopen_current_workspace(self) -> None:
@@ -517,10 +503,7 @@ class MainWindow(QMainWindow):
         # than silent (the document's own Header.BPX is a separate fact,
         # shown on the Workspace info card).
         version_label = QLabel(f"bpx {BPX_VERSION}")
-        version_label.setToolTip(
-            "Installed bpx package - the validator every verdict in "
-            "this app comes from"
-        )
+        version_label.setToolTip("Installed bpx package - the validator every verdict in this app comes from")
         bar.addPermanentWidget(version_label)
         self.setStatusBar(bar)
 
@@ -567,12 +550,8 @@ class MainWindow(QMainWindow):
         self._workspace.workspace_locate_requested.connect(self._on_workspace_locate)
         self._workspace.new_workspace_requested.connect(self._on_new_workspace)
         self._workspace.workspace_renamed.connect(self._on_workspace_renamed)
-        self._workspace.edit_requested.connect(
-            lambda: self._show_page(_EDITOR_PAGE_INDEX)
-        )
-        self._workspace.diagnostics_requested.connect(
-            lambda: self._show_page(_DIAGNOSTICS_PAGE_INDEX)
-        )
+        self._workspace.edit_requested.connect(lambda: self._show_page(_EDITOR_PAGE_INDEX))
+        self._workspace.diagnostics_requested.connect(lambda: self._show_page(_DIAGNOSTICS_PAGE_INDEX))
         self._workspace.diff_requested.connect(self._on_diff_requested)
         self._workspace.locate_requested.connect(self._on_locate_missing)
         self._workspace.forget_missing_requested.connect(self._on_forget_missing)
@@ -807,8 +786,7 @@ class MainWindow(QMainWindow):
         choice = QMessageBox.question(
             self,
             "Remove section",
-            f"“{label}” is not empty. Remove it and everything it contains?\n"
-            "Undo restores it.",
+            f"“{label}” is not empty. Remove it and everything it contains?\nUndo restores it.",
             QMessageBox.Yes | QMessageBox.Cancel,
             QMessageBox.Cancel,
         )
@@ -817,10 +795,7 @@ class MainWindow(QMainWindow):
     def _on_committed(self) -> None:
         if self._state.active is None:
             return
-        kept = (
-            self._state.active.selected_parameter_path
-            or self._state.active.selected_path
-        )
+        kept = self._state.active.selected_parameter_path or self._state.active.selected_path
         self._refresh_all()
         if kept:
             self._navigation.navigate(kept)
@@ -891,10 +866,9 @@ class MainWindow(QMainWindow):
             if widget.isUndoAvailable():
                 widget.undo()
                 return True
-        elif isinstance(widget, (QPlainTextEdit, QTextEdit)):
-            if widget.document().isUndoAvailable():
-                widget.undo()
-                return True
+        elif isinstance(widget, (QPlainTextEdit, QTextEdit)) and widget.document().isUndoAvailable():
+            widget.undo()
+            return True
         return False
 
     # --- redo -------------------------------------------------------------
@@ -947,10 +921,9 @@ class MainWindow(QMainWindow):
             if widget.isRedoAvailable():
                 widget.redo()
                 return True
-        elif isinstance(widget, (QPlainTextEdit, QTextEdit)):
-            if widget.document().isRedoAvailable():
-                widget.redo()
-                return True
+        elif isinstance(widget, (QPlainTextEdit, QTextEdit)) and widget.document().isRedoAvailable():
+            widget.redo()
+            return True
         return False
 
     # --- file actions ---------------------------------------------------
@@ -1019,10 +992,7 @@ class MainWindow(QMainWindow):
         """
         box = QMessageBox(self)
         box.setWindowTitle(f"Open {filename}")
-        box.setText(
-            f"{filename} is BPX {file_version}. Editing and checking here "
-            f"use BPX {BPX_VERSION}."
-        )
+        box.setText(f"{filename} is BPX {file_version}. Editing and checking here use BPX {BPX_VERSION}.")
         box.setInformativeText(
             f"Open converted copy starts a new unsaved document in BPX "
             f"{BPX_VERSION}. The conversion is approximate: State "
@@ -1076,8 +1046,7 @@ class MainWindow(QMainWindow):
         choice = QMessageBox.question(
             self,
             "Unsaved changes",
-            f"{self._fallback_filename(session)} has unsaved changes. "
-            "Save before continuing?",
+            f"{self._fallback_filename(session)} has unsaved changes. Save before continuing?",
             QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
             QMessageBox.Save,
         )
@@ -1136,10 +1105,7 @@ class MainWindow(QMainWindow):
         box.setWindowTitle(f"Open {filename}")
         # Both files named (the label rule: never "this file"): the one that
         # is open, and the one this choice routes.
-        box.setText(
-            f"{self._fallback_filename(self._state.active)} is already open. "
-            f"Open {filename} as:"
-        )
+        box.setText(f"{self._fallback_filename(self._state.active)} is already open. Open {filename} as:")
         replace_main = box.addButton("Replace main", QMessageBox.AcceptRole)
         # One stable label: pinning appends, so this choice never replaces
         # anything. At the cap it is the one control that cannot act, so it
@@ -1172,9 +1138,7 @@ class MainWindow(QMainWindow):
             return
         self._open_reference_path(path)
 
-    def _restore_workspace(
-        self, record: WorkspaceRecord, quiet: bool = False
-    ) -> None:
+    def _restore_workspace(self, record: WorkspaceRecord, quiet: bool = False) -> None:
         """Reopen a remembered workspace whole: main document first, then
         its references, replacing the pinned set.
 
@@ -1254,9 +1218,7 @@ class MainWindow(QMainWindow):
         installed; False means a prompt was cancelled."""
         path = Path(main.path)
         before = self._state.active
-        if main.mode in ("read_only", "converted_copy") and (
-            self._state.legacy_version(path) is not None
-        ):
+        if main.mode in ("read_only", "converted_copy") and (self._state.legacy_version(path) is not None):
             if main.mode == "read_only":
                 self._state.open_read_only(path)
             else:
@@ -1340,9 +1302,7 @@ class MainWindow(QMainWindow):
         record = history.by_id(workspace_id) if history is not None else None
         if record is None:
             return
-        prefill = record.name or (
-            Path(record.main.path).stem if record.main is not None else ""
-        )
+        prefill = record.name or (Path(record.main.path).stem if record.main is not None else "")
         while True:
             name = self._ask_workspace_name(
                 "Rename workspace" if record.is_named else "Name workspace",
@@ -1388,11 +1348,7 @@ class MainWindow(QMainWindow):
         record = history.by_id(workspace_id) if history is not None else None
         if record is None:
             return
-        label = record.name or (
-            Path(record.main.path).name
-            if record.main is not None
-            else UNTITLED_WORKSPACE
-        )
+        label = record.name or (Path(record.main.path).name if record.main is not None else UNTITLED_WORKSPACE)
         if not self._confirm_remove_workspace(label):
             return
         was_current = self._state.workspace_id == workspace_id
@@ -1453,10 +1409,7 @@ class MainWindow(QMainWindow):
             self._on_workspace_remove(workspace_id)
             return
         history.remove_reference(workspace_id, reference_index)
-        self._missing_files = [
-            entry for entry in self._missing_files
-            if entry.reference_index != reference_index
-        ]
+        self._missing_files = [entry for entry in self._missing_files if entry.reference_index != reference_index]
         self._refresh_all()
 
     def _missing_entry(self, reference_index: object) -> MissingFileView | None:
@@ -1469,9 +1422,7 @@ class MainWindow(QMainWindow):
         """Where is *label* now? Overridable seam: headless tests
         monkeypatch this method directly, the ``_ask_open_intent``
         convention."""
-        name, _ = QFileDialog.getOpenFileName(
-            self, f"Locate {label}", "", BPX_FILTER
-        )
+        name, _ = QFileDialog.getOpenFileName(self, f"Locate {label}", "", BPX_FILTER)
         return Path(name) if name else None
 
     def _on_diff_requested(self, reference: ReferenceSnapshot) -> None:
@@ -1513,8 +1464,7 @@ class MainWindow(QMainWindow):
             QMessageBox.question(
                 self,
                 "Remove workspace",
-                f"Remove workspace '{label}'? The files themselves are "
-                "not touched.",
+                f"Remove workspace '{label}'? The files themselves are not touched.",
                 QMessageBox.Yes | QMessageBox.Cancel,
                 QMessageBox.Cancel,
             )
@@ -1589,9 +1539,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Cannot open file", str(exc))
             return
         message = {
-            PinReferenceOutcome.ADDED: (
-                f"Pinned {self._state.references[-1].filename} as reference"
-            ),
+            PinReferenceOutcome.ADDED: (f"Pinned {self._state.references[-1].filename} as reference"),
             PinReferenceOutcome.ALREADY_REFERENCE: "Already pinned as reference",
             PinReferenceOutcome.AT_CAP: AT_CAP_MESSAGE,
         }[outcome]
@@ -1717,7 +1665,7 @@ class MainWindow(QMainWindow):
         self._check_reference_stale()
         self._update_workspace_info()
 
-    def changeEvent(self, event) -> None:  # noqa: N802 - Qt override
+    def changeEvent(self, event) -> None:
         """Window activation is the second stale-notice point: coming back
         from another app is exactly when the file may have changed
         underneath the snapshot."""
@@ -1725,7 +1673,7 @@ class MainWindow(QMainWindow):
         if event.type() == QEvent.ActivationChange and self.isActiveWindow():
             self._check_reference_stale()
 
-    def closeEvent(self, event) -> None:  # noqa: N802 - Qt override
+    def closeEvent(self, event) -> None:
         """Closing the window is the one document-losing exit that used to
         skip the discard guard entirely: Open, New and Make main all ask
         before replacing a dirty document, so the X button and Alt+F4 must
@@ -1857,9 +1805,7 @@ class MainWindow(QMainWindow):
         if session.backing_file is not None:
             disk_mtime = session.stale_mtime()
             if disk_mtime is not None:
-                choice = self._ask_stale_resolution(
-                    session.backing_file.name, disk_mtime
-                )
+                choice = self._ask_stale_resolution(session.backing_file.name, disk_mtime)
                 if choice is StaleChoice.CANCEL:
                     return False
                 if choice is StaleChoice.RELOAD:
@@ -1879,12 +1825,11 @@ class MainWindow(QMainWindow):
             # this run, else Documents -- never wherever the app happens to run
             # from (which could be a bundled directory). The document's own
             # filename seeds the name.
-            start_dir = self._save_dialog_dir or Path(
-                QStandardPaths.writableLocation(QStandardPaths.DocumentsLocation)
-            )
+            start_dir = self._save_dialog_dir or Path(QStandardPaths.writableLocation(QStandardPaths.DocumentsLocation))
             suggested = session.document.filename if session.document else ""
             name, _ = QFileDialog.getSaveFileName(
-                self, "Save BPX",
+                self,
+                "Save BPX",
                 str(start_dir / suggested) if suggested else str(start_dir),
                 BPX_FILTER,
             )
@@ -1970,9 +1915,7 @@ class MainWindow(QMainWindow):
             return False
         backing = session.backing_file
         suggested = f"{backing.stem} (copy){backing.suffix}"
-        name, _ = QFileDialog.getSaveFileName(
-            self, "Save BPX", str(backing.parent / suggested), BPX_FILTER
-        )
+        name, _ = QFileDialog.getSaveFileName(self, "Save BPX", str(backing.parent / suggested), BPX_FILTER)
         if not name:
             return False
         session.backing_file = Path(name)
@@ -2001,9 +1944,7 @@ class MainWindow(QMainWindow):
         record = session.load_record
         if record is None or not record.has_yaml_comments:
             return True
-        source_name = (
-            Path(record.source).name if record.source else session.document.filename
-        )
+        source_name = Path(record.source).name if record.source else session.document.filename
         return self._ask_comment_loss(source_name, session.document.filename)
 
     def _ask_comment_loss(self, source_name: str, document_name: str) -> bool:
@@ -2020,10 +1961,7 @@ class MainWindow(QMainWindow):
             f"{source_name} contains comments. Saving rewrites the whole "
             "file: comments and formatting will not survive."
         )
-        box.setInformativeText(
-            f"This is asked once for {document_name}. The file record "
-            "keeps the note either way."
-        )
+        box.setInformativeText(f"This is asked once for {document_name}. The file record keeps the note either way.")
         save_button = box.addButton("Save without comments", QMessageBox.AcceptRole)
         cancel_button = box.addButton("Cancel", QMessageBox.RejectRole)
         box.setDefaultButton(cancel_button)
@@ -2056,8 +1994,7 @@ class MainWindow(QMainWindow):
         # leaves Save looking silently broken on every further attempt.
         sentence = f"{verb.capitalize()} blocked · fix or discard {target}"
         self._blocked_chip.setText(
-            f'<a href="editor" style="color: {ERROR}; text-decoration: none;">'
-            f"{html.escape(sentence)}</a>"
+            f'<a href="editor" style="color: {ERROR}; text-decoration: none;">{html.escape(sentence)}</a>'
         )
         self._blocked_chip_sentence = sentence
         # Two lines: the chip clips at the status bar edge with no ellipsis,
@@ -2135,7 +2072,7 @@ class MainWindow(QMainWindow):
         name = session.backing_file.name if session.backing_file else session.document.filename
         prefix = "* " if session.dirty else ""
         self.setWindowTitle(f"{prefix}{name} - ExploreBPX")
-        if session.read_only:
+        if session.read_only:  # noqa: SIM108 - a nested ternary would bury the three states
             # Not the Saved/Unsaved pair: a read-only session has no saved
             # state to report, only its mode.
             state_text = "Read-only"
@@ -2224,12 +2161,8 @@ class MainWindow(QMainWindow):
         before they may say what it is for. The header appears with the
         workspace, ghosted, and answers a click from the first moment.
         """
-        record = (
-            self._state.history.current() if self._state.history is not None else None
-        )
-        self._workspace.set_workspace_name(
-            record.name if record is not None else None, exists=record is not None
-        )
+        record = self._state.history.current() if self._state.history is not None else None
+        self._workspace.set_workspace_name(record.name if record is not None else None, exists=record is not None)
 
     def _refresh_workspace_rail(self) -> None:
         """Sync the rail's two workspace groups with the persistent store.
@@ -2253,10 +2186,7 @@ class MainWindow(QMainWindow):
             main = workspace.main
             return WorkspaceRowView(
                 id=workspace.id,
-                label=(
-                    workspace.name
-                    or (Path(main.path).name if main is not None else UNTITLED_WORKSPACE)
-                ),
+                label=(workspace.name or (Path(main.path).name if main is not None else UNTITLED_WORKSPACE)),
                 named=workspace.is_named,
                 reference_count=len(workspace.references),
                 # Nothing recorded is nothing missing: a workspace that
@@ -2349,9 +2279,7 @@ class MainWindow(QMainWindow):
         self._tree.set_read_only(read_only)
         self._params.set_read_only(read_only)
         if document is not None:
-            self._tree.set_root(
-                document.tree, completion.visible_error_section_paths(document, partition)
-            )
+            self._tree.set_root(document.tree, completion.visible_error_section_paths(document, partition))
         self._params.show_node(None)
         self._inspector.reset()
 
@@ -2359,9 +2287,7 @@ class MainWindow(QMainWindow):
         # real rows (those happen later, via a navigation reveal -- show_node
         # above is always called with None here) so the parameter list's dot
         # marker reflects *page-visible* issues, not the validator verbatim.
-        self._params.set_visible_issue_severities(
-            completion.visible_issue_severities(document, partition)
-        )
+        self._params.set_visible_issue_severities(completion.visible_issue_severities(document, partition))
 
         buckets = page_buckets.bucket_page_content(raw, model, partition, tasks) if document is not None else None
         # The diagnostics stream's own file-facts group -- the same
@@ -2411,4 +2337,3 @@ class MainWindow(QMainWindow):
         # reference's own dock/undock/replace recomputes separately -- see
         # _open_reference_path/_on_remove_reference_requested).
         self._recompute_comparison()
-

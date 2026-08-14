@@ -64,9 +64,7 @@ def test_model_level_error_attaches_to_the_named_parameter(valid_spm_dict):
     # The Positive electrode is blended, so a bare scalar here is invalid: the
     # field must be a dict keyed by the particle names. This is a real validator
     # error, surfaced verbatim -- not invented by the app.
-    valid_spm_dict["State"]["Initial conditions"][
-        "Initial hysteresis state: Positive electrode"
-    ] = 1.0
+    valid_spm_dict["State"]["Initial conditions"]["Initial hysteresis state: Positive electrode"] = 1.0
     data = json.dumps(valid_spm_dict).encode("utf-8")
     document = BPXDocument.from_bytes(data, "blended.json")
 
@@ -180,9 +178,7 @@ def test_missing_field_attaches_to_owning_section_not_sibling_leaf(fixtures_dir)
     # single "Field required" error.
     negative_electrode = document.find(("Parameterisation", "Negative electrode"))
     assert negative_electrode is not None
-    required_errors = [
-        issue for issue in negative_electrode.issues if issue.message == "Field required"
-    ]
+    required_errors = [issue for issue in negative_electrode.issues if issue.message == "Field required"]
     assert len(required_errors) == 1
 
     # The Positive electrode's present, valid parameter is left untouched.
@@ -206,8 +202,6 @@ def test_issue_attached_to_node(valid_spm_bytes):
     assert node is not None
     assert node.has_errors
 
-    parameter = document.find_parameter(
-        ("Parameterisation", "Cell", "Upper voltage cut-off [V]")
-    )
+    parameter = document.find_parameter(("Parameterisation", "Cell", "Upper voltage cut-off [V]"))
     assert parameter is not None
     assert parameter.has_errors

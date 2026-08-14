@@ -24,9 +24,7 @@ from .activating_list import ActivatingList
 class ContentSizedList(ActivatingList):
     """See module docstring. Return activates, per :class:`ActivatingList`."""
 
-    def sizeHint(self) -> QSize:  # noqa: N802 (Qt override)
+    def sizeHint(self) -> QSize:
         width = super().sizeHint().width()
-        height = 2 * self.frameWidth() + sum(
-            self.sizeHintForRow(row) for row in range(self.count())
-        )
+        height = 2 * self.frameWidth() + sum(self.sizeHintForRow(row) for row in range(self.count()))
         return QSize(width, height)

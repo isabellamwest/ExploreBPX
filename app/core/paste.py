@@ -53,6 +53,7 @@ class ParsedPaste:
 
     @property
     def row_count(self) -> int:
+        """How many rows the pasted block yielded."""
         return len(self.rows)
 
 
@@ -110,9 +111,9 @@ def parse_clipboard(text: str, columns: int) -> ParsedPaste:
 
 
 def _split(line: str, delimiter: str) -> list[str]:
-    if delimiter == "whitespace" or delimiter == "single column":
+    if delimiter in {"whitespace", "single column"}:
         return line.split()
-    char = dict((name, ch) for name, ch in _DELIMITERS)[delimiter]
+    char = dict(_DELIMITERS)[delimiter]
     return [token.strip() for token in line.split(char)]
 
 
@@ -121,10 +122,7 @@ def _is_header(line: str, delimiter: str) -> bool:
     tokens = _split(line, delimiter)
     if not tokens:
         return False
-    return all(
-        not isinstance(parse_value(token), (int, float)) and parse_value(token) is not None
-        for token in tokens
-    )
+    return all(not isinstance(parse_value(token), (int, float)) and parse_value(token) is not None for token in tokens)
 
 
 def _first_nonblank(text: str) -> str | None:

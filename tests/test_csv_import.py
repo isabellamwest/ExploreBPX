@@ -18,7 +18,6 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 pytest.importorskip("PySide6")
 
 from core.csv_import import (
-    CsvData,
     auto_map,
     positional_map,
     read_csv_file,
@@ -163,7 +162,7 @@ def test_positional_map_is_what_auto_map_uses_without_headers():
 def _qapp():
     from PySide6.QtWidgets import QApplication
 
-    yield QApplication.instance() or QApplication([])
+    return QApplication.instance() or QApplication([])
 
 
 def _dialog(text="time,voltage\n0,4.1\n100,4.0\n", targets=("Time [s]", "Voltage [V]"), **kwargs):
@@ -225,9 +224,7 @@ def test_dialog_proposed_overrides_the_auto_map():
 
 
 def test_dialog_require_all_targets_blocks_when_only_one_is_mapped():
-    dialog = _dialog(
-        text="x,y\n0,1\n2,3\n", targets=("x", "y"), require_all_targets=True
-    )
+    dialog = _dialog(text="x,y\n0,1\n2,3\n", targets=("x", "y"), require_all_targets=True)
     assert dialog.mapping() == (0, 1)  # both auto-mapped to start
     dialog._combos[1].setCurrentIndex(0)  # skip y
 
@@ -247,9 +244,7 @@ def test_dialog_require_all_targets_names_the_files_column_shortfall():
 def test_default_construction_keeps_the_at_least_one_gate():
     """Without ``require_all_targets`` (the series path), mapping only one of
     several targets is still a valid, partial import."""
-    dialog = _dialog(
-        text="time,voltage\n0,4.1\n", targets=("Time [s]", "Voltage [V]")
-    )
+    dialog = _dialog(text="time,voltage\n0,4.1\n", targets=("Time [s]", "Voltage [V]"))
     dialog._combos[1].setCurrentIndex(0)  # skip Voltage
     assert dialog._import_button.isEnabled() is True
     assert not dialog._reason.isVisible()
@@ -375,9 +370,7 @@ def test_apply_csv_import_with_nothing_mapped_emits_nothing():
 # ----------------------------------------------------------------------
 
 
-def test_bulk_commit_reaches_the_document_and_undoes_as_one_step(
-    qtbot, spm_with_validation_path
-):
+def test_bulk_commit_reaches_the_document_and_undoes_as_one_step(qtbot, spm_with_validation_path):
     from state.app_state import AppState
     from ui_qt.inspector import InspectorPanel
 
@@ -392,9 +385,7 @@ def test_bulk_commit_reaches_the_document_and_undoes_as_one_step(
     qtbot.addWidget(panel)
     panel.show_parameter(session.selected_parameter())
 
-    data = read_csv_text(
-        "time,current,voltage,temp\n0,-0.5,4.1,298.15\n50,-0.5,4.0,298.15\n"
-    )
+    data = read_csv_text("time,current,voltage,temp\n0,-0.5,4.1,298.15\n50,-0.5,4.0,298.15\n")
     before = session.document.raw["Validation"]["C/20 discharge"]
     panel._card._editor._apply_csv_import(data, (0, 1, 2, 3))
 

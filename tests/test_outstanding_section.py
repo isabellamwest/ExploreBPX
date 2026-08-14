@@ -21,7 +21,7 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from core import completion, document_factory
+from core import document_factory
 from core.completion import TaskKind
 
 _CELL = ("Parameterisation", "Cell")
@@ -107,9 +107,7 @@ def test_state2_working_document(app_driver, tmp_path, valid_spm_dict):
     assert d.validation_badge_severity() == "error"
 
     tasks = d.outstanding_tasks()
-    assert any(
-        t.kind is TaskKind.MISSING_FIELD and t.path == _CAPACITY for t in tasks
-    )
+    assert any(t.kind is TaskKind.MISSING_FIELD and t.path == _CAPACITY for t in tasks)
     assert any(t.kind is TaskKind.NULL_FIELD and t.path == _LOWER_CUTOFF for t in tasks)
     headers = d.diagnostics_stream_headers()
     assert "Cell  2 of 5 remaining" in headers
@@ -164,7 +162,8 @@ def test_state3_partial_sparse_electrode(app_driver, tmp_path):
     )
     # Terminology discipline: "valid"/"invalid" never appear in the
     # Outstanding notice.
-    assert "valid" not in notice.lower() and "invalid" not in notice.lower()
+    assert "valid" not in notice.lower()
+    assert "invalid" not in notice.lower()
 
 
 def test_state3b_partial_null_is_outstanding_not_error(app_driver, tmp_path, valid_spm_dict):
@@ -194,7 +193,8 @@ def test_state3b_partial_null_is_outstanding_not_error(app_driver, tmp_path, val
     assert d.tree_error_marked_sections() == []  # calm tree too
 
     cell_header = next(h for h in d.diagnostics_stream_headers() if h.startswith("Cell"))
-    assert "of" not in cell_header and "remaining" not in cell_header  # no ratio -- optional-only
+    assert "of" not in cell_header
+    assert "remaining" not in cell_header
     assert "capacity" in " ".join(d.diagnostics_stream_task_texts()).lower()
     assert d._validation_rows("message") == []  # the page-wide Partial notice does not render
 
@@ -215,8 +215,7 @@ def test_state4_done(app_driver, valid_spm_path):
     assert d.diagnostics_stream_headers() == []
     total = len(d._w._diagnostics._buckets.buckets)
     assert d.diagnostics_all_clear_text() == (
-        style.all_clear("No issues, nothing incomplete")
-        + f"\n{total} of {total} sections complete and valid"
+        style.all_clear("No issues, nothing incomplete") + f"\n{total} of {total} sections complete and valid"
     )
     assert d.validation_badge_count() == 0
     assert d.validation_badge_severity() is None
@@ -227,14 +226,10 @@ def test_state4_done(app_driver, valid_spm_path):
 # ---------------------------------------------------------------------------
 
 
-def test_missing_field_activation_reveals_the_fields_to_add_group(
-    app_driver, tmp_path, valid_spm_dict
-):
+def test_missing_field_activation_reveals_the_fields_to_add_group(app_driver, tmp_path, valid_spm_dict):
     d = app_driver
     d.open(_working_doc_path(tmp_path, valid_spm_dict))
-    task = next(
-        t for t in d.outstanding_tasks() if t.kind is TaskKind.MISSING_FIELD and t.path == _CAPACITY
-    )
+    task = next(t for t in d.outstanding_tasks() if t.kind is TaskKind.MISSING_FIELD and t.path == _CAPACITY)
 
     d.activate_outstanding_task(task)
 
@@ -250,9 +245,7 @@ def test_missing_field_activation_reveals_the_fields_to_add_group(
 def test_null_field_activation_selects_the_parameter(app_driver, tmp_path, valid_spm_dict):
     d = app_driver
     d.open(_working_doc_path(tmp_path, valid_spm_dict))
-    task = next(
-        t for t in d.outstanding_tasks() if t.kind is TaskKind.NULL_FIELD and t.path == _LOWER_CUTOFF
-    )
+    task = next(t for t in d.outstanding_tasks() if t.kind is TaskKind.NULL_FIELD and t.path == _LOWER_CUTOFF)
 
     d.activate_outstanding_task(task)
 
@@ -280,11 +273,7 @@ def test_missing_section_activation_adds_and_cascades_end_to_end(app_driver, tmp
     del raw["Parameterisation"]["Electrolyte"]
     d.open(_write(tmp_path, "spme_no_electrolyte.json", raw))
     electrolyte_path = ("Parameterisation", "Electrolyte")
-    task = next(
-        t
-        for t in d.outstanding_tasks()
-        if t.kind is TaskKind.MISSING_SECTION and t.path == electrolyte_path
-    )
+    task = next(t for t in d.outstanding_tasks() if t.kind is TaskKind.MISSING_SECTION and t.path == electrolyte_path)
     assert d.undo_enabled() is False
 
     d.activate_outstanding_task(task)
@@ -292,17 +281,13 @@ def test_missing_section_activation_adds_and_cascades_end_to_end(app_driver, tmp
     assert d.undo_enabled() is True  # exactly one undo step
     assert d.tree_selection_label() == "Electrolyte"
     tasks_after = d.outstanding_tasks()
-    assert not any(
-        t.kind is TaskKind.MISSING_SECTION and t.path == electrolyte_path for t in tasks_after
-    )
+    assert not any(t.kind is TaskKind.MISSING_SECTION and t.path == electrolyte_path for t in tasks_after)
     assert any(
-        t.kind is TaskKind.MISSING_FIELD
-        and t.path == electrolyte_path + ("Cation transference number",)
+        t.kind is TaskKind.MISSING_FIELD and t.path == electrolyte_path + ("Cation transference number",)
         for t in tasks_after
     )
     assert any(
-        t.kind is TaskKind.MISSING_FIELD and t.path == electrolyte_path + ("Diffusivity [m2.s-1]",)
-        for t in tasks_after
+        t.kind is TaskKind.MISSING_FIELD and t.path == electrolyte_path + ("Diffusivity [m2.s-1]",) for t in tasks_after
     )
 
     # Undo reverts both the section AND the Outstanding re-render.
@@ -347,9 +332,7 @@ def test_declare_model_activation_navigates_to_header_when_model_absent(app_driv
     assert d.fields_to_add_current_alias() == "Model"
 
 
-def test_declare_model_activation_reveals_fields_to_add_group_and_commits_a_model(
-    app_driver, tmp_path
-):
+def test_declare_model_activation_reveals_fields_to_add_group_and_commits_a_model(app_driver, tmp_path):
     """End to end: ``Header`` present, ``Header.Model`` absent. Activating the
     DECLARE_MODEL Outstanding row must not just navigate to Header -- it must
     reveal a *usable* Header "fields to add" group (the regression this fix
@@ -418,18 +401,14 @@ def test_optional_null_field_gets_its_own_subgroup(app_driver, tmp_path):
     assert d.diagnostics_stream_subhead_texts() == ["1 optional parameter unfilled"]
     assert d.validation_task_row_count_under_header("Cell  5 of 5 remaining") == 5
 
-    optional_task = next(
-        t for t in d.outstanding_tasks() if t.path == _CELL + ("Volume [m3]",)
-    )
+    optional_task = next(t for t in d.outstanding_tasks() if t.path == _CELL + ("Volume [m3]",))
     assert optional_task.required is False
     row_text = d.outstanding_task_row_text(optional_task)
     assert "REQUIRED" not in row_text
     assert "No Value" in row_text
 
 
-def test_required_group_ratio_integrity_with_mixed_required_and_optional_tasks(
-    app_driver, tmp_path
-):
+def test_required_group_ratio_integrity_with_mixed_required_and_optional_tasks(app_driver, tmp_path):
     """The required group's stated N always equals the row count directly
     beneath it, in a section holding BOTH required-missing and
     optional-null tasks together (the scenario that used to read "5 of 5"
@@ -442,9 +421,7 @@ def test_required_group_ratio_integrity_with_mixed_required_and_optional_tasks(
     assert d.validation_task_row_count_under_header("Cell  5 of 5 remaining") == 5
 
 
-def test_section_with_only_optional_nulls_shows_a_bare_header(
-    app_driver, tmp_path, valid_spm_dict
-):
+def test_section_with_only_optional_nulls_shows_a_bare_header(app_driver, tmp_path, valid_spm_dict):
     """A section whose only outstanding work is optional gets no ratio at
     all in its header (a bare label) -- ``required_tasks`` is empty, so
     there is no REQUIRED count to report; showing "0 of N remaining" would

@@ -25,7 +25,7 @@ from ui_qt.reference_library_dialog import ReferenceLibraryDialog
 
 @pytest.fixture(autouse=True)
 def _qapp():
-    yield QApplication.instance() or QApplication([])
+    return QApplication.instance() or QApplication([])
 
 
 def test_rows_follow_the_curated_catalog_order():
@@ -45,13 +45,8 @@ def test_the_flagship_is_preselected_with_its_detail_filled():
     assert dialog._detail_description.text() == flagship.description
     # Counts derive through BPXDocument -- the same derivation the docked
     # tile uses -- so the meta line restates that, not an invented number.
-    document = BPXDocument.from_raw(
-        load_reference_raw(flagship.id), filename=flagship.id, fmt="json"
-    )
-    assert (
-        f"{document.section_count} sections · {document.parameter_count} parameters"
-        in dialog._detail_meta.text()
-    )
+    document = BPXDocument.from_raw(load_reference_raw(flagship.id), filename=flagship.id, fmt="json")
+    assert f"{document.section_count} sections · {document.parameter_count} parameters" in dialog._detail_meta.text()
     assert f"Model {flagship.model}" in dialog._detail_meta.text()
 
 

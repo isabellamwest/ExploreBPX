@@ -73,9 +73,7 @@ def test_custom_parameter_under_a_schema_section_offers_rename_and_duplicate(pan
 
 
 def test_user_defined_row_menu_offers_rename_and_duplicate(panel):
-    node = _section_node(
-        _USER_DEFINED, [_parameter(_USER_DEFINED, "Alpha"), _parameter(_USER_DEFINED, "Beta")]
-    )
+    node = _section_node(_USER_DEFINED, [_parameter(_USER_DEFINED, "Alpha"), _parameter(_USER_DEFINED, "Beta")])
     panel.show_node(node)
     menu = panel._build_row_menu(_USER_DEFINED + ("Alpha",))
     labels = [a.text() for a in menu.actions() if not a.isSeparator()]
@@ -83,9 +81,7 @@ def test_user_defined_row_menu_offers_rename_and_duplicate(panel):
 
 
 def test_first_row_has_move_up_disabled(panel):
-    node = _section_node(
-        _USER_DEFINED, [_parameter(_USER_DEFINED, "Alpha"), _parameter(_USER_DEFINED, "Beta")]
-    )
+    node = _section_node(_USER_DEFINED, [_parameter(_USER_DEFINED, "Alpha"), _parameter(_USER_DEFINED, "Beta")])
     panel.show_node(node)
     menu = panel._build_row_menu(_USER_DEFINED + ("Alpha",))
     actions = {a.text(): a for a in menu.actions() if not a.isSeparator()}
@@ -94,9 +90,7 @@ def test_first_row_has_move_up_disabled(panel):
 
 
 def test_last_row_has_move_down_disabled(panel):
-    node = _section_node(
-        _USER_DEFINED, [_parameter(_USER_DEFINED, "Alpha"), _parameter(_USER_DEFINED, "Beta")]
-    )
+    node = _section_node(_USER_DEFINED, [_parameter(_USER_DEFINED, "Alpha"), _parameter(_USER_DEFINED, "Beta")])
     panel.show_node(node)
     menu = panel._build_row_menu(_USER_DEFINED + ("Beta",))
     actions = {a.text(): a for a in menu.actions() if not a.isSeparator()}

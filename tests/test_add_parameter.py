@@ -78,11 +78,7 @@ def _aliases(popup, tier=None):
 
 def _headers(popup):
     lst = popup._list
-    return [
-        lst.item(i).text()
-        for i in range(lst.count())
-        if lst.item(i).data(popup._TIER_ROLE) == "header"
-    ]
+    return [lst.item(i).text() for i in range(lst.count()) if lst.item(i).data(popup._TIER_ROLE) == "header"]
 
 
 def _row_item(popup, alias):
@@ -203,9 +199,7 @@ def test_electrode_section_suggests_blended_fields_when_particle_present(popup, 
     material, every parameter under it) via
     ``core.editing.add_parameter``'s unconditional ``parent[key] = value``.
     The popup filters it out, leaving the section's genuine leaf field."""
-    popup.open_for_section(
-        anchor, "Positive electrode", set(), _POSITIVE_ELECTRODE, "SPM", {"Particle": {}}
-    )
+    popup.open_for_section(anchor, "Positive electrode", set(), _POSITIVE_ELECTRODE, "SPM", {"Particle": {}})
 
     assert set(_aliases(popup, "suggested")) == {"Thickness [m]"}
 
@@ -217,9 +211,7 @@ def test_container_property_is_never_offered_as_an_addable_parameter(popup, anch
     would route through ``AddParameter`` -> ``core.editing.add_parameter``'s
     unconditional ``parent[key] = value`` and silently replace the whole
     child section with ``None``."""
-    popup.open_for_section(
-        anchor, "Positive electrode", set(), _POSITIVE_ELECTRODE, "SPM", {"Particle": {}}
-    )
+    popup.open_for_section(anchor, "Positive electrode", set(), _POSITIVE_ELECTRODE, "SPM", {"Particle": {}})
     assert "Particle" not in _aliases(popup, "suggested")
     assert "Particle" not in _aliases(popup, "other")
 
@@ -388,7 +380,7 @@ def test_selecting_a_suggestion_emits_its_known_alias(popup, anchor, qtbot):
 
 
 @pytest.mark.parametrize(
-    "path, expected_label",
+    ("path", "expected_label"),
     [
         (("State", "Degradation", "LAM: Negative electrode"), "FloatInt | dict[str, FloatInt]"),
         (("Validation", "some_run", "Time [s]"), "list[FloatInt]"),
@@ -519,7 +511,7 @@ def test_form_key_composition_with_a_unit(popup, anchor, qtbot):
 
 
 @pytest.mark.parametrize(
-    "type_label, expected_seed",
+    ("type_label", "expected_seed"),
     [
         ("Scalar", 0.0),
         ("Text", ""),
@@ -714,15 +706,23 @@ def test_outside_click_closes_popup_and_is_swallowed(popup, anchor, qtbot):
 
     global_pos = decoy.mapToGlobal(decoy.rect().center())
     press = QMouseEvent(
-        QEvent.MouseButtonPress, QPointF(decoy.rect().center()), QPointF(global_pos),
-        Qt.LeftButton, Qt.LeftButton, Qt.NoModifier,
+        QEvent.MouseButtonPress,
+        QPointF(decoy.rect().center()),
+        QPointF(global_pos),
+        Qt.LeftButton,
+        Qt.LeftButton,
+        Qt.NoModifier,
     )
     QApplication.instance().sendEvent(decoy, press)
     assert popup.isVisible() is False
 
     release = QMouseEvent(
-        QEvent.MouseButtonRelease, QPointF(decoy.rect().center()), QPointF(global_pos),
-        Qt.LeftButton, Qt.NoButton, Qt.NoModifier,
+        QEvent.MouseButtonRelease,
+        QPointF(decoy.rect().center()),
+        QPointF(global_pos),
+        Qt.LeftButton,
+        Qt.NoButton,
+        Qt.NoModifier,
     )
     QApplication.instance().sendEvent(decoy, release)
     assert clicks == []  # the dismissing press never reached the button beneath
@@ -745,8 +745,12 @@ def test_outside_click_on_trigger_button_closes_without_reopening(panel, qtbot):
     local_pos = button.rect().center()
     global_pos = button.mapToGlobal(local_pos)
     press = QMouseEvent(
-        QEvent.MouseButtonPress, QPointF(local_pos), QPointF(global_pos),
-        Qt.LeftButton, Qt.LeftButton, Qt.NoModifier,
+        QEvent.MouseButtonPress,
+        QPointF(local_pos),
+        QPointF(global_pos),
+        Qt.LeftButton,
+        Qt.LeftButton,
+        Qt.NoModifier,
     )
     QApplication.instance().sendEvent(button, press)
     assert panel._popup.isVisible() is False
@@ -893,9 +897,7 @@ def test_popup_suggests_blended_fields_for_electrode_node_with_particle_value(pa
     """``Particle`` itself is a container-link property (identifies the child
     ``Particle`` section, not a leaf parameter) -- it must never be offered,
     or activating it would silently overwrite the whole ``Particle`` dict."""
-    node = TreeNode(
-        label="Positive electrode", path=_POSITIVE_ELECTRODE, value={"Particle": {}}
-    )
+    node = TreeNode(label="Positive electrode", path=_POSITIVE_ELECTRODE, value={"Particle": {}})
     panel.show_node(node, model="SPM")
     panel._open_add_popup()
     assert set(_aliases(panel._popup, "suggested")) == {"Thickness [m]"}
@@ -922,7 +924,6 @@ def test_parameter_list_rows_bold_the_name_and_mute_the_unit(panel, valid_spm_di
     add-parameter popup's language, for choosing a field the section does not
     have yet, and a row in this list is already present."""
     from core.tree_model import build_tree
-
     from ui_qt import parameter_row, style
 
     root = build_tree(valid_spm_dict)
@@ -931,9 +932,7 @@ def test_parameter_list_rows_bold_the_name_and_mute_the_unit(panel, valid_spm_di
     panel.show_node(electrode, model="SPM")
 
     lst = panel._list
-    thickness = next(
-        lst.item(i) for i in range(lst.count()) if lst.item(i).text().startswith("Thickness")
-    )
+    thickness = next(lst.item(i) for i in range(lst.count()) if lst.item(i).text().startswith("Thickness"))
     html = thickness.data(parameter_row.HTML_ROLE)
     assert "Thickness" in html
     assert "[m]" in html
@@ -995,13 +994,12 @@ def test_add_refuses_a_colliding_composed_key_end_to_end(app_driver, spm_workfil
     assert popup._form_message.isVisible() is True
     assert cell["Nominal cell capacity [A.h]"] == original  # untouched
     assert (
-        sum(1 for label in d.parameter_labels() if label.startswith("Nominal cell capacity"))
-        == 1
+        sum(1 for label in d.parameter_labels() if label.startswith("Nominal cell capacity")) == 1
     )  # no duplicate row either
 
 
 @pytest.mark.parametrize(
-    "type_label, expected_kind, expected_value",
+    ("type_label", "expected_kind", "expected_value"),
     [
         ("Scalar", "ScalarCard", 0.0),
         ("Text", "TextCard", ""),
@@ -1074,9 +1072,7 @@ def test_add_other_bpx_alias_end_to_end(app_driver, spm_workfile):
     assert any("Porosity" in label for label in d.parameter_labels())
 
 
-def test_electrode_section_lists_standard_and_custom_add_works_end_to_end(
-    app_driver, spm_workfile
-):
+def test_electrode_section_lists_standard_and_custom_add_works_end_to_end(app_driver, spm_workfile):
     """An electrode section resolves (Negative electrode here has no ``Particle``
     key, so the single-particle shape) and lists the whole standard; the
     custom-add path stays fully functional regardless."""

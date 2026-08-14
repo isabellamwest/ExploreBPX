@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import cache
 from pathlib import Path
 
 from . import bpx_gateway
@@ -77,7 +77,7 @@ class ReferenceSet:
     references: str  # the file's own Header.References (the citation; "" if absent)
 
 
-@lru_cache(maxsize=None)
+@cache
 def _load_raw(stem: str) -> dict:
     path = _ASSETS / f"{stem}.json"
     raw, _fmt = bpx_gateway.load_raw(path.read_bytes(), path.name)

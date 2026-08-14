@@ -20,6 +20,7 @@ import pytest
 pytest.importorskip("PySide6")
 
 import yaml
+from platform_facts import assert_alert_title
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication
 
@@ -29,8 +30,6 @@ from core.load_record import LoadRecord
 from state.app_state import AppState
 from state.document_session import DocumentSession
 from ui_qt.main_window import StaleChoice, _format_disk_time
-
-from platform_facts import assert_alert_title
 
 _CAPACITY = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
 
@@ -109,9 +108,7 @@ def test_stale_cancel_blocks_the_save(app_driver, spm_workfile, monkeypatch):
     assert _capacity_on_disk(spm_workfile) != 6.0
 
 
-def test_stale_overwrite_saves_and_the_check_rearms(
-    app_driver, spm_workfile, monkeypatch
-):
+def test_stale_overwrite_saves_and_the_check_rearms(app_driver, spm_workfile, monkeypatch):
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(6.0).commit()
     window = app_driver._w
     _bump_mtime(spm_workfile)
@@ -127,9 +124,7 @@ def test_stale_overwrite_saves_and_the_check_rearms(
     assert len(calls) == 1
 
 
-def test_stale_reload_discards_and_opens_the_disk_version(
-    app_driver, spm_workfile, monkeypatch
-):
+def test_stale_reload_discards_and_opens_the_disk_version(app_driver, spm_workfile, monkeypatch):
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(6.0).commit()
     window = app_driver._w
     raw = json.loads(spm_workfile.read_text("utf-8"))
@@ -139,15 +134,11 @@ def test_stale_reload_discards_and_opens_the_disk_version(
     _arm_stale(window, monkeypatch, StaleChoice.RELOAD)
     assert window._save() is False
     session = window._state.active
-    assert session.document.raw["Parameterisation"]["Cell"][
-        "Nominal cell capacity [A.h]"
-    ] == 9.9
+    assert session.document.raw["Parameterisation"]["Cell"]["Nominal cell capacity [A.h]"] == 9.9
     assert session.dirty is False
 
 
-def test_stale_save_as_copy_retargets_and_leaves_the_disk_version(
-    app_driver, spm_workfile, tmp_path, monkeypatch
-):
+def test_stale_save_as_copy_retargets_and_leaves_the_disk_version(app_driver, spm_workfile, tmp_path, monkeypatch):
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(6.0).commit()
     window = app_driver._w
     _bump_mtime(spm_workfile)
@@ -159,9 +150,7 @@ def test_stale_save_as_copy_retargets_and_leaves_the_disk_version(
         seen["start"] = start
         return (str(copy_path), "")
 
-    monkeypatch.setattr(
-        main_window_module.QFileDialog, "getSaveFileName", fake_get_save_file_name
-    )
+    monkeypatch.setattr(main_window_module.QFileDialog, "getSaveFileName", fake_get_save_file_name)
     _arm_stale(window, monkeypatch, StaleChoice.SAVE_AS_COPY)
     assert window._save() is True
     session = window._state.active
@@ -174,15 +163,11 @@ def test_stale_save_as_copy_retargets_and_leaves_the_disk_version(
     assert seen["start"].endswith(f"{spm_workfile.stem} (copy){spm_workfile.suffix}")
 
 
-def test_stale_save_as_copy_cancelled_saves_nothing(
-    app_driver, spm_workfile, monkeypatch
-):
+def test_stale_save_as_copy_cancelled_saves_nothing(app_driver, spm_workfile, monkeypatch):
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(6.0).commit()
     window = app_driver._w
     _bump_mtime(spm_workfile)
-    monkeypatch.setattr(
-        main_window_module.QFileDialog, "getSaveFileName", lambda *a, **k: ("", "")
-    )
+    monkeypatch.setattr(main_window_module.QFileDialog, "getSaveFileName", lambda *a, **k: ("", ""))
     _arm_stale(window, monkeypatch, StaleChoice.SAVE_AS_COPY)
     assert window._save() is False
     session = window._state.active
@@ -190,9 +175,7 @@ def test_stale_save_as_copy_cancelled_saves_nothing(
     assert session.dirty is True
 
 
-def test_stale_save_as_copy_failure_restores_the_backing_file(
-    app_driver, spm_workfile, tmp_path, monkeypatch
-):
+def test_stale_save_as_copy_failure_restores_the_backing_file(app_driver, spm_workfile, tmp_path, monkeypatch):
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(6.0).commit()
     window = app_driver._w
     _bump_mtime(spm_workfile)
@@ -202,9 +185,7 @@ def test_stale_save_as_copy_failure_restores_the_backing_file(
         "getSaveFileName",
         lambda *a, **k: (str(tmp_path / "target.json"), ""),
     )
-    monkeypatch.setattr(
-        main_window_module.QMessageBox, "critical", lambda *a, **k: None
-    )
+    monkeypatch.setattr(main_window_module.QMessageBox, "critical", lambda *a, **k: None)
 
     def failing_save():
         raise OSError("disk full")
@@ -217,9 +198,7 @@ def test_stale_save_as_copy_failure_restores_the_backing_file(
     assert session.backing_file == spm_workfile
 
 
-def test_deleted_backing_file_saves_without_asking(
-    app_driver, spm_workfile, monkeypatch
-):
+def test_deleted_backing_file_saves_without_asking(app_driver, spm_workfile, monkeypatch):
     """A vanished file blocks nothing: a save there can destroy no newer
     version, so Save simply writes the file again."""
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(6.0).commit()
@@ -258,9 +237,7 @@ def test_disk_time_another_day_names_the_date():
 # ----------------------------------------------------------------------
 
 
-def test_commented_yaml_cancel_blocks_the_first_save(
-    app_driver, commented_yaml_workfile, monkeypatch
-):
+def test_commented_yaml_cancel_blocks_the_first_save(app_driver, commented_yaml_workfile, monkeypatch):
     app_driver.open(commented_yaml_workfile).go_to(_CAPACITY).edit_field(6.0).commit()
     window = app_driver._w
     calls = []
@@ -271,9 +248,7 @@ def test_commented_yaml_cancel_blocks_the_first_save(
     assert window._state.active.dirty is True
 
 
-def test_commented_yaml_confirm_saves_and_never_asks_again(
-    app_driver, commented_yaml_workfile, monkeypatch
-):
+def test_commented_yaml_confirm_saves_and_never_asks_again(app_driver, commented_yaml_workfile, monkeypatch):
     app_driver.open(commented_yaml_workfile).go_to(_CAPACITY).edit_field(6.0).commit()
     window = app_driver._w
     calls = []
@@ -307,9 +282,7 @@ def test_uncommented_yaml_never_asks(app_driver, plain_yaml_workfile, monkeypatc
     assert calls == []
 
 
-def test_clone_of_commented_source_names_both_files(
-    app_driver, commented_yaml_workfile, monkeypatch
-):
+def test_clone_of_commented_source_names_both_files(app_driver, commented_yaml_workfile, monkeypatch):
     """A never-saved session whose content came from another file (the shape
     a converted copy has) keeps its comments in that origin: the dialog's
     first sentence names the origin, the asked-once sentence the document.
@@ -323,9 +296,7 @@ def test_clone_of_commented_source_names_both_files(
     document = BPXDocument.from_bytes(data, "cell (copy).yaml")
     session = DocumentSession(document)
     session.dirty = True
-    session.load_record = LoadRecord.capture(
-        data, document, path=commented_yaml_workfile
-    )
+    session.load_record = LoadRecord.capture(data, document, path=commented_yaml_workfile)
     window._state.active = session
     calls = []
     _arm_comment(window, monkeypatch, False, calls)
@@ -333,9 +304,7 @@ def test_clone_of_commented_source_names_both_files(
     assert calls == [("cell.yaml", "cell (copy).yaml")]
 
 
-def test_stale_asks_first_then_comments_on_one_save(
-    app_driver, commented_yaml_workfile, monkeypatch
-):
+def test_stale_asks_first_then_comments_on_one_save(app_driver, commented_yaml_workfile, monkeypatch):
     app_driver.open(commented_yaml_workfile).go_to(_CAPACITY).edit_field(6.0).commit()
     window = app_driver._w
     _bump_mtime(commented_yaml_workfile)
@@ -345,16 +314,12 @@ def test_stale_asks_first_then_comments_on_one_save(
         "_ask_stale_resolution",
         lambda *a: order.append("stale") or StaleChoice.OVERWRITE,
     )
-    monkeypatch.setattr(
-        window, "_ask_comment_loss", lambda *a: order.append("comments") or True
-    )
+    monkeypatch.setattr(window, "_ask_comment_loss", lambda *a: order.append("comments") or True)
     assert window._save() is True
     assert order == ["stale", "comments"]
 
 
-def test_stale_save_as_copy_still_confirms_comment_loss(
-    app_driver, commented_yaml_workfile, monkeypatch
-):
+def test_stale_save_as_copy_still_confirms_comment_loss(app_driver, commented_yaml_workfile, monkeypatch):
     """The copy written by Save as copy is comment-free too, so consent
     comes before its file dialog ever opens."""
     app_driver.open(commented_yaml_workfile).go_to(_CAPACITY).edit_field(6.0).commit()
@@ -440,11 +405,9 @@ def test_comment_dialog_real_box_words_and_default(app_driver):
     assert answer is True
     assert_alert_title(captured["title"], "Comments will not survive saving")
     assert captured["text"] == (
-        "nmc_pouch.yaml contains comments. Saving rewrites the whole "
-        "file: comments and formatting will not survive."
+        "nmc_pouch.yaml contains comments. Saving rewrites the whole file: comments and formatting will not survive."
     )
     assert captured["informative"] == (
-        "This is asked once for nmc_pouch.yaml. The file record "
-        "keeps the note either way."
+        "This is asked once for nmc_pouch.yaml. The file record keeps the note either way."
     )
     assert captured["default"] == "Cancel"

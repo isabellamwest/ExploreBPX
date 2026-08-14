@@ -26,6 +26,8 @@ not two independently-drifting ones.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from PySide6.QtCore import QPoint, Qt, Signal
 from PySide6.QtGui import QAction, QColor
 from PySide6.QtWidgets import (
@@ -48,17 +50,20 @@ from core.compare import (
     merged_ghost_keys,
     merged_row_state,
 )
-from core.completion import MissingField
 from core.parameter_types import ParameterKind, classify
-from core.tree_model import ParameterItem, TreeNode
 
 from . import parameter_row, style, typography
 from .add_parameter_popup import AddParameterPopup, suggestion_row_html, suggestion_row_text
 from .cards.experiment import KNOWN_ALIASES, is_validation_run_path
-from .name_popup import NamePopup
-from .reference_identity import ReferencePin
 from .group_box import TintedSectionHeader
+from .name_popup import NamePopup
 from .parameter_row import ParameterRowDelegate
+
+if TYPE_CHECKING:
+    from core.completion import MissingField
+    from core.tree_model import ParameterItem, TreeNode
+
+    from .reference_identity import ReferencePin
 
 #: RowState -> gutter-bar variant (:data:`parameter_row.REF_BAR_ROLE`).
 #: DIFFERS and FILLABLE both read "the reference disagrees or has something
@@ -226,9 +231,7 @@ class ParameterListPanel(QWidget):
         suffix_layout.addWidget(self._count_label)
         suffix_layout.addWidget(self._add_button)
 
-        self._header = TintedSectionHeader(
-            "", object_name="ParameterListHeader", suffix=suffix
-        )
+        self._header = TintedSectionHeader("", object_name="ParameterListHeader", suffix=suffix)
         self._header.hide()  # no section selected yet
         layout.addWidget(self._header)
 
@@ -287,22 +290,14 @@ class ParameterListPanel(QWidget):
     def _rows_for(self, section_path: tuple[str, ...], key: str) -> list[RowDiff | None]:
         """One entry per pinned reference, in pin order: that reference's
         comparison for *key*, or ``None`` where it has nothing to say."""
-        return [
-            pin.comparison.row(section_path, key) if pin.comparison is not None else None
-            for pin in self._pins
-        ]
+        return [pin.comparison.row(section_path, key) if pin.comparison is not None else None for pin in self._pins]
 
     def _sections_for(self, section_path: tuple[str, ...]) -> list:
         """One entry per pinned reference, in pin order: that reference's
         ``SectionDiff`` at *section_path*, or ``None``."""
-        return [
-            pin.comparison.section(section_path) if pin.comparison is not None else None
-            for pin in self._pins
-        ]
+        return [pin.comparison.section(section_path) if pin.comparison is not None else None for pin in self._pins]
 
-    def _reference_tooltip_lines(
-        self, rows: list[RowDiff | None], kind: ParameterKind
-    ) -> list[str]:
+    def _reference_tooltip_lines(self, rows: list[RowDiff | None], kind: ParameterKind) -> list[str]:
         """One "<names>: <value>" line per distinct reference value, in the
         order the values were first pinned.
 
@@ -361,18 +356,14 @@ class ParameterListPanel(QWidget):
             # session offers no adds, so it is not appended at all.
             self._append_missing_fields_group(node, model)
 
-    def _make_parameter_item(
-        self, node: TreeNode, parameter: ParameterItem
-    ) -> QListWidgetItem:
+    def _make_parameter_item(self, node: TreeNode, parameter: ParameterItem) -> QListWidgetItem:
         severity = self._visible_issue_severities.get(parameter.path)
         is_empty = parameter.value is None
         item = QListWidgetItem(parameter.label)
         item.setData(256, parameter.path)
         item.setData(
             parameter_row.HTML_ROLE,
-            parameter_row.build_parameter_row_html(
-                parameter.label, severity=severity, is_empty=is_empty
-            ),
+            parameter_row.build_parameter_row_html(parameter.label, severity=severity, is_empty=is_empty),
         )
         # Right-aligned value preview (raw-verbatim, delegate-elided); the
         # tooltip carries the committed value -- kind-aware, so a series
@@ -393,9 +384,7 @@ class ParameterListPanel(QWidget):
                 # with several pinned, which references say what. The main
                 # value's own tooltip line (set above) stays first.
                 existing = item.toolTip()
-                lines = ([existing] if existing else []) + self._reference_tooltip_lines(
-                    rows, parameter.kind
-                )
+                lines = ([existing] if existing else []) + self._reference_tooltip_lines(rows, parameter.kind)
                 item.setToolTip("\n".join(lines))
         return item
 
@@ -408,11 +397,7 @@ class ParameterListPanel(QWidget):
         the run's grid always shows, ending the list/grid disagreement.
         """
         by_label = {p.label: p for p in node.parameters}
-        ghost_keys = (
-            frozenset(merged_ghost_keys(self._sections_for(node.path)))
-            if self._pins
-            else frozenset()
-        )
+        ghost_keys = frozenset(merged_ghost_keys(self._sections_for(node.path))) if self._pins else frozenset()
         for alias in KNOWN_ALIASES:
             parameter = by_label.get(alias)
             if parameter is not None:
@@ -462,10 +447,7 @@ class ParameterListPanel(QWidget):
         item.setData(parameter_row.HTML_ROLE, parameter_row.build_ghost_row_html(alias))
         item.setData(parameter_row.VALUE_ROLE, "not in file")
         item.setData(parameter_row.VALUE_GHOST_ROLE, True)
-        item.setToolTip(
-            "Not in the file. Opens the run's grid column; nothing is "
-            "written until you type a value."
-        )
+        item.setToolTip("Not in the file. Opens the run's grid column; nothing is written until you type a value.")
         return item
 
     def _append_ghost_rows(self, node: TreeNode) -> None:
@@ -582,10 +564,7 @@ class ParameterListPanel(QWidget):
         self.show_node(self._node, self._model)
         for row in range(self._list.count()):
             item = self._list.item(row)
-            if (
-                item.data(self._GROUP_ROW_KIND_ROLE) == "suggestion"
-                and item.data(self._GROUP_ROW_ALIAS_ROLE) == alias
-            ):
+            if item.data(self._GROUP_ROW_KIND_ROLE) == "suggestion" and item.data(self._GROUP_ROW_ALIAS_ROLE) == alias:
                 self._list.setCurrentRow(row)
                 self._list.scrollToItem(item)
                 return True
@@ -683,9 +662,7 @@ class ParameterListPanel(QWidget):
             return
         if kind == "placeholder":
             if self._node is not None:
-                self.placeholder_selected.emit(
-                    self._node.path, item.data(self._PLACEHOLDER_ALIAS_ROLE)
-                )
+                self.placeholder_selected.emit(self._node.path, item.data(self._PLACEHOLDER_ALIAS_ROLE))
             return
         self.parameter_selected.emit(item.data(256))
 
@@ -731,9 +708,7 @@ class ParameterListPanel(QWidget):
         value = parameter.value if parameter is not None else None
         if structure.can_rename_parameter(path, value):
             rename_action = menu.addAction("Rename…")
-            rename_action.triggered.connect(
-                lambda _checked=False, p=path: self.rename_parameter_requested.emit(p)
-            )
+            rename_action.triggered.connect(lambda _checked=False, p=path: self.rename_parameter_requested.emit(p))
         if structure.can_duplicate_parameter(path, value):
             duplicate_action = menu.addAction("Duplicate")
             duplicate_action.triggered.connect(
@@ -748,14 +723,10 @@ class ParameterListPanel(QWidget):
             last_index = len(siblings) - 1
             move_up = menu.addAction("Move up")
             move_up.setEnabled(index is not None and index > 0)
-            move_up.triggered.connect(
-                lambda _checked=False, p=path: self.move_parameter_requested.emit(p, "up")
-            )
+            move_up.triggered.connect(lambda _checked=False, p=path: self.move_parameter_requested.emit(p, "up"))
             move_down = menu.addAction("Move down")
             move_down.setEnabled(index is not None and index < last_index)
-            move_down.triggered.connect(
-                lambda _checked=False, p=path: self.move_parameter_requested.emit(p, "down")
-            )
+            move_down.triggered.connect(lambda _checked=False, p=path: self.move_parameter_requested.emit(p, "down"))
 
         menu.addSeparator()
         menu.addAction(self._remove_action)

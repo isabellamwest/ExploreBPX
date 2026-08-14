@@ -28,6 +28,7 @@ _DIFFUSIVITY = ("Parameterisation", "Negative electrode", "Diffusivity [m2.s-1]"
 # Mode strip: a union-typed field's representations, driven through the UI
 # ---------------------------------------------------------------------------
 
+
 def test_mode_strip_switch_alone_commits_nothing(app_driver, spm_workfile):
     """Switching mode is not an edit: it must not dirty the card, must not
     flash the badge, and a bare Enter after it must write nothing."""
@@ -37,18 +38,16 @@ def test_mode_strip_switch_alone_commits_nothing(app_driver, spm_workfile):
     assert d.current_mode() == "FloatInt"
     assert d.validity() == "Valid"
 
-    d.select_mode("Function")           # a real click on the strip button
+    d.select_mode("Function")  # a real click on the strip button
     d.wait_for_live_validation()
 
     assert d.current_mode() == "Function"
-    assert d.validity() == "Valid"      # no preview kicked at the empty body
+    assert d.validity() == "Valid"  # no preview kicked at the empty body
     d.commit()
-    assert d.undo_enabled() is False    # nothing entered the undo stack
+    assert d.undo_enabled() is False  # nothing entered the undo stack
 
 
-def test_mode_strip_converts_a_number_into_an_interpolated_table(
-    app_driver, spm_workfile, main_window
-):
+def test_mode_strip_converts_a_number_into_an_interpolated_table(app_driver, spm_workfile, main_window):
     d = app_driver
     d.open(spm_workfile).go_to(_DIFFUSIVITY)
 
@@ -56,9 +55,7 @@ def test_mode_strip_converts_a_number_into_an_interpolated_table(
     d.add_grid_row().set_grid_cell(0, 0, "0.1").set_grid_cell(0, 1, "5e-14")
     d.commit_grid()
 
-    stored = main_window._state.active.document.raw["Parameterisation"][
-        "Negative electrode"
-    ]["Diffusivity [m2.s-1]"]
+    stored = main_window._state.active.document.raw["Parameterisation"]["Negative electrode"]["Diffusivity [m2.s-1]"]
     assert stored == {"x": [0.1], "y": [5e-14]}
     assert d.current_mode() == "InterpolatedTable"
 
@@ -87,35 +84,34 @@ def test_unrepresentable_value_opens_raw_and_blocks_a_broken_commit(
     d.open(spm_with_ragged_table_path).go_to(_DIFFUSIVITY)
 
     assert d.current_mode() == "Raw"
-    assert d.mode_labels()[-1] == "Raw"   # Raw appended only when unrepresentable
+    assert d.mode_labels()[-1] == "Raw"  # Raw appended only when unrepresentable
     assert d.commit_blocked_reason() is None
 
-    stored = lambda: main_window._state.active.document.raw["Parameterisation"][
-        "Negative electrode"
-    ]["Diffusivity [m2.s-1]"]
+    def stored():
+        return main_window._state.active.document.raw["Parameterisation"]["Negative electrode"]["Diffusivity [m2.s-1]"]
+
     assert stored() == {"x": [0, 1], "y": [1]}
 
-    d.set_raw_json('{"x": [0,1], "y": [1]')      # broken
+    d.set_raw_json('{"x": [0,1], "y": [1]')  # broken
     reason = d.commit_blocked_reason()
-    assert reason is not None and "Not valid JSON" in reason
+    assert reason is not None
+    assert "Not valid JSON" in reason
 
     d.commit()
 
-    assert stored() == {"x": [0, 1], "y": [1]}   # untouched, not a broken string
+    assert stored() == {"x": [0, 1], "y": [1]}  # untouched, not a broken string
     assert d.undo_enabled() is False
 
-    d.set_raw_json('{"x": [0,1], "y": [1,2]}')   # repaired
+    d.set_raw_json('{"x": [0,1], "y": [1,2]}')  # repaired
     assert d.commit_blocked_reason() is None
     d.commit()
 
     assert stored() == {"x": [0, 1], "y": [1, 2]}
     assert d.current_mode() == "InterpolatedTable"
-    assert "Raw" not in d.mode_labels()          # representable now
+    assert "Raw" not in d.mode_labels()  # representable now
 
 
-def test_a_blocked_draft_holds_the_badge_rather_than_previewing_a_stale_value(
-    app_driver, spm_with_ragged_table_path
-):
+def test_a_blocked_draft_holds_the_badge_rather_than_previewing_a_stale_value(app_driver, spm_with_ragged_table_path):
     """While the Raw text is unparseable there is no value to validate, so the
     badge must not report the last representable one as "Valid"."""
     d = app_driver
@@ -145,6 +141,7 @@ def test_a_blocked_draft_holds_the_badge_rather_than_previewing_a_stale_value(
 # Flagship 1: open -> select -> edit -> validation updates -> issues update
 # ---------------------------------------------------------------------------
 
+
 def test_flagship_edit_updates_validation_and_issues(app_driver, spm_workfile):
     d = app_driver
     d.open(spm_workfile)
@@ -171,6 +168,7 @@ def test_flagship_edit_updates_validation_and_issues(app_driver, spm_workfile):
 # ---------------------------------------------------------------------------
 # Flagship 2: navigate from a validation issue, fix it, validation clears
 # ---------------------------------------------------------------------------
+
 
 def test_flagship_navigate_from_issue_and_fix(app_driver, spm_workfile):
     d = app_driver
@@ -202,6 +200,7 @@ def test_flagship_navigate_from_issue_and_fix(app_driver, spm_workfile):
 # ---------------------------------------------------------------------------
 # Live validation + Escape recovery (the one timing-dependent workflow)
 # ---------------------------------------------------------------------------
+
 
 def test_live_validation_updates_then_escape_restores(app_driver, spm_workfile):
     d = app_driver
@@ -240,6 +239,7 @@ def test_committed_invalid_value_stays_editable_and_recoverable(app_driver, spm_
 # Search
 # ---------------------------------------------------------------------------
 
+
 def test_search_navigates_to_parameter(app_driver, spm_workfile):
     d = app_driver
     d.open(spm_workfile)
@@ -259,6 +259,7 @@ def test_search_navigates_to_object(app_driver, spm_workfile):
 # ---------------------------------------------------------------------------
 # Navigation reveals the target in the structure tree
 # ---------------------------------------------------------------------------
+
 
 def test_navigation_reveals_owning_object_in_tree(app_driver, spm_workfile):
     d = app_driver
@@ -280,6 +281,7 @@ def test_focus_search_selects_existing_text(main_window, spm_workfile):
 # ---------------------------------------------------------------------------
 # Issues section: navigation + conditional presence
 # ---------------------------------------------------------------------------
+
 
 def test_issues_section_navigation_and_presence(app_driver, spm_workfile):
     d = app_driver
@@ -308,6 +310,7 @@ def test_issues_section_navigation_and_presence(app_driver, spm_workfile):
 # ---------------------------------------------------------------------------
 # Documentation section state is workspace state, not parameter state
 # ---------------------------------------------------------------------------
+
 
 def test_documentation_section_state_persists_and_resets(app_driver, spm_workfile):
     d = app_driver
@@ -376,6 +379,7 @@ def test_sections_hide_without_a_parameter(app_driver, spm_workfile):
 # Placeholder / no-document states
 # ---------------------------------------------------------------------------
 
+
 def test_fresh_window_has_no_document(app_driver):
     assert app_driver.has_document() is False
     assert app_driver.window_title() == "ExploreBPX"
@@ -396,9 +400,7 @@ def test_selecting_object_without_parameter_shows_placeholder(app_driver, spm_wo
 _TEMPERATURE = ("State", "Initial conditions", "Initial temperature [K]")
 
 
-def test_masked_section_badges_not_validated_instead_of_valid(
-    app_driver, spm_workfile
-):
+def test_masked_section_badges_not_validated_instead_of_valid(app_driver, spm_workfile):
     """bpx validates in stages, and a Parameterisation error aborts the run
     before State is ever judged (see test_gateway.py's staged-abort tests).
     A parameter bpx never judged must badge neutral "Not checked" -- a
@@ -433,7 +435,7 @@ def test_masked_section_badges_not_validated_instead_of_valid(
 
 
 def test_not_checked_badge_says_why_on_hover(app_driver, spm_workfile):
-    """"Not checked" states the absence of a verdict but not its cause. The
+    """ "Not checked" states the absence of a verdict but not its cause. The
     hover supplies it in the diagnostics stream's own words for the same
     abort, so the two surfaces can never explain it differently."""
     d = app_driver

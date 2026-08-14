@@ -19,7 +19,8 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import QLabel, QPlainTextEdit, QVBoxLayout
 
-from ..style import MUTED
+from ui_qt.style import MUTED
+
 from .base import EditorCard
 
 #: Auto-grow bounds: never shorter than one line, never taller than this many

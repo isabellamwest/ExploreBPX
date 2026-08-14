@@ -111,6 +111,7 @@ class SectionBucket:
 
     @property
     def outstanding_count(self) -> int:
+        """Every open task in this bucket, required and optional together."""
         return len(self.required_tasks) + len(self.optional_tasks)
 
 
@@ -283,9 +284,7 @@ def _parameterisation_child_order(raw: dict, model: str | None) -> list[str]:
     is empty) is appended after, in ``raw``'s own order.
     """
     schema_order = [
-        path[-1]
-        for path in structure.required_sections(model)
-        if len(path) == 2 and path[0] == "Parameterisation"
+        path[-1] for path in structure.required_sections(model) if len(path) == 2 and path[0] == "Parameterisation"
     ]
     parameterisation = raw.get("Parameterisation") if isinstance(raw, dict) else None
     present = list(parameterisation) if isinstance(parameterisation, dict) else []
@@ -420,11 +419,7 @@ def bucket_page_content(
             continue
 
         absent = not _section_present(raw, path)
-        required_total = (
-            None
-            if absent
-            else completion.completion_for(path, _value_at(raw, path), model).required_total
-        )
+        required_total = None if absent else completion.completion_for(path, _value_at(raw, path), model).required_total
         buckets.append(
             SectionBucket(
                 path=path,

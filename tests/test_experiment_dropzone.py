@@ -27,7 +27,7 @@ _RUN = ("Validation", "C/20 discharge")
 
 @pytest.fixture(autouse=True)
 def _qapp():
-    yield QApplication.instance() or QApplication([])
+    return QApplication.instance() or QApplication([])
 
 
 @pytest.fixture(autouse=True)
@@ -74,9 +74,7 @@ def _stub_dialog(monkeypatch, mapping):
 
 
 def _stub_file_dialog(monkeypatch, path):
-    monkeypatch.setattr(
-        experiment_module.QFileDialog, "getOpenFileName", lambda *a, **k: (str(path), "")
-    )
+    monkeypatch.setattr(experiment_module.QFileDialog, "getOpenFileName", lambda *a, **k: (str(path), ""))
 
 
 def test_freshly_created_empty_run_shows_the_dropzone(app_driver, tmp_path, valid_spm_dict):
@@ -88,9 +86,7 @@ def test_freshly_created_empty_run_shows_the_dropzone(app_driver, tmp_path, vali
     assert d.experiment_columns() == ("Time [s]", "Current [A]", "Voltage [V]")
 
 
-def test_run_with_every_array_present_but_empty_shows_the_dropzone(
-    app_driver, tmp_path, valid_spm_dict
-):
+def test_run_with_every_array_present_but_empty_shows_the_dropzone(app_driver, tmp_path, valid_spm_dict):
     workfile = _write_doc(
         tmp_path,
         valid_spm_dict,
@@ -116,9 +112,7 @@ def test_populated_run_never_shows_the_dropzone(app_driver, spm_with_validation_
     assert d.experiment_dropzone_shown() is False
 
 
-def test_one_filled_column_is_enough_to_hide_the_dropzone(
-    app_driver, tmp_path, valid_spm_dict
-):
+def test_one_filled_column_is_enough_to_hide_the_dropzone(app_driver, tmp_path, valid_spm_dict):
     workfile = _write_doc(tmp_path, valid_spm_dict, {"Partial": {"Time [s]": [0, 1, 2]}})
     d = app_driver
     d.open(workfile).go_to(("Validation", "Partial"))
@@ -126,9 +120,7 @@ def test_one_filled_column_is_enough_to_hide_the_dropzone(
     assert d.experiment_dropzone_shown() is False
 
 
-def test_typing_the_first_value_dismisses_the_dropzone_live(
-    app_driver, tmp_path, valid_spm_dict
-):
+def test_typing_the_first_value_dismisses_the_dropzone_live(app_driver, tmp_path, valid_spm_dict):
     """A genuinely empty grid has zero displayed rows (see
     ``test_numeric_grid_multicolumn.test_row_count_is_zero_for_two_empty_columns``),
     so typing the very first value is, like any empty grid in this app, a
@@ -146,9 +138,7 @@ def test_typing_the_first_value_dismisses_the_dropzone_live(
     assert d.undo_enabled() is False
 
 
-def test_reverting_the_only_typed_value_brings_the_dropzone_back(
-    app_driver, tmp_path, valid_spm_dict
-):
+def test_reverting_the_only_typed_value_brings_the_dropzone_back(app_driver, tmp_path, valid_spm_dict):
     workfile = _write_doc(tmp_path, valid_spm_dict, {"New run": {}})
     d = app_driver
     d.open(workfile).go_to(("Validation", "New run"))
@@ -208,9 +198,7 @@ def test_dropped_file_fills_mapped_columns_the_same_way_as_browse(
     assert d.experiment_dropzone_shown() is False
 
 
-def test_experiment_card_offers_its_grid_for_the_pages_leftover_height(
-    app_driver, spm_with_validation_path
-):
+def test_experiment_card_offers_its_grid_for_the_pages_leftover_height(app_driver, spm_with_validation_path):
     d = app_driver
     d.open(spm_with_validation_path).go_to(_RUN)
     card = d.experiment_card()
@@ -218,18 +206,14 @@ def test_experiment_card_offers_its_grid_for_the_pages_leftover_height(
     assert card.growable_grid() is card._grid
 
 
-def test_sample_count_chip_reports_each_columns_length(
-    app_driver, spm_with_validation_path
-):
+def test_sample_count_chip_reports_each_columns_length(app_driver, spm_with_validation_path):
     d = app_driver
     d.open(spm_with_validation_path).go_to(_RUN)
 
     assert d.experiment_sample_count_text() == "Time 3 · Current 3 · Voltage 3 · Temperature 3"
 
 
-def test_sample_count_chip_reflects_a_length_mismatch_factually(
-    app_driver, tmp_path, valid_spm_dict
-):
+def test_sample_count_chip_reflects_a_length_mismatch_factually(app_driver, tmp_path, valid_spm_dict):
     workfile = _write_doc(
         tmp_path,
         valid_spm_dict,
@@ -247,9 +231,7 @@ def test_sample_count_chip_reflects_a_length_mismatch_factually(
     assert d.experiment_sample_count_text() == "Time 4 · Current 4 · Voltage 2"
 
 
-def test_sample_count_chip_updates_live_with_a_typed_value(
-    app_driver, tmp_path, valid_spm_dict
-):
+def test_sample_count_chip_updates_live_with_a_typed_value(app_driver, tmp_path, valid_spm_dict):
     workfile = _write_doc(tmp_path, valid_spm_dict, {"New run": {}})
     d = app_driver
     d.open(workfile).go_to(("Validation", "New run"))
@@ -267,9 +249,7 @@ def test_sample_count_chip_updates_live_with_a_typed_value(
 # ---------------------------------------------------------------------------
 
 
-def test_dropzone_has_no_compare_or_database_examples_button(
-    app_driver, tmp_path, valid_spm_dict
-):
+def test_dropzone_has_no_compare_or_database_examples_button(app_driver, tmp_path, valid_spm_dict):
     workfile = _write_doc(tmp_path, valid_spm_dict, {"New run": {}})
     d = app_driver
     d.open(workfile).go_to(("Validation", "New run"))
@@ -279,21 +259,18 @@ def test_dropzone_has_no_compare_or_database_examples_button(
     assert dropzone.findChild(QPushButton, "ExperimentDropzoneDatabaseExamples") is None
 
 
-def test_toolbar_compare_button_visible_while_the_dropzone_shows(
-    app_driver, tmp_path, valid_spm_dict
-):
+def test_toolbar_compare_button_visible_while_the_dropzone_shows(app_driver, tmp_path, valid_spm_dict):
     workfile = _write_doc(tmp_path, valid_spm_dict, {"New run": {}})
     d = app_driver
     d.open(workfile).go_to(("Validation", "New run"))
     assert d.experiment_dropzone_shown() is True
 
     button = d.experiment_card()._database_examples_button
-    assert button is not None and not button.isHidden()
+    assert button is not None
+    assert not button.isHidden()
 
 
-def test_toolbar_compare_button_opens_dialog_with_no_you_series_on_an_empty_run(
-    app_driver, tmp_path, valid_spm_dict
-):
+def test_toolbar_compare_button_opens_dialog_with_no_you_series_on_an_empty_run(app_driver, tmp_path, valid_spm_dict):
     workfile = _write_doc(tmp_path, valid_spm_dict, {"New run": {}})
     d = app_driver
     d.open(workfile).go_to(("Validation", "New run"))
@@ -310,17 +287,17 @@ def test_toolbar_compare_button_visible_in_both_empty_and_populated_states(
     d = app_driver
     d.open(spm_with_validation_path).go_to(_RUN)
     populated_button = d.experiment_card()._database_examples_button
-    assert populated_button is not None and not populated_button.isHidden()
+    assert populated_button is not None
+    assert not populated_button.isHidden()
 
     workfile = _write_doc(tmp_path, valid_spm_dict, {"New run": {}})
     d.open(workfile).go_to(("Validation", "New run"))
     empty_button = d.experiment_card()._database_examples_button
-    assert empty_button is not None and not empty_button.isHidden()
+    assert empty_button is not None
+    assert not empty_button.isHidden()
 
 
-def test_toolbar_database_examples_labels_own_run_by_file_name_not_you(
-    app_driver, spm_with_validation_path
-):
+def test_toolbar_database_examples_labels_own_run_by_file_name_not_you(app_driver, spm_with_validation_path):
     """The active document's own series reads "<file> · <run>" -- the file
     name, never "You". The fixture is saved as
     ``spm_with_validation.json``."""
@@ -340,9 +317,7 @@ def test_toolbar_database_examples_labels_own_run_by_file_name_not_you(
     }
 
 
-def test_toolbar_database_examples_labels_an_unsaved_document_active_file(
-    app_driver, tmp_path, valid_spm_dict
-):
+def test_toolbar_database_examples_labels_an_unsaved_document_active_file(app_driver, tmp_path, valid_spm_dict):
     """An unsaved document has no real file name yet, so its own series falls
     back to "Active file · <run>" rather than a bare "untitled"."""
     workfile = _write_doc(
@@ -359,9 +334,7 @@ def test_toolbar_database_examples_labels_an_unsaved_document_active_file(
     assert dialog._added["__you__"].label == "Active file · C/20 discharge"
 
 
-def test_toolbar_database_examples_reflects_an_uncommitted_edit_live(
-    app_driver, spm_with_validation_path
-):
+def test_toolbar_database_examples_reflects_an_uncommitted_edit_live(app_driver, spm_with_validation_path):
     """The own run is built from the grid's *current draft*, not the last
     commit -- an edit that has not been confirmed with Enter yet still shows
     up."""
@@ -380,9 +353,7 @@ def test_toolbar_database_examples_reflects_an_uncommitted_edit_live(
 # ---------------------------------------------------------------------------
 
 
-def test_compare_dialog_lists_the_documents_other_runs_committed_values(
-    app_driver, tmp_path, valid_spm_dict
-):
+def test_compare_dialog_lists_the_documents_other_runs_committed_values(app_driver, tmp_path, valid_spm_dict):
     """The dialog's first picker group is the document's OTHER runs
     (committed values, the compared run itself excluded) -- comparing your
     C/20 against your 1C no longer needs a save-and-reopen round trip."""
@@ -420,9 +391,7 @@ def test_compare_dialog_lists_the_documents_other_runs_committed_values(
         dialog.close()
 
 
-def test_compare_dialog_shows_no_active_group_for_a_single_run_document(
-    app_driver, spm_with_validation_path
-):
+def test_compare_dialog_shows_no_active_group_for_a_single_run_document(app_driver, spm_with_validation_path):
     d = app_driver
     d.open(spm_with_validation_path).go_to(("Validation", "C/20 discharge"))
 
@@ -438,9 +407,7 @@ def test_compare_dialog_shows_no_active_group_for_a_single_run_document(
 # ---------------------------------------------------------------------------
 
 
-def test_preview_band_shows_committed_values_per_panel(
-    app_driver, spm_with_validation_path
-):
+def test_preview_band_shows_committed_values_per_panel(app_driver, spm_with_validation_path):
     d = app_driver
     d.open(spm_with_validation_path).go_to(_RUN)
 
@@ -462,9 +429,7 @@ def test_preview_band_shows_committed_values_per_panel(
     ]
 
 
-def test_preview_band_reflects_an_uncommitted_draft_edit_live(
-    app_driver, spm_with_validation_path
-):
+def test_preview_band_reflects_an_uncommitted_draft_edit_live(app_driver, spm_with_validation_path):
     """The band previews the draft, not only the committed value -- and the
     edit stays a draft (nothing committed by drawing it)."""
     d = app_driver
@@ -477,9 +442,7 @@ def test_preview_band_reflects_an_uncommitted_draft_edit_live(
     assert d.experiment_card_is_dirty() is True
 
 
-def test_preview_band_hidden_on_an_empty_run_and_appears_with_the_first_value(
-    app_driver, tmp_path, valid_spm_dict
-):
+def test_preview_band_hidden_on_an_empty_run_and_appears_with_the_first_value(app_driver, tmp_path, valid_spm_dict):
     """While the dropzone shows, the band does not -- a fully empty run
     must never stack the dropzone, an empty grid and empty charts."""
     workfile = _write_doc(tmp_path, valid_spm_dict, {"New run": {}})
@@ -496,9 +459,7 @@ def test_preview_band_hidden_on_an_empty_run_and_appears_with_the_first_value(
     assert d.experiment_preview_visible() is True
 
 
-def test_preview_band_omits_temperature_without_the_column(
-    app_driver, tmp_path, valid_spm_dict
-):
+def test_preview_band_omits_temperature_without_the_column(app_driver, tmp_path, valid_spm_dict):
     workfile = _write_doc(
         tmp_path,
         valid_spm_dict,
@@ -516,9 +477,7 @@ def test_preview_band_omits_temperature_without_the_column(
     assert d.experiment_preview_panels() == ("Voltage [V]", "Current [A]")
 
 
-def test_preview_band_empty_texts_name_the_missing_array(
-    app_driver, tmp_path, valid_spm_dict
-):
+def test_preview_band_empty_texts_name_the_missing_array(app_driver, tmp_path, valid_spm_dict):
     """An empty Y column names itself; a Y column with values
     but no Time to pair against says exactly that. Preview wording, never
     the compare dialog's."""
@@ -554,10 +513,7 @@ def test_preview_band_empty_texts_name_the_missing_array(
     d.open(workfile2).go_to(("Validation", "Run"))
 
     assert d.experiment_preview_series("Voltage [V]") == []
-    assert (
-        d.experiment_preview_empty_text("Voltage [V]")
-        == "No Time [s] values to plot against."
-    )
+    assert d.experiment_preview_empty_text("Voltage [V]") == "No Time [s] values to plot against."
     assert d.experiment_preview_empty_text("Current [A]") == "No Current [A] values yet."
 
 
@@ -572,20 +528,16 @@ def _drag_enter_event(path):
     the event does not own the ``QMimeData``, so the caller must hold the
     second element alive for the event's lifetime (a released mime leaves
     ``event.mimeData()`` a dangling wrapper and crashes the run)."""
-    from PySide6.QtCore import QMimeData, QPoint, QUrl, Qt
+    from PySide6.QtCore import QMimeData, QPoint, Qt, QUrl
     from PySide6.QtGui import QDragEnterEvent
 
     mime = QMimeData()
     mime.setUrls([QUrl.fromLocalFile(str(path))])
-    event = QDragEnterEvent(
-        QPoint(0, 0), Qt.CopyAction, mime, Qt.LeftButton, Qt.NoModifier
-    )
+    event = QDragEnterEvent(QPoint(0, 0), Qt.CopyAction, mime, Qt.LeftButton, Qt.NoModifier)
     return event, mime
 
 
-def test_dropzone_affordance_flips_during_a_csv_drag_and_never_at_rest(
-    app_driver, tmp_path, valid_spm_dict
-):
+def test_dropzone_affordance_flips_during_a_csv_drag_and_never_at_rest(app_driver, tmp_path, valid_spm_dict):
     from PySide6.QtGui import QDragLeaveEvent
 
     workfile = _write_doc(tmp_path, valid_spm_dict, {"New run": {}})
@@ -605,9 +557,7 @@ def test_dropzone_affordance_flips_during_a_csv_drag_and_never_at_rest(
     assert dropzone.styleSheet() == ""
 
 
-def test_dropzone_affordance_ignores_a_non_csv_drag(
-    app_driver, tmp_path, valid_spm_dict
-):
+def test_dropzone_affordance_ignores_a_non_csv_drag(app_driver, tmp_path, valid_spm_dict):
     workfile = _write_doc(tmp_path, valid_spm_dict, {"New run": {}})
     d = app_driver
     d.open(workfile).go_to(("Validation", "New run"))
@@ -621,9 +571,7 @@ def test_dropzone_affordance_ignores_a_non_csv_drag(
     assert dropzone.styleSheet() == ""
 
 
-def test_dropzone_affordance_clears_after_a_real_drop(
-    app_driver, monkeypatch, tmp_path, valid_spm_dict
-):
+def test_dropzone_affordance_clears_after_a_real_drop(app_driver, monkeypatch, tmp_path, valid_spm_dict):
     workfile = _write_doc(tmp_path, valid_spm_dict, {"New run": {}})
     csv_path = tmp_path / "data.csv"
     csv_path.write_text("Time [s],Current [A],Voltage [V]\n0,-1,4\n50,-1,3.9\n", encoding="utf-8")

@@ -18,9 +18,7 @@ import ui_qt.main_window as main_window_module
 _CAPACITY = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
 
 
-def test_failed_save_as_rolls_back_backing_file_and_reprompts(
-    app_driver, spm_workfile, tmp_path, monkeypatch
-):
+def test_failed_save_as_rolls_back_backing_file_and_reprompts(app_driver, spm_workfile, tmp_path, monkeypatch):
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(6.0).commit()
     window = app_driver._w
     session = window._state.active
@@ -32,12 +30,8 @@ def test_failed_save_as_rolls_back_backing_file_and_reprompts(
         dialog_calls.append(1)
         return (str(tmp_path / "target.json"), "")
 
-    monkeypatch.setattr(
-        main_window_module.QFileDialog, "getSaveFileName", fake_get_save_file_name
-    )
-    monkeypatch.setattr(
-        main_window_module.QMessageBox, "critical", lambda *a, **k: None
-    )
+    monkeypatch.setattr(main_window_module.QFileDialog, "getSaveFileName", fake_get_save_file_name)
+    monkeypatch.setattr(main_window_module.QMessageBox, "critical", lambda *a, **k: None)
 
     def failing_save():
         raise OSError("disk full")
@@ -53,17 +47,13 @@ def test_failed_save_as_rolls_back_backing_file_and_reprompts(
     assert len(dialog_calls) == 2
 
 
-def test_failed_save_to_existing_backing_file_keeps_it(
-    app_driver, spm_workfile, monkeypatch
-):
+def test_failed_save_to_existing_backing_file_keeps_it(app_driver, spm_workfile, monkeypatch):
     app_driver.open(spm_workfile).go_to(_CAPACITY).edit_field(6.0).commit()
     window = app_driver._w
     session = window._state.active
     assert session.backing_file is not None
 
-    monkeypatch.setattr(
-        main_window_module.QMessageBox, "critical", lambda *a, **k: None
-    )
+    monkeypatch.setattr(main_window_module.QMessageBox, "critical", lambda *a, **k: None)
 
     def failing_save():
         raise OSError("permission denied")

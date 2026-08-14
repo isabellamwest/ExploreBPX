@@ -22,14 +22,24 @@ from .tree_model import (
 )
 from .validation import PydanticErrorDiagnostic, Severity, ValidatorDiagnostic
 
-
 # Navigation constants: Pydantic union-type discriminator suffixes that are
 # artefacts of validation mechanics, not data-path components.  These are
 # stripped only when deriving a navigation path for tree matching.
-_NAV_STRIP_TAGS = frozenset({
-    "float", "int", "str", "bool", "number", "integer", "boolean", "string",
-    "function-after", "function-before", "is-instance",
-})
+_NAV_STRIP_TAGS = frozenset(
+    {
+        "float",
+        "int",
+        "str",
+        "bool",
+        "number",
+        "integer",
+        "boolean",
+        "string",
+        "function-after",
+        "function-before",
+        "is-instance",
+    }
+)
 
 
 def _derive_nav_path(loc: tuple[str, ...]) -> tuple[str, ...]:
@@ -136,16 +146,12 @@ class BPXDocument:
     #: ``bpx`` aborted before judging the whole document, in which case a
     #: parameter without issues was never actually checked.
     validation_completed: bool = True
-    _node_path_map: dict[tuple[str, ...], TreeNode] = field(
-        default_factory=dict, repr=False
-    )
-    _parameter_path_map: dict[tuple[str, ...], ParameterItem] = field(
-        default_factory=dict, repr=False
-    )
+    _node_path_map: dict[tuple[str, ...], TreeNode] = field(default_factory=dict, repr=False)
+    _parameter_path_map: dict[tuple[str, ...], ParameterItem] = field(default_factory=dict, repr=False)
     _issue_nav_paths: list[tuple[str, ...]] = field(default_factory=list, repr=False)
 
     @classmethod
-    def from_bytes(cls, data: bytes | str, filename: str) -> "BPXDocument":
+    def from_bytes(cls, data: bytes | str, filename: str) -> BPXDocument:
         """Load, validate and build the tree for raw file bytes.
 
         Raises :class:`core.bpx_gateway.LoadError` only if the bytes are not
@@ -155,7 +161,7 @@ class BPXDocument:
         return cls.from_raw(raw, filename=filename, fmt=fmt)
 
     @classmethod
-    def from_raw(cls, raw: dict, filename: str, fmt: str) -> "BPXDocument":
+    def from_raw(cls, raw: dict, filename: str, fmt: str) -> BPXDocument:
         """Build a document from an already-decoded raw dict.
 
         Validation, tree building and issue attachment are identical to
@@ -221,7 +227,7 @@ class BPXDocument:
 
     def iter_issues(self) -> list[tuple[ValidatorDiagnostic, tuple[str, ...]]]:
         """Return ``(diagnostic, nav_path)`` pairs for all document issues."""
-        return list(zip(self.issues, self._issue_nav_paths))
+        return list(zip(self.issues, self._issue_nav_paths, strict=False))
 
     @property
     def identity(self) -> DocumentIdentity:
@@ -230,10 +236,12 @@ class BPXDocument:
 
     @property
     def error_count(self) -> int:
+        """Error-severity diagnostics, before task absorption (see ``core.completion``)."""
         return sum(1 for issue in self.issues if issue.severity == Severity.ERROR)
 
     @property
     def warning_count(self) -> int:
+        """Warning-severity diagnostics, before task absorption."""
         return sum(1 for issue in self.issues if issue.severity == Severity.WARNING)
 
     @property

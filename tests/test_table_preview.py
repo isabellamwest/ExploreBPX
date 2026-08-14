@@ -30,12 +30,10 @@ from ui_qt.style import ACCENT
 def _qapp():
     from PySide6.QtWidgets import QApplication
 
-    yield QApplication.instance() or QApplication([])
+    return QApplication.instance() or QApplication([])
 
 
-requires_charts = pytest.mark.skipif(
-    not charts_available(), reason="QtCharts not available in this PySide6 build"
-)
+requires_charts = pytest.mark.skipif(not charts_available(), reason="QtCharts not available in this PySide6 build")
 
 
 # ----------------------------------------------------------------------

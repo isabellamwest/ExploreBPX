@@ -21,8 +21,8 @@ from core.parameter_types import ParameterKind
 from core.tree_model import ParameterItem
 from core.validation import PydanticErrorDiagnostic
 from ui_qt import diagnostics_panel as vp
-from ui_qt.issues_view import IssuesView
 from ui_qt.diagnostics_panel import DiagnosticsPanel
+from ui_qt.issues_view import IssuesView
 
 
 @pytest.fixture
@@ -212,7 +212,7 @@ def test_a_modified_return_is_handed_to_the_base_class(qtbot, activating_list):
     reached = []
 
     class _Probe(ActivatingList):
-        def keyPressEvent(self, event):  # noqa: N802
+        def keyPressEvent(self, event):
             ActivatingList.keyPressEvent(self, event)
             reached.append(event.key())
 

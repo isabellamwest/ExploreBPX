@@ -279,7 +279,7 @@ class _SuggestionDelegate(ParameterRowDelegate):
 
     @staticmethod
     def _has_divider(index) -> bool:
-        return bool(index.data(AddParameterPopup._TIER_TOP_ROLE))
+        return bool(index.data(AddParameterPopup._TIER_TOP_ROLE))  # noqa: SLF001 - same-file delegate reads the popup's role
 
     def sizeHint(self, option, index):
         size = super().sizeHint(option, index)
@@ -298,9 +298,7 @@ class _SuggestionDelegate(ParameterRowDelegate):
         painter.drawLine(rect.left() + 6, line_y, rect.right() - 6, line_y)
         painter.restore()
         shifted = QStyleOptionViewItem(option)
-        shifted.rect = QRect(
-            rect.left(), rect.top() + self._GAP, rect.width(), rect.height() - self._GAP
-        )
+        shifted.rect = QRect(rect.left(), rect.top() + self._GAP, rect.width(), rect.height() - self._GAP)
         super().paint(painter, shifted, index)
 
 
@@ -456,9 +454,7 @@ class AddParameterPopup(QWidget):
         else:
             fields = tuple(field for field in fields if not field.meta.is_container)
             self._expected_aliases = frozenset(field.alias for field in fields)
-            self._expected_fields = tuple(
-                field for field in fields if field.alias not in self._existing_aliases
-            )
+            self._expected_fields = tuple(field for field in fields if field.alias not in self._existing_aliases)
         self._input.setPlaceholderText(f"Add parameter to {section_label}…")
         self._input.clear()
         self._refresh_rows("")
@@ -495,9 +491,7 @@ class AddParameterPopup(QWidget):
         if suggested:
             self._list.addItem(self._make_header(_SUGGESTED_HEADER, divider=False))
             for field in suggested:
-                self._list.addItem(
-                    self._make_row(field.alias, field.meta, "suggested", required=field.required)
-                )
+                self._list.addItem(self._make_row(field.alias, field.meta, "suggested", required=field.required))
                 shown_aliases.add(field.alias)
 
         if others:
@@ -569,9 +563,7 @@ class AddParameterPopup(QWidget):
             # fallback fonts make the elide point itself unpredictable).
             self._create_button.setToolTip(label.strip())
             self._create_button.setText(
-                self._create_button.fontMetrics().elidedText(
-                    label, Qt.ElideRight, _CARD_WIDTH - 56
-                )
+                self._create_button.fontMetrics().elidedText(label, Qt.ElideRight, _CARD_WIDTH - 56)
             )
         self._update_footer_visibility()
 
@@ -778,11 +770,7 @@ class AddParameterPopup(QWidget):
     def _selectable_rows(self) -> list[int]:
         """Row indices the keyboard/mouse may land on -- i.e. real parameter
         rows, skipping the non-selectable group headers."""
-        return [
-            i
-            for i in range(self._list.count())
-            if self._list.item(i).flags() & Qt.ItemIsSelectable
-        ]
+        return [i for i in range(self._list.count()) if self._list.item(i).flags() & Qt.ItemIsSelectable]
 
     def _reset_selection(self) -> None:
         """Pick the default highlight after a rebuild: the first real row if

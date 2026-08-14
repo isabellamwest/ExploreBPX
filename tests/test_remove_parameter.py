@@ -16,7 +16,7 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtCore import Qt, QPoint, QTimer
+from PySide6.QtCore import QPoint, Qt, QTimer
 from PySide6.QtWidgets import QApplication
 
 from core.parameter_types import ParameterKind
@@ -69,9 +69,7 @@ def test_right_click_on_row_selects_it_and_offers_remove(panel):
     # can_rename_parameter/can_duplicate_parameter, a made-up name here would
     # wrongly read as a custom (schema-undefined) parameter and offer
     # Rename…/Duplicate too.
-    panel.show_node(
-        _section_node(parameters=[_parameter("Alpha"), _parameter("Reference temperature [K]")])
-    )
+    panel.show_node(_section_node(parameters=[_parameter("Alpha"), _parameter("Reference temperature [K]")]))
 
     item = panel._list.item(1)
     pos = panel._list.visualItemRect(item).center()
@@ -186,9 +184,7 @@ def test_remove_via_context_menu_is_undoable_end_to_end(app_driver, spm_workfile
     assert any(label.startswith("Reference temperature") for label in d.parameter_labels())
 
 
-def test_removing_the_inspected_parameter_clears_dangling_selection_end_to_end(
-    app_driver, spm_workfile
-):
+def test_removing_the_inspected_parameter_clears_dangling_selection_end_to_end(app_driver, spm_workfile):
     d = app_driver
     d.open(spm_workfile)
     d.select_object(_CELL)
@@ -221,9 +217,7 @@ def test_remove_custom_parameter_end_to_end(app_driver, spm_workfile):
     assert "My custom parameter" not in session.document.raw["Parameterisation"]["Cell"]
 
 
-def test_removing_a_required_parameter_produces_a_validation_error_end_to_end(
-    app_driver, spm_workfile
-):
+def test_removing_a_required_parameter_produces_a_validation_error_end_to_end(app_driver, spm_workfile):
     d = app_driver
     d.open(spm_workfile)
     d.select_object(_CELL)

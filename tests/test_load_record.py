@@ -89,10 +89,7 @@ def test_yaml_hash_inside_scalars_is_not_a_comment():
 def test_yaml_comment_beside_hashful_data_is_still_detected():
     """One real comment is enough, even when the same document also
     carries ``#`` characters inside its data."""
-    data = (
-        b"Header:\n"
-        b'  Title: "keep # this"  # but this is a comment\n'
-    )
+    data = b'Header:\n  Title: "keep # this"  # but this is a comment\n'
     record = _capture(data, "thing.yaml")
     assert record.has_yaml_comments is True
 

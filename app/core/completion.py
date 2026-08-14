@@ -60,11 +60,11 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 from . import bpx_gateway
-from .bpx_gateway import FieldMeta
 from .tree_model import TreeNode, build_parameter_path_map, build_tree
 from .validation import Severity, ValidatorDiagnostic, merge_union_pairs_by_location
 
 if TYPE_CHECKING:
+    from .bpx_gateway import FieldMeta
     from .document import BPXDocument
 
 #: The models with a full, fixed schema shape: the ``Header.Model`` enum
@@ -152,9 +152,7 @@ def completion_for(path: tuple[str, ...], value: object, model: str | None) -> S
         elif present[expected.alias] is None:
             null_fields.append(MissingField(expected.alias, required, expected.meta))
 
-    return SectionCompletion(
-        tuple(missing), tuple(null_fields), tuple(missing_child_sections), required_total
-    )
+    return SectionCompletion(tuple(missing), tuple(null_fields), tuple(missing_child_sections), required_total)
 
 
 class TaskKind(Enum):
@@ -258,18 +256,16 @@ def _walk_completion(node: TreeNode, model: str, tasks: list[CompletionTask]) ->
                 # is Required-only -- an optional absence is never a task.
                 continue
             tasks.append(
-                CompletionTask(
-                    TaskKind.MISSING_FIELD, node.path + (missing.alias,), missing.alias, missing.required
-                )
+                CompletionTask(TaskKind.MISSING_FIELD, node.path + (missing.alias,), missing.alias, missing.required)
             )
-        for null_field in section.null_fields:
-            tasks.append(
-                CompletionTask(
-                    TaskKind.NULL_FIELD, node.path + (null_field.alias,), null_field.alias, null_field.required
-                )
-            )
-        for child_path in section.missing_child_sections:
-            tasks.append(CompletionTask(TaskKind.MISSING_SECTION, child_path, None, True))
+        tasks.extend(
+            CompletionTask(TaskKind.NULL_FIELD, node.path + (null_field.alias,), null_field.alias, null_field.required)
+            for null_field in section.null_fields
+        )
+        tasks.extend(
+            CompletionTask(TaskKind.MISSING_SECTION, child_path, None, True)
+            for child_path in section.missing_child_sections
+        )
     for child in node.children:
         _walk_completion(child, model, tasks)
 
@@ -327,7 +323,7 @@ class PartitionedIssues:
     warning_count: int
 
 
-def partition_issues(document: "BPXDocument", tasks: tuple[CompletionTask, ...]) -> PartitionedIssues:
+def partition_issues(document: BPXDocument, tasks: tuple[CompletionTask, ...]) -> PartitionedIssues:
     """Split ``document.iter_issues()`` into ``visible``/``absorbed`` against
     ``tasks``, attributing each absorbed diagnostic to the
     specific task that covers it.
@@ -403,7 +399,7 @@ def partition_issues(document: "BPXDocument", tasks: tuple[CompletionTask, ...])
     )
 
 
-def partitioned_counts(document: "BPXDocument") -> tuple[int, int]:
+def partitioned_counts(document: BPXDocument) -> tuple[int, int]:
     """Return ``(error_count, warning_count)`` the same way the main
     document path derives its user-facing counts: :func:`document_completion`
     then :func:`partition_issues` over ``document``. The one shared entry
@@ -420,7 +416,7 @@ def partitioned_counts(document: "BPXDocument") -> tuple[int, int]:
 
 
 def visible_issue_severities(
-    document: "BPXDocument | None", partition: PartitionedIssues | None
+    document: BPXDocument | None, partition: PartitionedIssues | None
 ) -> dict[tuple[str, ...], str]:
     """Parameter paths carrying at least one *page-visible* diagnostic,
     mapped to the row's worst severity ("error" if any
@@ -441,16 +437,14 @@ def visible_issue_severities(
     parameter_map = build_parameter_path_map(document.tree)
     result: dict[tuple[str, ...], str] = {}
     for path, parameter in parameter_map.items():
-        severities = [
-            visible_severity[id(issue)] for issue in parameter.issues if id(issue) in visible_severity
-        ]
+        severities = [visible_severity[id(issue)] for issue in parameter.issues if id(issue) in visible_severity]
         if severities:
             result[path] = "error" if Severity.ERROR in severities else "warning"
     return result
 
 
 def visible_error_section_paths(
-    document: "BPXDocument | None", partition: PartitionedIssues | None
+    document: BPXDocument | None, partition: PartitionedIssues | None
 ) -> frozenset[tuple[str, ...]]:
     """Section paths carrying at least one page-visible ERROR of their own:
     a visible error diagnostic attached to the section node itself, or to a
@@ -466,17 +460,12 @@ def visible_error_section_paths(
     """
     if document is None or partition is None:
         return frozenset()
-    visible_error_ids = {
-        id(diagnostic)
-        for diagnostic, _ in partition.visible
-        if diagnostic.severity == Severity.ERROR
-    }
+    visible_error_ids = {id(diagnostic) for diagnostic, _ in partition.visible if diagnostic.severity == Severity.ERROR}
     result: set[tuple[str, ...]] = set()
 
     def _walk(node: TreeNode) -> None:
         direct = any(id(issue) in visible_error_ids for issue in node.issues) or any(
-            any(id(issue) in visible_error_ids for issue in parameter.issues)
-            for parameter in node.parameters
+            any(id(issue) in visible_error_ids for issue in parameter.issues) for parameter in node.parameters
         )
         if direct:
             result.add(node.path)

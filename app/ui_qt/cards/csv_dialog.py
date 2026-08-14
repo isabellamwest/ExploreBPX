@@ -46,8 +46,8 @@ from PySide6.QtWidgets import (
 
 from core.csv_import import CsvData, auto_map
 from core.values import format_value
+from ui_qt.style import ERROR, MUTED, TABLE_PREVIEW_MAX_HEIGHT
 
-from ..style import ERROR, MUTED, TABLE_PREVIEW_MAX_HEIGHT
 from .paste_dialog import PastePreviewResult
 
 #: Rows shown in the preview; the parse itself is complete (same convention as
@@ -110,7 +110,7 @@ class CsvImportDialog(QDialog):
         form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
         self._combos: list[QComboBox] = []
         column_names = [data.column_name(i) for i in range(data.column_count)]
-        for target, guess in zip(targets, proposal):
+        for target, guess in zip(targets, proposal, strict=False):
             combo = QComboBox()
             combo.addItem(_SKIP)
             combo.addItems(column_names)
@@ -146,9 +146,7 @@ class CsvImportDialog(QDialog):
             self._import_button.setDefault(True)
             buttons.addButton(self._import_button, QDialogButtonBox.AcceptRole)
             buttons.addButton(append_button, QDialogButtonBox.AcceptRole)
-            self._import_button.clicked.connect(
-                lambda: self._choose(PastePreviewResult.REPLACE)
-            )
+            self._import_button.clicked.connect(lambda: self._choose(PastePreviewResult.REPLACE))
             append_button.clicked.connect(lambda: self._choose(PastePreviewResult.APPEND))
             self._confirm_buttons = [self._import_button, append_button]
         else:
@@ -160,7 +158,7 @@ class CsvImportDialog(QDialog):
             # to a bare-connected slot, which would make ``accepted_mode`` read
             # ``False`` instead of ``None`` -- matching the two Replace/Append
             # lambdas above.
-            self._import_button.clicked.connect(lambda: self._choose())
+            self._import_button.clicked.connect(lambda: self._choose())  # noqa: PLW0108
             self._confirm_buttons = [self._import_button]
         buttons.addButton(QDialogButtonBox.Cancel)
         buttons.rejected.connect(self.reject)
@@ -172,10 +170,7 @@ class CsvImportDialog(QDialog):
 
     def mapping(self) -> tuple[int | None, ...]:
         """The current per-target column choice (``None`` = skip)."""
-        return tuple(
-            combo.currentIndex() - 1 if combo.currentIndex() > 0 else None
-            for combo in self._combos
-        )
+        return tuple(combo.currentIndex() - 1 if combo.currentIndex() > 0 else None for combo in self._combos)
 
     @property
     def accepted_mapping(self) -> tuple[int | None, ...] | None:
@@ -227,7 +222,7 @@ class CsvImportDialog(QDialog):
 
 
 def _join_targets(targets: tuple[str, ...]) -> str:
-    """"x" -> "x"; ("x", "y") -> "x and y"; more targets get an Oxford list."""
+    """ "x" -> "x"; ("x", "y") -> "x and y"; more targets get an Oxford list."""
     if len(targets) <= 1:
         return ", ".join(targets)
     return f"{', '.join(targets[:-1])} and {targets[-1]}"
@@ -236,24 +231,17 @@ def _join_targets(targets: tuple[str, ...]) -> str:
 def _detail(data: CsvData) -> str:
     parts = [f"delimiter: {data.delimiter}"]
     parts.append(
-        "column names from the file's header row"
-        if data.headers is not None
-        else "no header row: columns are numbered"
+        "column names from the file's header row" if data.headers is not None else "no header row: columns are numbered"
     )
     if data.rejected:
-        parts.append(
-            f"{data.rejected} cell{'s' if data.rejected != 1 else ''} kept as text "
-            "(not a number)"
-        )
+        parts.append(f"{data.rejected} cell{'s' if data.rejected != 1 else ''} kept as text (not a number)")
     return " · ".join(parts)
 
 
 def _preview_table(data: CsvData) -> QTableWidget:
     shown = min(data.row_count, _PREVIEW_ROWS)
     table = QTableWidget(shown, data.column_count)
-    table.setHorizontalHeaderLabels(
-        [data.column_name(i) for i in range(data.column_count)]
-    )
+    table.setHorizontalHeaderLabels([data.column_name(i) for i in range(data.column_count)])
     table.setEditTriggers(QTableWidget.NoEditTriggers)
     table.setSelectionMode(QTableWidget.NoSelection)
     # Columns stretch to fill the width, matching the NumericGrid this

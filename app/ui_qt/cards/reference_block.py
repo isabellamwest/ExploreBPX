@@ -34,6 +34,8 @@ draft/commit machinery (known Qt pitfall): populating this can never trip
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (
@@ -49,13 +51,15 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from core.compare import ValueGroup
-from core.spread import SpreadScale
 from core.values import format_value
+from ui_qt import badges, style, typography
 
-from .. import badges, style, typography
-from ..reference_identity import ReferencePin
 from .spread_scale import SpreadScaleView
+
+if TYPE_CHECKING:
+    from core.compare import ValueGroup
+    from core.spread import SpreadScale
+    from ui_qt.reference_identity import ReferencePin
 
 #: "No maximum": Qt's QWIDGETSIZE_MAX, restored when the row is not narrow.
 _NO_MAX_WIDTH = 16777215
@@ -102,9 +106,7 @@ class ReferenceTableGrid(QWidget):
             # Right-aligned over its own numbers, like the editable grids
             # above and the cells below -- a centred header floats between
             # two columns and belongs to neither.
-            self._table.horizontalHeaderItem(column).setTextAlignment(
-                Qt.AlignRight | Qt.AlignVCenter
-            )
+            self._table.horizontalHeaderItem(column).setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self._table.verticalHeader().setVisible(False)
         # Dense glance rows: this is a comparison aid, not a second editor,
         # so it packs tighter than the main grid's editable rows.
@@ -129,7 +131,7 @@ class ReferenceTableGrid(QWidget):
         purple = QBrush(QColor(style.REFERENCE))
         muted = QBrush(QColor(style.MUTED))
         self._table.setRowCount(len(rows))
-        for row_index, ((x, y), matched) in enumerate(zip(rows, matches)):
+        for row_index, ((x, y), matched) in enumerate(zip(rows, matches, strict=False)):
             x_item = QTableWidgetItem(format_value(x))
             y_item = QTableWidgetItem(format_value(y))
             for item in (x_item, y_item):
@@ -178,9 +180,7 @@ class _LedgerRow(QWidget):
         cluster_layout.setSpacing(2)
         for index in group.indices:
             pin = pins[index]
-            cluster_layout.addWidget(
-                badges.make_reference_badge(pin.letters, pin.colour, pin.name)
-            )
+            cluster_layout.addWidget(badges.make_reference_badge(pin.letters, pin.colour, pin.name))
         # The cluster owns at least the label column's width so a one-badge
         # row and a four-badge row start their value at the same x -- and
         # that x is the main editor's own.
@@ -359,9 +359,7 @@ class ReferenceLedger(QFrame):
         self._spread.set_scale(scale, pins, main_text=main_text, width=width)
         self._spread_holder.setVisible(self._spread.is_active)
 
-    def set_table_references(
-        self, references: list[tuple[ReferencePin, list[list[object]], list[bool]]]
-    ) -> None:
+    def set_table_references(self, references: list[tuple[ReferencePin, list[list[object]], list[bool]]]) -> None:
         """Show one reference's table beneath the rows, behind a badge
         selector over all of *references*.
 

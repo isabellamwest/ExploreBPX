@@ -29,9 +29,10 @@ shadows beyond the tinted washes and the cards themselves; the bordered
 
 from __future__ import annotations
 
-from datetime import datetime
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QEvent, QMimeData, Qt, Signal
 from PySide6.QtGui import QAction, QDragEnterEvent, QDropEvent
@@ -49,18 +50,14 @@ from PySide6.QtWidgets import (
 )
 
 from core.bpx_gateway import BPX_VERSION, SUPPORTED_EXTENSIONS, CheckReach
-from core.document import BPXDocument
 from core.document_factory import SUPPORTED_MODELS
-from core.load_record import LoadRecord
 from core.reference_library import PROVENANCE as LIBRARY_PROVENANCE
 from state.app_state import MAX_PINNED_REFERENCES
-from state.reference_snapshot import ReferenceSnapshot
 
-from . import badges, icons
+from . import badges, icons, typography
 from .elided_label import ElidedLabel, PathLabel
 from .group_box import TintedSection
 from .reference_identity import badge_colour, badge_letters
-from . import typography
 from .style import (
     ERROR,
     MUTED,
@@ -71,6 +68,11 @@ from .style import (
     not_checked_tooltip,
 )
 from .typography import panel_title
+
+if TYPE_CHECKING:
+    from core.document import BPXDocument
+    from core.load_record import LoadRecord
+    from state.reference_snapshot import ReferenceSnapshot
 
 _INFO_PANEL_EMPTY_STATE_TEXT = "No document open"
 
@@ -251,16 +253,10 @@ def _model_row_text(model: str | None, bpx_version: str | None) -> str:
     """The record's merged Model row: "DFN · BPX 1.1.0" (the version part
     omitted when the Header declares none) -- the format reference rows
     already used, now shared by the main document (one record shape)."""
-    return " · ".join(
-        part
-        for part in (model or "-", f"BPX {bpx_version}" if bpx_version else "")
-        if part
-    )
+    return " · ".join(part for part in (model or "-", f"BPX {bpx_version}" if bpx_version else "") if part)
 
 
-def _checked_row_text(
-    reach: CheckReach, errors: int, warnings: int, is_legacy: bool
-) -> str:
+def _checked_row_text(reach: CheckReach, errors: int, warnings: int, is_legacy: bool) -> str:
     """The record's Checked row: how far checking went, then the verdict.
 
     An aborted run names the stage it stopped after and says plainly that
@@ -305,9 +301,7 @@ def _legacy_checked_detail(filename: str, file_version: str | None) -> str:
 #: comments. States the consequence only -- the once-per-document save
 #: confirmation is a separate dialog and is not promised here before it
 #: exists.
-_COMMENTS_DETAIL = (
-    "Saving rewrites the whole file: comments and formatting will not survive."
-)
+_COMMENTS_DETAIL = "Saving rewrites the whole file: comments and formatting will not survive."
 
 
 def _size_text(size_bytes: int) -> str:
@@ -336,10 +330,7 @@ def _fact_with_detail(value_html: str, detail: str) -> str:
     its details outright; see ``ReferenceRecordPanel``)."""
     if not detail:
         return value_html
-    return (
-        f"{value_html}<br/><span style='color:{MUTED}; "
-        f"font-size:{typography.META}px'>{detail}</span>"
-    )
+    return f"{value_html}<br/><span style='color:{MUTED}; font-size:{typography.META}px'>{detail}</span>"
 
 
 def _read_as_fact(record: LoadRecord | None, fmt: str) -> tuple[str, str]:
@@ -348,10 +339,7 @@ def _read_as_fact(record: LoadRecord | None, fmt: str) -> tuple[str, str]:
     comments a save would destroy."""
     shown = (record.fmt if record else fmt).upper()
     if record is not None and record.has_yaml_comments:
-        value = (
-            f"{shown} <span style='color:#57606a'>·</span> "
-            f"<span style='color:{WARNING}'>has comments</span>"
-        )
+        value = f"{shown} <span style='color:#57606a'>·</span> <span style='color:{WARNING}'>has comments</span>"
         return value, _COMMENTS_DETAIL
     return shown, ""
 
@@ -474,19 +462,15 @@ class _EditableText(QWidget):
         self._editor.setFocus()
         self._editor.selectAll()
 
-    def mousePressEvent(self, event) -> None:  # noqa: N802 - Qt naming
+    def mousePressEvent(self, event) -> None:
         if event.button() == Qt.LeftButton and self._editor.isHidden() and self._editable:
             self.begin_edit()
             event.accept()
             return
         super().mousePressEvent(event)
 
-    def eventFilter(self, watched, event) -> bool:  # noqa: N802 - Qt naming
-        if (
-            watched is self._editor
-            and event.type() == QEvent.KeyPress
-            and event.key() == Qt.Key_Escape
-        ):
+    def eventFilter(self, watched, event) -> bool:
+        if watched is self._editor and event.type() == QEvent.KeyPress and event.key() == Qt.Key_Escape:
             # Revert: close without committing. The hide() below drops focus,
             # which fires editingFinished -- the flag stops that stray signal
             # from committing the abandoned draft.
@@ -624,13 +608,10 @@ class _ExpandableFact(QLabel):
             chevron = "▾" if self._expanded else "▸"
             text = f"{text}&nbsp; <span style='color:{MUTED}'>{chevron}</span>"
         if self._expanded and self._detail_text:
-            text = (
-                f"{text}<br/><span style='color:#57606a; "
-                f"font-size:{typography.META}px'>{self._detail_text}</span>"
-            )
+            text = f"{text}<br/><span style='color:#57606a; font-size:{typography.META}px'>{self._detail_text}</span>"
         self.setText(text)
 
-    def mousePressEvent(self, event) -> None:  # noqa: N802 - Qt naming
+    def mousePressEvent(self, event) -> None:
         if event.button() == Qt.LeftButton and self._detail_text:
             self.set_expanded(not self.is_expanded())
             event.accept()
@@ -786,9 +767,7 @@ class ReferenceRecordPanel(QWidget):
     def snapshot(self) -> ReferenceSnapshot | None:
         return self._snapshot
 
-    def show_snapshot(
-        self, snapshot: ReferenceSnapshot, letters: str = "", colour: str = ""
-    ) -> None:
+    def show_snapshot(self, snapshot: ReferenceSnapshot, letters: str = "", colour: str = "") -> None:
         self._snapshot = snapshot
         record = snapshot.record
         self._title.setText(snapshot.filename)
@@ -797,41 +776,29 @@ class ReferenceRecordPanel(QWidget):
             if item.widget() is not None:
                 item.widget().deleteLater()
         if letters:
-            self._badge_layout.addWidget(
-                badges.make_reference_badge(letters, colour, snapshot.filename)
-            )
+            self._badge_layout.addWidget(badges.make_reference_badge(letters, colour, snapshot.filename))
         self._values["Title"].setText(snapshot.title or "-")
         self._values["Description"].setText(snapshot.description or "-")
         self._values["Citation"].setText(snapshot.citation or "-")
-        self._values["Model"].setText(
-            _model_row_text(snapshot.model, snapshot.bpx_version)
-        )
+        self._values["Model"].setText(_model_row_text(snapshot.model, snapshot.bpx_version))
         read_as, comment_detail = _read_as_fact(record, "json")
         self._read_as.setText(_fact_with_detail(read_as, comment_detail))
-        self._values["Contents"].setText(
-            f"{snapshot.section_count} sections · {snapshot.parameter_count} parameters"
-        )
+        self._values["Contents"].setText(f"{snapshot.section_count} sections · {snapshot.parameter_count} parameters")
 
         # Checked as dot *and* words: how far checking went, then the
         # verdict. The dot goes MUTED for anything short of a completed run
         # -- zero errors from an aborted run is not a verdict.
         reach = record.checked if record is not None else CheckReach.COMPLETE
         is_legacy = record.is_legacy if record is not None else False
-        self._checked_value = _checked_row_text(
-            reach, snapshot.error_count, snapshot.warning_count, is_legacy
-        )
+        self._checked_value = _checked_row_text(reach, snapshot.error_count, snapshot.warning_count, is_legacy)
         self._checked_text.setText(
             _fact_with_detail(
                 self._checked_value,
-                _legacy_checked_detail(snapshot.filename, snapshot.bpx_version)
-                if is_legacy
-                else "",
+                _legacy_checked_detail(snapshot.filename, snapshot.bpx_version) if is_legacy else "",
             )
         )
         if reach is CheckReach.COMPLETE:
-            _, colour = _reference_validity_text(
-                snapshot.error_count, snapshot.warning_count
-            )
+            _, colour = _reference_validity_text(snapshot.error_count, snapshot.warning_count)
         else:
             colour = MUTED
         # Isolated dot, no text in its own document: lift=0, like the card
@@ -844,9 +811,7 @@ class ReferenceRecordPanel(QWidget):
         # pinning, not only in the pre-pin dialog); a file names its path
         # plus the disk facts captured at pin time.
         if snapshot.set_id is not None:
-            self._from_fact.setText(
-                _fact_with_detail("Reference library", LIBRARY_PROVENANCE)
-            )
+            self._from_fact.setText(_fact_with_detail("Reference library", LIBRARY_PROVENANCE))
             self._from_fact.show()
             self._from_path.hide()
             self._from_meta.hide()
@@ -859,15 +824,9 @@ class ReferenceRecordPanel(QWidget):
             self._from_fact.hide()
             self._from_path.show()
             self._from_path.set_path(str(snapshot.path))
-            has_disk_facts = (
-                record is not None
-                and record.size_bytes is not None
-                and record.mtime is not None
-            )
+            has_disk_facts = record is not None and record.size_bytes is not None and record.mtime is not None
             if has_disk_facts:
-                self._from_meta.setText(
-                    f"· {_size_text(record.size_bytes)} · {_stamp_text(record.mtime)}"
-                )
+                self._from_meta.setText(f"· {_size_text(record.size_bytes)} · {_stamp_text(record.mtime)}")
             self._from_meta.setVisible(has_disk_facts)
 
     def validity_text(self) -> str:
@@ -990,8 +949,14 @@ class _MainCard(QFrame):
         self._issue_route.hide()
 
     def set_document(
-        self, filename: str, validity: str, colour: str, tooltip: str,
-        errors: int, read_only: bool, never_saved: bool = False,
+        self,
+        filename: str,
+        validity: str,
+        colour: str,
+        tooltip: str,
+        errors: int,
+        read_only: bool,
+        never_saved: bool = False,
     ) -> None:
         self._name.setText(filename)
         self._set_ghosted(False)
@@ -1134,6 +1099,14 @@ class _ReferenceSlot(QFrame):
     def snapshot(self) -> ReferenceSnapshot | None:
         return self._snapshot
 
+    @property
+    def letters(self) -> str:
+        return self._letters
+
+    @property
+    def colour(self) -> str:
+        return self._colour
+
     def set_empty(self) -> None:
         self._snapshot = None
         self.setObjectName("BoardSlotEmpty")
@@ -1144,9 +1117,7 @@ class _ReferenceSlot(QFrame):
         self.setCursor(Qt.ArrowCursor)
         self.setToolTip("")
 
-    def set_reference(
-        self, snapshot: ReferenceSnapshot, letters: str, colour: str, differ: int | None
-    ) -> None:
+    def set_reference(self, snapshot: ReferenceSnapshot, letters: str, colour: str, differ: int | None) -> None:
         self._snapshot = snapshot
         self._letters = letters
         self._colour = colour
@@ -1164,17 +1135,13 @@ class _ReferenceSlot(QFrame):
             origin = str(snapshot.path)
         else:
             origin = ""
-        self.setToolTip(
-            f"{snapshot.filename}\n{origin}" if origin else snapshot.filename
-        )
+        self.setToolTip(f"{snapshot.filename}\n{origin}" if origin else snapshot.filename)
 
         while self._badge_layout.count():
             item = self._badge_layout.takeAt(0)
             if item.widget() is not None:
                 item.widget().deleteLater()
-        self._badge_layout.addWidget(
-            badges.make_reference_badge(letters, colour, snapshot.filename)
-        )
+        self._badge_layout.addWidget(badges.make_reference_badge(letters, colour, snapshot.filename))
         self._name.setText(snapshot.filename)
         self._model.setText(snapshot.model or "-")
         self.set_differ(differ)
@@ -1211,7 +1178,7 @@ class _ReferenceSlot(QFrame):
         if self._snapshot is not None:
             self.diff_requested.emit(self._snapshot)
 
-    def mousePressEvent(self, event) -> None:  # noqa: N802 - Qt naming
+    def mousePressEvent(self, event) -> None:
         """Clicking a filled slot shows its record. The ✕ and the differ
         route are child buttons and eat their own clicks, so neither can
         select the slot on the way to acting."""
@@ -1271,17 +1238,13 @@ class _MissingBanner(QFrame):
         locate = QPushButton("Locate…")
         locate.setObjectName("HistoryRowButton")
         locate.setToolTip("Find where the file moved to")
-        locate.clicked.connect(
-            lambda _=False, index=entry.reference_index: self.locate_requested.emit(index)
-        )
+        locate.clicked.connect(lambda _=False, index=entry.reference_index: self.locate_requested.emit(index))
         layout.addWidget(locate)
 
         forget = QPushButton("Remove")
         forget.setObjectName("HistoryRowButton")
         forget.setToolTip("Forget this file (the file itself is not touched)")
-        forget.clicked.connect(
-            lambda _=False, index=entry.reference_index: self.forget_requested.emit(index)
-        )
+        forget.clicked.connect(lambda _=False, index=entry.reference_index: self.forget_requested.emit(index))
         layout.addWidget(forget)
         return row
 
@@ -1289,9 +1252,7 @@ class _MissingBanner(QFrame):
         """The files this banner is currently naming -- the test seam."""
         from PySide6.QtWidgets import QLabel as _QLabel
 
-        return [
-            row.findChild(_QLabel, "WorkspaceMissingText").text() for row in self._rows
-        ]
+        return [row.findChild(_QLabel, "WorkspaceMissingText").text() for row in self._rows]
 
 
 class _HistoryRow(QFrame):
@@ -1324,15 +1285,15 @@ class _HistoryRow(QFrame):
         for widget in self._hover_widgets:
             widget.setVisible(hovered)
 
-    def enterEvent(self, event) -> None:  # noqa: N802 - Qt naming
+    def enterEvent(self, event) -> None:
         self.set_hovered(True)
         super().enterEvent(event)
 
-    def leaveEvent(self, event) -> None:  # noqa: N802 - Qt naming
+    def leaveEvent(self, event) -> None:
         self.set_hovered(False)
         super().leaveEvent(event)
 
-    def mousePressEvent(self, event) -> None:  # noqa: N802 - Qt naming
+    def mousePressEvent(self, event) -> None:
         if self._clickable and event.button() == Qt.LeftButton:
             self.clicked.emit()
             return
@@ -1396,9 +1357,7 @@ class _StartSurface(QWidget):
         layout.addSpacing(4)
         layout.addWidget(new_label)
         for model in SUPPORTED_MODELS:
-            row = self._build_row(
-                model, _MODEL_DESCRIPTORS.get(model, ""), f"NewButton_{model}"
-            )
+            row = self._build_row(model, _MODEL_DESCRIPTORS.get(model, ""), f"NewButton_{model}")
             row.clicked.connect(lambda name=model: self.new_requested.emit(name))
             layout.addWidget(row)
         layout.addStretch(1)
@@ -1416,27 +1375,21 @@ class _StartSurface(QWidget):
             row.setParent(None)
             row.deleteLater()
         self._recent_rows = []
-        for entry in [entry for entry in entries if entry.exists][
-            : self.MAX_RECENT_ROWS
-        ]:
+        for entry in [entry for entry in entries if entry.exists][: self.MAX_RECENT_ROWS]:
             row = self._build_row(
                 entry.name,
                 _stamp_text(entry.mtime) if entry.mtime is not None else "",
                 "StartRecentRow",
             )
             row.setToolTip(entry.path)
-            row.clicked.connect(
-                lambda path=entry.path: self.recent_open_requested.emit(path)
-            )
+            row.clicked.connect(lambda path=entry.path: self.recent_open_requested.emit(path))
             self._recent_layout.addWidget(row)
             self._recent_rows.append(row)
         self._recent_host.setVisible(bool(self._recent_rows))
 
     def recent_row_labels(self) -> list[str]:
         """The recent files this surface is offering -- the test seam."""
-        return [
-            row.findChild(QLabel, "StartRowName").text() for row in self._recent_rows
-        ]
+        return [row.findChild(QLabel, "StartRowName").text() for row in self._recent_rows]
 
     @staticmethod
     def _build_row(name: str, trailing: str, object_name: str) -> _HistoryRow:
@@ -1484,17 +1437,9 @@ def _workspace_glyph(reference_count: int, has_main: bool = True) -> QLabel:
     label.setObjectName("WorkspaceGlyph")
     plural = "s" if reference_count != 1 else ""
     if not has_main:
-        label.setToolTip(
-            f"{reference_count} reference{plural}, no main"
-            if reference_count
-            else "Empty workspace"
-        )
+        label.setToolTip(f"{reference_count} reference{plural}, no main" if reference_count else "Empty workspace")
     else:
-        label.setToolTip(
-            f"Main + {reference_count} reference{plural}"
-            if reference_count
-            else "Main, no references"
-        )
+        label.setToolTip(f"Main + {reference_count} reference{plural}" if reference_count else "Main, no references")
     return label
 
 
@@ -1592,15 +1537,11 @@ class WorkspacePanel(QWidget):
         self._new_workspace_button.clicked.connect(self.new_workspace_requested)
         rail_layout.addWidget(self._new_workspace_button)
 
-        self._workspaces_group, self._workspace_rows_layout = self._build_group(
-            "Named workspaces"
-        )
+        self._workspaces_group, self._workspace_rows_layout = self._build_group("Named workspaces")
         rail_layout.addSpacing(6)
         rail_layout.addWidget(self._workspaces_group)
 
-        self._recent_group, self._recent_rows_layout = self._build_group(
-            "Recent workspaces"
-        )
+        self._recent_group, self._recent_rows_layout = self._build_group("Recent workspaces")
         rail_layout.addSpacing(6)
         rail_layout.addWidget(self._recent_group)
         rail_layout.addStretch(1)
@@ -1688,9 +1629,7 @@ class WorkspacePanel(QWidget):
             # Clickable even with the main gone: opening it brings back
             # every reference that is still there and names what is not.
             # Refusing outright would throw away the arrangement.
-            row.clicked.connect(
-                lambda ws_id=entry.id: self.workspace_open_requested.emit(ws_id)
-            )
+            row.clicked.connect(lambda ws_id=entry.id: self.workspace_open_requested.emit(ws_id))
 
         def _action(text: str, signal, ws_id: str = entry.id) -> None:
             button = QPushButton(text)
@@ -1831,30 +1770,21 @@ class WorkspacePanel(QWidget):
         edit in place -- over the *fact plaque*, a quieter wash carrying the
         file's own immutable facts. This split makes that rule visible:
         the upper block is yours, the plaque is the file's."""
-        section = TintedSection(
-            "Main", object_name="WorkspaceMainSection", measure=PAGE_MEASURE
-        )
+        section = TintedSection("Main", object_name="WorkspaceMainSection", measure=PAGE_MEASURE)
         body = section.body_layout
 
         self._info_title = _EditableText(
-            "WorkspaceCardTitle", "Add a title…",
+            "WorkspaceCardTitle",
+            "Add a title…",
             editor_object_name="WorkspaceTitleEditor",
         )
-        self._info_title.committed.connect(
-            lambda text: self.identity_edited.emit("Title", text)
-        )
+        self._info_title.committed.connect(lambda text: self.identity_edited.emit("Title", text))
         body.addWidget(self._info_title)
 
-        self._info_description = _EditableText(
-            "WorkspaceCardValue", "Add a description…"
-        )
-        self._info_description.committed.connect(
-            lambda text: self.identity_edited.emit("Description", text)
-        )
+        self._info_description = _EditableText("WorkspaceCardValue", "Add a description…")
+        self._info_description.committed.connect(lambda text: self.identity_edited.emit("Description", text))
         self._info_citation = _EditableText("WorkspaceCardValue", "Add a citation…")
-        self._info_citation.committed.connect(
-            lambda text: self.identity_edited.emit("References", text)
-        )
+        self._info_citation.committed.connect(lambda text: self.identity_edited.emit("References", text))
         self._identity_form = _record_form()
         _add_record_row(self._identity_form, "Description", self._info_description)
         _add_record_row(self._identity_form, "Citation", self._info_citation)
@@ -1931,9 +1861,7 @@ class WorkspacePanel(QWidget):
             for entry in recent:
                 action = QAction(entry.name, submenu)
                 action.setToolTip(entry.path)
-                action.triggered.connect(
-                    lambda _=False, path=entry.path: self.recent_pin_requested.emit(path)
-                )
+                action.triggered.connect(lambda _=False, path=entry.path: self.recent_pin_requested.emit(path))
                 submenu.addAction(action)
         return menu
 
@@ -1966,9 +1894,7 @@ class WorkspacePanel(QWidget):
 
     def set_missing_files(self, missing: list[MissingFileView]) -> None:
         self._missing_banner.set_missing(missing)
-        self._main_missing = any(
-            entry.reference_index is None for entry in missing
-        )
+        self._main_missing = any(entry.reference_index is None for entry in missing)
 
     def refresh(
         self,
@@ -2044,16 +1970,10 @@ class WorkspacePanel(QWidget):
         self._fact_read_as.set_fact(read_as, comment_detail)
         legacy = load_record.is_legacy if load_record is not None else False
         self._fact_checked.set_fact(
-            _checked_row_text(
-                document.validation_reach, error_count, warning_count, legacy
-            ),
-            _legacy_checked_detail(filename or document.filename, identity.bpx_version)
-            if legacy
-            else "",
+            _checked_row_text(document.validation_reach, error_count, warning_count, legacy),
+            _legacy_checked_detail(filename or document.filename, identity.bpx_version) if legacy else "",
         )
-        self._fact_contents.setText(
-            f"{document.section_count} sections · {document.parameter_count} parameters"
-        )
+        self._fact_contents.setText(f"{document.section_count} sections · {document.parameter_count} parameters")
 
         has_source = load_record is not None and bool(load_record.source)
         from_label = self._fact_form.labelForField(self._fact_from)
@@ -2062,17 +1982,14 @@ class WorkspacePanel(QWidget):
             from_label.setVisible(has_source)
         if has_source:
             self._fact_from_path.set_path(load_record.source)
-            has_disk_facts = (
-                load_record.size_bytes is not None and load_record.mtime is not None
-            )
+            has_disk_facts = load_record.size_bytes is not None and load_record.mtime is not None
             if has_disk_facts:
                 self._fact_from_meta.setText(
-                    f"· {_size_text(load_record.size_bytes)}"
-                    f" · {_stamp_text(load_record.mtime)}"
+                    f"· {_size_text(load_record.size_bytes)} · {_stamp_text(load_record.mtime)}"
                 )
             self._fact_from_meta.setVisible(has_disk_facts)
 
-        if read_only:
+        if read_only:  # noqa: SIM108 - a nested ternary would bury the three states
             # Not the Saved/Unsaved pair: a read-only session will never
             # write, so its status is its mode.
             status = "Read-only"
@@ -2098,9 +2015,7 @@ class WorkspacePanel(QWidget):
         # cards.
         self._level_board_cards()
 
-    def _set_references(
-        self, references: list[ReferenceSnapshot], differ_counts: list[int]
-    ) -> None:
+    def _set_references(self, references: list[ReferenceSnapshot], differ_counts: list[int]) -> None:
         """Refill the four slots for the current pins.
 
         Refilled wholesale, never patched: pin order is what decides every
@@ -2120,11 +2035,7 @@ class WorkspacePanel(QWidget):
             self._start_surface_index,
             _MAIN_CARD_STRETCH if references else _START_SURFACE_STRETCH,
         )
-        open_id = (
-            id(self._reference_record.snapshot)
-            if not self._reference_record.isHidden()
-            else None
-        )
+        open_id = id(self._reference_record.snapshot) if not self._reference_record.isHidden() else None
         letters = badge_letters([reference.filename for reference in references])
         for index, slot in enumerate(self._slots):
             if index < len(references):
@@ -2140,13 +2051,9 @@ class WorkspacePanel(QWidget):
                 slot.set_empty()
                 slot.set_selected(False)
 
-        still_open = next(
-            (slot for slot in self._slots if id(slot.snapshot) == open_id), None
-        )
+        still_open = next((slot for slot in self._slots if id(slot.snapshot) == open_id), None)
         if still_open is not None:
-            self._reference_record.show_snapshot(
-                still_open.snapshot, still_open._letters, still_open._colour
-            )
+            self._reference_record.show_snapshot(still_open.snapshot, still_open.letters, still_open.colour)
             self._reference_record.show()
         else:
             self._reference_record.hide()
@@ -2173,10 +2080,7 @@ class WorkspacePanel(QWidget):
         measuring again on an already-levelled row cannot ratchet it.
         """
         cards = [self._main_card, *self._slots]
-        height = max(
-            [_EMPTY_SLOT_HEIGHT]
-            + [_card_height(card) for card in cards if not card.isHidden()]
-        )
+        height = max([_EMPTY_SLOT_HEIGHT] + [_card_height(card) for card in cards if not card.isHidden()])
         for card in cards:
             # Only on a real change, or the relayout this triggers would ask
             # for another levelling pass for ever.
@@ -2202,27 +2106,18 @@ class WorkspacePanel(QWidget):
     def _on_slot_selected(self, snapshot: ReferenceSnapshot) -> None:
         """Clicking a slot opens its record beneath the board; clicking the
         same slot again closes it."""
-        already = (
-            not self._reference_record.isHidden()
-            and self._reference_record.snapshot is snapshot
-        )
+        already = not self._reference_record.isHidden() and self._reference_record.snapshot is snapshot
         if already:
             self._reference_record.hide()
         else:
-            slot = next(
-                slot for slot in self._slots if slot.snapshot is snapshot
-            )
-            self._reference_record.show_snapshot(
-                snapshot, slot._letters, slot._colour
-            )
+            slot = next(slot for slot in self._slots if slot.snapshot is snapshot)
+            self._reference_record.show_snapshot(snapshot, slot.letters, slot.colour)
             self._reference_record.show()
         for slot in self._slots:
             slot.set_selected(not already and slot.snapshot is snapshot)
 
     @staticmethod
-    def _validity_mark(
-        errors: int, warnings: int, outstanding: int, reach: CheckReach
-    ) -> tuple[str, str, str]:
+    def _validity_mark(errors: int, warnings: int, outstanding: int, reach: CheckReach) -> tuple[str, str, str]:
         """The main document's dot-and-text mark: what the validator says,
         plus what is still missing.
 

@@ -147,9 +147,7 @@ def test_undeclared_model_yields_only_declare_model_task():
 def test_absent_header_yields_only_missing_header_task():
     raw = document_factory.create("SPM", title="probe")
     del raw["Header"]
-    assert completion.document_completion(raw) == (
-        CompletionTask(TaskKind.MISSING_SECTION, ("Header",), None, True),
-    )
+    assert completion.document_completion(raw) == (CompletionTask(TaskKind.MISSING_SECTION, ("Header",), None, True),)
 
 
 def test_absent_required_section_then_cascade_on_readd():
@@ -540,9 +538,7 @@ def test_partition_null_field_absorbs_both_union_branch_diagnostics():
     result = completion.partition_issues(doc, tasks)
 
     capacity_diagnostics = [
-        (d, nav)
-        for d, nav in doc.iter_issues()
-        if nav == ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
+        (d, nav) for d, nav in doc.iter_issues() if nav == ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
     ]
     assert len(capacity_diagnostics) == 2  # float_type + int_type
     # PydanticErrorDiagnostic wraps a raw error dict, so it is unhashable --
@@ -609,15 +605,14 @@ def test_every_expected_field_committed_null_absorbs_fully(model):
     raw = document_factory.create(model, title="probe")
     for _ in range(6):
         tasks = completion.document_completion(raw)
-        pending = [
-            t for t in tasks if t.kind in (TaskKind.MISSING_SECTION, TaskKind.MISSING_FIELD)
-        ]
+        pending = [t for t in tasks if t.kind in (TaskKind.MISSING_SECTION, TaskKind.MISSING_FIELD)]
         if not pending:
             break
         for task in pending:
             _set_leaf(raw, task.path, {} if task.kind is TaskKind.MISSING_SECTION else None)
     tasks = completion.document_completion(raw)
-    assert tasks and all(t.kind is TaskKind.NULL_FIELD for t in tasks)
+    assert tasks
+    assert all(t.kind is TaskKind.NULL_FIELD for t in tasks)
 
     doc = BPXDocument.from_raw(raw, filename="probe", fmt="json")
     result = completion.partition_issues(doc, tasks)
@@ -643,8 +638,7 @@ def test_partition_garbage_model_shows_both_error_and_task():
 
     result = completion.partition_issues(doc, tasks)
     assert any(
-        getattr(d, "error_type", None) == "literal_error" and nav == ("Header", "Model")
-        for d, nav in result.visible
+        getattr(d, "error_type", None) == "literal_error" and nav == ("Header", "Model") for d, nav in result.visible
     )
 
 
@@ -667,9 +661,7 @@ def test_required_total_counts_schema_required_non_container_fields():
     count (there are none on Cell), and this must match regardless of which
     of those fields are actually present."""
     raw = document_factory.create("SPM", title="probe")
-    section = completion.completion_for(
-        ("Parameterisation", "Cell"), raw["Parameterisation"]["Cell"], "SPM"
-    )
+    section = completion.completion_for(("Parameterisation", "Cell"), raw["Parameterisation"]["Cell"], "SPM")
     assert section.required_total == 5
 
 
@@ -699,12 +691,10 @@ def test_ordering_is_deterministic_and_document_ordered():
     # ``State`` is no longer scaffolded (bpx 1.1.1: schema-optional, so the
     # factory never adds it).
     cell_positions = [i for i, t in enumerate(first) if t.path[:2] == ("Parameterisation", "Cell")]
-    electrolyte_positions = [
-        i for i, t in enumerate(first) if t.path[:2] == ("Parameterisation", "Electrolyte")
-    ]
-    electrode_positions = [
-        i for i, t in enumerate(first) if t.path[:2] == ("Parameterisation", "Negative electrode")
-    ]
-    assert cell_positions and electrolyte_positions and electrode_positions
+    electrolyte_positions = [i for i, t in enumerate(first) if t.path[:2] == ("Parameterisation", "Electrolyte")]
+    electrode_positions = [i for i, t in enumerate(first) if t.path[:2] == ("Parameterisation", "Negative electrode")]
+    assert cell_positions
+    assert electrolyte_positions
+    assert electrode_positions
     assert max(cell_positions) < min(electrolyte_positions)
     assert max(electrolyte_positions) < min(electrode_positions)

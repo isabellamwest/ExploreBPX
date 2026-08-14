@@ -8,15 +8,19 @@ model is reset.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QAbstractItemModel, QModelIndex, Qt
 
 from core import structure
-from core.compare import ComparisonResult
-from core.tree_model import TreeNode
 
 from .parameter_row import REF_BAR_ROLE, SEVERITY_ROLE
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from core.compare import ComparisonResult
+    from core.tree_model import TreeNode
 
 #: Item-data role carrying a section's differ count (DIFFERS+FILLABLE rows,
 #: multi-file track M2), painted right-aligned by ``_TreeItemDelegate``

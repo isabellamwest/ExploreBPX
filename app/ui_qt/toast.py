@@ -9,12 +9,15 @@ inventing its own.
 from __future__ import annotations
 
 import html
-from typing import Callable
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtWidgets import QLabel, QWidget
 
 from . import style, typography
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 #: How long a message stays visible before auto-dismissing.
 DISMISS_DELAY_MS = 4000
@@ -108,7 +111,7 @@ class Toast(QLabel):
         if action is not None:
             action()
 
-    def eventFilter(self, watched, event) -> bool:  # noqa: N802 - Qt override
+    def eventFilter(self, watched, event) -> bool:
         if watched is self.parentWidget() and event.type() == QEvent.Resize:
             self._reposition()
         return super().eventFilter(watched, event)

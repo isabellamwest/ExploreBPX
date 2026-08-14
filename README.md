@@ -127,3 +127,14 @@ uv run pytest            # or, with the venv active: python -m pytest
 
 The suite runs headless (offscreen Qt) and includes the boundary test that
 keeps `core/` and `state/` free of UI imports.
+
+## Linting
+
+Code style follows the official `bpx` package's ruff configuration, adapted
+for a Qt desktop app (see the carve-outs and their reasons in
+`pyproject.toml`). Both commands must come back clean:
+
+```bash
+uv run ruff check app tests scripts
+uv run ruff format --check app tests scripts
+```

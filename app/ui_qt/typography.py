@@ -74,9 +74,7 @@ _MACOS = sys.platform == "darwin"
 #: Pinning the family matters even though nothing set one before: the app was
 #: consistent only by luck, since anything constructing a bare ``QFont()``
 #: picked up the *application* default rather than the widget's.
-UI_FAMILIES: tuple[str, ...] = (
-    (".AppleSystemUIFont", "Helvetica Neue") if _MACOS else ("Segoe UI", "system-ui")
-)
+UI_FAMILIES: tuple[str, ...] = (".AppleSystemUIFont", "Helvetica Neue") if _MACOS else ("Segoe UI", "system-ui")
 
 #: The monospace face, most-preferred first, chosen to *optically match*
 #: :data:`UI_FAMILIES` rather than merely to be fixed-width.
@@ -97,11 +95,7 @@ UI_FAMILIES: tuple[str, ...] = (
 #: Menlo rather than SF Mono deliberately: SF Mono ships with macOS but is not
 #: registered under that name in Qt's font database, so naming it buys nothing
 #: and costs the alias-table scan described above. Menlo is on every macOS.
-MONO_FAMILIES: tuple[str, ...] = (
-    ("Menlo", "Courier New")
-    if _MACOS
-    else ("Cascadia Mono", "Consolas", "Courier New")
-)
+MONO_FAMILIES: tuple[str, ...] = ("Menlo", "Courier New") if _MACOS else ("Cascadia Mono", "Consolas", "Courier New")
 
 # ---------------------------------------------------------------------------
 # The scale
@@ -150,9 +144,7 @@ def apply_caps_spacing(font: QFont) -> QFont:
     return font
 
 
-def panel_title(
-    text: str, object_name: str = "PanelTitle", parent: QWidget | None = None
-) -> QLabel:
+def panel_title(text: str, object_name: str = "PanelTitle", parent: QWidget | None = None) -> QLabel:
     """A caps panel-title label.
 
     Every *fixed* panel/section label the app owns renders as this one tier.

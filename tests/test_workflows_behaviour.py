@@ -12,13 +12,16 @@ The thin UI wiring on top of this behaviour is covered by
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 from core.bpx_gateway import CheckReach, section_checked
 from core.parameter_types import ParameterKind
 from state.app_state import AppState
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 _CAPACITY = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
 _MODEL = ("Header", "Model")
@@ -33,6 +36,7 @@ def _open(path: Path) -> AppState:
 # ---------------------------------------------------------------------------
 # Flagship: open -> select -> edit -> validation updates -> issues update
 # ---------------------------------------------------------------------------
+
 
 def test_edit_lifecycle_updates_validation_dirty_and_issues(spm_workfile):
     """The core edit workflow: a live preview never mutates the document, a
@@ -63,10 +67,7 @@ def test_edit_lifecycle_updates_validation_dirty_and_issues(spm_workfile):
     assert session.dirty
     assert session.document.find_parameter(_CAPACITY).has_errors
     # The issue is discoverable and resolves back to the parameter it came from.
-    resolved = [
-        session.document.find_best_parameter(nav)
-        for _, nav in session.document.iter_issues()
-    ]
+    resolved = [session.document.find_best_parameter(nav) for _, nav in session.document.iter_issues()]
     assert session.document.find_parameter(_CAPACITY) in resolved
 
     # Repair it: document is valid again.
@@ -75,9 +76,7 @@ def test_edit_lifecycle_updates_validation_dirty_and_issues(spm_workfile):
     assert not session.document.find_parameter(_CAPACITY).has_errors
 
 
-def test_preview_parameter_issues_excludes_document_level_diagnostics(
-    warning_only_bpx_path, tmp_path
-):
+def test_preview_parameter_issues_excludes_document_level_diagnostics(warning_only_bpx_path, tmp_path):
     """A document-level warning must never colour an unrelated parameter's
     validity badge while the user types.
 
@@ -151,6 +150,7 @@ def test_recovery_from_invalid_edit_keeps_parameter_editable(spm_workfile):
 # Invalid documents
 # ---------------------------------------------------------------------------
 
+
 def test_invalid_document_opens_and_stays_explorable(invalid_bpx_path):
     """A schema-invalid file still opens, reports errors, and keeps a navigable
     tree with issues that resolve to a location."""
@@ -163,17 +163,14 @@ def test_invalid_document_opens_and_stays_explorable(invalid_bpx_path):
     assert issues
     # Every issue resolves to a node or parameter (or the document root).
     for _, nav_path in issues:
-        resolved = (
-            document.find_best_parameter(nav_path)
-            or document.find_best(nav_path)
-            or document.tree
-        )
+        resolved = document.find_best_parameter(nav_path) or document.find_best(nav_path) or document.tree
         assert resolved is not None
 
 
 # ---------------------------------------------------------------------------
 # Save (format + dirty semantics not already covered by test_app_state)
 # ---------------------------------------------------------------------------
+
 
 def test_save_infers_json_from_extension(spm_workfile):
     state = _open(spm_workfile)
@@ -197,5 +194,5 @@ def test_save_infers_yaml_from_extension(spm_workfile, tmp_path):
 def test_save_without_backing_file_raises(spm_workfile):
     state = _open(spm_workfile)
     state.active.backing_file = None
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="No backing file"):
         state.active.save()

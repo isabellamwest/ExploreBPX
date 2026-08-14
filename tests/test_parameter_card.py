@@ -14,11 +14,10 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 pytest.importorskip("PySide6")
 
-from PySide6.QtCore import Qt
+from pathlib import Path
+
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QWidget
-
-from pathlib import Path
 
 from core import bpx_gateway
 from core.compare import ValueGroup
@@ -34,7 +33,7 @@ from ui_qt.reference_identity import ReferencePin
 
 @pytest.fixture(autouse=True)
 def _qapp():
-    yield QApplication.instance() or QApplication([])
+    return QApplication.instance() or QApplication([])
 
 
 def _card(path, kind=ParameterKind.SCALAR, value=1.0, unit="") -> ParameterCard:
@@ -177,8 +176,10 @@ def test_headings_absent_with_no_reference_docked():
 def test_headings_present_only_while_a_reference_is_pinned():
     card = _card(("Parameterisation", "Cell", "Electrode area [m2]"))
     card.set_reference(*_one_reference(2.0), ParameterKind.SCALAR)
-    assert card._main_file_heading is not None and not card._main_file_heading.isHidden()
-    assert card._ledger is not None and not card._ledger.isHidden()
+    assert card._main_file_heading is not None
+    assert not card._main_file_heading.isHidden()
+    assert card._ledger is not None
+    assert not card._ledger.isHidden()
 
     card.set_reference((), [], None)
     assert card._main_file_heading.isHidden()
@@ -226,9 +227,7 @@ def test_clicking_pull_names_the_first_pinned_source_and_does_not_dirty_the_card
 # Richer table/function reference comparison
 # ----------------------------------------------------------------------
 
-requires_charts = pytest.mark.skipif(
-    not charts_available(), reason="QtCharts not available in this PySide6 build"
-)
+requires_charts = pytest.mark.skipif(not charts_available(), reason="QtCharts not available in this PySide6 build")
 
 
 def _table_card(value) -> ParameterCard:

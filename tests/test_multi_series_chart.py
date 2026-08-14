@@ -16,7 +16,7 @@ from ui_qt.cards.multi_series_chart import MultiSeriesChart
 
 @pytest.fixture(autouse=True)
 def _qapp():
-    yield QApplication.instance() or QApplication([])
+    return QApplication.instance() or QApplication([])
 
 
 def test_a_series_with_zero_points_does_not_crash():

@@ -1,8 +1,8 @@
-"""Serialise a BPX document back to bytes (roundtrip and format conversion).
+"""Serialise a BPX document back to bytes (round-trip and format conversion).
 
-Editing is not yet supported, so export faithfully re-serialises the raw
-dictionary that was loaded. Choosing a different format performs a JSON
-<-> YAML conversion.
+Export faithfully re-serialises the raw dictionary -- edits included, nothing
+reformatted beyond the serialiser's own layout. Choosing a different format
+performs a JSON <-> YAML conversion.
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ import yaml
 
 
 def to_json(raw: dict, indent: int = 2) -> bytes:
+    """Serialise *raw* as UTF-8 JSON."""
     # Deliberately permissive: json.dumps emits bare NaN/Infinity/-Infinity
     # tokens for non-finite floats. That is valid for Python's own json
     # module and for bpx's loader (both round-trip it), but not RFC 8259
@@ -24,6 +25,7 @@ def to_json(raw: dict, indent: int = 2) -> bytes:
 
 
 def to_yaml(raw: dict) -> bytes:
+    """Serialise *raw* as UTF-8 YAML, keys in document order."""
     return yaml.safe_dump(raw, sort_keys=False, allow_unicode=True).encode("utf-8")
 
 

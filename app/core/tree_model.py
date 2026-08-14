@@ -9,7 +9,7 @@ objects/sections; direct values owned by those objects are stored as
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 
 from . import bpx_gateway
 from .parameter_types import (
@@ -21,7 +21,7 @@ from .parameter_types import (
 from .validation import Severity, ValidatorDiagnostic
 
 
-class NodeType(str, Enum):
+class NodeType(StrEnum):
     """How a navigable BPX object node was discovered."""
 
     STATIC = "static"
@@ -71,6 +71,7 @@ class ParameterItem:
 
     @property
     def has_errors(self) -> bool:
+        """True when any of this parameter's own issues is an error."""
         return any(issue.severity == Severity.ERROR for issue in self.issues)
 
 
@@ -83,16 +84,18 @@ class TreeNode:
     node_type: NodeType = NodeType.UNKNOWN
     value: object = None
     description: str = ""
-    children: list["TreeNode"] = field(default_factory=list)
+    children: list[TreeNode] = field(default_factory=list)
     parameters: list[ParameterItem] = field(default_factory=list)
     issues: list[ValidatorDiagnostic] = field(default_factory=list)
 
     @property
     def is_section(self) -> bool:
+        """Always True: a TreeNode is a section, never a leaf parameter."""
         return True
 
     @property
     def has_errors(self) -> bool:
+        """True when this node, a parameter of it, or any descendant has an error."""
         return (
             any(issue.severity == Severity.ERROR for issue in self.issues)
             or any(parameter.has_errors for parameter in self.parameters)
@@ -101,10 +104,12 @@ class TreeNode:
 
     @property
     def has_direct_errors(self) -> bool:
+        """True only for errors attached to this node itself, not descendants."""
         return any(issue.severity == Severity.ERROR for issue in self.issues)
 
     @property
     def has_direct_parameter_errors(self) -> bool:
+        """True when one of this node's own parameters has an error."""
         return any(parameter.has_errors for parameter in self.parameters)
 
     @property
@@ -319,10 +324,7 @@ def _contains_slice(haystack: tuple[str, ...], needle: tuple[str, ...]) -> bool:
     size = len(needle)
     if size == 0:
         return False
-    for start in range(len(haystack) - size + 1):
-        if haystack[start : start + size] == needle:
-            return True
-    return False
+    return any(haystack[start : start + size] == needle for start in range(len(haystack) - size + 1))
 
 
 def match_path(

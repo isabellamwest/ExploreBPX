@@ -88,7 +88,7 @@ def main(document: Path) -> int:
                 "active": window.isActiveWindow(),
                 "keys": sorted(claims),
                 "dead": sorted(dead),
-                "claims": {k: v for k, v in sorted(claims.items())},
+                "claims": dict(sorted(claims.items())),
             }
         )
     )

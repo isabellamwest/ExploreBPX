@@ -75,9 +75,7 @@ def test_user_defined_parameter_unit_carries_no_tooltip(user_defined_window):
     assert d.card_unit_tooltip() in (None, "")
 
 
-def test_custom_parameter_under_a_schema_section_unit_carries_no_tooltip(
-    app_driver, spm_workfile
-):
+def test_custom_parameter_under_a_schema_section_unit_carries_no_tooltip(app_driver, spm_workfile):
     """Contrast with test_schema_parameter_unit_carries_fixed_tooltip above:
     a schema-undefined parameter's unit is never marked fixed, even when it
     lives inside a schema section rather than User-defined."""

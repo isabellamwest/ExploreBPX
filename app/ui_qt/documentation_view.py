@@ -26,14 +26,16 @@ Data contract mirrors :class:`~ui_qt.issues_view.IssuesView`:
 from __future__ import annotations
 
 import html
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
-from core.parameter_metadata import ParameterMetadata
-
 from . import typography
 from .latex import latex_pixmap
+
+if TYPE_CHECKING:
+    from core.parameter_metadata import ParameterMetadata
 
 _MSG_NO_DOCS = "No technical description is available for this parameter."
 

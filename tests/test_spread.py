@@ -11,7 +11,6 @@ import pytest
 
 from app.core.spread import MAX_DIVISIONS, MIN_DIVISIONS, build_spread, numeric
 
-
 # ── hidden / visible ────────────────────────────────────────────────────────
 
 
@@ -66,7 +65,8 @@ def test_a_main_value_outside_the_references_becomes_an_end_label():
 def test_positions_ascend_with_value_and_stay_inside_the_axis():
     scale = build_spread(2.0, [1.0, 3.0])
     lo, hi = scale.ticks[0], scale.ticks[-1]
-    assert lo.value == 1.0 and hi.value == 3.0
+    assert lo.value == 1.0
+    assert hi.value == 3.0
     assert 0.0 < lo.position < scale.main_position < hi.position < 1.0
 
 
@@ -166,7 +166,7 @@ def test_linear_divisions_cross_zero_with_a_division_at_it():
 
 
 @pytest.mark.parametrize(
-    "lo, hi",
+    ("lo", "hi"),
     [
         (5.0, 5.1),  # a tiny span
         (5.0, 12.5),
@@ -186,7 +186,8 @@ def test_linear_divisions_ascend_and_stay_on_axis():
     scale = build_spread(None, [5.0, 12.5])
     positions = [d.position for d in scale.divisions]
     assert positions == sorted(positions)
-    assert 0.0 < positions[0] and positions[-1] < 1.0
+    assert positions[0] > 0.0
+    assert positions[-1] < 1.0
 
 
 def test_two_decades_exactly_gets_linear_divisions_not_decade_marks():

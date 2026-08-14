@@ -68,9 +68,7 @@ class SeriesCard(EditorCard):
         # arrays), which the grid this button sits on does not own.
         self._import_button = QToolButton()
         self._import_button.setText("Import CSV…")
-        self._import_button.setToolTip(
-            "Fill this run's arrays from the columns of a CSV file"
-        )
+        self._import_button.setToolTip("Fill this run's arrays from the columns of a CSV file")
         self._import_button.setAutoRaise(True)
         self._import_button.clicked.connect(self._import_csv)
         self._grid.add_toolbar_widget(self._import_button)
@@ -84,15 +82,15 @@ class SeriesCard(EditorCard):
     def _hint_lines(parameter) -> tuple[str, ...]:
         lines = [
             "Click a cell and type, or double-click, to edit it; Enter confirms the cell and moves down.",
-            "Your edits stay a draft until applied: Enter on the grid (or Apply) writes them to the file, Esc (or Discard) reverts.",
+            "Your edits stay a draft until applied: Enter on the grid (or Apply) writes them to the file, "
+            "Esc (or Discard) reverts.",
             "Paste a column from a spreadsheet with Ctrl+V, or right-click → Paste.",
             "Use + and − to add or remove rows.",
             "Import CSV… loads this run's arrays from the columns of a file.",
         ]
         if parameter.sibling_series:
             lines.append(
-                "The run's other arrays show as read-only columns, so a length "
-                "mismatch is visible while you edit."
+                "The run's other arrays show as read-only columns, so a length mismatch is visible while you edit."
             )
         return tuple(lines)
 
@@ -159,7 +157,7 @@ class SeriesCard(EditorCard):
         """
         updates = tuple(
             (path, list(data.columns[column]))
-            for (_, path), column in zip(self._csv_targets(), mapping)
+            for (_, path), column in zip(self._csv_targets(), mapping, strict=False)
             if column is not None
         )
         if updates:

@@ -43,7 +43,9 @@ above a slab of white.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, QTimer, Qt, Signal
+from typing import TYPE_CHECKING
+
+from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QLabel,
     QScrollArea,
@@ -58,9 +60,7 @@ from core.commands import PullParameter, RenameKey
 from core.compare import RowState, group_reference_values
 from core.parameter_metadata import resolve_parameter_metadata
 from core.parameter_types import ParameterKind, classify
-from core.tree_model import ParameterItem
 from core.validation import Severity
-from state.app_state import AppState
 
 from .cards.experiment import KNOWN_ALIASES, ExperimentCard, is_validation_run_path
 from .cards.ghost_card import GhostParameterCard
@@ -68,9 +68,14 @@ from .cards.parameter_card import ParameterCard
 from .documentation_view import DocumentationView
 from .group_box import TintedSection
 from .issues_view import IssuesView
-from .reference_identity import ReferencePin
 from .style import ERROR, MUTED, OK, PAGE_MEASURE, WARNING, not_checked_tooltip
 from .validation_empty_state import ValidationEmptyState
+
+if TYPE_CHECKING:
+    from core.tree_model import ParameterItem
+    from state.app_state import AppState
+
+    from .reference_identity import ReferencePin
 
 
 class InspectorPanel(QWidget):
@@ -188,7 +193,7 @@ class InspectorPanel(QWidget):
 
         outer.addWidget(scroll, 1)
 
-    def eventFilter(self, obj, event) -> bool:  # noqa: N802
+    def eventFilter(self, obj, event) -> bool:
         if event.type() == QEvent.LayoutRequest and not self._fill_timer.isActive():
             self._fill_timer.start()
         return False
@@ -314,7 +319,7 @@ class InspectorPanel(QWidget):
             return "Select a run from the list to open its experiment."
         if not node.parameters:
             return f"{node.label} has no parameters yet. Add one from the list."
-        return f"Select a parameter from {node.label} to inspect + edit it."
+        return f"Select a parameter from {node.label} to inspect + edit it."  # noqa: S608 - UI copy, not SQL
 
     def show_placeholder(self) -> None:
         placeholder = QLabel(self._placeholder_text())
@@ -352,10 +357,7 @@ class InspectorPanel(QWidget):
         """This key's per-reference values, grouped by identical value in pin
         order -- the ledger's rows. Empty when no pinned reference has
         anything to say about the key."""
-        rows = [
-            pin.comparison.row(section_path, key) if pin.comparison is not None else None
-            for pin in self._pins
-        ]
+        rows = [pin.comparison.row(section_path, key) if pin.comparison is not None else None for pin in self._pins]
         return group_reference_values(rows)
 
     def _apply_reference_block(self, parameter: ParameterItem) -> None:
@@ -393,9 +395,7 @@ class InspectorPanel(QWidget):
             return
         meta = bpx_gateway.field_meta(section_path + (key,))
         kind = classify(groups[0].value, meta)
-        card = GhostParameterCard(
-            section_path, key, groups, self._pins, kind, read_only=self._read_only
-        )
+        card = GhostParameterCard(section_path, key, groups, self._pins, kind, read_only=self._read_only)
         card.pull_requested.connect(self._on_ghost_pull)
         self._set_surface(card, fills=False)
         self._card = card
@@ -462,9 +462,8 @@ class InspectorPanel(QWidget):
                 return owner
             return None
         session = self._state.active
-        if session is not None and session.selected_path is not None:
-            if is_validation_run_path(session.selected_path):
-                return session.selected_path
+        if session is not None and session.selected_path is not None and is_validation_run_path(session.selected_path):
+            return session.selected_path
         return None
 
     def _show_experiment(self, run_path: tuple[str, ...], parameter: ParameterItem | None) -> None:
@@ -481,9 +480,7 @@ class InspectorPanel(QWidget):
             self.show_placeholder()
             return
         focused_alias = parameter.label if parameter is not None else None
-        document_name = (
-            session.backing_file.name if session.backing_file else session.document.filename
-        )
+        document_name = session.backing_file.name if session.backing_file else session.document.filename
         # The document's other runs (committed values), for the compare
         # dialog's "this file" picker group. Built here because the card
         # deliberately never sees the session; shallow-copied so the dialog
@@ -551,9 +548,7 @@ class InspectorPanel(QWidget):
         self._set_surface(card, fills=False)
         self._card = card
         self._apply_grid_fill()
-        self._render_issues(
-            parameter.issues, parameter.has_errors, self._committed_reach()
-        )
+        self._render_issues(parameter.issues, parameter.has_errors, self._committed_reach())
         self._card.set_cell_issues(parameter.issues)
 
         # Refresh both sections; the Documentation section's open/collapsed
@@ -680,9 +675,7 @@ class InspectorPanel(QWidget):
             # a value the user is not looking at, while the editor shows a parse
             # error beside it. Hold the badge instead: the card explains itself.
             return
-        preview = self._state.active.preview_parameter(
-            self._card.parameter.path, self._card.value()
-        )
+        preview = self._state.active.preview_parameter(self._card.parameter.path, self._card.value())
         issues = preview.issues
         errors = [i for i in issues if i.severity == Severity.ERROR]
         self._render_issues(issues, bool(errors), preview.validation_reach)
@@ -797,9 +790,7 @@ class InspectorPanel(QWidget):
         row = pin.comparison.row(section_path, parameter.path[-1])
         if row is None or row.state in (RowState.MAIN_ONLY, RowState.EQUAL):
             return
-        self._state.active.execute_command(
-            PullParameter(parameter.path, row.ref_value, source_label=pin.name)
-        )
+        self._state.active.execute_command(PullParameter(parameter.path, row.ref_value, source_label=pin.name))
         self.committed.emit()
 
     def _on_ghost_pull(self, index: int) -> None:
@@ -819,9 +810,7 @@ class InspectorPanel(QWidget):
         row = pin.comparison.row(section_path, key)
         if row is None or row.state is not RowState.REF_ONLY:
             return
-        self._state.active.execute_command(
-            PullParameter(section_path + (key,), row.ref_value, source_label=pin.name)
-        )
+        self._state.active.execute_command(PullParameter(section_path + (key,), row.ref_value, source_label=pin.name))
         self.committed.emit()
 
     def _on_bulk_commit(self, command) -> None:
@@ -848,9 +837,7 @@ class InspectorPanel(QWidget):
             return bpx_gateway.CheckReach.COMPLETE
         return session.document.validation_reach
 
-    def _render_issues(
-        self, issues, has_errors: bool, reach: bpx_gateway.CheckReach
-    ) -> None:
+    def _render_issues(self, issues, has_errors: bool, reach: bpx_gateway.CheckReach) -> None:
         """Drive the card's validity badge from one validation run.
 
         *reach* is how far the run that produced *issues* got: the committed
@@ -872,13 +859,9 @@ class InspectorPanel(QWidget):
                 # The badge states the absence of a verdict; the hover states
                 # why there is none, in the same words the diagnostics
                 # stream's file-facts row uses for the same abort.
-                self._card.set_validity(
-                    "Not checked", MUTED, not_checked_tooltip(reach)
-                )
+                self._card.set_validity("Not checked", MUTED, not_checked_tooltip(reach))
             return
-        self._card.set_validity(
-            "Invalid" if has_errors else "Warning", ERROR if has_errors else WARNING
-        )
+        self._card.set_validity("Invalid" if has_errors else "Warning", ERROR if has_errors else WARNING)
 
     def _clear_surface(self) -> None:
         self._card = None

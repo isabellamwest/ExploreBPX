@@ -56,7 +56,7 @@ class ActivityButton(QToolButton):
             return ""
         return "99+" if self.badge_count > 99 else str(self.badge_count)
 
-    def paintEvent(self, event) -> None:  # noqa: N802 - Qt override
+    def paintEvent(self, event) -> None:
         super().paintEvent(event)
         if not self.badge_count:
             return
@@ -72,9 +72,7 @@ class ActivityButton(QToolButton):
         icon_rect.moveCenter(self.rect().center())
 
         badge_rect = QRect(0, 0, width, height)
-        badge_rect.moveBottomRight(
-            QPoint(icon_rect.right() + 3, icon_rect.bottom() + 3)
-        )
+        badge_rect.moveBottomRight(QPoint(icon_rect.right() + 3, icon_rect.bottom() + 3))
         inset = self.rect().adjusted(1, 1, -1, -1)
         if badge_rect.right() > inset.right():
             badge_rect.moveRight(inset.right())
@@ -117,9 +115,7 @@ class ActivityBar(QWidget):
         self._buttons_by_page: dict[int, ActivityButton] = {}
         self._labels_by_page: dict[int, str] = {}
 
-    def add_view(
-        self, label: str, page_index: int, icon: QIcon, *, checked: bool = False
-    ) -> ActivityButton:
+    def add_view(self, label: str, page_index: int, icon: QIcon, *, checked: bool = False) -> ActivityButton:
         """Register a view entry and return its button for later updates."""
         btn = ActivityButton(label)
         btn.setIcon(icon)

@@ -13,7 +13,7 @@ from state.workspace_history import (
     RECENT_FILES_CAP,
     SCHEMA_VERSION,
     MainRecord,
-    NameInUse,
+    NameInUseError,
     ReferenceRecord,
     WorkspaceHistory,
     WorkspaceRecord,
@@ -149,10 +149,7 @@ def test_switching_away_shelves_rather_than_discards(tmp_path):
 
 def test_recent_workspaces_decay_oldest_first(tmp_path):
     history = _store(tmp_path)
-    started = [
-        _started(history, path=f"/cells/file{index}.json")
-        for index in range(MAX_RECENT_WORKSPACES + 2)
-    ]
+    started = [_started(history, path=f"/cells/file{index}.json") for index in range(MAX_RECENT_WORKSPACES + 2)]
 
     assert len(history.recent_workspaces) == MAX_RECENT_WORKSPACES
     assert history.by_id(started[0].id) is None  # fell off the end
@@ -232,9 +229,7 @@ def test_a_named_workspace_is_live_not_a_snapshot(tmp_path):
     history = _store(tmp_path)
     kept = history.keep(_started(history, references=()).id, "study")
 
-    history.update_current(
-        kept.main, (ReferenceRecord(kind="file", path="/cells/nmc.json"),)
-    )
+    history.update_current(kept.main, (ReferenceRecord(kind="file", path="/cells/nmc.json"),))
 
     live = history.named("study")
     assert live.id == kept.id
@@ -284,7 +279,7 @@ def test_a_name_in_use_is_refused_never_overwritten(tmp_path):
     second = _started(history, path="/cells/b.json")
 
     assert history.name_in_use("study") is True
-    with pytest.raises(NameInUse):
+    with pytest.raises(NameInUseError):
         history.keep(second.id, "study")
 
     # Neither entry moved: the refusal changed nothing at all.
@@ -304,7 +299,7 @@ def test_renaming_to_its_own_name_is_allowed(tmp_path):
 def test_an_empty_name_is_not_a_name(tmp_path):
     history = _store(tmp_path)
     started = _started(history)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="needs a name"):
         history.keep(started.id, "   ")
 
 
@@ -364,9 +359,7 @@ def test_removing_a_reference_edits_the_record(tmp_path):
     history.remove_reference(started.id, 0)
     history.remove_reference(started.id, 9)  # past the end: no-op
 
-    assert history.current().references == (
-        ReferenceRecord(kind="file", path="/cells/nmc.json"),
-    )
+    assert history.current().references == (ReferenceRecord(kind="file", path="/cells/nmc.json"),)
 
 
 # ---------------------------------------------------------------------------
@@ -517,9 +510,7 @@ def test_version_2_stores_load_unchanged(tmp_path):
 
     assert history.load_failed is False
     assert history.current().main == MainRecord("/cells/lgm50.json", "read_only")
-    assert history.current().references == (
-        ReferenceRecord(kind="library", set_id="chen2020"),
-    )
+    assert history.current().references == (ReferenceRecord(kind="library", set_id="chen2020"),)
 
 
 def test_an_empty_untitled_workspace_is_never_written(tmp_path):
@@ -537,13 +528,9 @@ def test_an_empty_untitled_workspace_is_never_written(tmp_path):
 
 def test_a_named_or_referenced_mainless_workspace_is_written(tmp_path):
     history = _store(tmp_path)
-    named = history.keep(
-        history.start_workspace(WorkspaceRecord(main=None)).id, "planning"
-    )
+    named = history.keep(history.start_workspace(WorkspaceRecord(main=None)).id, "planning")
     referenced = history.start_workspace(
-        WorkspaceRecord(
-            main=None, references=(ReferenceRecord(kind="library", set_id="chen2020"),)
-        )
+        WorkspaceRecord(main=None, references=(ReferenceRecord(kind="library", set_id="chen2020"),))
     )
 
     reloaded = _store(tmp_path)
@@ -588,8 +575,19 @@ def test_store_never_contains_content_or_verdicts(tmp_path):
                 yield from keys_of(item)
 
     allowed = {
-        "version", "recent_files", "recent_workspaces", "workspaces",
-        "current_id", "id",
-        "main", "path", "mode", "references", "kind", "set_id", "name", "saved_at",
+        "version",
+        "recent_files",
+        "recent_workspaces",
+        "workspaces",
+        "current_id",
+        "id",
+        "main",
+        "path",
+        "mode",
+        "references",
+        "kind",
+        "set_id",
+        "name",
+        "saved_at",
     }
     assert set(keys_of(written)) <= allowed

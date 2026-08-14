@@ -12,14 +12,16 @@ card's ( i ) button owns the open/close toggle.
 from __future__ import annotations
 
 import html
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
-from core.parameter_metadata import ParameterMetadata
-
 from .dismissal import OutsideDismissFilter
 from .latex import symbol_label
+
+if TYPE_CHECKING:
+    from core.parameter_metadata import ParameterMetadata
 
 #: Same width as name_popup's card -- both are frameless anchored popups.
 _CARD_WIDTH = 300
@@ -139,5 +141,3 @@ class ParameterInfoPopover(QWidget):
             self.hide()
             return
         super().keyPressEvent(event)
-
-

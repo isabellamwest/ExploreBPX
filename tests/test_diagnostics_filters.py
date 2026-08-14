@@ -381,6 +381,7 @@ def test_chip_toggles_on_left_click_only(qtbot):
     # Review hardening: a right/middle click must not silently flip a
     # filter -- only the left button toggles.
     from PySide6.QtCore import Qt
+
     from ui_qt.diagnostics_panel import _FilterChip
 
     chip = _FilterChip()
@@ -409,11 +410,7 @@ def test_a_missing_field_row_does_not_repeat_itself(app_driver):
 
     app_driver._w._new("DFN")
     partition = app_driver._w._diagnostics._partition
-    missing = [
-        task
-        for task in partition.absorbed_by_task
-        if task.kind.name.startswith("MISSING")
-    ]
+    missing = [task for task in partition.absorbed_by_task if task.kind.name.startswith("MISSING")]
     assert missing, "expected a fresh DFN to carry absorbed missing-field tasks"
     for task in missing:
         assert _absorbed_messages(task, partition) == ()

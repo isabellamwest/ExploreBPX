@@ -34,11 +34,14 @@ def _ink_bbox(svg: str, size: int = _ICON_SIZE) -> tuple[int, int, int, int]:
                 xs.append(x)
                 ys.append(y)
 
-    assert xs and ys, "icon rendered no visible ink"
+    assert xs, "icon rendered no visible ink"
+    assert ys, "icon rendered no visible ink"
     return min(xs), max(xs), min(ys), max(ys)
 
 
-@pytest.mark.parametrize("name, svg", [("WORKSPACE", icons.WORKSPACE), ("EDITOR", icons.EDITOR), ("DIAGNOSTICS", icons.DIAGNOSTICS)])
+@pytest.mark.parametrize(
+    ("name", "svg"), [("WORKSPACE", icons.WORKSPACE), ("EDITOR", icons.EDITOR), ("DIAGNOSTICS", icons.DIAGNOSTICS)]
+)
 def test_hidpi_render_matches_dpr1_geometry(name, svg, monkeypatch):
     """At devicePixelRatio 2 the glyph must be the DPR-1 rendering scaled, not
     an oversized paint clipped to the canvas (the macOS/Retina regression: an
@@ -56,7 +59,9 @@ def test_hidpi_render_matches_dpr1_geometry(name, svg, monkeypatch):
         )
 
 
-@pytest.mark.parametrize("name, svg", [("WORKSPACE", icons.WORKSPACE), ("EDITOR", icons.EDITOR), ("DIAGNOSTICS", icons.DIAGNOSTICS)])
+@pytest.mark.parametrize(
+    ("name", "svg"), [("WORKSPACE", icons.WORKSPACE), ("EDITOR", icons.EDITOR), ("DIAGNOSTICS", icons.DIAGNOSTICS)]
+)
 def test_icon_ink_is_optically_centred_and_sized(name, svg):
     x_min, x_max, y_min, y_max = _ink_bbox(svg)
     width = x_max - x_min

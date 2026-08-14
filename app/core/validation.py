@@ -11,16 +11,18 @@ only captures and exposes validator output.
 from __future__ import annotations
 
 import math
-import warnings as _warnings
-from collections.abc import Sequence
 from dataclasses import dataclass
-from enum import Enum
-from typing import Any
+from enum import StrEnum
+from typing import TYPE_CHECKING, Any
 
 from .values import format_value
 
+if TYPE_CHECKING:
+    import warnings as _warnings
+    from collections.abc import Sequence
 
-class Severity(str, Enum):
+
+class Severity(StrEnum):
     """Presentation-layer severity classification assigned by Explore_BPX."""
 
     ERROR = "error"
@@ -189,11 +191,7 @@ def merge_union_pair(diagnostics: Sequence[ValidatorDiagnostic]) -> tuple[Valida
     parameter.
     """
     types = {getattr(d, "error_type", None) for d in diagnostics}
-    drop = {
-        int_type
-        for float_type, int_type in _UNION_PAIRS
-        if float_type in types and int_type in types
-    }
+    drop = {int_type for float_type, int_type in _UNION_PAIRS if float_type in types and int_type in types}
     if not drop:
         return tuple(diagnostics)
     return tuple(d for d in diagnostics if getattr(d, "error_type", None) not in drop)

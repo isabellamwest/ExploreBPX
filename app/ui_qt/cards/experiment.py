@@ -32,9 +32,9 @@ one undo step.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QEvent, QMimeData, Qt, QTimer, Signal
-from PySide6.QtGui import QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
@@ -52,9 +52,9 @@ from core.csv_import import read_csv_file
 from core.parameter_types import ParameterKind
 from core.tree_model import ParameterItem, TreeNode
 from core.values import values_equal
+from ui_qt import typography
+from ui_qt.style import ACCENT, ACCENT_TINT, ERROR, MUTED
 
-from .. import typography
-from ..style import ACCENT, ACCENT_TINT, ERROR, MUTED
 from .cell_issues import experiment_cells
 from .chart_axes import as_plot_number, series_pairs
 from .csv_dialog import CsvImportDialog
@@ -62,6 +62,9 @@ from .database_examples_dialog import DatabaseExamplesDialog
 from .grid import MultiColumnGrid
 from .multi_series_chart import MultiSeriesChart
 from .page import page_content, page_header
+
+if TYPE_CHECKING:
+    from PySide6.QtGui import QDragEnterEvent, QDropEvent
 
 #: The Experiment array aliases in the schema's own field order, derived
 #: live through the gateway (every Validation run is typed ``Experiment``,
@@ -90,9 +93,9 @@ def is_validation_run_path(path: tuple[str, ...]) -> bool:
 
 
 def _short_alias(alias: str) -> str:
-    """"Time [s]" -> "Time" -- the unit-stripped name the sample-count
+    """ "Time [s]" -> "Time" -- the unit-stripped name the sample-count
     footer chip uses (see :meth:`ExperimentCard._sample_count_text`)."""
-    return alias.split(" [")[0]
+    return alias.split(" [", maxsplit=1)[0]
 
 
 #: Extensions the CSV pipeline actually reads (matches the ``QFileDialog``
@@ -193,18 +196,18 @@ class _CsvDropzone(QFrame):
         else:
             self.setStyleSheet("")
 
-    def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         if _first_csv_file(event.mimeData()) is not None:
             self._set_drag_active(True)
             event.acceptProposedAction()
         else:
             event.ignore()
 
-    def dragLeaveEvent(self, event) -> None:  # noqa: N802
+    def dragLeaveEvent(self, event) -> None:
         self._set_drag_active(False)
         super().dragLeaveEvent(event)
 
-    def dropEvent(self, event: QDropEvent) -> None:  # noqa: N802
+    def dropEvent(self, event: QDropEvent) -> None:
         self._set_drag_active(False)
         path = _first_csv_file(event.mimeData())
         if path is None:
@@ -247,9 +250,7 @@ class ExperimentCard(QWidget):
         self._sibling_runs: dict[str, dict] = dict(sibling_runs or {})
 
         by_alias = {
-            parameter.label: parameter
-            for parameter in run.parameters
-            if parameter.kind is ParameterKind.SERIES
+            parameter.label: parameter for parameter in run.parameters if parameter.kind is ParameterKind.SERIES
         }
         #: The run's columns, in schema order. The three schema-required
         #: aliases (everything but ``_OPTIONAL_ALIAS``) always get a column,
@@ -259,9 +260,7 @@ class ExperimentCard(QWidget):
         #: has something to type or import into. Temperature alone stays
         #: behind its own "+" button while absent (see below).
         self._columns: list[ParameterItem] = [
-            by_alias[alias]
-            if alias in by_alias
-            else self._placeholder_column(run, alias)
+            by_alias[alias] if alias in by_alias else self._placeholder_column(run, alias)
             for alias in KNOWN_ALIASES
             if alias in by_alias or alias != _OPTIONAL_ALIAS
         ]
@@ -270,9 +269,7 @@ class ExperimentCard(QWidget):
         #: diffs a draft against, so an untouched column (even one whose real
         #: stored value is malformed, e.g. a string) is never mistaken for an
         #: edit merely because the grid renders it as empty.
-        self._originals: list[list[object]] = [
-            self._baseline(parameter.value) for parameter in self._columns
-        ]
+        self._originals: list[list[object]] = [self._baseline(parameter.value) for parameter in self._columns]
 
         # Same page anatomy as ``ParameterCard`` (structured-page layout):
         # the title row in the hairline-ruled header block, the dropzone and
@@ -292,9 +289,7 @@ class ExperimentCard(QWidget):
         if not read_only:
             self._import_button = QToolButton()
             self._import_button.setText("Import CSV…")
-            self._import_button.setToolTip(
-                "Fill this run's arrays from the columns of a CSV file"
-            )
+            self._import_button.setToolTip("Fill this run's arrays from the columns of a CSV file")
             self._import_button.setAutoRaise(True)
             self._import_button.clicked.connect(self._import_csv)
             header.addWidget(self._import_button)
@@ -332,9 +327,7 @@ class ExperimentCard(QWidget):
             # anyway.
             self._import_message = QLabel("")
             self._import_message.setObjectName("CsvImportMessage")
-            self._import_message.setStyleSheet(
-                f"color: {ERROR}; {typography.size_qss(typography.META)}"
-            )
+            self._import_message.setStyleSheet(f"color: {ERROR}; {typography.size_qss(typography.META)}")
             self._import_message.setWordWrap(True)
             self._import_message.hide()
             body_layout.addWidget(self._import_message)
@@ -381,9 +374,7 @@ class ExperimentCard(QWidget):
         if not read_only and _OPTIONAL_ALIAS not in by_alias:
             self._add_temperature_button = QToolButton()
             self._add_temperature_button.setText(f"+ {_OPTIONAL_ALIAS}")
-            self._add_temperature_button.setToolTip(
-                f"Add an empty {_OPTIONAL_ALIAS} column to this run"
-            )
+            self._add_temperature_button.setToolTip(f"Add an empty {_OPTIONAL_ALIAS} column to this run")
             self._add_temperature_button.setAutoRaise(True)
             self._add_temperature_button.clicked.connect(self._add_temperature_column)
             self._grid.add_toolbar_widget(self._add_temperature_button)
@@ -443,7 +434,7 @@ class ExperimentCard(QWidget):
     def _install_keyboard_handler(self, widget: QWidget) -> None:
         widget.installEventFilter(self)
 
-    def eventFilter(self, obj, event) -> bool:  # noqa: N802
+    def eventFilter(self, obj, event) -> bool:
         if event.type() == QEvent.KeyPress:
             key = event.key()
             if key in (Qt.Key_Return, Qt.Key_Enter):
@@ -525,10 +516,7 @@ class ExperimentCard(QWidget):
         re-derives the same state fresh.)
         """
         if self._dropzone is not None:
-            empty = all(
-                self._grid.column_length(index) == 0
-                for index in range(self._grid.column_count)
-            )
+            empty = all(self._grid.column_length(index) == 0 for index in range(self._grid.column_count))
             self._dropzone.setVisible(empty)
             # The dropzone already covers an empty run, so the toolbar's
             # "Import CSV…" is disabled -- not hidden -- until there is data
@@ -544,10 +532,7 @@ class ExperimentCard(QWidget):
         # Preview band: visibility flips instantly with the first/last value
         # (it must appear the moment the dropzone goes, with no 120ms hole),
         # while the redraw itself stays coalesced behind the timer.
-        has_values = any(
-            self._grid.column_length(index) > 0
-            for index in range(self._grid.column_count)
-        )
+        has_values = any(self._grid.column_length(index) > 0 for index in range(self._grid.column_count))
         self._preview_band.setVisible(has_values and bool(self._preview_panels))
         self._preview_timer.start()
 
@@ -572,13 +557,11 @@ class ExperimentCard(QWidget):
                 elif not y_plottable:
                     panel.set_empty_text(f"No plottable {alias} values.")
                 else:
-                    panel.set_empty_text(
-                        f"No {_TIME_ALIAS} values to plot against."
-                    )
+                    panel.set_empty_text(f"No {_TIME_ALIAS} values to plot against.")
             panel.set_series("draft", pairs, ACCENT, width=2.0, name=self._run_label)
 
     def _sample_count_text(self) -> str:
-        """"Time 120 · Current 120 · Voltage 118" -- one entry per column,
+        """ "Time 120 · Current 120 · Voltage 118" -- one entry per column,
         its short alias (see ``_short_alias``) and its current length."""
         parts = (
             f"{_short_alias(parameter.label)} {self._grid.column_length(index)}"
@@ -609,7 +592,7 @@ class ExperimentCard(QWidget):
 
     @staticmethod
     def _columns_equal(a: list, b: list) -> bool:
-        return len(a) == len(b) and all(values_equal(x, y) for x, y in zip(a, b))
+        return len(a) == len(b) and all(values_equal(x, y) for x, y in zip(a, b, strict=False))
 
     @staticmethod
     def _baseline(value: object) -> list:
@@ -640,13 +623,11 @@ class ExperimentCard(QWidget):
 
     @staticmethod
     def _run_level_message(run: TreeNode) -> str | None:
-        messages = list(dict.fromkeys(
-            issue.message for issue in run.issues if getattr(issue, "message", "")
-        ))
+        messages = list(dict.fromkeys(issue.message for issue in run.issues if getattr(issue, "message", "")))
         return "; ".join(messages) if messages else None
 
     # ------------------------------------------------------------------
-    # "+ Temperature [K]"
+    # the "+ Temperature [K]" affordance
     # ------------------------------------------------------------------
 
     def _add_temperature_column(self) -> None:
@@ -667,10 +648,7 @@ class ExperimentCard(QWidget):
         "own_run" shape: one entry per column this card actually holds --
         e.g. no ``"Temperature [K]"`` key at all while that column hasn't
         been added yet, exactly as the dialog expects "You" to lack it."""
-        return {
-            parameter.label: self._grid.column_values(index)
-            for index, parameter in enumerate(self._columns)
-        }
+        return {parameter.label: self._grid.column_values(index) for index, parameter in enumerate(self._columns)}
 
     def _document_display_name(self) -> str:
         """The document's display stem ("my_cell"), or "Active file" for an
@@ -757,7 +735,7 @@ class ExperimentCard(QWidget):
         touched, never blanked."""
         updates = tuple(
             (path, list(data.columns[column]))
-            for (_, path), column in zip(self._csv_targets(), mapping)
+            for (_, path), column in zip(self._csv_targets(), mapping, strict=False)
             if column is not None
         )
         if updates:

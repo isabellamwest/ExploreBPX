@@ -47,8 +47,9 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QPen
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
-from .. import badges, typography
-from ..style import ACCENT, MUTED
+from ui_qt import badges, typography
+from ui_qt.style import ACCENT, MUTED
+
 from .chart_axes import (
     as_plot_number,
     fit_axis,
@@ -217,10 +218,7 @@ class TablePreview(QWidget):
         self._curve_shown = [True] * len(self._curves)
         self._rebuild_reference_series()
         self._legend.set_curves(
-            [
-                (curve, _domain_text(points))
-                for curve, points in zip(self._curves, self._curve_points)
-            ]
+            [(curve, _domain_text(points)) for curve, points in zip(self._curves, self._curve_points, strict=False)]
         )
         self._legend.setVisible(bool(self._curves))
         self._redraw()
@@ -264,9 +262,7 @@ class TablePreview(QWidget):
             self._line.append(x, y)
             if show_dots:
                 self._dots.append(x, y)
-        for series, points, shown in zip(
-            self._ref_series, self._curve_points, self._curve_shown
-        ):
+        for series, points, shown in zip(self._ref_series, self._curve_points, self._curve_shown, strict=False):
             series.clear()
             # Each curve holds only its own reference's points, so it stops
             # at that reference's own domain edge: nothing here extends or
@@ -275,9 +271,7 @@ class TablePreview(QWidget):
                 series.append(x, y)
             series.setVisible(shown)
         self._sync_readout_series()
-        all_points = self._main_points + [
-            point for points in self._curve_points for point in points
-        ]
+        all_points = self._main_points + [point for points in self._curve_points for point in points]
         if not all_points:
             self._show_empty(True)
             return
@@ -289,7 +283,7 @@ class TablePreview(QWidget):
         called on every content change and every legend toggle, never on a
         mouse move (see ``ReadoutChartView.set_readout_series``)."""
         series = [("Main", _LINE, self._main_points, True)]
-        for curve, points, shown in zip(self._curves, self._curve_points, self._curve_shown):
+        for curve, points, shown in zip(self._curves, self._curve_points, self._curve_shown, strict=False):
             series.append((curve.name, curve.colour, points, shown))
         self._view.set_readout_series(series)
 
@@ -315,9 +309,7 @@ class TablePreview(QWidget):
         xs = [p[0] for p in points]
         ys = [p[1] for p in points]
         fit_axis(self._axis_x, min(xs), max(xs))
-        fit_axis(
-            self._axis_y, min(ys), max(ys), tick_count=tick_count_for_height(self._view.height())
-        )
+        fit_axis(self._axis_y, min(ys), max(ys), tick_count=tick_count_for_height(self._view.height()))
 
     def _show_empty(self, empty: bool) -> None:
         self._view.setVisible(not empty)
@@ -330,7 +322,7 @@ class TablePreview(QWidget):
 
 
 def _domain_text(points: list[tuple[float, float]]) -> str:
-    """"domain 0 – 0.8 · 41 points" -- the plain facts about one curve's own
+    """ "domain 0 – 0.8 · 41 points" -- the plain facts about one curve's own
     extent, for its legend badge's tooltip. This is where a curve that stops
     early says so; the chart itself carries no inline annotation."""
     if not points:
@@ -344,12 +336,11 @@ def _domain_text(points: list[tuple[float, float]]) -> str:
 def _number(value: float) -> str:
     """A short, honest rendering of an axis bound -- trailing zeros trimmed,
     never rounded to fewer significant figures than the value has."""
-    text = f"{value:g}"
-    return text
+    return f"{value:g}"
 
 
 class _LegendRow(QWidget):
-    """"Main" swatch, then one badge per overlaid reference curve.
+    """ "Main" swatch, then one badge per overlaid reference curve.
 
     The badges *are* the controls: clicking one toggles its curve, hovering
     one gives that reference's name, domain and point count. Legend-row
@@ -381,10 +372,8 @@ class _LegendRow(QWidget):
             button.setParent(None)
             button.deleteLater()
         self._buttons = []
-        for index, (curve, domain) in enumerate(curves):
-            button = badges.ReferenceBadgeButton(
-                curve.letters, curve.colour, f"{curve.name} · {domain}"
-            )
+        for _index, (curve, domain) in enumerate(curves):
+            button = badges.ReferenceBadgeButton(curve.letters, curve.colour, f"{curve.name} · {domain}")
             button.toggled.connect(self._on_toggled)
             self._buttons.append(button)
             # Before the trailing stretch, after the "Main" swatch pair.

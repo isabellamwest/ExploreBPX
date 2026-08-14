@@ -63,9 +63,7 @@ class _RefStub:
         path=Path("reference.json"),
         set_id=None,
     ):
-        self.snapshot = _SnapshotStub(
-            raw, filename=filename, model=model, path=path, set_id=set_id
-        )
+        self.snapshot = _SnapshotStub(raw, filename=filename, model=model, path=path, set_id=set_id)
         self.index = 0
         self.comparison = None
         self.letters = "Re"
@@ -83,9 +81,7 @@ def _write(tmp_path: Path, name: str, raw: dict) -> Path:
 
 
 def _stub_open_dialog(monkeypatch, path) -> None:
-    monkeypatch.setattr(
-        main_window_module.QFileDialog, "getOpenFileName", lambda *a, **k: (str(path), "")
-    )
+    monkeypatch.setattr(main_window_module.QFileDialog, "getOpenFileName", lambda *a, **k: (str(path), ""))
 
 
 # ---------------------------------------------------------------------------
@@ -204,10 +200,7 @@ def test_long_value_wraps_within_the_pane(qtbot):
     page.refresh(_LONG_DOC)
     view = _sized(page, 420)
 
-    index = next(
-        i for i, text in enumerate(view.line_texts())
-        if text.startswith('"Description"')
-    )
+    index = next(i for i, text in enumerate(view.line_texts()) if text.startswith('"Description"'))
     rows = _wrapped_rows(view, index)
     assert len(rows) > 1
     # Nothing is lost to the wrap: only the whitespace at each break point.
@@ -227,15 +220,10 @@ def test_wrapped_line_takes_its_own_vertical_space(qtbot):
     page.refresh(_LONG_DOC)
     view = _sized(page, 420)
 
-    index = next(
-        i for i, text in enumerate(view.line_texts())
-        if text.startswith('"Description"')
-    )
+    index = next(i for i, text in enumerate(view.line_texts()) if text.startswith('"Description"'))
     rows = view.line_rows(index)
     assert rows > 1
-    assert (
-        view.line_top(index + 1) == view.line_top(index) + rows * view._line_height()
-    )
+    assert view.line_top(index + 1) == view.line_top(index) + rows * view._line_height()
     # Wrapping replaces horizontal scrolling outright.
     assert view.horizontalScrollBar().maximum() == 0
 
@@ -246,10 +234,7 @@ def test_wrap_reflows_when_the_pane_narrows(qtbot):
     page.refresh(_LONG_DOC)
     view = _sized(page, 900)
 
-    index = next(
-        i for i, text in enumerate(view.line_texts())
-        if text.startswith('"Description"')
-    )
+    index = next(i for i, text in enumerate(view.line_texts()) if text.startswith('"Description"'))
     wide = view.line_rows(index)
 
     _sized(page, 400)
@@ -266,10 +251,7 @@ def test_two_panes_share_a_wrapped_line_height(qtbot):
     page.refresh(_LONG_DOC, pins=[_RefStub(ref)])
     view = _sized(page, 700)
 
-    index = next(
-        i for i, text in enumerate(view.line_texts())
-        if text.startswith('"Description"')
-    )
+    index = next(i for i, text in enumerate(view.line_texts()) if text.startswith('"Description"'))
     main_rows = _wrapped_rows(view, index)
     ref_rows = _wrapped_rows(view, index, side="ref")
     assert len(main_rows) > 1
@@ -535,9 +517,7 @@ def test_fillable_chips_the_reference_side_value_only(qtbot):
     ref = {"Parameterisation": {"Cell": {"Capacity": 28700}}}
     page = _two_pane(qtbot, main, ref)
 
-    assert [
-        (side, text) for _, side, text in page._view.chipped_texts()
-    ] == [("ref", "28700")]
+    assert [(side, text) for _, side, text in page._view.chipped_texts()] == [("ref", "28700")]
 
 
 def test_function_string_chips_only_the_differing_tokens(qtbot):
@@ -596,10 +576,7 @@ def test_collapsed_section_with_differences_chips_its_dots(qtbot):
 
     chips = page._view.chipped_texts()
     main_texts = page._view.line_texts()
-    index = next(
-        i for i, text in enumerate(main_texts)
-        if text.startswith("Parameterisation  ·  3 parameters")
-    )
+    index = next(i for i, text in enumerate(main_texts) if text.startswith("Parameterisation  ·  3 parameters"))
     assert main_texts[index].endswith("⋯")
     assert (index, "main", "⋯") in chips
     assert (index, "ref", "⋯") in chips
@@ -703,8 +680,7 @@ def test_gutter_click_emits_pull_and_pane_click_does_not(qtbot):
     view.pull_requested.connect(lambda path, is_section: received.append((path, is_section)))
 
     index, path, _ = next(
-        entry for entry in view.pull_lines()
-        if entry[1] == ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
+        entry for entry in view.pull_lines() if entry[1] == ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
     )
     line_height = view._line_height()
     y = view.line_top(index) + line_height // 2
@@ -801,9 +777,7 @@ def test_source_file_label_follows_save_as(app_driver, tmp_path, monkeypatch):
     assert app_driver.source_file_label().startswith("untitled.json")
 
     save_path = tmp_path / "saved_as.json"
-    monkeypatch.setattr(
-        main_window_module.QFileDialog, "getSaveFileName", lambda *a, **k: (str(save_path), "")
-    )
+    monkeypatch.setattr(main_window_module.QFileDialog, "getSaveFileName", lambda *a, **k: (str(save_path), ""))
     app_driver.save()
 
     assert save_path.exists()
@@ -819,9 +793,7 @@ def test_source_main_pane_header_follows_save_as(app_driver, tmp_path, monkeypat
     assert "untitled.json" in app_driver.source_pane_headers()[0]
 
     save_path = tmp_path / "saved_as.json"
-    monkeypatch.setattr(
-        main_window_module.QFileDialog, "getSaveFileName", lambda *a, **k: (str(save_path), "")
-    )
+    monkeypatch.setattr(main_window_module.QFileDialog, "getSaveFileName", lambda *a, **k: (str(save_path), ""))
     app_driver.save()
 
     headers = app_driver.source_pane_headers()
@@ -835,9 +807,7 @@ def _dock_reference(app_driver, tmp_path, monkeypatch, ref_raw):
     return app_driver.show_view("Source")
 
 
-def test_source_pull_copies_value_and_shares_the_undo_stack(
-    app_driver, tmp_path, monkeypatch
-):
+def test_source_pull_copies_value_and_shares_the_undo_stack(app_driver, tmp_path, monkeypatch):
     app_driver.open(_write(tmp_path, "main.json", _DOC_MAIN_ONLY))
     _dock_reference(app_driver, tmp_path, monkeypatch, _REF)
     path = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
@@ -851,9 +821,7 @@ def test_source_pull_copies_value_and_shares_the_undo_stack(
     assert '"Nominal cell capacity [A.h]": 4.0' in texts
     assert path not in [p for p, _ in app_driver.source_pull_paths()]
     pulled_line = texts.index('"Nominal cell capacity [A.h]": 4.0')
-    assert not any(
-        index == pulled_line for index, _, _ in app_driver.source_chipped_texts()
-    )
+    assert not any(index == pulled_line for index, _, _ in app_driver.source_chipped_texts())
 
     # One undo entry, on the same stack every page shares.
     app_driver.undo()
@@ -1065,9 +1033,7 @@ def test_fold_button_ignores_section_folds(qtbot):
     assert '"BPX": "1.0.0"' not in texts
 
 
-def test_fold_button_docks_in_the_page_header_and_follows_the_page(
-    app_driver, tmp_path
-):
+def test_fold_button_docks_in_the_page_header_and_follows_the_page(app_driver, tmp_path):
     """The fold-all toggle lives in the window's page-header bar (the bar
     that says SOURCE), so it must render only while the Source page is
     current -- every page shares that bar."""
@@ -1151,9 +1117,7 @@ def _bump_on_disk(path: Path, raw: dict) -> None:
     os.utime(path, (stamp, stamp))
 
 
-def test_stale_band_appears_on_page_entry_and_reload_resnapshots(
-    app_driver, tmp_path, monkeypatch
-):
+def test_stale_band_appears_on_page_entry_and_reload_resnapshots(app_driver, tmp_path, monkeypatch):
     app_driver.open(_write(tmp_path, "main.json", _DOC_MAIN_ONLY))
     _dock_reference(app_driver, tmp_path, monkeypatch, _REF)
     assert app_driver.source_stale_band_visible() is False
@@ -1314,9 +1278,7 @@ def test_arrows_work_in_single_pane_mode(qtbot):
     assert view.selected_path() == ("Header", "BPX")
 
 
-def test_double_click_jumps_to_the_parameter_in_the_editor(
-    app_driver, tmp_path, monkeypatch
-):
+def test_double_click_jumps_to_the_parameter_in_the_editor(app_driver, tmp_path, monkeypatch):
     app_driver.open(_write(tmp_path, "main.json", _DOC_MAIN_ONLY))
     _dock_reference(app_driver, tmp_path, monkeypatch, _REF)
 
@@ -1335,9 +1297,7 @@ def test_double_click_works_without_a_reference(app_driver, tmp_path):
     assert app_driver.inspector_title() == "Title"
 
 
-def test_double_click_on_a_ref_only_row_stays_on_source(
-    app_driver, tmp_path, monkeypatch
-):
+def test_double_click_on_a_ref_only_row_stays_on_source(app_driver, tmp_path, monkeypatch):
     app_driver.open(_write(tmp_path, "main.json", _DOC_MAIN_ONLY))
     _dock_reference(app_driver, tmp_path, monkeypatch, _REF)
 

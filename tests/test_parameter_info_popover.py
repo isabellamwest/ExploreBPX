@@ -34,16 +34,13 @@ def _app() -> QApplication:
 # ParameterInfoPopover rendering
 # ---------------------------------------------------------------------------
 
+
 def test_only_populated_fields_are_rendered(qtbot):
     _app()
     popover = ParameterInfoPopover()
     qtbot.addWidget(popover)
-    popover.show_metadata(
-        ParameterMetadata(physical_meaning="The ambient temperature.", units="K")
-    )
-    labels = [
-        popover._layout.itemAt(i).widget().text() for i in range(popover._layout.count())
-    ]
+    popover.show_metadata(ParameterMetadata(physical_meaning="The ambient temperature.", units="K"))
+    labels = [popover._layout.itemAt(i).widget().text() for i in range(popover._layout.count())]
     assert "Physical meaning" in labels
     assert "The ambient temperature." in labels
     assert "Units" in labels
@@ -67,9 +64,7 @@ def test_custom_parameter_says_custom(qtbot):
     popover = ParameterInfoPopover()
     qtbot.addWidget(popover)
     popover.show_metadata(ParameterMetadata(is_custom=True))
-    labels = [
-        popover._layout.itemAt(i).widget().text() for i in range(popover._layout.count())
-    ]
+    labels = [popover._layout.itemAt(i).widget().text() for i in range(popover._layout.count())]
     assert "Custom parameter" in labels
     assert any("Not defined by the BPX schema" in text for text in labels)
 
@@ -85,9 +80,7 @@ def test_symbol_link_and_docs_hint_render_when_populated(qtbot):
             documentation=(("Physical correspondence", "Long prose."),),
         )
     )
-    widgets = [
-        popover._layout.itemAt(i).widget() for i in range(popover._layout.count())
-    ]
+    widgets = [popover._layout.itemAt(i).widget() for i in range(popover._layout.count())]
     texts = [w.text() for w in widgets]
     assert "Symbol" in texts
     assert any("w3id.org/example" in t for t in texts)
@@ -113,6 +106,7 @@ def test_escape_hides_popover(qtbot):
 # ---------------------------------------------------------------------------
 # ParameterCard integration: the ( i ) button toggles the popover
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def card(qtbot):
@@ -143,10 +137,7 @@ def test_click_opens_popover_with_field_meta_content(card, qtbot):
     qtbot.mouseClick(card._info_button, Qt.LeftButton)
     assert card._popover is not None
     assert card._popover.isVisible()
-    labels = [
-        card._popover._layout.itemAt(i).widget().text()
-        for i in range(card._popover._layout.count())
-    ]
+    labels = [card._popover._layout.itemAt(i).widget().text() for i in range(card._popover._layout.count())]
     assert "The ambient temperature." in labels
     assert "K" in labels
 
@@ -164,10 +155,7 @@ def test_custom_parameter_card_popover_says_custom(qtbot):
     c = ParameterCard(parameter, None)  # no schema metadata -> custom
     qtbot.addWidget(c)
     qtbot.mouseClick(c._info_button, Qt.LeftButton)
-    labels = [
-        c._popover._layout.itemAt(i).widget().text()
-        for i in range(c._popover._layout.count())
-    ]
+    labels = [c._popover._layout.itemAt(i).widget().text() for i in range(c._popover._layout.count())]
     assert "Custom parameter" in labels
     if c._popover is not None:
         c._popover.close()
@@ -188,8 +176,8 @@ def test_escape_closes_popover_opened_from_card(card, qtbot):
 
 
 def test_outside_click_closes_popover_and_is_swallowed(card, qtbot):
-    from PySide6.QtGui import QMouseEvent
     from PySide6.QtCore import QEvent, QPointF
+    from PySide6.QtGui import QMouseEvent
     from PySide6.QtWidgets import QApplication, QPushButton
 
     qtbot.mouseClick(card._info_button, Qt.LeftButton)
@@ -204,16 +192,24 @@ def test_outside_click_closes_popover_and_is_swallowed(card, qtbot):
 
     global_pos = decoy.mapToGlobal(decoy.rect().center())
     press = QMouseEvent(
-        QEvent.MouseButtonPress, QPointF(decoy.rect().center()), QPointF(global_pos),
-        Qt.LeftButton, Qt.LeftButton, Qt.NoModifier,
+        QEvent.MouseButtonPress,
+        QPointF(decoy.rect().center()),
+        QPointF(global_pos),
+        Qt.LeftButton,
+        Qt.LeftButton,
+        Qt.NoModifier,
     )
     QApplication.instance().sendEvent(decoy, press)
 
     assert card._popover.isVisible() is False
     # The dismissing press was swallowed: the button beneath never saw it.
     release = QMouseEvent(
-        QEvent.MouseButtonRelease, QPointF(decoy.rect().center()), QPointF(global_pos),
-        Qt.LeftButton, Qt.NoButton, Qt.NoModifier,
+        QEvent.MouseButtonRelease,
+        QPointF(decoy.rect().center()),
+        QPointF(global_pos),
+        Qt.LeftButton,
+        Qt.NoButton,
+        Qt.NoModifier,
     )
     QApplication.instance().sendEvent(decoy, release)
     assert clicks == []

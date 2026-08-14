@@ -30,7 +30,7 @@ from ui_qt.cards.series import SeriesCard
 def _qapp():
     from PySide6.QtWidgets import QApplication
 
-    yield QApplication.instance() or QApplication([])
+    return QApplication.instance() or QApplication([])
 
 
 def _series(value, label="Time [s]") -> SeriesCard:
@@ -49,7 +49,7 @@ def _series(value, label="Time [s]") -> SeriesCard:
 
 
 @pytest.mark.parametrize(
-    "text, expected",
+    ("text", "expected"),
     [
         ("", None),
         ("   ", None),
@@ -66,7 +66,7 @@ def _series(value, label="Time [s]") -> SeriesCard:
 )
 def test_parse_value_matches_the_lenient_convention(text, expected):
     result = parse_value(text)
-    assert result == expected or (result != result and expected != expected)
+    assert result == expected or (result != result and expected != expected)  # noqa: PLR0124 - x != x is the NaN check
     assert type(result) is type(expected)
 
 
@@ -300,8 +300,7 @@ def _series_with_siblings(value, siblings):
         kind=ParameterKind.SERIES,
         value=value,
         sibling_series=tuple(
-            SiblingSeries(label, ("Validation", "run", label), sibling_value)
-            for label, sibling_value in siblings
+            SiblingSeries(label, ("Validation", "run", label), sibling_value) for label, sibling_value in siblings
         ),
     )
     return create_card(param, None)
@@ -371,9 +370,9 @@ def test_representable_series_values_get_the_series_card(value):
 @pytest.mark.parametrize(
     "value",
     [
-        {"x": [1], "y": [2]},   # a dict is not a series
-        [[1, 2], [3, 4]],        # nested lists have no flat-cell form
-        [1, True, 3],            # a bool would round-trip as the string "True"
+        {"x": [1], "y": [2]},  # a dict is not a series
+        [[1, 2], [3, 4]],  # nested lists have no flat-cell form
+        [1, True, 3],  # a bool would round-trip as the string "True"
         "not a list",
         42,
     ],

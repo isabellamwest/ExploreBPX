@@ -18,14 +18,14 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 from . import bpx_gateway
 from .compare import ComparisonResult, RowState, compare
 from .tree_model import is_object_node
 
 
-class RowKind(str, Enum):
+class RowKind(StrEnum):
     """What one Source-page row is."""
 
     SECTION = "section"
@@ -70,8 +70,7 @@ class SourceRow:
         """Rendered whole over several lines and closable to a one-line
         ``"key": table`` summary (decision 15): any dict/list leaf value."""
         return self.kind is RowKind.PARAM and (
-            isinstance(self.main_value, (dict, list))
-            or isinstance(self.ref_value, (dict, list))
+            isinstance(self.main_value, (dict, list)) or isinstance(self.ref_value, (dict, list))
         )
 
     @property
@@ -161,9 +160,7 @@ def _walk(
             # Same key, section on one side but a leaf on the other: the
             # leaf side still owns a row (compare classifies it MAIN_ONLY /
             # REF_ONLY within the parent), rendered after the section.
-            if (key in main and not main_is_object) or (
-                key in ref and not ref_is_object
-            ):
+            if (key in main and not main_is_object) or (key in ref and not ref_is_object):
                 rows.append(
                     _param_row(
                         child_path,
