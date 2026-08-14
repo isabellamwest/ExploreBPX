@@ -1,0 +1,31 @@
+name: bpx contract
+
+# The app pins bpx exactly, but its schema-contract assumptions
+# (tests/test_schema_contract.py) should hold against whatever bpx ships
+# next. This job upgrades bpx past the pin and runs only those tests, so an
+# upstream change that breaks an assumption is noticed before a version bump.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  latest-bpx:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - name: Install locked dependencies
+        run: uv sync --locked
+      - name: Upgrade bpx past the pin
+        run: |
+          uv pip install --upgrade bpx
+          uv run --no-sync python -c "import bpx; print('bpx', bpx.__version__)"
+      - name: Contract tests against latest bpx
+        # --no-sync keeps uv from restoring the locked (pinned) bpx.
+        run: uv run --no-sync pytest tests/test_schema_contract.py
+        env:
+          QT_QPA_PLATFORM: offscreen
