@@ -22,9 +22,13 @@ a future feature may want, to standardise something nobody presses.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import QListWidget
+
+if TYPE_CHECKING:
+    from PySide6.QtGui import QKeyEvent
 
 #: Return and the keypad's Enter. The keypad sets ``KeypadModifier``, so it is
 #: masked out before asking whether the chord was bare -- a modified Return
@@ -35,7 +39,7 @@ _ACTIVATE_KEYS = (Qt.Key_Return, Qt.Key_Enter)
 class ActivatingList(QListWidget):
     """See module docstring."""
 
-    def keyPressEvent(self, event: QKeyEvent) -> None:  # noqa: N802 (Qt override)
+    def keyPressEvent(self, event: QKeyEvent) -> None:
         bare = not (event.modifiers() & ~Qt.KeypadModifier)
         if event.key() in _ACTIVATE_KEYS and bare:
             item = self.currentItem()

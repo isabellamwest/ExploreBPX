@@ -44,10 +44,7 @@ AE_RAW = f"https://raw.githubusercontent.com/{AE_REPO}/{AE_COMMIT}"
 
 #: The NMC pouch cell file migrated to modern BPX (proper ``State`` section),
 #: from the pinned pybamm-data release.
-PYBAMM_NMC_URL = (
-    "https://github.com/pybamm-team/pybamm-data/releases/download/"
-    "v1.0.2/nmc_pouch_cell_BPX.json"
-)
+PYBAMM_NMC_URL = "https://github.com/pybamm-team/pybamm-data/releases/download/v1.0.2/nmc_pouch_cell_BPX.json"
 
 #: About:Energy's LFP BPX file at the pinned commit.
 AE_LFP_URL = f"{AE_RAW}/LFP/lfp_18650_cell_BPX.json"
@@ -72,8 +69,7 @@ MAX_POINTS = 1000
 SIG_DIGITS = 6
 
 PROVENANCE_NOTE = (
-    "Validation runs rebuilt from About:Energy full-resolution validation "
-    "data (downsampled), see NOTICE.md."
+    "Validation runs rebuilt from About:Energy full-resolution validation data (downsampled), see NOTICE.md."
 )
 
 OUT_DIR = Path(__file__).resolve().parents[1] / "app" / "data" / "example_documents" / "about_energy"
@@ -84,8 +80,8 @@ OUT_DIR = Path(__file__).resolve().parents[1] / "app" / "data" / "example_docume
 
 def fetch(url: str) -> bytes:
     """Download *url* and return its body."""
-    request = urllib.request.Request(url, headers={"User-Agent": "Explore_BPX-build-script"})
-    with urllib.request.urlopen(request) as response:
+    request = urllib.request.Request(url, headers={"User-Agent": "Explore_BPX-build-script"})  # noqa: S310
+    with urllib.request.urlopen(request) as response:  # noqa: S310 - fixed https URLs from this script's own constants
         return response.read()
 
 

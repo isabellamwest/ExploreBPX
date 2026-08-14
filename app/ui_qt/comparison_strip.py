@@ -18,15 +18,20 @@ one source of truth.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget
 
-from core.compare import ComparisonResult
-
 from . import badges, style
-from .reference_identity import ReferencePin
+
+if TYPE_CHECKING:
+    from core.compare import ComparisonResult
+
+    from .reference_identity import ReferencePin
+
 
 def _counts_text(comparison: ComparisonResult) -> str:
-    """"14 differ · 8 reference only" -- singular forms at 1, a zero side
+    """ "14 differ · 8 reference only" -- singular forms at 1, a zero side
     omitted entirely, "no differences" when both are zero.
     "Reference" spelled out, never "ref"."""
     differ = comparison.differ_count
@@ -40,7 +45,7 @@ def _counts_text(comparison: ComparisonResult) -> str:
 
 
 def chip_tooltip(pin: ReferencePin) -> str:
-    """"Chen2020 · DFN · 14 differ · 8 reference only" -- the whole of what the
+    """ "Chen2020 · DFN · 14 differ · 8 reference only" -- the whole of what the
     chip is not saying out loud. The counts tail is dropped when there is no
     comparison at all (no main document open): a chip must never imply a
     comparison that was never run."""
@@ -80,11 +85,7 @@ class _IdentityChip(QWidget):
     def natural_width(self) -> int:
         """The width this chip wants with its name shown -- what the strip
         adds up to decide whether the names fit at all."""
-        return (
-            badges.REFERENCE_BADGE_SIZE
-            + self.layout().spacing()
-            + self._name.sizeHint().width()
-        )
+        return badges.REFERENCE_BADGE_SIZE + self.layout().spacing() + self._name.sizeHint().width()
 
 
 class ComparisonStrip(QWidget):
@@ -143,7 +144,7 @@ class ComparisonStrip(QWidget):
     def _refresh_visible(self) -> None:
         self.setVisible(bool(self._chips) and self._page_active)
 
-    def resizeEvent(self, event) -> None:  # noqa: N802 - Qt naming
+    def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         self._apply_elision()
 

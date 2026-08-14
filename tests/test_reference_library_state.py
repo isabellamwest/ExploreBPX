@@ -66,7 +66,8 @@ def test_pin_reference_set_pins_and_dedupes_by_set_id():
 
     assert state.pin_reference_set(_CHEN) is PinReferenceOutcome.ADDED
     pinned = state.reference
-    assert pinned is not None and pinned.set_id == _CHEN
+    assert pinned is not None
+    assert pinned.set_id == _CHEN
 
     # Same set again: quiet no-op, the pinned snapshot is kept as-is.
     assert state.pin_reference_set(_CHEN) is PinReferenceOutcome.ALREADY_REFERENCE

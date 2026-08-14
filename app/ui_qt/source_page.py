@@ -157,15 +157,11 @@ def _gap(depth: int) -> _PaneLine:
     return _PaneLine(depth=depth, gap=True)
 
 
-def _param_counts(
-    rows: list[SourceRow], present
-) -> dict[tuple[str, ...], int]:
+def _param_counts(rows: list[SourceRow], present) -> dict[tuple[str, ...], int]:
     """Per-section count of parameter rows beneath it, counting only rows
     the *present* predicate admits -- so each pane's header counts its own
     side's parameters."""
-    counts: dict[tuple[str, ...], int] = {
-        row.path: 0 for row in rows if row.kind is RowKind.SECTION
-    }
+    counts: dict[tuple[str, ...], int] = {row.path: 0 for row in rows if row.kind is RowKind.SECTION}
     for row in rows:
         if row.kind is not RowKind.PARAM or not present(row):
             continue
@@ -219,9 +215,7 @@ def _token_diff_segments(value: str, other: str, color: str) -> tuple[_Segment, 
     return tuple(segments)
 
 
-def _open_value_panes(
-    key: str, value: object, depth: int, color: str
-) -> list[_PaneLine]:
+def _open_value_panes(key: str, value: object, depth: int, color: str) -> list[_PaneLine]:
     """A dict/list value rendered whole: key line, indented body, closer."""
     dumped = json.dumps(value, indent=2, ensure_ascii=False).splitlines()
     opener, body, closer = dumped[0], dumped[1:-1], dumped[-1]
@@ -237,11 +231,7 @@ def _open_value_panes(
         # pane's own depth steps so the body sits under its key line.
         stripped = raw_line.lstrip(" ")
         extra = (len(raw_line) - len(stripped)) // 2
-        panes.append(
-            _PaneLine(
-                segments=(_Segment(stripped, color=color),), depth=depth + extra
-            )
-        )
+        panes.append(_PaneLine(segments=(_Segment(stripped, color=color),), depth=depth + extra))
     panes.append(_PaneLine(segments=(_Segment(closer, color=color),), depth=depth))
     return panes
 
@@ -314,9 +304,7 @@ def _param_side_panes(
 
 def _chip_pane(pane: _PaneLine) -> _PaneLine:
     return _PaneLine(
-        segments=tuple(
-            _Segment(s.text, s.color, s.bold, s.italic, True) for s in pane.segments
-        ),
+        segments=tuple(_Segment(s.text, s.color, s.bold, s.italic, True) for s in pane.segments),
         depth=pane.depth,
         caret=pane.caret,
     )
@@ -379,9 +367,7 @@ def _build_lines(
     pull_enabled: bool = True,
 ) -> list[_Line]:
     counts_main = _param_counts(rows, lambda row: row.in_main)
-    counts_ref = (
-        _param_counts(rows, lambda row: row.in_reference) if two_pane else {}
-    )
+    counts_ref = _param_counts(rows, lambda row: row.in_reference) if two_pane else {}
     # Sections holding any difference (differs/fillable/ref-only anywhere
     # beneath, ref-only ghost sections included): their collapsed headers
     # carry the chipped ⋯. Ancestors only -- a ref-only header itself stays
@@ -402,12 +388,7 @@ def _build_lines(
             # The ⋯ chip belongs to shared collapsed sections only: a
             # ref-only header is already purple, a main-only section can
             # never contain differences.
-            diff_dots = (
-                is_closed
-                and row.in_main
-                and row.in_reference
-                and row.path in diff_sections
-            )
+            diff_dots = is_closed and row.in_main and row.in_reference and row.path in diff_sections
             main = (
                 _section_pane(
                     row,
@@ -421,9 +402,7 @@ def _build_lines(
             )
             ref = None
             if two_pane:
-                key_color = (
-                    style.REFERENCE if not row.in_main else style.DEFAULT_TEXT
-                )
+                key_color = style.REFERENCE if not row.in_main else style.DEFAULT_TEXT
                 ref = (
                     _section_pane(
                         row,
@@ -444,9 +423,7 @@ def _build_lines(
                     # ref-only: its pull copies the full subtree as one undo
                     # entry; shared headers carry no ← -- and a read-only
                     # main (pull_enabled False) offers none anywhere.
-                    pull_path=row.path
-                    if pull_enabled and two_pane and row.is_difference
-                    else None,
+                    pull_path=row.path if pull_enabled and two_pane and row.is_difference else None,
                     pull_section=pull_enabled and two_pane and row.is_difference,
                     row_path=row.path,
                 )
@@ -458,9 +435,7 @@ def _build_lines(
             # else (equal, main-only, ref-only) carries no chip.
             chip = None
             if two_pane and row.state is RowState.DIFFERS:
-                both_str = isinstance(row.main_value, str) and isinstance(
-                    row.ref_value, str
-                )
+                both_str = isinstance(row.main_value, str) and isinstance(row.ref_value, str)
                 chip = "tokens" if both_str else "whole"
             main_panes = _param_side_panes(
                 row,
@@ -473,11 +448,7 @@ def _build_lines(
                 other_value=row.ref_value,
             )
             if two_pane:
-                value_color = (
-                    style.REFERENCE
-                    if row.state is RowState.REF_ONLY
-                    else style.DEFAULT_TEXT
-                )
+                value_color = style.REFERENCE if row.state is RowState.REF_ONLY else style.DEFAULT_TEXT
                 ref_chip = chip
                 if row.state is RowState.FILLABLE:
                     ref_chip = "whole"
@@ -503,14 +474,10 @@ def _build_lines(
                         _Line(
                             main=main,
                             ref=ref,
-                            toggle_path=row.path
-                            if index == 0 and row.closable
-                            else None,
+                            toggle_path=row.path if index == 0 and row.closable else None,
                             # ← on the parameter's key line; its pull always
                             # copies the whole value, table or scalar.
-                            pull_path=row.path
-                            if pull_enabled and index == 0 and row.is_difference
-                            else None,
+                            pull_path=row.path if pull_enabled and index == 0 and row.is_difference else None,
                             row_path=row.path if index == 0 else None,
                         )
                     )
@@ -519,9 +486,7 @@ def _build_lines(
                     lines.append(
                         _Line(
                             main=main,
-                            toggle_path=row.path
-                            if index == 0 and row.closable
-                            else None,
+                            toggle_path=row.path if index == 0 and row.closable else None,
                             row_path=row.path if index == 0 else None,
                         )
                     )
@@ -609,23 +574,15 @@ class SourceView(QAbstractScrollArea):
         self._rows = rows
         self._two_pane = two_pane
         self._pull_enabled = pull_enabled
-        foldable = {
-            row.path
-            for row in rows
-            if row.kind is RowKind.SECTION or row.closable
-        }
+        foldable = {row.path for row in rows if row.kind is RowKind.SECTION or row.closable}
         self._closed &= foldable
         # A selection whose row vanished (edit, undo, reference change) is
         # dropped rather than left pointing at nothing.
-        if self._selected is not None and self._selected not in {
-            row.path for row in rows
-        }:
+        if self._selected is not None and self._selected not in {row.path for row in rows}:
             self._selected = None
         # A pulled row survives its own re-render (it merely turns equal),
         # but an undo removes it -- take the tag with it.
-        if self._flash_path is not None and self._flash_path not in {
-            row.path for row in rows
-        }:
+        if self._flash_path is not None and self._flash_path not in {row.path for row in rows}:
             self._clear_flash()
         self._rebuild()
 
@@ -713,9 +670,7 @@ class SourceView(QAbstractScrollArea):
         the ends -- arrows do not wrap. With nothing selected, Down starts
         at the first row and Up at the last.
         """
-        row_paths = [
-            line.row_path for line in self._lines if line.row_path is not None
-        ]
+        row_paths = [line.row_path for line in self._lines if line.row_path is not None]
         if not row_paths:
             return
         if self._selected in row_paths:
@@ -728,7 +683,7 @@ class SourceView(QAbstractScrollArea):
         self._scroll_to(self._selected)
         self.viewport().update()
 
-    def keyPressEvent(self, event) -> None:  # noqa: N802 - Qt override
+    def keyPressEvent(self, event) -> None:
         if event.key() == Qt.Key_Up:
             self.move_selection(-1)
             event.accept()
@@ -743,9 +698,9 @@ class SourceView(QAbstractScrollArea):
             # and main-only rows stay as impossible to pull as ever.
             line = next(
                 (
-                    l
-                    for l in self._lines
-                    if l.row_path is not None and l.row_path == self._selected
+                    candidate
+                    for candidate in self._lines
+                    if candidate.row_path is not None and candidate.row_path == self._selected
                 ),
                 None,
             )
@@ -785,9 +740,7 @@ class SourceView(QAbstractScrollArea):
             for side, pane in (("main", line.main), ("ref", line.ref)):
                 if pane is None or pane.gap:
                     continue
-                for segment in pane.segments:
-                    if segment.chip:
-                        found.append((index, side, segment.text))
+                found.extend((index, side, segment.text) for segment in pane.segments if segment.chip)
         return found
 
     # -- geometry --------------------------------------------------------
@@ -831,10 +784,7 @@ class SourceView(QAbstractScrollArea):
         still paints as a single rounded chip per row.
         """
         pane_width = self._pane_width()
-        widths = [
-            max(_MIN_WRAP_WIDTH, pane_width - self._wrap_x(pane, row) - _RIGHT_PADDING)
-            for row in (0, 1)
-        ]
+        widths = [max(_MIN_WRAP_WIDTH, pane_width - self._wrap_x(pane, row) - _RIGHT_PADDING) for row in (0, 1)]
         rows: list[tuple[_Segment, ...]] = []
         current: list[_Segment] = []
         used = 0
@@ -882,9 +832,7 @@ class SourceView(QAbstractScrollArea):
         return tuple(rows)
 
     def _rebuild(self) -> None:
-        self._lines = _build_lines(
-            self._rows, self._closed, self._two_pane, self._pull_enabled
-        )
+        self._lines = _build_lines(self._rows, self._closed, self._two_pane, self._pull_enabled)
         self._relayout()
         self.viewport().update()
         self.fold_state_changed.emit()
@@ -946,13 +894,11 @@ class SourceView(QAbstractScrollArea):
 
     def _update_scrollbars(self) -> None:
         line_height = self._line_height()
-        self.verticalScrollBar().setRange(
-            0, max(0, self._content_height - self.viewport().height())
-        )
+        self.verticalScrollBar().setRange(0, max(0, self._content_height - self.viewport().height()))
         self.verticalScrollBar().setSingleStep(line_height)
         self.verticalScrollBar().setPageStep(self.viewport().height())
 
-    def resizeEvent(self, event) -> None:  # noqa: N802 - Qt override
+    def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         # A narrower pane moves every wrap point; the height alone only
         # changes how much of the layout fits on screen.
@@ -961,7 +907,7 @@ class SourceView(QAbstractScrollArea):
 
     # -- painting --------------------------------------------------------
 
-    def paintEvent(self, event) -> None:  # noqa: N802 - Qt override
+    def paintEvent(self, event) -> None:
         self._ensure_layout()
         painter = QPainter(self.viewport())
         painter.fillRect(self.viewport().rect(), QColor("#ffffff"))
@@ -979,8 +925,15 @@ class SourceView(QAbstractScrollArea):
             top = block.top - v_offset
             block_height = block.rows * line_height
             self._paint_pane(
-                painter, line.main, block.main_rows, 0, pane_width, top, ascent,
-                block_height, line_height,
+                painter,
+                line.main,
+                block.main_rows,
+                0,
+                pane_width,
+                top,
+                ascent,
+                block_height,
+                line_height,
             )
             if line.ref is not None:
                 self._paint_pane(
@@ -996,11 +949,7 @@ class SourceView(QAbstractScrollArea):
                 )
             if self._two_pane and line.pull_path is not None:
                 self._paint_pull_chip(painter, pane_width, top, line_height)
-            elif (
-                self._two_pane
-                and line.row_path is not None
-                and line.row_path == self._flash_path
-            ):
+            elif self._two_pane and line.row_path is not None and line.row_path == self._flash_path:
                 # The pulled row's chip is gone (it is equal now); its
                 # gutter slot briefly says what just happened instead.
                 self._paint_pulled_tag(painter, pane_width, top, line_height)
@@ -1061,18 +1010,14 @@ class SourceView(QAbstractScrollArea):
                 if segment.chip:
                     painter.setPen(Qt.NoPen)
                     painter.setBrush(QColor(style.DIFF_TINT))
-                    painter.drawRoundedRect(
-                        x - 2, row_top + 2, advance + 4, line_height - 4, 3, 3
-                    )
+                    painter.drawRoundedRect(x - 2, row_top + 2, advance + 4, line_height - 4, 3, 3)
                     painter.setBrush(Qt.NoBrush)
                 painter.setPen(QColor(segment.color))
                 painter.drawText(x, baseline, segment.text)
                 x += advance
         painter.restore()
 
-    def _paint_pull_chip(
-        self, painter: QPainter, pane_width: int, top: int, line_height: int
-    ) -> None:
+    def _paint_pull_chip(self, painter: QPainter, pane_width: int, top: int, line_height: int) -> None:
         """The ← copy affordance, centred in the gutter column: light
         purple tint, pointing into the main file."""
         x = pane_width + (_GUTTER_PX - _PULL_W) // 2
@@ -1092,9 +1037,7 @@ class SourceView(QAbstractScrollArea):
             _PULL_GLYPH,
         )
 
-    def _paint_pulled_tag(
-        self, painter: QPainter, pane_width: int, top: int, line_height: int
-    ) -> None:
+    def _paint_pulled_tag(self, painter: QPainter, pane_width: int, top: int, line_height: int) -> None:
         """The transient "Used" confirmation, in the ← chip's own slot
         and palette -- a role word, not a glyph."""
         width = _GUTTER_PX - 4
@@ -1111,15 +1054,13 @@ class SourceView(QAbstractScrollArea):
 
     # -- interaction -----------------------------------------------------
 
-    def mousePressEvent(self, event) -> None:  # noqa: N802 - Qt override
+    def mousePressEvent(self, event) -> None:
         point = event.position().toPoint()
         index = self._line_at(point.y() + self.verticalScrollBar().value())
         if index >= 0:
             line = self._lines[index]
             pane_width = self._pane_width()
-            in_gutter = (
-                self._two_pane and pane_width <= point.x() < pane_width + _GUTTER_PX
-            )
+            in_gutter = self._two_pane and pane_width <= point.x() < pane_width + _GUTTER_PX
             if in_gutter:
                 # The gutter is the ←'s territory alone: no pull chip on
                 # this line means the click does nothing (never a stray
@@ -1138,7 +1079,7 @@ class SourceView(QAbstractScrollArea):
                 return
         super().mousePressEvent(event)
 
-    def mouseDoubleClickEvent(self, event) -> None:  # noqa: N802 - Qt override
+    def mouseDoubleClickEvent(self, event) -> None:
         """Double-click a row: jump to it in the Editor.
 
         Pane cells only -- the gutter stays the ←'s territory (its press
@@ -1151,13 +1092,9 @@ class SourceView(QAbstractScrollArea):
         if index >= 0:
             line = self._lines[index]
             pane_width = self._pane_width()
-            in_gutter = (
-                self._two_pane and pane_width <= point.x() < pane_width + _GUTTER_PX
-            )
+            in_gutter = self._two_pane and pane_width <= point.x() < pane_width + _GUTTER_PX
             if not in_gutter and line.row_path is not None:
-                row = next(
-                    (r for r in self._rows if r.path == line.row_path), None
-                )
+                row = next((r for r in self._rows if r.path == line.row_path), None)
                 if row is not None and row.in_main:
                     self.navigate_requested.emit(line.row_path)
                     return

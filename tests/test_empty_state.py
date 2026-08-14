@@ -46,9 +46,7 @@ def test_validation_page_shows_no_document_message(app_driver):
     assert app_driver.validation_issue_count() == 0
 
 
-def test_validation_page_shows_no_issues_message_for_a_clean_document(
-    app_driver, valid_spm_path
-):
+def test_validation_page_shows_no_issues_message_for_a_clean_document(app_driver, valid_spm_path):
     """The full-page placeholder is gone; the stream renders no
     header at all for a clean bucket -- proved here directly on the
     bucket data -- while the document-wide claim itself (nothing anywhere)
@@ -61,7 +59,8 @@ def test_validation_page_shows_no_issues_message_for_a_clean_document(
     assert d.diagnostics_filter_counts() == (0, 0, 0)
 
     header = d.diagnostics_bucket("Header")
-    assert header.error_count == 0 and header.warning_count == 0
+    assert header.error_count == 0
+    assert header.warning_count == 0
     assert d.diagnostics_stream_headers() == []
 
 
@@ -102,9 +101,7 @@ def test_editor_page_hides_hint_for_a_newly_created_document(app_driver):
     assert d.editor_showing_empty_state() is False
 
 
-def test_editor_page_shows_hint_again_after_returning_to_no_document_state(
-    app_driver, valid_spm_path
-):
+def test_editor_page_shows_hint_again_after_returning_to_no_document_state(app_driver, valid_spm_path):
     """Not a real user flow today (there is no "close document" action), but
     guards against the hint being wired as a one-shot rather than driven by
     live document state."""

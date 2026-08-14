@@ -11,11 +11,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from PySide6.QtCore import QStandardPaths  # noqa: E402
-from PySide6.QtWidgets import QApplication  # noqa: E402
+from PySide6.QtCore import QStandardPaths
+from PySide6.QtWidgets import QApplication
 
-from state.workspace_history import WorkspaceHistory  # noqa: E402
-from ui_qt.main_window import MainWindow  # noqa: E402
+from state.workspace_history import WorkspaceHistory
+from ui_qt.main_window import MainWindow
 
 
 def main() -> None:
@@ -24,12 +24,8 @@ def main() -> None:
     # lands in a stable per-app directory rather than one derived from the
     # interpreter's name.
     app.setApplicationName("ExploreBPX")
-    config_dir = Path(
-        QStandardPaths.writableLocation(QStandardPaths.AppConfigLocation)
-    )
-    window = MainWindow(
-        history=WorkspaceHistory(config_dir / "workspace_history.json")
-    )
+    config_dir = Path(QStandardPaths.writableLocation(QStandardPaths.AppConfigLocation))
+    window = MainWindow(history=WorkspaceHistory(config_dir / "workspace_history.json"))
     window.show()
     sys.exit(app.exec())
 

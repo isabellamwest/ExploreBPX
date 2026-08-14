@@ -27,7 +27,7 @@ from ui_qt.cards.page import page_content
 def _qapp():
     from PySide6.QtWidgets import QApplication
 
-    yield QApplication.instance() or QApplication([])
+    return QApplication.instance() or QApplication([])
 
 
 def test_page_content_body_is_capped_at_the_shared_page_measure():

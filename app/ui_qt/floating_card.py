@@ -22,9 +22,7 @@ SHADOW_MARGIN = 16
 CARD_MARGIN = 8
 
 
-def floating_card(
-    popup: QWidget, object_name: str, width: int | None = None
-) -> tuple[QFrame, QVBoxLayout]:
+def floating_card(popup: QWidget, object_name: str, width: int | None = None) -> tuple[QFrame, QVBoxLayout]:
     """Build *popup*'s shadowed card and return ``(card, card_layout)``.
 
     Installs the card as *popup*'s sole child inside the shadow margin; the
@@ -35,9 +33,7 @@ def floating_card(
     if width is not None:
         card.setFixedWidth(width)
     card_layout = QVBoxLayout(card)
-    card_layout.setContentsMargins(
-        CARD_MARGIN, CARD_MARGIN, CARD_MARGIN, CARD_MARGIN
-    )
+    card_layout.setContentsMargins(CARD_MARGIN, CARD_MARGIN, CARD_MARGIN, CARD_MARGIN)
     card_layout.setSpacing(6)
 
     shadow = QGraphicsDropShadowEffect(popup)
@@ -47,8 +43,6 @@ def floating_card(
     card.setGraphicsEffect(shadow)
 
     outer = QVBoxLayout(popup)
-    outer.setContentsMargins(
-        SHADOW_MARGIN, SHADOW_MARGIN, SHADOW_MARGIN, SHADOW_MARGIN
-    )
+    outer.setContentsMargins(SHADOW_MARGIN, SHADOW_MARGIN, SHADOW_MARGIN, SHADOW_MARGIN)
     outer.addWidget(card)
     return card, card_layout

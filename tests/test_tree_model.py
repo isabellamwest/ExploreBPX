@@ -234,9 +234,7 @@ def test_key_suggestions_seeded_from_blended_electrode_particle_names(valid_spm_
     gets those names as key_suggestions."""
     tree = build_tree(valid_spm_dict)
     parameter_map = build_parameter_path_map(tree)
-    hysteresis = parameter_map[
-        ("State", "Initial conditions", "Initial hysteresis state: Positive electrode")
-    ]
+    hysteresis = parameter_map[("State", "Initial conditions", "Initial hysteresis state: Positive electrode")]
     assert hysteresis.key_suggestions == ("Primary", "Secondary")
 
 
@@ -246,9 +244,7 @@ def test_key_suggestions_empty_for_single_particle_electrode(valid_spm_dict):
     gets no key suggestions."""
     tree = build_tree(valid_spm_dict)
     parameter_map = build_parameter_path_map(tree)
-    hysteresis = parameter_map[
-        ("State", "Initial conditions", "Initial hysteresis state: Negative electrode")
-    ]
+    hysteresis = parameter_map[("State", "Initial conditions", "Initial hysteresis state: Negative electrode")]
     assert hysteresis.key_suggestions == ()
 
 

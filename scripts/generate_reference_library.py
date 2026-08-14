@@ -124,51 +124,36 @@ SETS: tuple[SetMeta, ...] = (
         pybamm_name="Chen2020",
         slug="chen2020",
         cell="LG M50 21700 (graphite | NMC811)",
-        citation=(
-            "Chen et al. (2020), J. Electrochem. Soc. 167 080534, "
-            "doi:10.1149/1945-7111/ab9050"
-        ),
+        citation=("Chen et al. (2020), J. Electrochem. Soc. 167 080534, doi:10.1149/1945-7111/ab9050"),
     ),
     SetMeta(
         pybamm_name="Marquis2019",
         slug="marquis2019",
         cell="Kokam SLPB78205130H pouch cell",
-        citation=(
-            "Marquis et al. (2019), J. Electrochem. Soc. 166 A3693, "
-            "doi:10.1149/2.0341915jes"
-        ),
+        citation=("Marquis et al. (2019), J. Electrochem. Soc. 166 A3693, doi:10.1149/2.0341915jes"),
     ),
     SetMeta(
         pybamm_name="Prada2013",
         slug="prada2013",
         cell="A123 26650 (graphite | LFP)",
-        citation=(
-            "Prada et al. (2013), J. Electrochem. Soc. 160 A616, "
-            "doi:10.1149/2.053304jes"
-        ),
+        citation=("Prada et al. (2013), J. Electrochem. Soc. 160 A616, doi:10.1149/2.053304jes"),
     ),
     SetMeta(
         pybamm_name="Ai2020",
         slug="ai2020",
         cell="Enertech pouch cell (graphite | LCO)",
-        citation=(
-            "Ai et al. (2020), J. Electrochem. Soc. 167 013512, "
-            "doi:10.1149/2.0122001JES"
-        ),
+        citation=("Ai et al. (2020), J. Electrochem. Soc. 167 013512, doi:10.1149/2.0122001JES"),
     ),
     SetMeta(
         pybamm_name="Mohtat2020",
         slug="mohtat2020",
         cell="NMC532 | graphite pouch cell",
-        citation=(
-            "Mohtat et al. (2020), J. Electrochem. Soc. 167 110561, "
-            "doi:10.1149/1945-7111/aba5d1"
-        ),
+        citation=("Mohtat et al. (2020), J. Electrochem. Soc. 167 110561, doi:10.1149/1945-7111/aba5d1"),
     ),
 )
 
 
-class SkipSet(Exception):
+class SkipSet(Exception):  # noqa: N818 - a control-flow signal ("skip this set"), not an error
     """This set cannot be converted faithfully; skip it with a reason."""
 
 
@@ -199,7 +184,7 @@ def _as_data_table(value) -> tuple[list[float], list[float]] | None:
     """The ``(x, y)`` arrays of a pybamm data-interpolant entry, else None."""
     if not isinstance(value, tuple):
         return None
-    name, data = value
+    _name, data = value
     x, y = (data[0][0], data[1]) if isinstance(data[0], list) else data
     return list(np.asarray(x, dtype=float)), list(np.asarray(y, dtype=float))
 
@@ -257,13 +242,11 @@ class ConversionLog:
 
 def _label(key: str) -> str:
     """A pybamm entry name as description prose (unit suffix dropped)."""
-    name = key.split(" [")[0]
+    name = key.split(" [", maxsplit=1)[0]
     return name[0].lower() + name[1:]
 
 
-def _sampled_or_scalar(
-    pv, key: str, t_ref: float, log: ConversionLog
-) -> tuple[object, float | None]:
+def _sampled_or_scalar(pv, key: str, t_ref: float, log: ConversionLog) -> tuple[object, float | None]:
     """A sto-dependent property as (scalar | table, activation energy).
 
     Handles the three source shapes: plain number, callable of ``(sto, T)``,
@@ -340,9 +323,7 @@ def _ocp_table(pv, key: str, sto_min: float, sto_max: float, log: ConversionLog)
     return {"x": xs, "y": ys}
 
 
-def _electrode(
-    pv, prefix: str, sto_min: float, sto_max: float, t_ref: float, c_e0: float, log: ConversionLog
-) -> dict:
+def _electrode(pv, prefix: str, sto_min: float, sto_max: float, t_ref: float, c_e0: float, log: ConversionLog) -> dict:
     """One electrode's BPX section from pybamm's ``<prefix> ...`` entries."""
     particle = "Negative particle" if prefix == "Negative electrode" else "Positive particle"
     c_max = _evaluate(pv[f"Maximum concentration in {prefix.lower()} [mol.m-3]"])
@@ -397,9 +378,7 @@ def _electrode(
     entropic = pv[f"{prefix} OCP entropic change [V.K-1]"]
     if callable(entropic):
         log.sampled_sto.append(_label(f"{prefix} OCP entropic change [V.K-1]"))
-        section["Entropic change coefficient [V.K-1]"] = _table(
-            STO_GRID, [_evaluate(entropic, s) for s in STO_GRID]
-        )
+        section["Entropic change coefficient [V.K-1]"] = _table(STO_GRID, [_evaluate(entropic, s) for s in STO_GRID])
     else:
         section["Entropic change coefficient [V.K-1]"] = float(entropic)
     return section
@@ -417,9 +396,7 @@ def _electrolyte(pv, t_ref: float, c_e0: float, log: ConversionLog) -> dict:
             "to its value at the initial electrolyte concentration"
         )
     section: dict = {
-        "Cation transference number": (
-            _evaluate(t_plus, c_e0, t_ref) if callable(t_plus) else float(t_plus)
-        ),
+        "Cation transference number": (_evaluate(t_plus, c_e0, t_ref) if callable(t_plus) else float(t_plus)),
     }
     for name, alias, fn in (
         ("Electrolyte conductivity [S.m-1]", "Conductivity [S.m-1]", conductivity_fn),
@@ -428,7 +405,7 @@ def _electrolyte(pv, t_ref: float, c_e0: float, log: ConversionLog) -> dict:
         if callable(fn):
             log.sampled_at_t.append(_label(name))
             section[alias] = _table(CE_GRID, [_evaluate(fn, c, t_ref) for c in CE_GRID])
-            ea = _activation_energy(lambda t: _evaluate(fn, c_e0, t), t_ref)
+            ea = _activation_energy(lambda t, fn=fn: _evaluate(fn, c_e0, t), t_ref)
             if ea is not None:
                 log.arrhenius.append(_label(name))
                 section[alias.split(" [")[0] + " activation energy [J.mol-1]"] = ea
@@ -444,30 +421,19 @@ def _description(meta: SetMeta, t_ref: float, log: ConversionLog) -> str:
     conversions = []
     if log.sampled_sto:
         conversions.append(
-            "analytic functions sampled onto interpolated tables over "
-            "stoichiometry: " + ", ".join(log.sampled_sto)
+            "analytic functions sampled onto interpolated tables over stoichiometry: " + ", ".join(log.sampled_sto)
         )
     if log.sampled_at_t:
         conversions.append(
-            f"analytic functions sampled onto interpolated tables at {t_ref} K: "
-            + ", ".join(log.sampled_at_t)
+            f"analytic functions sampled onto interpolated tables at {t_ref} K: " + ", ".join(log.sampled_at_t)
         )
     if log.arrhenius:
         conversions.append(
-            "temperature dependence reduced to a best-fit Arrhenius activation "
-            "energy for " + ", ".join(log.arrhenius)
+            "temperature dependence reduced to a best-fit Arrhenius activation energy for " + ", ".join(log.arrhenius)
         )
     conversions.extend(log.extra)
-    applied = (
-        " Conversions applied to this set: " + "; ".join(conversions) + "."
-        if conversions
-        else ""
-    )
-    carried = (
-        " Measured data tables carried over unchanged: " + ", ".join(log.copied) + "."
-        if log.copied
-        else ""
-    )
+    applied = " Conversions applied to this set: " + "; ".join(conversions) + "." if conversions else ""
+    carried = " Measured data tables carried over unchanged: " + ", ".join(log.copied) + "." if log.copied else ""
     return (
         f"Reference artifact converted from PyBaMM's {meta.pybamm_name} parameter set "
         f"({meta.citation}). Not simulation-grade: only parameters with a BPX home are "
@@ -582,7 +548,7 @@ def _verify_round_trip(meta: SetMeta, doc: dict) -> dict[str, float]:
     t_ref = _evaluate(pv_src["Reference temperature [K]"])
 
     report: dict[str, float] = {}
-    for prefix, lo, hi in (
+    for prefix, lo, _hi in (
         ("Negative electrode", doc["Parameterisation"]["Negative electrode"], None),
         ("Positive electrode", doc["Parameterisation"]["Positive electrode"], None),
     ):
@@ -669,7 +635,8 @@ def main() -> int:
             report = _verify_round_trip(meta, doc)
             failures = _check_report(report)
             if failures:
-                raise SkipSet("round-trip fidelity: " + "; ".join(failures))
+                # The raise lands in the SkipSet handler below on purpose.
+                raise SkipSet("round-trip fidelity: " + "; ".join(failures))  # noqa: TRY301
         except SkipSet as reason:
             skipped.append((meta.pybamm_name, str(reason)))
             print(f"SKIPPED {meta.pybamm_name}: {reason}")

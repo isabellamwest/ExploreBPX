@@ -28,12 +28,8 @@ def test_no_meta_and_no_description_yields_all_none_but_flags_custom():
 def test_custom_flag_set_for_a_user_typed_parameter_anywhere():
     """Any parameter with neither FieldMeta nor a dataset entry is custom --
     inside User-defined or typed into a schema section alike."""
-    assert resolve_parameter_metadata(
-        ("Parameterisation", "User-defined", "k_sei"), None
-    ).is_custom
-    assert resolve_parameter_metadata(
-        ("Parameterisation", "Cell", "my extra field"), None
-    ).is_custom
+    assert resolve_parameter_metadata(("Parameterisation", "User-defined", "k_sei"), None).is_custom
+    assert resolve_parameter_metadata(("Parameterisation", "Cell", "my extra field"), None).is_custom
 
 
 def test_schema_parameter_is_not_custom():
@@ -111,21 +107,18 @@ def test_accepted_types_none_when_no_kind_flags_set():
 
 
 def test_dataset_supplies_symbol_documentation_and_source():
-    metadata = resolve_parameter_metadata(
-        _path("Nominal cell capacity [A.h]", "Cell"), None
-    )
+    metadata = resolve_parameter_metadata(_path("Nominal cell capacity [A.h]", "Cell"), None)
     assert metadata.symbol == r"Q_\mathrm{nom}"
     headings = [heading for heading, _ in metadata.documentation]
     assert "Physical correspondence" in headings
     assert "Model sensitivity" in headings
     assert "Measurement methods" in headings
-    assert metadata.source and "October 2024" in metadata.source
+    assert metadata.source
+    assert "October 2024" in metadata.source
 
 
 def test_dataset_link_present_where_the_source_document_has_one():
-    metadata = resolve_parameter_metadata(
-        _path("Particle radius [m]", "Negative electrode"), None
-    )
+    metadata = resolve_parameter_metadata(_path("Particle radius [m]", "Negative electrode"), None)
     assert metadata.specification_link
     assert metadata.specification_link.startswith("https://w3id.org/")
 
@@ -133,9 +126,7 @@ def test_dataset_link_present_where_the_source_document_has_one():
 def test_documentation_is_section_scoped_not_alias_scoped():
     """The same alias resolves different documentation in different sections."""
     separator = resolve_parameter_metadata(_path("Thickness [m]", "Separator"), None)
-    electrode = resolve_parameter_metadata(
-        _path("Thickness [m]", "Negative electrode"), None
-    )
+    electrode = resolve_parameter_metadata(_path("Thickness [m]", "Negative electrode"), None)
     assert separator.documentation != electrode.documentation
     assert "separator" in dict(separator.documentation)["Description"].lower()
 
@@ -151,8 +142,6 @@ def test_blended_particle_paths_resolve_the_electrode_entry():
 def test_user_defined_alias_reuse_gets_no_documentation():
     """A custom parameter that reuses a standard alias must not inherit the
     standard's documentation -- no dataset section appears in its path."""
-    metadata = resolve_parameter_metadata(
-        ("User-defined", "Particle radius [m]"), None
-    )
+    metadata = resolve_parameter_metadata(("User-defined", "Particle radius [m]"), None)
     assert metadata.symbol is None
     assert metadata.documentation == ()

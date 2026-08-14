@@ -44,7 +44,7 @@ from ui_qt.cards.map import (
     map_is_representable,
 )
 from ui_qt.cards.map import initial_mode as map_initial_mode
-from ui_qt.cards.modal import RAW_MODE, Mode, ModalCard, RawValueCard
+from ui_qt.cards.modal import RAW_MODE, ModalCard, Mode, RawValueCard
 from ui_qt.cards.multi_series_chart import charts_available
 from ui_qt.cards.paste_dialog import PastePreviewResult
 from ui_qt.cards.registry import create_card
@@ -55,7 +55,7 @@ from ui_qt.cards.table import TableCard
 def _qapp():
     from PySide6.QtWidgets import QApplication
 
-    yield QApplication.instance() or QApplication([])
+    return QApplication.instance() or QApplication([])
 
 
 def _fn(value, unit="m2.s-1") -> FunctionCard:
@@ -75,7 +75,7 @@ def _fn(value, unit="m2.s-1") -> FunctionCard:
 
 
 @pytest.mark.parametrize(
-    "value, expected",
+    ("value", "expected"),
     [
         (3.7, FLOAT_INT),
         (5, FLOAT_INT),
@@ -367,9 +367,7 @@ def test_function_hint_quotes_bpx_function_docstring():
 # ExpressionBody: the committed-value chart preview
 # ----------------------------------------------------------------------
 
-requires_charts = pytest.mark.skipif(
-    not charts_available(), reason="QtCharts not available in this PySide6 build"
-)
+requires_charts = pytest.mark.skipif(not charts_available(), reason="QtCharts not available in this PySide6 build")
 
 
 @requires_charts
@@ -489,7 +487,7 @@ def _map(value, suggestions=()) -> MapCard:
 
 
 @pytest.mark.parametrize(
-    "value, expected",
+    ("value", "expected"),
     [
         (1.0, FLOAT_INT),
         (5, FLOAT_INT),
@@ -614,7 +612,9 @@ def test_material_map_body_blocks_a_duplicate_key():
     body.set_value({"Primary": 1.0})
     body._grid.append_row(["Primary", 9.0])
     reason = body.commit_blocked_reason()
-    assert reason is not None and "Duplicate material" in reason and "Primary" in reason
+    assert reason is not None
+    assert "Duplicate material" in reason
+    assert "Primary" in reason
     assert not body._error.isHidden()
 
 

@@ -34,7 +34,6 @@ last-writer-wins, accepted for a single-user desktop tool.
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import dataclass, replace
 from pathlib import Path
 from uuid import uuid4
@@ -62,7 +61,7 @@ SCHEMA_VERSION = 3
 MAIN_MODES = ("normal", "read_only", "converted_copy")
 
 
-class NameInUse(ValueError):
+class NameInUseError(ValueError):
     """Raised by :meth:`WorkspaceHistory.keep`/:meth:`rename` when the
     requested name already belongs to another workspace.
 
@@ -115,6 +114,7 @@ class WorkspaceRecord:
 
     @property
     def is_named(self) -> bool:
+        """True once the workspace has been kept under a name."""
         return self.name is not None
 
 
@@ -156,9 +156,7 @@ class WorkspaceHistory:
         user actually typed or picked, so it is what the row should show.
         """
         resolved = _resolve(path)
-        self.recent_files = [
-            existing for existing in self.recent_files if _resolve(existing) != resolved
-        ]
+        self.recent_files = [existing for existing in self.recent_files if _resolve(existing) != resolved]
         self.recent_files.insert(0, path)
         del self.recent_files[RECENT_FILES_CAP:]
         self._persist()
@@ -166,9 +164,7 @@ class WorkspaceHistory:
     def remove_recent(self, path: str) -> None:
         """Drop *path* from the recent files (the row's explicit ✕)."""
         resolved = _resolve(path)
-        self.recent_files = [
-            existing for existing in self.recent_files if _resolve(existing) != resolved
-        ]
+        self.recent_files = [existing for existing in self.recent_files if _resolve(existing) != resolved]
         self._persist()
 
     # ------------------------------------------------------------------
@@ -202,10 +198,7 @@ class WorkspaceHistory:
         """Whether *name* already belongs to a workspace other than the one
         with id *excluding* -- the seam the name dialog says "that name is
         in use" from, before anything is attempted."""
-        for workspace in self.workspaces:
-            if workspace.name == name and workspace.id != excluding:
-                return True
-        return False
+        return any(workspace.name == name and workspace.id != excluding for workspace in self.workspaces)
 
     # ------------------------------------------------------------------
     # mutations (each persists immediately)
@@ -225,9 +218,7 @@ class WorkspaceHistory:
         self._persist()
         return stored
 
-    def update_current(
-        self, main: MainRecord | None, references: tuple[ReferenceRecord, ...]
-    ) -> None:
+    def update_current(self, main: MainRecord | None, references: tuple[ReferenceRecord, ...]) -> None:
         """Rewrite the current workspace's files in place -- named or not.
 
         This is rule 4 made mechanical: a workspace looks after itself, so
@@ -262,7 +253,7 @@ class WorkspaceHistory:
 
         Naming is the one act that stops a workspace decaying, so it moves
         the entry from ``recent_workspaces`` to ``workspaces``. Raises
-        :class:`NameInUse` rather than overwriting; the shell asks again.
+        :class:`NameInUseError` rather than overwriting; the shell asks again.
         """
         workspace = self.by_id(workspace_id)
         if workspace is None:
@@ -271,7 +262,7 @@ class WorkspaceHistory:
         if not name:
             raise ValueError("A named workspace needs a name")
         if self.name_in_use(name, excluding=workspace_id):
-            raise NameInUse(name)
+            raise NameInUseError(name)
         named = replace(workspace, name=name, saved_at=_now_stamp())
         if workspace in self.recent_workspaces:
             self.recent_workspaces.remove(workspace)
@@ -312,9 +303,7 @@ class WorkspaceHistory:
         workspace = self.by_id(workspace_id)
         if workspace is None or workspace.main is None:
             return
-        self._replace_record(
-            replace(workspace, main=replace(workspace.main, path=path))
-        )
+        self._replace_record(replace(workspace, main=replace(workspace.main, path=path)))
         self._persist()
 
     def relocate_reference(self, workspace_id: str, index: int, path: str) -> None:
@@ -398,15 +387,6 @@ class WorkspaceHistory:
             else:  # pragma: no cover - unreachable above the cap
                 return
 
-    def _free_name(self, base: str) -> str:
-        """*base* if no workspace holds it, else "base 2", "base 3", …"""
-        if not self.name_in_use(base):
-            return base
-        suffix = 2
-        while self.name_in_use(f"{base} {suffix}"):
-            suffix += 1
-        return f"{base} {suffix}"
-
     # ------------------------------------------------------------------
     # persistence
 
@@ -422,16 +402,15 @@ class WorkspaceHistory:
             data = json.loads(text)
             version = data.get("version")
             if version > SCHEMA_VERSION:
-                raise ValueError("newer schema than this app understands")
-            self.recent_files = [
-                entry["path"] for entry in data.get("recent_files", [])
-            ][:RECENT_FILES_CAP]
+                # The raise lands in the reset handler below on purpose.
+                raise ValueError("newer schema than this app understands")  # noqa: TRY301
+            self.recent_files = [entry["path"] for entry in data.get("recent_files", [])][:RECENT_FILES_CAP]
             if version < 2:
                 self._load_v1(data)
             else:
                 self._load_current(data)
             if any(workspace.name is None for workspace in self.workspaces):
-                raise ValueError("named workspace without a name")
+                raise ValueError("named workspace without a name")  # noqa: TRY301
             if self.by_id(self.current_id) is None:
                 self.current_id = None
         except (TypeError, KeyError, ValueError):
@@ -455,28 +434,18 @@ class WorkspaceHistory:
         question ``current_id`` now answers.
         """
         last = data.get("last_workspace")
-        self.recent_workspaces = (
-            [replace(_workspace_from_json(last), id=new_id())] if last else []
-        )
-        self.workspaces = [
-            replace(_workspace_from_json(entry), id=new_id())
-            for entry in data.get("workspaces", [])
-        ]
-        self.current_id = (
-            self.recent_workspaces[0].id if self.recent_workspaces else None
-        )
+        self.recent_workspaces = [replace(_workspace_from_json(last), id=new_id())] if last else []
+        self.workspaces = [replace(_workspace_from_json(entry), id=new_id()) for entry in data.get("workspaces", [])]
+        self.current_id = self.recent_workspaces[0].id if self.recent_workspaces else None
 
     def _load_current(self, data: dict) -> None:
         """Read a version-2 or version-3 store. One path serves both: the
         only difference is that a version-2 record always has a main, which
         the version-3 reader accepts unchanged."""
-        self.recent_workspaces = [
-            _workspace_from_json(entry)
-            for entry in data.get("recent_workspaces", [])
-        ][:MAX_RECENT_WORKSPACES]
-        self.workspaces = [
-            _workspace_from_json(entry) for entry in data.get("workspaces", [])
+        self.recent_workspaces = [_workspace_from_json(entry) for entry in data.get("recent_workspaces", [])][
+            :MAX_RECENT_WORKSPACES
         ]
+        self.workspaces = [_workspace_from_json(entry) for entry in data.get("workspaces", [])]
         self.current_id = data.get("current_id")
 
     def _persist(self) -> None:
@@ -500,7 +469,7 @@ class WorkspaceHistory:
         self.store_path.parent.mkdir(parents=True, exist_ok=True)
         temp = self.store_path.with_name(self.store_path.name + ".tmp")
         temp.write_text(json.dumps(data, indent=2), encoding="utf-8")
-        os.replace(temp, self.store_path)
+        temp.replace(self.store_path)
 
 
 def _now_stamp() -> str:
@@ -522,11 +491,7 @@ def _resolve(path: str) -> str:
 def _worth_writing(record: WorkspaceRecord) -> bool:
     """Whether a workspace holds anything to come back to: a name, a main,
     or references. A workspace with none of the three is an empty board."""
-    return (
-        record.name is not None
-        or record.main is not None
-        or bool(record.references)
-    )
+    return record.name is not None or record.main is not None or bool(record.references)
 
 
 def _content_key(record: WorkspaceRecord) -> tuple:
@@ -535,9 +500,13 @@ def _content_key(record: WorkspaceRecord) -> tuple:
     different arrangement, so both entries stay. Two mainless boards share
     the empty main key, so repeatedly asking for a new workspace collapses
     to the one empty board rather than piling up rows."""
-    main = (None, None) if record.main is None else (
-        _resolve(record.main.path),
-        record.main.mode,
+    main = (
+        (None, None)
+        if record.main is None
+        else (
+            _resolve(record.main.path),
+            record.main.mode,
+        )
     )
     return (
         *main,
@@ -553,15 +522,8 @@ def _content_key(record: WorkspaceRecord) -> tuple:
 def _workspace_to_json(record: WorkspaceRecord) -> dict:
     data: dict = {
         "id": record.id,
-        "main": (
-            None
-            if record.main is None
-            else {"path": record.main.path, "mode": record.main.mode}
-        ),
-        "references": [
-            {"kind": ref.kind, "path": ref.path, "set_id": ref.set_id}
-            for ref in record.references
-        ],
+        "main": (None if record.main is None else {"path": record.main.path, "mode": record.main.mode}),
+        "references": [{"kind": ref.kind, "path": ref.path, "set_id": ref.set_id} for ref in record.references],
     }
     if record.name is not None:
         data["name"] = record.name
@@ -584,11 +546,7 @@ def _workspace_from_json(data: dict) -> WorkspaceRecord:
     for ref in data.get("references", []):
         if ref.get("kind") not in ("file", "library"):
             raise ValueError(f"unknown reference kind: {ref.get('kind')!r}")
-        references.append(
-            ReferenceRecord(
-                kind=ref["kind"], path=ref.get("path"), set_id=ref.get("set_id")
-            )
-        )
+        references.append(ReferenceRecord(kind=ref["kind"], path=ref.get("path"), set_id=ref.get("set_id")))
     return WorkspaceRecord(
         main=main,
         references=tuple(references),

@@ -10,7 +10,7 @@ import pytest
 from core import bpx_gateway
 from core.bpx_gateway import LoadError
 from core.parameter_types import ParameterKind, classify
-from core.tree_model import build_tree, build_parameter_path_map
+from core.tree_model import build_parameter_path_map, build_tree
 
 
 def test_load_raw_json(valid_spm_bytes):
@@ -26,9 +26,7 @@ def test_load_raw_yaml_detected_by_extension():
 
 
 def test_load_raw_json_with_utf8_bom():
-    raw, fmt = bpx_gateway.load_raw(
-        b'\xef\xbb\xbf{"Header": {"Model": "SPM"}}', "thing.json"
-    )
+    raw, fmt = bpx_gateway.load_raw(b'\xef\xbb\xbf{"Header": {"Model": "SPM"}}', "thing.json")
     assert fmt == "json"
     assert raw == {"Header": {"Model": "SPM"}}
 
@@ -170,9 +168,7 @@ def test_field_meta_electrode_conductivity_is_scalar_only():
 def test_field_meta_diffusivity_activation_energy_differs_by_section():
     """The same alias describes electrolyte diffusion in one
     section and particle diffusion in another."""
-    electrolyte = bpx_gateway.field_meta(
-        ("Parameterisation", "Electrolyte", "Diffusivity activation energy [J.mol-1]")
-    )
+    electrolyte = bpx_gateway.field_meta(("Parameterisation", "Electrolyte", "Diffusivity activation energy [J.mol-1]"))
     electrode = bpx_gateway.field_meta(
         ("Parameterisation", "Negative electrode", "Diffusivity activation energy [J.mol-1]")
     )
@@ -239,9 +235,7 @@ def test_build_tree_validation_parameters_have_descriptions_end_to_end(fixtures_
     raw = json.loads((fixtures_dir / "nmc_pouch_cell_BPX.json").read_text("utf-8"))
     tree = build_tree(raw)
     parameters = build_parameter_path_map(tree)
-    validation_parameters = [
-        parameter for path, parameter in parameters.items() if path[0] == "Validation"
-    ]
+    validation_parameters = [parameter for path, parameter in parameters.items() if path[0] == "Validation"]
     assert validation_parameters
     for parameter in validation_parameters:
         assert parameter.description, f"{parameter.path!r} has no description"
@@ -253,9 +247,7 @@ def test_field_meta_degradation_and_thermal_fields_have_no_fabricated_descriptio
     lli = bpx_gateway.field_meta(("State", "Degradation", "LLI"))
     assert lli.description == ""
 
-    heat_transfer = bpx_gateway.field_meta(
-        ("State", "Thermal environment", "Heat transfer coefficient [W.m-2.K-1]")
-    )
+    heat_transfer = bpx_gateway.field_meta(("State", "Thermal environment", "Heat transfer coefficient [W.m-2.K-1]"))
     assert heat_transfer.description == ""
 
 
@@ -392,9 +384,7 @@ def test_expected_fields_cell_matches_schema_aliases():
 
 
 def test_expected_fields_cell_required_flag():
-    fields = {field.alias: field for field in bpx_gateway.expected_fields(
-        ("Parameterisation", "Cell")
-    )}
+    fields = {field.alias: field for field in bpx_gateway.expected_fields(("Parameterisation", "Cell"))}
     assert fields["Nominal cell capacity [A.h]"].required is True
     assert fields["External surface area [m2]"].required is False
 
@@ -419,7 +409,7 @@ def test_expected_fields_parameterisation_varies_by_model():
 
 
 def test_expected_fields_unknown_path_raises():
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Unsupported or ambiguous section path"):
         bpx_gateway.expected_fields(("Nonexistent",))
 
 
@@ -432,10 +422,7 @@ def test_expected_fields_electrode_single_shape_from_real_spm_example(valid_spm_
     the electrode's own fields in the non-SPM shape, not the SPM one)."""
     value = valid_spm_dict["Parameterisation"]["Negative electrode"]
     aliases = {
-        field.alias
-        for field in bpx_gateway.expected_fields(
-            ("Parameterisation", "Negative electrode"), "SPM", value
-        )
+        field.alias for field in bpx_gateway.expected_fields(("Parameterisation", "Negative electrode"), "SPM", value)
     }
     assert "Particle" not in aliases
     assert "Porosity" not in aliases
@@ -449,10 +436,7 @@ def test_expected_fields_electrode_blended_shape_from_real_spm_example(valid_spm
     directly on the electrode."""
     value = valid_spm_dict["Parameterisation"]["Positive electrode"]
     aliases = {
-        field.alias
-        for field in bpx_gateway.expected_fields(
-            ("Parameterisation", "Positive electrode"), "SPM", value
-        )
+        field.alias for field in bpx_gateway.expected_fields(("Parameterisation", "Positive electrode"), "SPM", value)
     }
     assert aliases == {"Thickness [m]", "Particle"}
 
@@ -468,9 +452,7 @@ def test_expected_fields_electrode_empty_value_resolves_to_single(empty_value):
     variant's narrower set above."""
     aliases = {
         field.alias
-        for field in bpx_gateway.expected_fields(
-            ("Parameterisation", "Negative electrode"), "DFN", empty_value
-        )
+        for field in bpx_gateway.expected_fields(("Parameterisation", "Negative electrode"), "DFN", empty_value)
     }
     assert "Particle" not in aliases
     assert "Porosity" in aliases
@@ -485,9 +467,7 @@ def test_expected_fields_electrode_blended_non_spm_model_includes_porosity(model
     non-SPM model -- only ``"SPM"`` narrows it."""
     aliases = {
         field.alias
-        for field in bpx_gateway.expected_fields(
-            ("Parameterisation", "Positive electrode"), model, {"Particle": {}}
-        )
+        for field in bpx_gateway.expected_fields(("Parameterisation", "Positive electrode"), model, {"Particle": {}})
     }
     assert aliases == {
         "Conductivity [S.m-1]",
@@ -505,9 +485,7 @@ def test_expected_fields_particle_instance_resolves_to_particle_definition(valid
     name = next(iter(positive["Particle"]))
     aliases = {
         field.alias
-        for field in bpx_gateway.expected_fields(
-            ("Parameterisation", "Positive electrode", "Particle", name), "SPM"
-        )
+        for field in bpx_gateway.expected_fields(("Parameterisation", "Positive electrode", "Particle", name), "SPM")
     }
     assert "Diffusivity [m2.s-1]" in aliases
     assert "Particle" not in aliases
@@ -518,9 +496,7 @@ def test_expected_fields_validation_run_resolves_to_experiment_definition():
     ``Validation`` as ``Dict[str, Experiment]``, the same fixed-shape-under-a-
     chosen-key pattern as a ``Particle`` instance -- so it resolves to the
     ``Experiment`` definition regardless of the run name or content."""
-    aliases = {
-        field.alias for field in bpx_gateway.expected_fields(("Validation", "Test 1"))
-    }
+    aliases = {field.alias for field in bpx_gateway.expected_fields(("Validation", "Test 1"))}
     assert aliases == {"Time [s]", "Current [A]", "Voltage [V]", "Temperature [K]"}
 
 
@@ -531,7 +507,7 @@ def test_expected_fields_validation_run_resolves_to_experiment_definition():
 
 
 @pytest.mark.parametrize(
-    "path, material_check",
+    ("path", "material_check"),
     [
         (("State", "Degradation", "LAM: Positive electrode"), "positive_electrode"),
         (("State", "Degradation", "LAM: Negative electrode"), "negative_electrode"),
@@ -680,8 +656,7 @@ def test_validate_header_failure_masks_body_and_reports_incomplete(valid_spm_dic
     locs = _locs(result)
     assert ("Model",) in locs, "header abort reports a Header-relative loc"
     assert not any("Initial temperature [K]" in loc for loc in locs), (
-        "bpx no longer masks body errors on a header failure -- "
-        "revisit _validation_completed"
+        "bpx no longer masks body errors on a header failure -- revisit _validation_completed"
     )
 
 
@@ -700,8 +675,7 @@ def test_validate_parameterisation_failure_masks_state_and_reports_incomplete(
     locs = _locs(result)
     assert any(loc[:1] == ("Cell",) for loc in locs)
     assert not any("Initial temperature [K]" in loc for loc in locs), (
-        "bpx no longer masks State errors on a Parameterisation failure -- "
-        "revisit _validation_completed"
+        "bpx no longer masks State errors on a Parameterisation failure -- revisit _validation_completed"
     )
 
 
@@ -715,9 +689,7 @@ def test_validate_model_type_mismatch_reports_incomplete(valid_spm_dict):
     assert result.is_valid is False
     assert result.completed is False
     assert result.reach is bpx_gateway.CheckReach.PARAMETERISATION
-    assert any(
-        bpx_gateway._MODEL_MISMATCH_MARKER in issue.message for issue in result.issues
-    )
+    assert any(bpx_gateway._MODEL_MISMATCH_MARKER in issue.message for issue in result.issues)
 
 
 def test_validate_raw_exception_reports_incomplete(valid_spm_dict):
@@ -742,7 +714,7 @@ def test_checking_reach_unrecognised_abort_claims_least():
 
 # ---------------------------------------------------------------------------
 # The legacy v0.x seam -- is_legacy / convert_legacy route to
-# bpx._migrations (is_legacy_bpx / convert_v0_to_v1), a *private* bpx
+# bpx._migrations (is_legacy_bpx / convert_v0_to_v1), a *private* bpx  # noqa: ERA001
 # module used deliberately because bpx has no public equivalent. These
 # tests pin the installed bpx's behaviour in the same spirit as
 # _MODEL_MISMATCH_MARKER: a bpx upgrade that moves the module, changes the
@@ -757,9 +729,7 @@ def legacy_v0_dict(fixtures_dir):
     temperatures still living in Parameterisation.Cell."""
     import json
 
-    return json.loads(
-        (fixtures_dir / "nmc_pouch_cell_BPX.json").read_text("utf-8")
-    )
+    return json.loads((fixtures_dir / "nmc_pouch_cell_BPX.json").read_text("utf-8"))
 
 
 def test_is_legacy_detects_real_v0_file(legacy_v0_dict):
@@ -799,9 +769,9 @@ def test_validate_auto_converts_legacy_and_warns(legacy_v0_dict):
     stays recognisable."""
     result = bpx_gateway.validate(legacy_v0_dict)
     assert result.completed is True
-    assert any(
-        "legacy BPX v0.x" in issue.message for issue in result.issues
-    ), "bpx no longer warns on legacy auto-conversion -- revisit the legacy seam"
+    assert any("legacy BPX v0.x" in issue.message for issue in result.issues), (
+        "bpx no longer warns on legacy auto-conversion -- revisit the legacy seam"
+    )
 
 
 def test_convert_legacy_produces_what_bpx_judges(legacy_v0_dict):

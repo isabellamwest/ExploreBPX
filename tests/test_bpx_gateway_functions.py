@@ -31,7 +31,7 @@ def test_sample_function_hits_the_domain_endpoints_exactly():
 
 
 def test_sample_function_invalid_expression_reports_bpx_message_verbatim():
-    with pytest.raises(ValueError) as excinfo:
+    with pytest.raises(ValueError, match="Invalid Function") as excinfo:
         bpx.Function.validate("2x")
 
     result = bpx_gateway.sample_function("2x", 0.0, 1.0)
@@ -42,7 +42,7 @@ def test_sample_function_invalid_expression_reports_bpx_message_verbatim():
 
 
 def test_sample_function_drops_a_single_bad_point_but_keeps_the_rest():
-    """"1/x" over [-2, 2] with 5 samples lands on whole-number x values
+    """ "1/x" over [-2, 2] with 5 samples lands on whole-number x values
     (-2, -1, 0, 1, 2), so the midpoint is x=0.0 exactly, not a
     floating-point near-miss -- only that one point is dropped."""
     result = bpx_gateway.sample_function("1/x", -2.0, 2.0, samples=5)
@@ -52,7 +52,7 @@ def test_sample_function_drops_a_single_bad_point_but_keeps_the_rest():
 
 
 @pytest.mark.parametrize(
-    "low, high",
+    ("low", "high"),
     [
         (1.0, 0.0),  # low > high
         (1.0, 1.0),  # low == high
@@ -78,7 +78,7 @@ def test_sample_function_drops_a_point_calling_an_undefined_function_name():
 
 
 def test_sample_function_all_points_failing_names_the_exception():
-    """"1/(x-x)" is zero-over-zero at every x, so every sampled point raises
+    """ "1/(x-x)" is zero-over-zero at every x, so every sampled point raises
     -- the error names the exception every point actually hit, rather than
     the generic "no finite values" wording reserved for a domain where
     nothing raised at all."""

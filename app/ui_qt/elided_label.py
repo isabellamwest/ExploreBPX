@@ -24,7 +24,7 @@ class ElidedLabel(QLabel):
         self._full_text = ""
         self.setMinimumWidth(0)
 
-    def sizeHint(self) -> QSize:  # noqa: N802 - Qt naming
+    def sizeHint(self) -> QSize:
         # Prefer the *full* text's width, not the currently-elided text's:
         # a zero-stretch label whose hint tracked its shown text would ratchet
         # down (layout grants the hint, resize re-elides to it) and never
@@ -33,7 +33,7 @@ class ElidedLabel(QLabel):
         metrics = QFontMetrics(self.font())
         return QSize(metrics.horizontalAdvance(self._full_text) + 2, hint.height())
 
-    def setText(self, text: str) -> None:  # noqa: N802 - Qt naming
+    def setText(self, text: str) -> None:
         self._full_text = text
         self.setToolTip(text)
         self._apply_elision()
@@ -47,15 +47,13 @@ class ElidedLabel(QLabel):
     def full_text(self) -> str:
         return self._full_text
 
-    def resizeEvent(self, event) -> None:  # noqa: N802 - Qt naming
+    def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         self._apply_elision()
 
     def _apply_elision(self) -> None:
         metrics = QFontMetrics(self.font())
-        super().setText(
-            metrics.elidedText(self._full_text, Qt.ElideRight, max(self.width(), 1))
-        )
+        super().setText(metrics.elidedText(self._full_text, Qt.ElideRight, max(self.width(), 1)))
 
 
 class PathLabel(QLabel):
@@ -81,7 +79,7 @@ class PathLabel(QLabel):
         self.setToolTip(path)
         self._apply_elision()
 
-    def resizeEvent(self, event) -> None:  # noqa: N802 - Qt naming
+    def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         self._apply_elision()
 

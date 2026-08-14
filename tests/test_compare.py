@@ -75,9 +75,7 @@ def test_units_in_key_never_unit_converted_or_fuzzy_matched():
 
     assert section.rows["Thickness [m]"].state is RowState.MAIN_ONLY
     assert section.rows["Thickness [µm]"].state is RowState.REF_ONLY
-    assert "Thickness [m]" not in [
-        key for key, row in section.rows.items() if row.state is RowState.DIFFERS
-    ]
+    assert "Thickness [m]" not in [key for key, row in section.rows.items() if row.state is RowState.DIFFERS]
 
 
 def test_bool_vs_int_differs_not_equal():
@@ -238,7 +236,8 @@ def test_end_to_end_against_bundled_about_energy_examples():
 
     cell = result.section(("Parameterisation", "Cell"))
     assert cell is not None
-    assert cell.in_main and cell.in_reference
+    assert cell.in_main
+    assert cell.in_reference
 
     # Both files declare 298.15 K as their reference temperature.
     assert cell.rows["Reference temperature [K]"].state is RowState.EQUAL
@@ -403,10 +402,7 @@ def test_merged_row_state_keeps_fillable_distinct_from_differs():
 
 def test_merged_row_state_falls_through_equal_then_ref_only_then_main_only():
     assert merged_row_state([RowDiff(RowState.EQUAL, 1.0), RowDiff(RowState.MAIN_ONLY)]) is RowState.EQUAL
-    assert (
-        merged_row_state([RowDiff(RowState.REF_ONLY, 1.0), RowDiff(RowState.MAIN_ONLY)])
-        is RowState.REF_ONLY
-    )
+    assert merged_row_state([RowDiff(RowState.REF_ONLY, 1.0), RowDiff(RowState.MAIN_ONLY)]) is RowState.REF_ONLY
     assert merged_row_state([RowDiff(RowState.MAIN_ONLY)]) is RowState.MAIN_ONLY
 
 

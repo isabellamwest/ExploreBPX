@@ -20,10 +20,10 @@ from __future__ import annotations
 
 from core import structure
 from core.values import is_grid_cell
+from ui_qt.style import FIXED_UNIT_TOOLTIP
 
-from ..style import FIXED_UNIT_TOOLTIP
 from .bodies import MaterialMapBody, NumberBody, RawJsonBody
-from .modal import RAW_MODE, Mode, ModalCard
+from .modal import RAW_MODE, ModalCard, Mode
 
 FLOAT_INT = "FloatInt"
 DICT_STR_FLOAT_INT = "dict[str, FloatInt]"
@@ -44,9 +44,7 @@ def map_is_representable(value: object) -> bool:
     """
     if not isinstance(value, dict):
         return False
-    return all(isinstance(key, str) for key in value) and all(
-        is_grid_cell(item) for item in value.values()
-    )
+    return all(isinstance(key, str) for key in value) and all(is_grid_cell(item) for item in value.values())
 
 
 def initial_mode(value: object) -> str:

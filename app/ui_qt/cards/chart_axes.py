@@ -16,14 +16,17 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Sequence
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QMargins, QPointF, Qt
 from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPen
 from PySide6.QtWidgets import QFrame, QGraphicsEllipseItem, QToolTip
 
-from .. import typography
-from ..style import BORDER, CHART_GRID, MUTED
+from ui_qt import typography
+from ui_qt.style import BORDER, CHART_GRID, MUTED
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 try:  # Mirrors each chart widget's own QtCharts import guard -- see above.
     from PySide6.QtCharts import QChartView
@@ -57,9 +60,7 @@ def as_plot_number(value: object) -> float | None:
     return None
 
 
-def series_pairs(
-    x_values: Sequence[object] | None, y_values: Sequence[object] | None
-) -> list[tuple[float, float]]:
+def series_pairs(x_values: Sequence[object] | None, y_values: Sequence[object] | None) -> list[tuple[float, float]]:
     """Numeric ``(x, y)`` pairs from two raw columns, paired index by index
     up to the shorter column, x-sorted, with non-plottable cells dropped
     (:func:`as_plot_number`) -- the one pairing contract every chart fed
@@ -67,7 +68,7 @@ def series_pairs(
     card's preview band alike). Never a judgement: the grid and the
     validator remain the only places a bad cell is flagged."""
     pairs = []
-    for x, y in zip(x_values or [], y_values or []):
+    for x, y in zip(x_values or [], y_values or [], strict=False):
         px, py = as_plot_number(x), as_plot_number(y)
         if px is not None and py is not None:
             pairs.append((px, py))
@@ -330,10 +331,8 @@ def format_readout_number(value: float) -> str:
     return f"{value:.6g}"
 
 
-def readout_tooltip_text(
-    hit: ReadoutPoint, x_title: str, y_title: str, *, show_series_name: bool
-) -> str:
-    """"Chen2020 · Time [s] 50000 · Voltage [V] 3.94" -- the app's " · "
+def readout_tooltip_text(hit: ReadoutPoint, x_title: str, y_title: str, *, show_series_name: bool) -> str:
+    """ "Chen2020 · Time [s] 50000 · Voltage [V] 3.94" -- the app's " · "
     separator throughout, never an em dash.
 
     *x_title*/*y_title* fall back to the bare axis letter when no title was
@@ -406,10 +405,7 @@ if _CHARTS_AVAILABLE:
             Call whenever a series' content *or* visibility changes -- a
             mouse move only ever reads this cache (see the class docstring).
             """
-            self._series = [
-                (name, colour, tuple(points), visible)
-                for name, colour, points, visible in series
-            ]
+            self._series = [(name, colour, tuple(points), visible) for name, colour, points, visible in series]
 
         def set_height_range(self, floor: int, ceiling: int) -> None:
             """Turn on width-responsive height (see
@@ -431,7 +427,7 @@ if _CHARTS_AVAILABLE:
             self.setFixedHeight(floor)
             self._adjusting_height = False
 
-        def resizeEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        def resizeEvent(self, event) -> None:
             super().resizeEvent(event)
             if self._adjusting_height:
                 return
@@ -454,12 +450,12 @@ if _CHARTS_AVAILABLE:
             # after it, and nothing here calls it again.
             self._axis_y.setTickCount(tick_count_for_height(target))
 
-        def mouseMoveEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        def mouseMoveEvent(self, event) -> None:
             super().mouseMoveEvent(event)
             pos = event.position()
             self._update_readout(pos.x(), pos.y(), event.globalPosition().toPoint())
 
-        def leaveEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        def leaveEvent(self, event) -> None:
             super().leaveEvent(event)
             self._hide_readout()
 

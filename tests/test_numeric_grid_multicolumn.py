@@ -24,7 +24,7 @@ from ui_qt.cards.paste_dialog import PastePreviewResult
 
 @pytest.fixture(autouse=True)
 def _qapp():
-    yield QApplication.instance() or QApplication([])
+    return QApplication.instance() or QApplication([])
 
 
 # ----------------------------------------------------------------------
@@ -474,9 +474,7 @@ def test_paste_targets_the_focused_column(monkeypatch):
         def text(self):
             return "5\n6\n"
 
-    monkeypatch.setattr(
-        grid_module.QApplication, "clipboard", staticmethod(lambda: _StubClipboard())
-    )
+    monkeypatch.setattr(grid_module.QApplication, "clipboard", staticmethod(_StubClipboard))
 
     class _StubDialog:
         def __init__(self, parsed, headers, parent=None):
@@ -562,9 +560,7 @@ def test_paste_is_a_noop_when_read_only(monkeypatch):
         def text(self):
             return "5\n"
 
-    monkeypatch.setattr(
-        grid_module.QApplication, "clipboard", staticmethod(lambda: _StubClipboard())
-    )
+    monkeypatch.setattr(grid_module.QApplication, "clipboard", staticmethod(_StubClipboard))
     grid = MultiColumnGrid(("x",), read_only=True)
 
     grid.paste()  # must not raise, and must not open a dialog

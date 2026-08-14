@@ -118,8 +118,12 @@ def test_outside_click_closes_popup(search, qtbot):
     decoy.show()
     global_pos = decoy.mapToGlobal(decoy.rect().center())
     press = QMouseEvent(
-        QEvent.MouseButtonPress, QPointF(decoy.rect().center()), QPointF(global_pos),
-        Qt.LeftButton, Qt.LeftButton, Qt.NoModifier,
+        QEvent.MouseButtonPress,
+        QPointF(decoy.rect().center()),
+        QPointF(global_pos),
+        Qt.LeftButton,
+        Qt.LeftButton,
+        Qt.NoModifier,
     )
     QApplication.instance().sendEvent(decoy, press)
 
@@ -138,8 +142,12 @@ def test_click_into_search_box_does_not_dismiss_popup(search, qtbot):
     local_pos = search.rect().center()
     global_pos = search.mapToGlobal(local_pos)
     press = QMouseEvent(
-        QEvent.MouseButtonPress, QPointF(local_pos), QPointF(global_pos),
-        Qt.LeftButton, Qt.LeftButton, Qt.NoModifier,
+        QEvent.MouseButtonPress,
+        QPointF(local_pos),
+        QPointF(global_pos),
+        Qt.LeftButton,
+        Qt.LeftButton,
+        Qt.NoModifier,
     )
     QApplication.instance().sendEvent(search, press)
 

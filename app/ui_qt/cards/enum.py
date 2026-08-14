@@ -15,7 +15,8 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QComboBox, QHBoxLayout
 
-from ..style import VALUE_INPUT_MAX_WIDTH
+from ui_qt.style import VALUE_INPUT_MAX_WIDTH
+
 from .base import EditorCard
 
 
@@ -26,7 +27,7 @@ class _EnumCombo(QComboBox):
         super().__init__()
         self.popup_was_open = False
 
-    def showPopup(self) -> None:  # noqa: N802
+    def showPopup(self) -> None:
         self.popup_was_open = True
         super().showPopup()
 

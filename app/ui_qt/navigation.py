@@ -15,11 +15,13 @@ the notification, not coupling to any concrete widget.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QObject, Signal
 
-from core.tree_model import ParameterItem, TreeNode
-from state.app_state import AppState
+if TYPE_CHECKING:
+    from core.tree_model import ParameterItem, TreeNode
+    from state.app_state import AppState
 
 
 @dataclass(frozen=True)
@@ -80,6 +82,4 @@ class NavigationService(QObject):
         node = document.find_best(key)
         if node is not None:
             self._state.active.select(tuple(node.path))
-            self.navigated.emit(
-                NavigationTarget(object_path=tuple(node.path), node=node)
-            )
+            self.navigated.emit(NavigationTarget(object_path=tuple(node.path), node=node))

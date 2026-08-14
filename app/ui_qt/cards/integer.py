@@ -13,8 +13,8 @@ from __future__ import annotations
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QSpinBox
 
 from core import structure
+from ui_qt.style import FIXED_UNIT_TOOLTIP, SPIN_INPUT_MAX_WIDTH, VALUE_INPUT_MAX_WIDTH
 
-from ..style import FIXED_UNIT_TOOLTIP, SPIN_INPUT_MAX_WIDTH, VALUE_INPUT_MAX_WIDTH
 from .base import EditorCard
 
 

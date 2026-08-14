@@ -55,7 +55,7 @@ def test_B1_supported_models_is_exactly_the_header_model_enum(model_enum):
     onboard the new model deliberately -- ``_PARAMETERISATION_DEFS`` in
     bpx_gateway.py (B3 below will also be failing), the workspace panel's
     ``_MODEL_DESCRIPTORS`` blurb, and a scaffold/completion sanity pass."""
-    assert document_factory.SUPPORTED_MODELS == model_enum
+    assert model_enum == document_factory.SUPPORTED_MODELS
 
 
 def test_B2_concrete_models_is_the_enum_minus_partial(model_enum):
@@ -64,7 +64,7 @@ def test_B2_concrete_models_is_the_enum_minus_partial(model_enum):
     concrete. If ``Partial`` itself vanishes from the enum, the subtraction
     in completion.py is dead wording and needs rethinking, not excusing."""
     assert "Partial" in model_enum
-    assert completion.CONCRETE_MODELS == frozenset(model_enum) - {"Partial"}
+    assert frozenset(model_enum) - {"Partial"} == completion.CONCRETE_MODELS
 
 
 # ---------------------------------------------------------------------------
@@ -105,8 +105,7 @@ def test_B4_required_sections_match_the_schemas_own_required_lists(model_enum, d
     for model in model_enum:
         definition = defs[bpx_gateway._PARAMETERISATION_DEFS[model]]
         want = {("Header",), ("Parameterisation",)} | {
-            ("Parameterisation", alias)
-            for alias in (definition.get("required") or ())
+            ("Parameterisation", alias) for alias in (definition.get("required") or ())
         }
         assert set(structure.required_sections(model)) == want, (
             f"required_sections({model!r}) disagrees with the schema's own "
@@ -133,8 +132,8 @@ def test_B5_experiment_aliases_and_their_required_split(defs):
     aliases = tuple(experiment_def["properties"])
     required = set(experiment_def.get("required") or ())
 
-    assert experiment.KNOWN_ALIASES == aliases
-    assert database_examples_dialog._KNOWN_ALIASES == aliases
+    assert aliases == experiment.KNOWN_ALIASES
+    assert aliases == database_examples_dialog._KNOWN_ALIASES
     optional = [alias for alias in aliases if alias not in required]
     assert optional == [experiment._OPTIONAL_ALIAS], (
         "The experiment card assumes exactly one schema-optional column "
@@ -180,9 +179,5 @@ def test_B7_every_state_child_has_a_section_definition_entry(defs):
     must be added, a stale entry must be removed) so a new State subsection
     gets completion/add-section support the moment bpx ships it."""
     state_children = set(defs["State"]["properties"])
-    mapped = {
-        path[1]
-        for path in bpx_gateway._SECTION_DEFS
-        if len(path) == 2 and path[0] == "State"
-    }
+    mapped = {path[1] for path in bpx_gateway._SECTION_DEFS if len(path) == 2 and path[0] == "State"}
     assert mapped == state_children

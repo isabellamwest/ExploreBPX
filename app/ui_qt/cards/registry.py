@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from core.bpx_gateway import FieldMeta
+from typing import TYPE_CHECKING
+
 from core.parameter_types import ParameterKind
-from core.tree_model import ParameterItem
 from core.values import is_grid_cell
 
-from .base import EditorCard
 from .boolean import BooleanCard
 from .enum import EnumCard
 from .function import FunctionCard, table_is_representable
@@ -20,6 +19,12 @@ from .series import SeriesCard
 from .table import TableCard
 from .text import TextCard
 from .unknown import ReadOnlyCard
+
+if TYPE_CHECKING:
+    from core.bpx_gateway import FieldMeta
+    from core.tree_model import ParameterItem
+
+    from .base import EditorCard
 
 # Kinds with one fixed card. The union kinds (FUNCTION, MAP) own their own mode
 # dispatch -- each is a strip that opens on whichever representation the

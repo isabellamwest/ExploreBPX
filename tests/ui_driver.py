@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QMimeData, QPointF, QUrl, Qt
+from PySide6.QtCore import QMimeData, QPointF, Qt, QUrl
 from PySide6.QtGui import QDropEvent, QTextDocument
 from PySide6.QtWidgets import (
     QComboBox,
@@ -66,7 +66,7 @@ class AppDriver:
     # Operations
     # ------------------------------------------------------------------
 
-    def open(self, path: Path | str) -> "AppDriver":
+    def open(self, path: Path | str) -> AppDriver:
         """Open a document by path (equivalent to File > Open).
 
         A detectably legacy v0.x *path* raises the real (blocking) legacy-open
@@ -75,7 +75,7 @@ class AppDriver:
         self._w.open_document(Path(path))
         return self
 
-    def open_as_is(self, path: Path | str) -> "AppDriver":
+    def open_as_is(self, path: Path | str) -> AppDriver:
         """Open a legacy v0.x file as the main document, answering the
         legacy-open prompt with "Open as-is, read-only". The prompt seam is
         stubbed for this one call (the ``_ask_open_intent`` monkeypatch
@@ -89,22 +89,22 @@ class AppDriver:
             del self._w._ask_legacy_intent
         return self
 
-    def select_object(self, path: tuple[str, ...]) -> "AppDriver":
+    def select_object(self, path: tuple[str, ...]) -> AppDriver:
         """Click an object node in the structure tree."""
         self._w._tree.node_selected.emit(tuple(path))
         return self
 
-    def select_parameter(self, path: tuple[str, ...]) -> "AppDriver":
+    def select_parameter(self, path: tuple[str, ...]) -> AppDriver:
         """Click a parameter in the parameter list."""
         self._w._params.parameter_selected.emit(tuple(path))
         return self
 
-    def go_to(self, path: tuple[str, ...]) -> "AppDriver":
+    def go_to(self, path: tuple[str, ...]) -> AppDriver:
         """Navigate straight to a parameter (owning object + parameter)."""
         self._w.navigate_to(tuple(path))
         return self
 
-    def edit_field(self, value) -> "AppDriver":
+    def edit_field(self, value) -> AppDriver:
         """Type/set *value* into the active card's editor."""
         widget = self._editor_widget()
         if isinstance(widget, QLineEdit):
@@ -119,25 +119,27 @@ class AppDriver:
             else:
                 widget.setEditText(str(value))
         else:  # pragma: no cover - defensive
-            raise AssertionError(f"No editable widget for the active card: {widget!r}")
+            # AssertionError, not TypeError: a driver failure is a broken
+            # test setup, and the driver speaks assert throughout.
+            raise AssertionError(f"No editable widget for the active card: {widget!r}")  # noqa: TRY004
         return self
 
-    def commit(self) -> "AppDriver":
+    def commit(self) -> AppDriver:
         """Press Enter to commit the current draft to the document."""
         self._qtbot.keyClick(self._editor_widget(), Qt.Key_Return)
         return self
 
-    def escape(self) -> "AppDriver":
+    def escape(self) -> AppDriver:
         """Press Escape to discard the current draft."""
         self._qtbot.keyClick(self._editor_widget(), Qt.Key_Escape)
         return self
 
-    def wait_for_live_validation(self) -> "AppDriver":
+    def wait_for_live_validation(self) -> AppDriver:
         """Wait for the Inspector's debounce so live validation can settle."""
         self._qtbot.wait(260)  # slightly longer than the 200ms debounce
         return self
 
-    def toggle_documentation_section(self) -> "AppDriver":
+    def toggle_documentation_section(self) -> AppDriver:
         """Click the Documentation section's title row (disclosure toggle)."""
         header = self._w._inspector._docs_section.header
         self._qtbot.mouseClick(header, Qt.LeftButton)
@@ -153,7 +155,7 @@ class AppDriver:
     # headers, the clear line, the all-clear row, collapse-all) gets its
     # own ``diagnostics_*``-prefixed methods further down.
 
-    def activate_first_validation_issue(self) -> "AppDriver":
+    def activate_first_validation_issue(self) -> AppDriver:
         """Activate the first issue row in the stream.
 
         Emits ``itemActivated`` -- the signal the panel actually connects
@@ -166,7 +168,7 @@ class AppDriver:
         self._w._diagnostics._stream._list.itemActivated.emit(items[0])
         return self
 
-    def activate_validation_row(self, item) -> "AppDriver":
+    def activate_validation_row(self, item) -> AppDriver:
         """Emit ``itemActivated`` for one already-located ``QListWidgetItem``
         from the stream (e.g. from :meth:`_validation_rows`) -- the
         low-level primitive :meth:`activate_first_validation_issue`/
@@ -174,7 +176,7 @@ class AppDriver:
         self._w._diagnostics._stream._list.itemActivated.emit(item)
         return self
 
-    def activate_outstanding_task(self, task) -> "AppDriver":
+    def activate_outstanding_task(self, task) -> AppDriver:
         """Activate the Outstanding row for *task* (a ``CompletionTask``, as
         returned by :meth:`outstanding_tasks`) in the stream."""
         from ui_qt import diagnostics_panel as dp
@@ -242,12 +244,12 @@ class AppDriver:
         """Text of every issue row in the stream, in order."""
         return [item.text() for item in self._validation_rows("issue")]
 
-    def activate_validation_group_header(self, index: int = 0) -> "AppDriver":
+    def activate_validation_group_header(self, index: int = 0) -> AppDriver:
         """Activate a sub-head row directly -- proves it is a structural
         no-op; only issue/task rows act."""
         return self.activate_validation_row(self._validation_rows("subhead")[index])
 
-    def activate_fold_header(self, index: int = 0) -> "AppDriver":
+    def activate_fold_header(self, index: int = 0) -> AppDriver:
         """Activate (Enter/double-click) a stream fold-header row directly
         -- proves it is a structural no-op; folding is single-click only
         (:meth:`diagnostics_fold_section`)."""
@@ -265,7 +267,7 @@ class AppDriver:
             if item.data(dp._FOLD_BUCKET_ROLE).path != dp._FILE_FACTS_PATH
         ]
 
-    def diagnostics_fold_section(self, label: str) -> "AppDriver":
+    def diagnostics_fold_section(self, label: str) -> AppDriver:
         """Fold/unfold the named bucket in the stream, as a single click on
         its header does."""
         from ui_qt import diagnostics_panel as dp
@@ -286,21 +288,15 @@ class AppDriver:
         pixel-reading."""
         from ui_qt import parameter_row
 
-        return [
-            item.data(parameter_row.HTML_ROLE) for item in self._validation_rows("issue")
-        ]
+        return [item.data(parameter_row.HTML_ROLE) for item in self._validation_rows("issue")]
 
     def _validation_rows(self, kind: str) -> list:
         from ui_qt import diagnostics_panel as dp
 
         lst = self._w._diagnostics._stream._list
-        return [
-            lst.item(i)
-            for i in range(lst.count())
-            if lst.item(i).data(dp._KIND_ROLE) == kind
-        ]
+        return [lst.item(i) for i in range(lst.count()) if lst.item(i).data(dp._KIND_ROLE) == kind]
 
-    def activate_validation_issue(self, path: tuple[str, ...]) -> "AppDriver":
+    def activate_validation_issue(self, path: tuple[str, ...]) -> AppDriver:
         """Emit the Diagnostics panel's own activation signal for *path*.
 
         Drives through the panel's public ``issue_activated`` signal
@@ -391,7 +387,7 @@ class AppDriver:
         item = self._diagnostics_clear_summary_item()
         return item.toolTip() if item is not None else ""
 
-    def diagnostics_toggle_clear_line(self) -> "AppDriver":
+    def diagnostics_toggle_clear_line(self) -> AppDriver:
         """Click the clear line, as a single click on it does."""
         item = self._diagnostics_clear_summary_item()
         if item is None:
@@ -435,7 +431,7 @@ class AppDriver:
         label = self._w._diagnostics._side._collapse_all
         return None if label.isHidden() else label.text()
 
-    def diagnostics_toggle_collapse_all(self) -> "AppDriver":
+    def diagnostics_toggle_collapse_all(self) -> AppDriver:
         """Click the filter column's Collapse all/Expand all affordance."""
         self._qtbot.mouseClick(self._w._diagnostics._side._collapse_all, Qt.LeftButton)
         return self
@@ -446,7 +442,7 @@ class AppDriver:
         """*name* is "errors"/"warnings"/"outstanding"."""
         return self._diagnostics_chip(name).is_on()
 
-    def diagnostics_toggle_chip(self, name: str) -> "AppDriver":
+    def diagnostics_toggle_chip(self, name: str) -> AppDriver:
         """Click the named filter, as a real mouse click would."""
         self._qtbot.mouseClick(self._diagnostics_chip(name), Qt.LeftButton)
         return self
@@ -471,7 +467,7 @@ class AppDriver:
             return None
         return item.data(panel._GROUP_ROW_ALIAS_ROLE)
 
-    def activate_first_parameter_issue(self) -> "AppDriver":
+    def activate_first_parameter_issue(self) -> AppDriver:
         """Activate the first issue in the Inspector's Issues section.
 
         Emits ``itemActivated`` -- the signal the view actually connects
@@ -483,7 +479,7 @@ class AppDriver:
         lst.itemActivated.emit(lst.item(0))
         return self
 
-    def choose_search_result(self, path: tuple[str, ...]) -> "AppDriver":
+    def choose_search_result(self, path: tuple[str, ...]) -> AppDriver:
         """Type a query, then pick the matching result from the SearchPopup."""
         from PySide6.QtCore import Qt
 
@@ -499,7 +495,7 @@ class AppDriver:
                 return self
         raise AssertionError(f"No search result for {path!r}")
 
-    def show_view(self, name: str) -> "AppDriver":
+    def show_view(self, name: str) -> AppDriver:
         """Switch the workspace via the activity bar ("Workspace"/"Editor"/
         "Source"/"Diagnostics")."""
         index = {"Editor": 0, "Diagnostics": 1, "Workspace": 2, "Source": 3}[name]
@@ -522,7 +518,7 @@ class AppDriver:
         to bottom (folded-away content is genuinely absent)."""
         return self._w._source._view.line_texts()
 
-    def source_toggle_fold(self, path: tuple[str, ...]) -> "AppDriver":
+    def source_toggle_fold(self, path: tuple[str, ...]) -> AppDriver:
         """Fold/unfold the Source-view section or table at *path*, as a
         click on its caret line does."""
         self._w._source._view.toggle_fold(tuple(path))
@@ -537,12 +533,9 @@ class AppDriver:
     def source_pull_paths(self) -> list[tuple[tuple, bool]]:
         """(path, is_section) of every ← gutter chip the Source view
         currently shows, top to bottom."""
-        return [
-            (path, is_section)
-            for _, path, is_section in self._w._source._view.pull_lines()
-        ]
+        return [(path, is_section) for _, path, is_section in self._w._source._view.pull_lines()]
 
-    def source_pull(self, path: tuple[str, ...]) -> "AppDriver":
+    def source_pull(self, path: tuple[str, ...]) -> AppDriver:
         """Click the ← gutter chip on *path*'s line. Raises if that line
         shows no chip -- pulling an equal/main-only row is impossible in
         the UI and stays impossible here."""
@@ -640,7 +633,7 @@ class AppDriver:
         the bar that says Source"."""
         return self._w._source._fold_button.parent() is self._w._page_header
 
-    def source_toggle_fold_all(self) -> "AppDriver":
+    def source_toggle_fold_all(self) -> AppDriver:
         """Click the Source page's fold-all toggle (in the page-header bar)."""
         self._w._source._fold_button.click()
         return self
@@ -672,7 +665,7 @@ class AppDriver:
         """Every badge in the reference pane's selector, in pin order."""
         return [button.text() for button in self._w._source._ref_badge_buttons]
 
-    def click_source_reference_badge(self, index: int) -> "AppDriver":
+    def click_source_reference_badge(self, index: int) -> AppDriver:
         """Click the reference pane selector's badge at *index*, switching
         which reference the page compares against."""
         buttons = self._w._source._ref_badge_buttons
@@ -683,12 +676,12 @@ class AppDriver:
     def source_selected_reference_index(self) -> int:
         return self._w._source.selected_reference_index()
 
-    def source_reload(self) -> "AppDriver":
+    def source_reload(self) -> AppDriver:
         """Click the stale band's Reload link."""
         self._w._source._reload_button.click()
         return self
 
-    def source_press_key(self, key: str) -> "AppDriver":
+    def source_press_key(self, key: str) -> AppDriver:
         """Send a navigation key to the Source view ("up"/"down"/"enter" --
         Enter pulls the selected row, the ← chip's keyboard counterpart)."""
         from PySide6.QtTest import QTest
@@ -702,7 +695,7 @@ class AppDriver:
         or ``None`` once it has faded (or before any pull)."""
         return self._w._source._view.flash_path()
 
-    def source_double_click(self, path: tuple[str, ...]) -> "AppDriver":
+    def source_double_click(self, path: tuple[str, ...]) -> AppDriver:
         """Double-click *path*'s key line in the main pane, exactly as a
         user does (press then double-click at the line's position).
         Raises if the row is not currently rendered."""
@@ -718,13 +711,13 @@ class AppDriver:
                 return self
         raise AssertionError(f"no rendered row at {path!r}")
 
-    def notice_window_activation(self) -> "AppDriver":
+    def notice_window_activation(self) -> AppDriver:
         """Run the window-activation stale-notice check directly (the
         headless suite has no real activation events to deliver)."""
         self._w._check_reference_stale()
         return self
 
-    def click_workspace_open(self) -> "AppDriver":
+    def click_workspace_open(self) -> AppDriver:
         """Click "Open a file…" on the board's start surface.
 
         Asserts the surface is actually on the board first: it exists only
@@ -737,7 +730,7 @@ class AppDriver:
         self._qtbot.mouseClick(surface._open_button, Qt.LeftButton)
         return self
 
-    def _trigger_add_route(self, text: str) -> "AppDriver":
+    def _trigger_add_route(self, text: str) -> AppDriver:
         """Pick one route from an empty slot's ＋ menu.
 
         The menu is built and its action triggered rather than shown: a
@@ -752,12 +745,12 @@ class AppDriver:
         menu.deleteLater()
         raise AssertionError(f"No {text!r} route in the ＋ menu")
 
-    def click_workspace_open_reference(self) -> "AppDriver":
+    def click_workspace_open_reference(self) -> AppDriver:
         """Take the ＋ menu's "Open a BPX file…" route (the old dock button;
         same flow, so this seam is stable)."""
         return self._trigger_add_route("Open a BPX file…")
 
-    def click_reference_from_library(self) -> "AppDriver":
+    def click_reference_from_library(self) -> AppDriver:
         """Take the ＋ menu's reference-library route (opens the modal
         ReferenceLibraryDialog -- tests stub its ``exec``)."""
         return self._trigger_add_route("From the reference library…")
@@ -780,7 +773,7 @@ class AppDriver:
         menu.deleteLater()
         return names
 
-    def pin_recent_file(self, name: str) -> "AppDriver":
+    def pin_recent_file(self, name: str) -> AppDriver:
         """Pick *name* from the ＋ menu's Recent files submenu."""
         menu = self._w._workspace.build_add_menu()
         for action in menu.actions():
@@ -794,7 +787,7 @@ class AppDriver:
         menu.deleteLater()
         raise AssertionError(f"No recent file {name!r} in the ＋ menu")
 
-    def dock_library_reference(self, set_id: str) -> "AppDriver":
+    def dock_library_reference(self, set_id: str) -> AppDriver:
         """Dock bundled reference set *set_id* ("pybamm/chen2020"), driving
         the same post-dialog path the dialog's accept takes -- the seam for
         testing the dock flow without the blocking modal ``exec``."""
@@ -805,9 +798,7 @@ class AppDriver:
 
     def _reference_rows(self) -> list:
         """The filled reference slots, in pin order."""
-        return [
-            slot for slot in self._w._workspace._slots if slot.snapshot is not None
-        ]
+        return [slot for slot in self._w._workspace._slots if slot.snapshot is not None]
 
     def _reference_row(self, index: int = 0):
         rows = self._reference_rows()
@@ -815,7 +806,7 @@ class AppDriver:
             raise AssertionError(f"No pinned reference at slot {index} (have {len(rows)})")
         return rows[index]
 
-    def click_reference_remove(self, index: int = 0) -> "AppDriver":
+    def click_reference_remove(self, index: int = 0) -> AppDriver:
         """Click the ✕ on the reference slot at *index*."""
         self._qtbot.mouseClick(self._reference_row(index)._remove, Qt.LeftButton)
         return self
@@ -823,15 +814,13 @@ class AppDriver:
     def empty_slot_count(self) -> int:
         """How many reference slots are still free. The slots are the drawn
         cap, so this replaced the old "n of 4 pinned" counter."""
-        return sum(
-            1 for slot in self._w._workspace._slots if slot.snapshot is None
-        )
+        return sum(1 for slot in self._w._workspace._slots if slot.snapshot is None)
 
     def can_add_reference(self) -> bool:
         """Whether the board still offers a ＋ to click."""
         return self.empty_slot_count() > 0
 
-    def click_reference_diff(self, index: int = 0) -> "AppDriver":
+    def click_reference_diff(self, index: int = 0) -> AppDriver:
         """Click the differ-count route on the reference slot at *index*."""
         self._qtbot.mouseClick(self._reference_row(index)._diff_route, Qt.LeftButton)
         return self
@@ -888,7 +877,7 @@ class AppDriver:
                 return row.findChild(QLabel, "HistoryRowName").full_text()
         return None
 
-    def click_workspace_row(self, label: str) -> "AppDriver":
+    def click_workspace_row(self, label: str) -> AppDriver:
         """Click a rail row, opening that workspace whole."""
         self._qtbot.mouseClick(self._workspace_row_named(label), Qt.LeftButton)
         return self
@@ -897,10 +886,7 @@ class AppDriver:
         """Whether the row carries the "Not found" chip (its main is gone)."""
         from PySide6.QtWidgets import QLabel
 
-        return (
-            self._workspace_row_named(label).findChild(QLabel, "HistoryRowChip")
-            is not None
-        )
+        return self._workspace_row_named(label).findChild(QLabel, "HistoryRowChip") is not None
 
     def workspace_row_reference_count(self, label: str) -> int:
         """How many reference dots the row's glyph draws."""
@@ -925,7 +911,7 @@ class AppDriver:
         row.set_hovered(True)
         return [button.text() for button in row.findChildren(QPushButton)]
 
-    def click_workspace_row_button(self, label: str, text: str) -> "AppDriver":
+    def click_workspace_row_button(self, label: str, text: str) -> AppDriver:
         """Hover a rail row (revealing its actions) and click one."""
         from PySide6.QtWidgets import QPushButton
 
@@ -937,11 +923,9 @@ class AppDriver:
                 return self
         raise AssertionError(f"No {text!r} action on workspace row {label!r}")
 
-    def click_new_workspace(self) -> "AppDriver":
+    def click_new_workspace(self) -> AppDriver:
         """Click "New workspace" -- a separate line of work, empty board."""
-        self._qtbot.mouseClick(
-            self._w._workspace._new_workspace_button, Qt.LeftButton
-        )
+        self._qtbot.mouseClick(self._w._workspace._new_workspace_button, Qt.LeftButton)
         return self
 
     def visible_rail_groups(self) -> list[str]:
@@ -964,7 +948,7 @@ class AppDriver:
         field = self._w._workspace._name_field
         return "" if field.isHidden() else field._display.text()
 
-    def rename_workspace(self, name: str) -> "AppDriver":
+    def rename_workspace(self, name: str) -> AppDriver:
         """Type a new name into the board header and commit it."""
         field = self._w._workspace._name_field
         field.begin_edit()
@@ -980,7 +964,7 @@ class AppDriver:
         """What the missing-file banner is naming, one line per file."""
         return self._w._workspace._missing_banner.missing_labels()
 
-    def click_missing_file_button(self, label: str, text: str) -> "AppDriver":
+    def click_missing_file_button(self, label: str, text: str) -> AppDriver:
         """Click Locate…/Remove on the banner row naming *label*."""
         from PySide6.QtWidgets import QLabel, QPushButton
 
@@ -1044,18 +1028,14 @@ class AppDriver:
         ws = self._w._workspace
         return not ws._main_section.isHidden() and not ws._fact_band.isHidden()
 
-    def click_edit_route(self) -> "AppDriver":
+    def click_edit_route(self) -> AppDriver:
         """Click the main card's "Edit ▸"."""
-        self._qtbot.mouseClick(
-            self._w._workspace._main_card._edit_route, Qt.LeftButton
-        )
+        self._qtbot.mouseClick(self._w._workspace._main_card._edit_route, Qt.LeftButton)
         return self
 
-    def click_issue_route(self) -> "AppDriver":
+    def click_issue_route(self) -> AppDriver:
         """Click the main card's "Diagnostics ▸"."""
-        self._qtbot.mouseClick(
-            self._w._workspace._main_card._issue_route, Qt.LeftButton
-        )
+        self._qtbot.mouseClick(self._w._workspace._main_card._issue_route, Qt.LeftButton)
         return self
 
     def issue_route_text(self) -> str:
@@ -1063,7 +1043,7 @@ class AppDriver:
         route = self._w._workspace._main_card._issue_route
         return "" if route.isHidden() else route.text()
 
-    def click_reference_row(self, index: int = 0) -> "AppDriver":
+    def click_reference_row(self, index: int = 0) -> AppDriver:
         """Click the reference slot at *index*, toggling its record."""
         self._qtbot.mouseClick(self._reference_row(index), Qt.LeftButton)
         return self
@@ -1072,10 +1052,7 @@ class AppDriver:
         """Whether the record beneath the board is showing this slot's
         reference."""
         record = self._w._workspace._reference_record
-        return (
-            not record.isHidden()
-            and record.snapshot is self._reference_row(index).snapshot
-        )
+        return not record.isHidden() and record.snapshot is self._reference_row(index).snapshot
 
     def reference_row_badges(self) -> list[str]:
         """Badge letters of the reference slots, in pin order."""
@@ -1100,14 +1077,12 @@ class AppDriver:
                 text = field.text()
             else:
                 text = " ".join(
-                    child.text()
-                    for child in field.findChildren(QLabel)
-                    if child.objectName() != "ValidityDot"
+                    child.text() for child in field.findChildren(QLabel) if child.objectName() != "ValidityDot"
                 )
             lines.append(f"{label.text()} {text}".strip())
         return "\n".join(lines)
 
-    def unpin_all_references(self) -> "AppDriver":
+    def unpin_all_references(self) -> AppDriver:
         """Unpin every pinned reference, through the same handler the
         Workspace's Remove goes through.
 
@@ -1193,7 +1168,7 @@ class AppDriver:
         toast = self._w._toast
         return toast.action_text() if not toast.isHidden() else None
 
-    def toast_click_action(self) -> "AppDriver":
+    def toast_click_action(self) -> AppDriver:
         """Click the visible toast's action link. Raises if no toast is
         showing or the message carries no action."""
         toast = self._w._toast
@@ -1212,7 +1187,7 @@ class AppDriver:
         doc.setHtml(chip.text())
         return doc.toPlainText()
 
-    def blocked_write_chip_click(self) -> "AppDriver":
+    def blocked_write_chip_click(self) -> AppDriver:
         """Follow the visible refusal chip's link back to the Editor."""
         chip = self._w._blocked_chip
         assert not chip.isHidden(), "no blocked-write chip is showing"
@@ -1304,7 +1279,7 @@ class AppDriver:
         """The middle column header's count label, verbatim."""
         return self._w._params._count_label.text()
 
-    def click_placeholder_row(self, alias: str) -> "AppDriver":
+    def click_placeholder_row(self, alias: str) -> AppDriver:
         """Click the run's muted placeholder row for *alias*."""
         panel = self._w._params
         lst = panel._list
@@ -1319,7 +1294,7 @@ class AppDriver:
                 return self
         raise AssertionError(f"No placeholder row for {alias!r}.")
 
-    def click_container_run_row(self, label: str) -> "AppDriver":
+    def click_container_run_row(self, label: str) -> AppDriver:
         """Click the ``("Validation",)`` container's run row named *label*."""
         panel = self._w._params
         lst = panel._list
@@ -1342,14 +1317,10 @@ class AppDriver:
             path = item.data(256)
             if path is not None and item.text().startswith(label):
                 menu = panel._build_row_menu(path)
-                return [
-                    (action.text(), action.isEnabled())
-                    for action in menu.actions()
-                    if not action.isSeparator()
-                ]
+                return [(action.text(), action.isEnabled()) for action in menu.actions() if not action.isSeparator()]
         raise AssertionError(f"No real parameter row starting with {label!r}.")
 
-    def add_experiment_via_container_popup(self, name: str) -> "AppDriver":
+    def add_experiment_via_container_popup(self, name: str) -> AppDriver:
         """Click the middle column's "+ Add" on the ``("Validation",)``
         container and confirm *name* in the experiment-name popup it opens."""
         panel = self._w._params
@@ -1378,7 +1349,7 @@ class AppDriver:
         image = lst.viewport().grab().toImage()
         return image.pixelColor(rect.left() + dx, rect.top() + dy).name()
 
-    def select_ghost_row(self, key: str) -> "AppDriver":
+    def select_ghost_row(self, key: str) -> AppDriver:
         """Click the ghost row for *key* -- the same ``itemClicked`` path a
         real click uses, made current first (as a real click also does)."""
         panel = self._w._params
@@ -1391,7 +1362,7 @@ class AppDriver:
                 return self
         raise AssertionError(f"No ghost row for {key!r}.")
 
-    def right_click_ghost_row(self, key: str) -> "AppDriver":
+    def right_click_ghost_row(self, key: str) -> AppDriver:
         """Right-click the ghost row for *key*: proves it opens no menu
         (read-only everywhere)."""
         panel = self._w._params
@@ -1512,9 +1483,7 @@ class AppDriver:
     def _ledger_row(self, index: int = 0):
         ledger = self._ledger()
         assert ledger is not None, "The current card has no ledger"
-        assert index < len(ledger._rows), (
-            f"No ledger row at index {index} (have {len(ledger._rows)})"
-        )
+        assert index < len(ledger._rows), f"No ledger row at index {index} (have {len(ledger._rows)})"
         return ledger._rows[index]
 
     def reference_block_visible(self) -> bool:
@@ -1567,7 +1536,7 @@ class AppDriver:
         button = self._ledger_row(index).findChild(QPushButton, "PullButton")
         return button is not None and button.isEnabled()
 
-    def click_pull(self, index: int = 0) -> "AppDriver":
+    def click_pull(self, index: int = 0) -> AppDriver:
         """Click the ledger row at *index*'s Pull button -- works for both
         ``ParameterCard`` and ``GhostParameterCard``."""
         from PySide6.QtWidgets import QPushButton
@@ -1598,7 +1567,7 @@ class AppDriver:
                 return button.text()
         return None
 
-    def click_reference_grid_badge(self, index: int) -> "AppDriver":
+    def click_reference_grid_badge(self, index: int) -> AppDriver:
         """Click the grid selector's badge at *index*, switching which
         reference's numbers the grid shows."""
         buttons = self._ledger()._grid_buttons
@@ -1621,7 +1590,7 @@ class AppDriver:
         return spread is not None and spread.is_active
 
     def spread_axis_kind(self) -> str:
-        """"linear" or "log" -- the axis the scale chose and names."""
+        """ "linear" or "log" -- the axis the scale chose and names."""
         spread = self._spread()
         return "" if spread is None else spread.axis_kind()
 
@@ -1646,9 +1615,7 @@ class AppDriver:
 
     def spread_has_main_marker(self) -> bool:
         spread = self._spread()
-        return spread is not None and spread._scale is not None and (
-            spread._scale.main_position is not None
-        )
+        return spread is not None and spread._scale is not None and (spread._scale.main_position is not None)
 
     def spread_tooltip_at_tick(self, index: int = 0) -> str:
         """The hover text over the tick at *index* -- names plus exact
@@ -1686,7 +1653,7 @@ class AppDriver:
         own domain and its point count."""
         return [button.toolTip() for button in self._preview()._legend._buttons]
 
-    def click_chart_legend_badge(self, index: int) -> "AppDriver":
+    def click_chart_legend_badge(self, index: int) -> AppDriver:
         """Click the legend badge at *index*, toggling its curve."""
         self._preview()._legend._buttons[index].click()
         return self
@@ -1714,13 +1681,9 @@ class AppDriver:
         from PySide6.QtWidgets import QAbstractSpinBox, QComboBox
 
         card = self._w._inspector._card
-        return bool(
-            card.findChildren(QLineEdit)
-            or card.findChildren(QComboBox)
-            or card.findChildren(QAbstractSpinBox)
-        )
+        return bool(card.findChildren(QLineEdit) or card.findChildren(QComboBox) or card.findChildren(QAbstractSpinBox))
 
-    def drop_file_on_workspace(self, path: Path | str) -> "AppDriver":
+    def drop_file_on_workspace(self, path: Path | str) -> AppDriver:
         """Simulate the user dropping *path* onto the Workspace page.
 
         Dispatches a real ``QDropEvent`` straight to the panel, exercising
@@ -1736,19 +1699,19 @@ class AppDriver:
         panel.dropEvent(event)
         return self
 
-    def open_add_parameter_popup(self) -> "AppDriver":
+    def open_add_parameter_popup(self) -> AppDriver:
         """Click the Parameter list's section-header "+ Add" action."""
         self._qtbot.mouseClick(self._w._params._add_button, Qt.LeftButton)
         return self
 
-    def type_new_parameter_alias(self, text: str) -> "AppDriver":
+    def type_new_parameter_alias(self, text: str) -> AppDriver:
         """Type *text* into the add-parameter popup's input."""
         popup = self._w._params._popup
         popup._input.clear()
         self._qtbot.keyClicks(popup._input, text)
         return self
 
-    def activate_selected_add_parameter_row(self) -> "AppDriver":
+    def activate_selected_add_parameter_row(self) -> AppDriver:
         """Activate whichever row is currently highlighted in the
         add-parameter popup -- a BPX-alias suggestion (creates immediately)
         or the "Create custom parameter" footer, which instead switches the
@@ -1762,7 +1725,7 @@ class AppDriver:
 
         return self._w._params._popup._active_tab == _TAB_LABELS[1]
 
-    def select_add_parameter_tab(self, label: str) -> "AppDriver":
+    def select_add_parameter_tab(self, label: str) -> AppDriver:
         """Click one of the popup's own "Standard"/"Custom" tab buttons."""
         from ui_qt.add_parameter_popup import _TAB_LABELS
 
@@ -1771,21 +1734,21 @@ class AppDriver:
         self._qtbot.mouseClick(button, Qt.LeftButton)
         return self
 
-    def type_custom_parameter_name(self, text: str) -> "AppDriver":
+    def type_custom_parameter_name(self, text: str) -> AppDriver:
         """Replace the Custom tab's Name field."""
         popup = self._w._params._popup
         popup._form_name.clear()
         self._qtbot.keyClicks(popup._form_name, text)
         return self
 
-    def type_custom_parameter_unit(self, text: str) -> "AppDriver":
+    def type_custom_parameter_unit(self, text: str) -> AppDriver:
         """Replace the Custom tab's (optional) Unit field."""
         popup = self._w._params._popup
         popup._form_unit.clear()
         self._qtbot.keyClicks(popup._form_unit, text)
         return self
 
-    def select_custom_parameter_type(self, label: str) -> "AppDriver":
+    def select_custom_parameter_type(self, label: str) -> AppDriver:
         """Click one of the Custom tab's five type buttons (e.g. "Scalar",
         "Table")."""
         from ui_qt.add_parameter_popup import _CUSTOM_TYPE_LABELS
@@ -1801,19 +1764,19 @@ class AppDriver:
     def custom_parameter_scalar_warning_visible(self) -> bool:
         return self._w._params._popup._form_warning.isVisible()
 
-    def submit_custom_parameter_form(self) -> "AppDriver":
+    def submit_custom_parameter_form(self) -> AppDriver:
         """Click "Add" on the Custom tab's form, committing the composed key
         and the selected type's seed value."""
         self._qtbot.mouseClick(self._w._params._popup._form_add, Qt.LeftButton)
         return self
 
-    def cancel_custom_parameter_form(self) -> "AppDriver":
+    def cancel_custom_parameter_form(self) -> AppDriver:
         """Click "Cancel" on the Custom tab's form, switching back to
         Standard without creating anything."""
         self._qtbot.mouseClick(self._w._params._popup._form_cancel, Qt.LeftButton)
         return self
 
-    def right_click_parameter_row(self, index: int) -> "AppDriver":
+    def right_click_parameter_row(self, index: int) -> AppDriver:
         """Right-click the parameter row at *index*: select it and open its
         context menu.
 
@@ -1854,7 +1817,7 @@ class AppDriver:
                 return item.text()
         return None
 
-    def toggle_fields_to_add_group(self) -> "AppDriver":
+    def toggle_fields_to_add_group(self) -> AppDriver:
         """Click the "fields to add" group's header row."""
         panel = self._w._params
         lst = panel._list
@@ -1876,7 +1839,7 @@ class AppDriver:
             if lst.item(i).data(panel._GROUP_ROW_KIND_ROLE) == "suggestion"
         ]
 
-    def click_fields_to_add_suggestion(self, alias: str) -> "AppDriver":
+    def click_fields_to_add_suggestion(self, alias: str) -> AppDriver:
         """Click one "fields to add" suggestion row -- the same
         ``add_parameter_requested`` path the add-parameter popup's own
         Suggested rows use."""
@@ -1892,13 +1855,13 @@ class AppDriver:
                 return self
         raise AssertionError(f"No fields-to-add suggestion row for {alias!r}.")
 
-    def activate_remove_parameter_action(self) -> "AppDriver":
+    def activate_remove_parameter_action(self) -> AppDriver:
         """Activate the parameter list's "Remove parameter" context-menu
         action -- the equivalent of clicking it while the menu is showing."""
         self._w._params._remove_action.trigger()
         return self
 
-    def press_delete_in_parameter_list(self) -> "AppDriver":
+    def press_delete_in_parameter_list(self) -> AppDriver:
         """Press the Delete key with the parameter list focused -- the
         row-removal accelerator."""
         self._qtbot.keyClick(self._w._params._list, Qt.Key_Delete)
@@ -1936,7 +1899,7 @@ class AppDriver:
                 return action.isEnabled()
         raise AssertionError(f"No {label!r} action on row {index}'s context menu.")
 
-    def trigger_parameter_row_menu_action(self, index: int, label: str) -> "AppDriver":
+    def trigger_parameter_row_menu_action(self, index: int, label: str) -> AppDriver:
         """Trigger one named action from the row's freshly built context menu."""
         for action in self.parameter_row_menu_actions(index):
             if action.text() == label:
@@ -1951,11 +1914,10 @@ class AppDriver:
         card = self._w._inspector._card
         return card is not None and getattr(card, "_rename_button", None) is not None
 
-    def click_card_rename_pencil(self) -> "AppDriver":
+    def click_card_rename_pencil(self) -> AppDriver:
         card = self._w._inspector._card
-        assert card is not None and card._rename_button is not None, (
-            "Active card has no rename pencil."
-        )
+        assert card is not None, "No active card."
+        assert card._rename_button is not None, "Active card has no rename pencil."
         self._qtbot.mouseClick(card._rename_button, Qt.LeftButton)
         return self
 
@@ -1976,24 +1938,24 @@ class AppDriver:
     def card_rename_unit_text(self) -> str:
         return self._w._inspector._card._rename_unit.text()
 
-    def type_card_rename_name(self, text: str) -> "AppDriver":
+    def type_card_rename_name(self, text: str) -> AppDriver:
         card = self._w._inspector._card
         card._rename_name.clear()
         self._qtbot.keyClicks(card._rename_name, text)
         return self
 
-    def type_card_rename_unit(self, text: str) -> "AppDriver":
+    def type_card_rename_unit(self, text: str) -> AppDriver:
         card = self._w._inspector._card
         card._rename_unit.clear()
         self._qtbot.keyClicks(card._rename_unit, text)
         return self
 
-    def click_card_rename_apply(self) -> "AppDriver":
+    def click_card_rename_apply(self) -> AppDriver:
         card = self._w._inspector._card
         self._qtbot.mouseClick(card._rename_apply, Qt.LeftButton)
         return self
 
-    def click_card_rename_cancel(self) -> "AppDriver":
+    def click_card_rename_cancel(self) -> AppDriver:
         card = self._w._inspector._card
         self._qtbot.mouseClick(card._rename_cancel, Qt.LeftButton)
         return self
@@ -2020,7 +1982,7 @@ class AppDriver:
             label = getattr(body, "_unit_label", None)
         return label.toolTip() if label is not None else None
 
-    def undo(self) -> "AppDriver":
+    def undo(self) -> AppDriver:
         """Click the toolbar's Undo button: a document command.
 
         ``QAction.trigger()`` is ignored by a disabled action exactly as a
@@ -2035,7 +1997,7 @@ class AppDriver:
         self._w._undo_action.trigger()
         return self
 
-    def press_undo_shortcut(self) -> "AppDriver":
+    def press_undo_shortcut(self) -> AppDriver:
         """Press ``Ctrl+Z``: focus-aware undo (see ``MainWindow._undo``).
 
         Emits the real ``QShortcut``'s ``activated`` signal rather than a
@@ -2046,7 +2008,7 @@ class AppDriver:
         self._w._undo_shortcut.activated.emit()
         return self
 
-    def redo(self) -> "AppDriver":
+    def redo(self) -> AppDriver:
         """Click the toolbar's Redo button: a document command.
 
         Mirrors ``undo()`` -- see its docstring for why a disabled action and
@@ -2055,7 +2017,7 @@ class AppDriver:
         self._w._redo_action.trigger()
         return self
 
-    def press_redo_shortcut(self) -> "AppDriver":
+    def press_redo_shortcut(self) -> AppDriver:
         """Press ``Ctrl+Y``: focus-aware redo (see ``MainWindow._redo``).
 
         Emits the real ``QShortcut``'s ``activated`` signal -- see
@@ -2064,17 +2026,17 @@ class AppDriver:
         self._w._redo_shortcut.activated.emit()
         return self
 
-    def press_redo_shortcut_alt(self) -> "AppDriver":
+    def press_redo_shortcut_alt(self) -> AppDriver:
         """Press ``Ctrl+Shift+Z``: the alternate focus-aware redo shortcut."""
         self._w._redo_shortcut_alt.activated.emit()
         return self
 
-    def focus_search(self) -> "AppDriver":
+    def focus_search(self) -> AppDriver:
         """Give the top-bar search box keyboard focus within the window."""
         self._focus(self._w._search)
         return self
 
-    def type_in_search(self, text: str) -> "AppDriver":
+    def type_in_search(self, text: str) -> AppDriver:
         self._qtbot.keyClicks(self._w._search, str(text))
         return self
 
@@ -2094,12 +2056,12 @@ class AppDriver:
         widget.setFocus()
         assert self._w.focusWidget() is widget, f"{widget!r} did not take focus"
 
-    def focus_field(self) -> "AppDriver":
+    def focus_field(self) -> AppDriver:
         """Give the active card's editor keyboard focus within the window."""
         self._focus(self._editor_widget())
         return self
 
-    def type_in_field(self, text: str) -> "AppDriver":
+    def type_in_field(self, text: str) -> AppDriver:
         """Type into the active card's editor without clearing it first, so the
         widget accumulates its own undo history."""
         self._qtbot.keyClicks(self._editor_widget(), str(text))
@@ -2111,15 +2073,13 @@ class AppDriver:
         assert isinstance(widget, QLineEdit), f"{type(widget).__name__} has no text()"
         return widget.text()
 
-    def click_workspace_new(self, model: str) -> "AppDriver":
+    def click_workspace_new(self, model: str) -> AppDriver:
         """Click the *model* row on the board's start surface. A QWidget
         lookup, not a QPushButton one: the rows are whole-row click targets
         now, and the objectName is the seam that survived the move."""
         row = self._w._workspace.findChild(QWidget, f"NewButton_{model}")
         assert row is not None, f"No New row for model {model!r}"
-        assert row.isVisibleTo(self._w._workspace), (
-            f"The New row for {model!r} is not on the board"
-        )
+        assert row.isVisibleTo(self._w._workspace), f"The New row for {model!r} is not on the board"
         self._qtbot.mouseClick(row, Qt.LeftButton)
         return self
 
@@ -2133,10 +2093,9 @@ class AppDriver:
         """
         prefix = "NewButton_"
         return [
-            row.objectName()[len(prefix):]
+            row.objectName()[len(prefix) :]
             for row in self._w._workspace.findChildren(QWidget)
-            if row.objectName().startswith(prefix)
-            and row.isVisibleTo(self._w._workspace)
+            if row.objectName().startswith(prefix) and row.isVisibleTo(self._w._workspace)
         ]
 
     def start_surface_visible(self) -> bool:
@@ -2147,7 +2106,7 @@ class AppDriver:
         """The recent files the start surface is offering as a main."""
         return self._w._workspace._start_surface.recent_row_labels()
 
-    def click_start_recent(self, name: str) -> "AppDriver":
+    def click_start_recent(self, name: str) -> AppDriver:
         """Click the start surface's recent row for *name*."""
         for row in self._w._workspace._start_surface._recent_rows:
             if row.findChild(QLabel, "StartRowName").text() == name:
@@ -2181,7 +2140,7 @@ class AppDriver:
         """
         return self._w._identity_label.toolTip()
 
-    def save(self) -> "AppDriver":
+    def save(self) -> AppDriver:
         """Click the toolbar's Save button: writes to the backing file, or
         opens Save As first for a never-saved document (tests stub the
         dialog)."""
@@ -2199,7 +2158,7 @@ class AppDriver:
     def open_shortcut(self) -> str:
         return self._w._open_shortcut.key().toString()
 
-    def press_open_shortcut(self) -> "AppDriver":
+    def press_open_shortcut(self) -> AppDriver:
         """Fire Ctrl+O without a synthesised key press, so the test does not
         depend on the offscreen window holding real Qt focus."""
         self._w._open_shortcut.activated.emit()
@@ -2317,11 +2276,7 @@ class AppDriver:
         listed in the add-parameter popup."""
         popup = self._w._params._popup
         lst = popup._list
-        return [
-            lst.item(i).text()
-            for i in range(lst.count())
-            if lst.item(i).data(popup._TIER_ROLE) != "header"
-        ]
+        return [lst.item(i).text() for i in range(lst.count()) if lst.item(i).data(popup._TIER_ROLE) != "header"]
 
     def editor_kind(self) -> str:
         """Class name of the active card's per-kind editor (e.g.
@@ -2452,9 +2407,7 @@ class AppDriver:
         lines.append(f"Contents: {ws._fact_contents.text()}")
         if not ws._fact_from.isHidden():
             # The full path (the label itself elides), plus the disk facts.
-            lines.append(
-                f"From: {ws._fact_from_path.toolTip()} {ws._fact_from_meta.text()}".rstrip()
-            )
+            lines.append(f"From: {ws._fact_from_path.toolTip()} {ws._fact_from_meta.text()}".rstrip())
         lines.append(f"Status: {ws._fact_status.text()}")
         return "\n".join(lines)
 
@@ -2480,7 +2433,7 @@ class AppDriver:
         """Every row of the active card's grid, as raw cell objects."""
         return self._grid().values()
 
-    def set_grid_cell(self, row: int, column: int, text) -> "AppDriver":
+    def set_grid_cell(self, row: int, column: int, text) -> AppDriver:
         """Type *text* into one grid cell (what the cell delegate commits).
 
         Drives the model's ``setData`` -- the same entry point the cell editor
@@ -2493,18 +2446,18 @@ class AppDriver:
         grid._model.setData(grid._model.index(row, column), str(text), Qt.EditRole)
         return self
 
-    def add_grid_row(self) -> "AppDriver":
+    def add_grid_row(self) -> AppDriver:
         self._grid().insert_row()
         return self
 
-    def remove_grid_row(self, row: int | None = None) -> "AppDriver":
+    def remove_grid_row(self, row: int | None = None) -> AppDriver:
         grid = self._grid()
         if row is not None:
             grid._view.setCurrentIndex(grid._model.index(row, 0))
         grid.remove_row()
         return self
 
-    def open_grid_cell_editor(self, row: int, column: int) -> "AppDriver":
+    def open_grid_cell_editor(self, row: int, column: int) -> AppDriver:
         """Open the real per-cell editor widget for one grid cell.
 
         Types a digit into the cell -- the ``AnyKeyPressed`` trigger -- so the
@@ -2529,7 +2482,7 @@ class AppDriver:
 
         return self._grid().focus_widget().state() == QAbstractItemView.State.EditingState
 
-    def press_in_cell_editor(self, key) -> "AppDriver":
+    def press_in_cell_editor(self, key) -> AppDriver:
         """Send a key to the open cell editor widget (not the grid).
 
         Waits for Qt to deliver the delegate's commit/close after the key, so
@@ -2543,14 +2496,14 @@ class AppDriver:
         self._qtbot.wait(10)
         return self
 
-    def commit_grid(self) -> "AppDriver":
+    def commit_grid(self) -> AppDriver:
         """Press Enter on the grid itself to commit the draft to the document."""
         from PySide6.QtCore import Qt
 
         self._qtbot.keyClick(self._grid().focus_widget(), Qt.Key_Return)
         return self
 
-    def revert_grid(self) -> "AppDriver":
+    def revert_grid(self) -> AppDriver:
         """Press Escape on the grid itself to discard the draft."""
         from PySide6.QtCore import Qt
 
@@ -2580,7 +2533,7 @@ class AppDriver:
     def current_mode(self) -> str:
         return self._modal().current_mode
 
-    def select_mode(self, label: str) -> "AppDriver":
+    def select_mode(self, label: str) -> AppDriver:
         """Click a mode button on the strip."""
         modal = self._modal()
         index = list(modal.mode_labels).index(label)
@@ -2596,7 +2549,7 @@ class AppDriver:
         assert card is not None, "No active card; navigate to a parameter first."
         return card.commit_blocked_reason()
 
-    def set_raw_json(self, text: str) -> "AppDriver":
+    def set_raw_json(self, text: str) -> AppDriver:
         """Replace the Raw mode body's JSON text wholesale."""
         modal = self._modal()
         assert modal.current_mode == "Raw", f"Not in Raw mode ({modal.current_mode})."
@@ -2607,9 +2560,7 @@ class AppDriver:
         card = self._w._inspector._card
         assert card is not None, "No active card; navigate to a parameter first."
         editor = card._editor
-        assert hasattr(editor, "mode_labels"), (
-            f"Card {type(editor).__name__} is not a ModalCard."
-        )
+        assert hasattr(editor, "mode_labels"), f"Card {type(editor).__name__} is not a ModalCard."
         return editor
 
     # ------------------------------------------------------------------
@@ -2626,8 +2577,7 @@ class AppDriver:
 
         card = self._w._inspector._card
         assert isinstance(card, ExperimentCard), (
-            "Inspector is not showing an ExperimentCard "
-            f"({type(card).__name__ if card is not None else None})."
+            f"Inspector is not showing an ExperimentCard ({type(card).__name__ if card is not None else None})."
         )
         return card
 
@@ -2651,7 +2601,7 @@ class AppDriver:
         card = self.experiment_card()
         return card._grid.column_values(self._experiment_column_index(alias))
 
-    def set_experiment_cell(self, alias: str, row: int, text) -> "AppDriver":
+    def set_experiment_cell(self, alias: str, row: int, text) -> AppDriver:
         """Type *text* into one cell of column *alias* (the model's
         ``setData``, exactly like :meth:`set_grid_cell`)."""
         card = self.experiment_card()
@@ -2666,14 +2616,14 @@ class AppDriver:
         column = self._experiment_column_index(alias)
         return grid._model.data(grid._model.index(row, column), Qt.ToolTipRole)
 
-    def commit_experiment(self) -> "AppDriver":
+    def commit_experiment(self) -> AppDriver:
         """Press Enter on the card's grid: commits every changed column as
         one ``SetValues``."""
         card = self.experiment_card()
         self._qtbot.keyClick(card._grid.focus_widget(), Qt.Key_Return)
         return self
 
-    def revert_experiment(self) -> "AppDriver":
+    def revert_experiment(self) -> AppDriver:
         """Press Escape on the card's grid: discards every column's draft."""
         card = self.experiment_card()
         self._qtbot.keyClick(card._grid.focus_widget(), Qt.Key_Escape)
@@ -2690,7 +2640,7 @@ class AppDriver:
         column already exists, or the card is read-only)."""
         return self.experiment_card()._add_temperature_button
 
-    def click_experiment_add_temperature(self) -> "AppDriver":
+    def click_experiment_add_temperature(self) -> AppDriver:
         button = self.experiment_add_temperature_button()
         assert button is not None, "No '+ Temperature [K]' button is currently shown."
         self._qtbot.mouseClick(button, Qt.LeftButton)
@@ -2700,7 +2650,7 @@ class AppDriver:
         card = self.experiment_card()
         return card._chip.text() if card._chip is not None else None
 
-    def experiment_import_csv(self, data, mapping) -> "AppDriver":
+    def experiment_import_csv(self, data, mapping) -> AppDriver:
         """Apply a confirmed CSV mapping directly (the dialog itself is
         modal and tested separately; see ``test_csv_import.py``)."""
         self.experiment_card()._apply_csv_import(data, mapping)
@@ -2738,7 +2688,7 @@ class AppDriver:
     def experiment_preview_empty_text(self, alias: str) -> str:
         return self.experiment_card()._preview_panels[alias]._empty.text()
 
-    def flush_experiment_preview(self) -> "AppDriver":
+    def flush_experiment_preview(self) -> AppDriver:
         """Fire the band's pending coalesced redraw now, if one is queued --
         deterministic stand-in for waiting out the 120ms timer."""
         card = self.experiment_card()
@@ -2747,14 +2697,14 @@ class AppDriver:
             card._refresh_preview()
         return self
 
-    def click_experiment_dropzone_browse(self) -> "AppDriver":
+    def click_experiment_dropzone_browse(self) -> AppDriver:
         dropzone = self.experiment_card()._dropzone
         assert dropzone is not None, "No dropzone is currently shown."
         button = dropzone.findChild(QPushButton, "ExperimentDropzoneUpload")
         self._qtbot.mouseClick(button, Qt.LeftButton)
         return self
 
-    def click_experiment_database_examples(self) -> "AppDriver":
+    def click_experiment_database_examples(self) -> AppDriver:
         button = self.experiment_card()._database_examples_button
         assert button is not None, "No 'Compare…' button is currently shown."
         self._qtbot.mouseClick(button, Qt.LeftButton)
@@ -2787,22 +2737,21 @@ class AppDriver:
 
         card = self._w._inspector._card
         assert isinstance(card, ValidationEmptyState), (
-            "Inspector is not showing the ValidationEmptyState "
-            f"({type(card).__name__ if card is not None else None})."
+            f"Inspector is not showing the ValidationEmptyState ({type(card).__name__ if card is not None else None})."
         )
         return card
 
-    def click_add_experiment(self) -> "AppDriver":
+    def click_add_experiment(self) -> AppDriver:
         widget = self._validation_empty_state()
         self._qtbot.mouseClick(widget._add_button, Qt.LeftButton)
         return self
 
-    def click_import_csv_as_new_experiment(self) -> "AppDriver":
+    def click_import_csv_as_new_experiment(self) -> AppDriver:
         widget = self._validation_empty_state()
         self._qtbot.mouseClick(widget._import_button, Qt.LeftButton)
         return self
 
-    def confirm_validation_empty_state_name(self, name: str) -> "AppDriver":
+    def confirm_validation_empty_state_name(self, name: str) -> AppDriver:
         """Type *name* into the open name popup and confirm it -- same
         directness as ``test_tree_editing.py``'s own ``NamePopup`` driving."""
         widget = self._validation_empty_state()
@@ -2810,7 +2759,7 @@ class AppDriver:
         widget._popup._input.confirm_requested.emit()
         return self
 
-    def drop_file_on_experiment_dropzone(self, path: Path | str) -> "AppDriver":
+    def drop_file_on_experiment_dropzone(self, path: Path | str) -> AppDriver:
         """Simulate dropping *path* onto the card's dropzone -- same real-
         ``QDropEvent`` idiom as :meth:`drop_file_on_workspace`."""
         dropzone = self.experiment_card()._dropzone
@@ -2821,7 +2770,7 @@ class AppDriver:
         dropzone.dropEvent(event)
         return self
 
-    def open_experiment_cell_editor(self, alias: str, row: int) -> "AppDriver":
+    def open_experiment_cell_editor(self, alias: str, row: int) -> AppDriver:
         """Open the real per-cell editor widget for one cell of column
         *alias* -- mirrors :meth:`open_grid_cell_editor` for the multi-column
         grid, to exercise the same cell-level-vs-grid-level keyboard layering."""
@@ -2838,12 +2787,9 @@ class AppDriver:
     def experiment_cell_editor_open(self) -> bool:
         from PySide6.QtWidgets import QAbstractItemView
 
-        return (
-            self.experiment_card()._grid.focus_widget().state()
-            == QAbstractItemView.State.EditingState
-        )
+        return self.experiment_card()._grid.focus_widget().state() == QAbstractItemView.State.EditingState
 
-    def press_in_experiment_cell_editor(self, key) -> "AppDriver":
+    def press_in_experiment_cell_editor(self, key) -> AppDriver:
         from PySide6.QtWidgets import QLineEdit
 
         editor = self.experiment_card()._grid.focus_widget().findChild(QLineEdit)
@@ -2852,12 +2798,12 @@ class AppDriver:
         self._qtbot.wait(10)
         return self
 
-    def rename_node(self, path: tuple[str, ...], new_name: str) -> "AppDriver":
+    def rename_node(self, path: tuple[str, ...], new_name: str) -> AppDriver:
         """Rename the user-named key at *path*, as the tree's rename UI does."""
         self._w._tree.rename_requested.emit(tuple(path), new_name)
         return self
 
-    def open_tree_rename_popup(self, path: tuple[str, ...]) -> "AppDriver":
+    def open_tree_rename_popup(self, path: tuple[str, ...]) -> AppDriver:
         """Open the tree's rename popup for the node at *path*, as its own
         "Rename…" context-menu action would."""
         tree = self._w._tree

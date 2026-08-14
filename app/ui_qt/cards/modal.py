@@ -177,9 +177,7 @@ class ModalCard(EditorCard):
         for i in range(self._stack.count()):
             body = self._stack.widget(i)
             policy = body.sizePolicy()
-            policy.setVerticalPolicy(
-                QSizePolicy.Preferred if i == index else QSizePolicy.Ignored
-            )
+            policy.setVerticalPolicy(QSizePolicy.Preferred if i == index else QSizePolicy.Ignored)
             body.setSizePolicy(policy)
 
     @property

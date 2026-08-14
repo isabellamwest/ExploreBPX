@@ -39,7 +39,7 @@ _TIME = _RUN + ("Time [s]",)
 
 @pytest.fixture(autouse=True)
 def _qapp():
-    yield QApplication.instance() or QApplication([])
+    return QApplication.instance() or QApplication([])
 
 
 def _table_card(value):
@@ -199,9 +199,7 @@ def test_cell_editor_enter_on_last_row_stays_put(app_driver, spm_with_validation
 # ----------------------------------------------------------------------
 
 
-def test_experiment_bar_shows_on_edit_and_discard_reverts(
-    app_driver, spm_with_validation_path
-):
+def test_experiment_bar_shows_on_edit_and_discard_reverts(app_driver, spm_with_validation_path):
     d = app_driver
     d.open(spm_with_validation_path).go_to(_TIME)
     grid = d.experiment_card()._grid
@@ -217,9 +215,7 @@ def test_experiment_bar_shows_on_edit_and_discard_reverts(
     assert d.undo_enabled() is False
 
 
-def test_experiment_apply_button_commits_the_dirty_columns(
-    app_driver, spm_with_validation_path
-):
+def test_experiment_apply_button_commits_the_dirty_columns(app_driver, spm_with_validation_path):
     d = app_driver
     d.open(spm_with_validation_path).go_to(_TIME)
 

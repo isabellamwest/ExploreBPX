@@ -57,9 +57,7 @@ def _pin(app_driver, monkeypatch, path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_run_rows_render_schema_arrays_first_then_customs_in_file_order(
-    app_driver, tmp_path, valid_spm_dict
-):
+def test_run_rows_render_schema_arrays_first_then_customs_in_file_order(app_driver, tmp_path, valid_spm_dict):
     """The file interleaves customs and schema arrays; the column shows the
     grid's own schema order, then customs in file order."""
     workfile = _write_doc(
@@ -91,9 +89,7 @@ def test_run_rows_render_schema_arrays_first_then_customs_in_file_order(
     assert rows[3] == ("placeholder", "Temperature [K]")
 
 
-def test_schema_arrays_offer_no_move_actions_customs_keep_them(
-    app_driver, tmp_path, valid_spm_dict
-):
+def test_schema_arrays_offer_no_move_actions_customs_keep_them(app_driver, tmp_path, valid_spm_dict):
     workfile = _write_doc(
         tmp_path,
         valid_spm_dict,
@@ -139,9 +135,7 @@ def test_rows_outside_validation_keep_move_actions(app_driver, valid_spm_path):
 # ---------------------------------------------------------------------------
 
 
-def test_placeholder_rows_anatomy_and_click_focuses_the_column(
-    app_driver, tmp_path, valid_spm_dict
-):
+def test_placeholder_rows_anatomy_and_click_focuses_the_column(app_driver, tmp_path, valid_spm_dict):
     from ui_qt import parameter_row
 
     workfile = _write_doc(
@@ -163,8 +157,7 @@ def test_placeholder_rows_anatomy_and_click_focuses_the_column(
     item = next(
         lst.item(i)
         for i in range(lst.count())
-        if lst.item(i).data(panel._GROUP_ROW_KIND_ROLE) == "placeholder"
-        and lst.item(i).text() == "Voltage [V]"
+        if lst.item(i).data(panel._GROUP_ROW_KIND_ROLE) == "placeholder" and lst.item(i).text() == "Voltage [V]"
     )
     assert item.data(parameter_row.VALUE_ROLE) == "not in file"
     assert item.data(parameter_row.REF_BAR_ROLE) is None
@@ -189,9 +182,7 @@ def test_placeholder_click_writes_nothing(app_driver, main_window, tmp_path, val
     assert d.undo_enabled() is False
 
 
-def test_a_ghost_row_wins_over_a_placeholder_for_the_same_key(
-    app_driver, monkeypatch, tmp_path, valid_spm_dict
-):
+def test_a_ghost_row_wins_over_a_placeholder_for_the_same_key(app_driver, monkeypatch, tmp_path, valid_spm_dict):
     """When a pinned reference supplies the missing array, the purple ghost
     row shows and the placeholder is suppressed -- one row per key, never
     both."""
@@ -288,18 +279,14 @@ def test_ghost_temperature_use_pulls_the_whole_array_in_one_undo_step(
 # ---------------------------------------------------------------------------
 
 
-def test_series_row_tooltip_is_a_summary_not_a_dump(
-    app_driver, spm_with_validation_path
-):
+def test_series_row_tooltip_is_a_summary_not_a_dump(app_driver, spm_with_validation_path):
     d = app_driver
     d.open(spm_with_validation_path).go_to(_RUN)
 
     assert d.parameter_row_tooltip("Time [s]") == "series · 3 values"
 
 
-def test_differs_tooltip_reference_lines_are_summaries(
-    app_driver, monkeypatch, tmp_path, valid_spm_dict
-):
+def test_differs_tooltip_reference_lines_are_summaries(app_driver, monkeypatch, tmp_path, valid_spm_dict):
     workfile = _write_doc(
         tmp_path,
         valid_spm_dict,
@@ -339,9 +326,7 @@ def test_differs_tooltip_reference_lines_are_summaries(
 # ---------------------------------------------------------------------------
 
 
-def test_container_lists_navigable_run_rows_and_count_matches(
-    app_driver, tmp_path, valid_spm_dict
-):
+def test_container_lists_navigable_run_rows_and_count_matches(app_driver, tmp_path, valid_spm_dict):
     workfile = _write_doc(
         tmp_path,
         valid_spm_dict,
@@ -365,9 +350,7 @@ def test_container_lists_navigable_run_rows_and_count_matches(
     assert d.experiment_title() == "Experiment · 1C discharge"
 
 
-def test_container_run_row_meta_counts_its_arrays(
-    app_driver, tmp_path, valid_spm_dict
-):
+def test_container_run_row_meta_counts_its_arrays(app_driver, tmp_path, valid_spm_dict):
     from ui_qt import parameter_row
 
     workfile = _write_doc(
@@ -392,9 +375,7 @@ def test_container_run_row_meta_counts_its_arrays(
     assert values == ["3 arrays", "1 array"]
 
 
-def test_container_add_opens_the_experiment_popup_and_creates_a_run(
-    app_driver, main_window, tmp_path, valid_spm_dict
-):
+def test_container_add_opens_the_experiment_popup_and_creates_a_run(app_driver, main_window, tmp_path, valid_spm_dict):
     workfile = _write_doc(
         tmp_path,
         valid_spm_dict,
@@ -410,9 +391,7 @@ def test_container_add_opens_the_experiment_popup_and_creates_a_run(
     assert raw["Validation"]["2C discharge"] == {}
 
 
-def test_empty_container_lists_no_rows_and_keeps_the_guided_empty_state(
-    app_driver, tmp_path, valid_spm_dict
-):
+def test_empty_container_lists_no_rows_and_keeps_the_guided_empty_state(app_driver, tmp_path, valid_spm_dict):
     """A zero-run container has no run rows, count 0, and the inspector's
     guided empty state is unchanged."""
     workfile = _write_doc(tmp_path, valid_spm_dict, {})

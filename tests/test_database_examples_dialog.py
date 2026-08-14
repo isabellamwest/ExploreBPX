@@ -36,13 +36,13 @@ _OWN_RUN = {
 #: The full bundled catalog, two documents (NMC pouch cell, LFP 18650 cell)
 #: x five runs each -- see ``test_example_library.py``. None of them carry
 #: Temperature (the About:Energy source data doesn't), so temperature-panel
-#: coverage below fabricates one run instead (see ``_with_temperature_run``).
+#: coverage below fabricates one run instead (see ``with_temperature_run``).
 _BUNDLED_RUN_COUNT = 10
 
 
 @pytest.fixture(autouse=True)
 def _qapp():
-    yield QApplication.instance() or QApplication([])
+    return QApplication.instance() or QApplication([])
 
 
 def _first_run() -> ExampleRun:
@@ -76,7 +76,7 @@ _SYNTHETIC_TEMPERATURE_DATA = {
 
 
 @pytest.fixture
-def _with_temperature_run(monkeypatch) -> ExampleRun:
+def with_temperature_run(monkeypatch) -> ExampleRun:
     """Adds :func:`_synthetic_run_with_temperature` to the catalog the dialog
     sees, alongside the real bundled runs, and serves its fabricated data
     when the dialog asks to load it."""
@@ -285,25 +285,21 @@ def test_removing_the_selected_series_falls_back_to_the_default():
 def test_table_omits_temperature_for_a_series_that_lacks_it():
     dialog = DatabaseExamplesDialog(_OWN_RUN)  # no Temperature key
 
-    headers = [
-        dialog._table.horizontalHeaderItem(c).text() for c in range(dialog._table.columnCount())
-    ]
+    headers = [dialog._table.horizontalHeaderItem(c).text() for c in range(dialog._table.columnCount())]
 
     assert headers == ["Time [s]", "Current [A]", "Voltage [V]"]
     assert dialog._table.rowCount() == 3
 
 
 def test_table_shows_the_selected_series_full_data_including_temperature(
-    _with_temperature_run,
+    with_temperature_run,
 ):
     dialog = DatabaseExamplesDialog()
-    run = _with_temperature_run
+    run = with_temperature_run
     dialog._toggle_run(run)
     dialog._on_mode_clicked(1)
 
-    headers = [
-        dialog._table.horizontalHeaderItem(c).text() for c in range(dialog._table.columnCount())
-    ]
+    headers = [dialog._table.horizontalHeaderItem(c).text() for c in range(dialog._table.columnCount())]
     assert headers == ["Time [s]", "Current [A]", "Voltage [V]", "Temperature [K]"]
 
     data = _SYNTHETIC_TEMPERATURE_DATA
@@ -313,10 +309,10 @@ def test_table_shows_the_selected_series_full_data_including_temperature(
 
 
 def test_adding_a_run_with_temperature_adds_its_curve_to_the_temperature_chart(
-    _with_temperature_run,
+    with_temperature_run,
 ):
     dialog = DatabaseExamplesDialog()
-    run = _with_temperature_run
+    run = with_temperature_run
 
     dialog._toggle_run(run)
 
@@ -324,10 +320,10 @@ def test_adding_a_run_with_temperature_adds_its_curve_to_the_temperature_chart(
 
 
 def test_temperature_panel_hidden_until_a_series_with_temperature_is_added(
-    _with_temperature_run,
+    with_temperature_run,
 ):
     dialog = DatabaseExamplesDialog(_OWN_RUN)  # the own run has no Temperature
-    run = _with_temperature_run
+    run = with_temperature_run
 
     assert dialog._chart_page.temperature.isHidden()
 
@@ -454,10 +450,7 @@ def test_numbers_table_reports_points_duration_and_ranges_for_own_run_and_a_refe
     # Pinned by id, not picker position -- the picker's curated order (NMC
     # first) is presentation, and these hand-computed values are the LFP
     # C/20 run's (1000 pts).
-    run = next(
-        r for r in list_example_runs()
-        if r.id == "about_energy/lfp_18650_cell::C/20 discharge"
-    )
+    run = next(r for r in list_example_runs() if r.id == "about_energy/lfp_18650_cell::C/20 discharge")
 
     dialog._toggle_run(run)
 
@@ -640,7 +633,7 @@ def _rail_widget(dialog):
 
 
 def test_rail_heading_is_compare_with_and_no_rail_string_says_reference():
-    """"Reference" belongs to the pinned purple reference system (a
+    """ "Reference" belongs to the pinned purple reference system (a
     different feature); this dialog's rail never uses the word."""
     from PySide6.QtWidgets import QLabel
 
@@ -663,9 +656,7 @@ def test_cap_message_states_the_limit_without_saying_reference(monkeypatch):
     dialog._toggle_run(runs[MAX_REFERENCE_RUNS])
 
     assert not dialog._cap_message.isHidden()
-    assert dialog._cap_message.text() == (
-        f"Up to {MAX_REFERENCE_RUNS} runs at a time. Remove one to add another."
-    )
+    assert dialog._cap_message.text() == (f"Up to {MAX_REFERENCE_RUNS} runs at a time. Remove one to add another.")
 
 
 def test_bundled_groups_carry_the_about_energy_origin_caption():
@@ -674,11 +665,7 @@ def test_bundled_groups_carry_the_about_energy_origin_caption():
     dialog = DatabaseExamplesDialog()
     rail = _rail_widget(dialog)
 
-    captions = [
-        w.text()
-        for w in rail.findChildren(QLabel)
-        if w.objectName() == "CompareGroupOrigin"
-    ]
+    captions = [w.text() for w in rail.findChildren(QLabel) if w.objectName() == "CompareGroupOrigin"]
     # One caption per bundled document group (NMC pouch cell, LFP 18650 cell).
     assert captions == ["Sample data · About:Energy", "Sample data · About:Energy"]
 
@@ -702,28 +689,20 @@ def test_opened_file_group_carries_the_opened_file_caption(tmp_path):
     dialog = DatabaseExamplesDialog()
     dialog._add_reference_file(str(path))
 
-    captions = [
-        w.text()
-        for w in dialog.findChildren(QLabel)
-        if w.objectName() == "CompareGroupOrigin"
-    ]
+    captions = [w.text() for w in dialog.findChildren(QLabel) if w.objectName() == "CompareGroupOrigin"]
     assert "Opened file" in captions
 
 
 def test_rail_foot_states_sample_provenance_with_the_full_statement_on_hover():
-    from core.example_library import PROVENANCE, SOURCE_URL
     from PySide6.QtWidgets import QLabel
+
+    from core.example_library import PROVENANCE, SOURCE_URL
 
     dialog = DatabaseExamplesDialog()
     rail = _rail_widget(dialog)
 
-    foot = next(
-        w for w in rail.findChildren(QLabel)
-        if w.objectName() == "CompareSampleProvenance"
-    )
-    assert foot.text() == (
-        f'Samples: <a href="{SOURCE_URL}">About:Energy</a> · CC BY-SA 4.0'
-    )
+    foot = next(w for w in rail.findChildren(QLabel) if w.objectName() == "CompareSampleProvenance")
+    assert foot.text() == (f'Samples: <a href="{SOURCE_URL}">About:Energy</a> · CC BY-SA 4.0')
     assert foot.openExternalLinks()
     assert SOURCE_URL.startswith("https://")
     assert foot.toolTip() == PROVENANCE
@@ -761,16 +740,10 @@ def test_document_runs_form_the_first_picker_group_named_by_the_stem():
     )
     rail = _rail_widget(dialog)
 
-    headings = [
-        w.text() for w in rail.findChildren(QLabel) if w.objectName() == "Heading"
-    ]
+    headings = [w.text() for w in rail.findChildren(QLabel) if w.objectName() == "Heading"]
     # The active document's group comes before both bundled sample groups.
     assert headings[0] == "my_cell"
-    captions = [
-        w.text()
-        for w in rail.findChildren(QLabel)
-        if w.objectName() == "CompareGroupOrigin"
-    ]
+    captions = [w.text() for w in rail.findChildren(QLabel) if w.objectName() == "CompareGroupOrigin"]
     assert captions[0] == "Active file"
     assert "active::1C discharge" in dialog._picker_rows
     assert "active::2C discharge" in dialog._picker_rows
@@ -796,9 +769,7 @@ def test_document_run_add_remove_round_trip_uses_the_given_committed_values():
 
 
 def test_document_runs_count_toward_the_cap():
-    dialog = DatabaseExamplesDialog(
-        document_runs=_SIBLING_RUNS, document_label="my_cell"
-    )
+    dialog = DatabaseExamplesDialog(document_runs=_SIBLING_RUNS, document_label="my_cell")
     dialog._picker_rows["active::1C discharge"].clicked.emit()
     dialog._picker_rows["active::2C discharge"].clicked.emit()
     for run in list_example_runs()[: MAX_REFERENCE_RUNS - 2]:
@@ -812,14 +783,10 @@ def test_document_runs_count_toward_the_cap():
 def test_unsaved_document_group_heads_as_active_file_without_duplicate_caption():
     from PySide6.QtWidgets import QLabel
 
-    dialog = DatabaseExamplesDialog(
-        _OWN_RUN, "Active file · run", document_runs=_SIBLING_RUNS
-    )
+    dialog = DatabaseExamplesDialog(_OWN_RUN, "Active file · run", document_runs=_SIBLING_RUNS)
     rail = _rail_widget(dialog)
 
-    headings = [
-        w.text() for w in rail.findChildren(QLabel) if w.objectName() == "Heading"
-    ]
+    headings = [w.text() for w in rail.findChildren(QLabel) if w.objectName() == "Heading"]
     assert headings[0] == "Active file"
 
 
@@ -829,7 +796,5 @@ def test_without_document_runs_no_active_file_group_appears():
     dialog = DatabaseExamplesDialog(_OWN_RUN, "my_cell · run")
     rail = _rail_widget(dialog)
 
-    headings = [
-        w.text() for w in rail.findChildren(QLabel) if w.objectName() == "Heading"
-    ]
+    headings = [w.text() for w in rail.findChildren(QLabel) if w.objectName() == "Heading"]
     assert all(h in ("NMC pouch cell", "LFP 18650 cell") for h in headings)

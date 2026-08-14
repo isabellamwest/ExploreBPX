@@ -16,7 +16,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QToolButton, QVBoxLayout, QWidget
 
-from ..style import MUTED
+from ui_qt.style import MUTED
 
 
 class WrappedHelp(QLabel):
@@ -37,7 +37,7 @@ class WrappedHelp(QLabel):
         super().__init__(text, parent)
         self.setWordWrap(True)
 
-    def resizeEvent(self, event) -> None:  # noqa: N802 (Qt override)
+    def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         self.setMinimumHeight(self.heightForWidth(self.width()))
 

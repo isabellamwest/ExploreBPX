@@ -25,7 +25,6 @@ from core.completion import TaskKind
 from core.validation import Severity
 from ui_qt import style
 
-
 # --- structural proof: the helpers cannot see message/alias text -----------
 
 
@@ -66,13 +65,15 @@ def test_task_kind_tooltip_ignores_task_alias_and_path():
 def test_every_severity_has_a_tooltip():
     for severity in Severity:
         text = style.severity_tooltip(severity)
-        assert isinstance(text, str) and text
+        assert isinstance(text, str)
+        assert text
 
 
 def test_every_task_kind_has_a_tooltip():
     for kind in TaskKind:
         text = style.task_kind_tooltip(kind)
-        assert isinstance(text, str) and text
+        assert isinstance(text, str)
+        assert text
 
 
 def test_missing_field_and_missing_section_have_distinct_wording():

@@ -21,9 +21,7 @@ _DIFFUSIVITY = ("Parameterisation", "Negative electrode", "Diffusivity [m2.s-1]"
 
 
 def _stored(window):
-    return window._state.active.document.raw["Parameterisation"]["Negative electrode"][
-        "Diffusivity [m2.s-1]"
-    ]
+    return window._state.active.document.raw["Parameterisation"]["Negative electrode"]["Diffusivity [m2.s-1]"]
 
 
 @pytest.fixture

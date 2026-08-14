@@ -34,7 +34,7 @@ _DIFFUSIVITY = ("Parameterisation", "Negative electrode", "Diffusivity [m2.s-1]"
 
 @pytest.fixture(autouse=True)
 def _qapp():
-    yield QApplication.instance() or QApplication([])
+    return QApplication.instance() or QApplication([])
 
 
 def _panel_on(qtbot, path, workfile):

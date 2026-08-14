@@ -8,7 +8,7 @@ opening and closing documents from the UI layer. All per-document state
 from __future__ import annotations
 
 from enum import Enum
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from core import bpx_gateway, document_factory
 from core.document import BPXDocument
@@ -22,6 +22,8 @@ from state.workspace_history import (
     WorkspaceRecord,
 )
 
+if TYPE_CHECKING:
+    from pathlib import Path
 
 #: The hard cap on pinned references. Four is what the comparison surfaces
 #: were designed to carry -- four badge colours that stay tellable apart, four
@@ -392,12 +394,8 @@ class AppState:
             return
         self.history.add_recent(str(path))
         current = self.history.current()
-        if current is None or (
-            current.is_named and current.main is not None and current.main != main
-        ):
-            self.history.start_workspace(
-                WorkspaceRecord(main=main, references=self._reference_records())
-            )
+        if current is None or (current.is_named and current.main is not None and current.main != main):
+            self.history.start_workspace(WorkspaceRecord(main=main, references=self._reference_records()))
         else:
             self.history.update_current(main, self._reference_records())
 

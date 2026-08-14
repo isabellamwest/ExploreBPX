@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from core import bpx_gateway, command_service, document_factory, editing, export, structure
 from core.command_service import CommandError
 from core.commands import (
@@ -19,8 +21,6 @@ from core.commands import (
     SetValue,
     SetValues,
 )
-
-import pytest
 
 
 def test_factory_creates_incomplete_scaffold_no_fake_values():
@@ -45,11 +45,7 @@ def test_factory_creates_spme_scaffold_with_separator_no_section_level_missing()
     raw = document_factory.create("SPMe", "Demo")
     assert raw["Parameterisation"]["Separator"] == {}
     issues = bpx_gateway.validate(raw).issues
-    missing_locs = {
-        getattr(issue, "loc", None)
-        for issue in issues
-        if getattr(issue, "error_type", None) == "missing"
-    }
+    missing_locs = {getattr(issue, "loc", None) for issue in issues if getattr(issue, "error_type", None) == "missing"}
     assert ("Separator",) not in missing_locs
     assert ("Separator", "Thickness [m]") in missing_locs
 
@@ -122,9 +118,7 @@ def test_change_model_never_removes_sections(valid_spm_dict):
     dfn["Parameterisation"]["Electrolyte"]["Initial concentration [mol.m-3]"] = 1000
     back = command_service.execute(dfn, ChangeModel("SPM")).raw
     assert back["Header"]["Model"] == "SPM"
-    assert back["Parameterisation"]["Electrolyte"] == {
-        "Initial concentration [mol.m-3]": 1000
-    }
+    assert back["Parameterisation"]["Electrolyte"] == {"Initial concentration [mol.m-3]": 1000}
 
 
 def test_change_model_to_an_unknown_string_presumes_no_structure():
@@ -197,9 +191,7 @@ def _raw_with_run(run_name="C/20 discharge"):
 
 def test_rename_run_moves_value_and_preserves_key_order():
     raw = _raw_with_run()
-    result = command_service.execute(
-        raw, RenameKey(("Validation", "C/20 discharge"), "C/10 discharge")
-    )
+    result = command_service.execute(raw, RenameKey(("Validation", "C/20 discharge"), "C/10 discharge"))
     assert list(result.raw["Validation"]) == ["C/10 discharge", "1C discharge"]
     assert result.raw["Validation"]["C/10 discharge"] == {"Time [s]": [0, 1]}
     assert result.label == "Rename"
@@ -208,11 +200,7 @@ def test_rename_run_moves_value_and_preserves_key_order():
 
 
 def test_rename_particle_material_is_allowed():
-    raw = {
-        "Parameterisation": {
-            "Positive electrode": {"Particle": {"Primary": {"a": 1}, "Secondary": {}}}
-        }
-    }
+    raw = {"Parameterisation": {"Positive electrode": {"Particle": {"Primary": {"a": 1}, "Secondary": {}}}}}
     path = ("Parameterisation", "Positive electrode", "Particle", "Primary")
     result = command_service.execute(raw, RenameKey(path, "Main"))
     particle = result.raw["Parameterisation"]["Positive electrode"]["Particle"]
@@ -245,9 +233,7 @@ def test_rename_onto_an_existing_sibling_is_refused():
     silently destroy its contents."""
     raw = _raw_with_run()
     with pytest.raises(CommandError):
-        command_service.execute(
-            raw, RenameKey(("Validation", "C/20 discharge"), "1C discharge")
-        )
+        command_service.execute(raw, RenameKey(("Validation", "C/20 discharge"), "1C discharge"))
     assert "C/20 discharge" in raw["Validation"]
 
 
@@ -256,9 +242,7 @@ def test_rename_to_blank_or_unchanged_is_refused():
     with pytest.raises(CommandError):
         command_service.execute(raw, RenameKey(("Validation", "C/20 discharge"), "   "))
     with pytest.raises(CommandError):
-        command_service.execute(
-            raw, RenameKey(("Validation", "C/20 discharge"), "C/20 discharge")
-        )
+        command_service.execute(raw, RenameKey(("Validation", "C/20 discharge"), "C/20 discharge"))
 
 
 def test_rename_then_undo_restores_the_old_name_and_position():
@@ -331,11 +315,7 @@ def test_move_parameter_then_undo_restores_order():
 
 def _raw_with_material():
     return {
-        "Parameterisation": {
-            "Positive electrode": {
-                "Particle": {"Primary": {"Radius [m]": 1e-6}, "Secondary": {}}
-            }
-        }
+        "Parameterisation": {"Positive electrode": {"Particle": {"Primary": {"Radius [m]": 1e-6}, "Secondary": {}}}}
     }
 
 
@@ -380,9 +360,7 @@ def test_duplicate_parameter_name_collision_increments_to_three():
             "User-defined": {"Foo": 1, "Foo (2)": 9},
         }
     }
-    result = command_service.execute(
-        raw, DuplicateParameter(("Parameterisation", "User-defined"), "Foo")
-    )
+    result = command_service.execute(raw, DuplicateParameter(("Parameterisation", "User-defined"), "Foo"))
     user_defined = result.raw["Parameterisation"]["User-defined"]
     assert list(user_defined) == ["Foo", "Foo (3)", "Foo (2)"]
 
@@ -411,9 +389,7 @@ def test_duplicate_parameter_then_undo_removes_it():
 
 def test_can_rename_materials_runs_and_user_defined_content():
     assert structure.can_rename(("Validation", "C/20 discharge"))
-    assert structure.can_rename(
-        ("Parameterisation", "Negative electrode", "Particle", "Primary")
-    )
+    assert structure.can_rename(("Parameterisation", "Negative electrode", "Particle", "Primary"))
     # User-defined content is user-owned at any depth; the bucket itself is not.
     assert structure.can_rename(("Parameterisation", "User-defined", "Thermal"))
     assert structure.can_rename(("Parameterisation", "User-defined", "Thermal", "h"))
@@ -493,10 +469,7 @@ def test_is_freeform_section_covers_the_user_defined_bucket_and_its_content():
 
 def test_named_child_noun_for_the_two_dict_keyed_containers():
     assert structure.named_child_noun(("Validation",)) == "experiment"
-    assert (
-        structure.named_child_noun(("Parameterisation", "Positive electrode", "Particle"))
-        == "material"
-    )
+    assert structure.named_child_noun(("Parameterisation", "Positive electrode", "Particle")) == "material"
     assert structure.named_child_noun(("Parameterisation",)) is None
 
 
@@ -619,7 +592,8 @@ def test_set_values_is_one_undo_step():
         )
     )
     run = session.document.raw["Validation"]["Run"]
-    assert run["Time [s]"] == [0, 1] and run["Current [A]"] == [0.1, 0.2]
+    assert run["Time [s]"] == [0, 1]
+    assert run["Current [A]"] == [0.1, 0.2]
     session.undo()
     assert session.document.raw["Validation"]["Run"] == {}
 
@@ -632,6 +606,7 @@ def test_remove_protected_section_raises():
 
 def test_document_session_create_then_undo():
     from state.document_session import DocumentSession
+
     session = DocumentSession()
     session.execute_command(CreateDocument("SPM", "T"))
     assert session.document is not None
@@ -737,9 +712,7 @@ def test_pull_parameter_with_source_label_names_the_source_in_the_undo_label():
     """A named source produces `Use "<key>" from <source>` instead of the
     plain `Use "<key>"`."""
     raw = {"Header": {"Title": "mine"}}
-    result = command_service.execute(
-        raw, PullParameter(("Header", "Title"), "theirs", source_label="Chen2020")
-    )
+    result = command_service.execute(raw, PullParameter(("Header", "Title"), "theirs", source_label="Chen2020"))
     assert result.label == 'Use "Title" from Chen2020'
 
 
@@ -757,9 +730,7 @@ def test_pull_parameter_creates_missing_ancestors_in_a_deep_chain():
     path = ("Parameterisation", "Positive electrode", "Particle", "Primary", "Radius [m]")
     result = command_service.execute(raw, PullParameter(path, 1e-6))
     parameterisation = result.raw["Parameterisation"]
-    assert parameterisation["Positive electrode"]["Particle"]["Primary"] == {
-        "Radius [m]": 1e-6
-    }
+    assert parameterisation["Positive electrode"]["Particle"]["Primary"] == {"Radius [m]": 1e-6}
     # Nothing invented beyond the empty ancestors + the pulled leaf.
     assert set(parameterisation) == {"Positive electrode"}
     assert set(parameterisation["Positive electrode"]) == {"Particle"}
@@ -771,9 +742,7 @@ def test_pull_parameter_leaves_an_existing_ancestor_untouched():
     """A sibling already inside a partially-existing ancestor chain survives
     the pull -- only the missing leaf is added."""
     raw = {"Parameterisation": {"Cell": {"Other [m]": 1}}}
-    result = command_service.execute(
-        raw, PullParameter(("Parameterisation", "Cell", "Thickness [m]"), 2)
-    )
+    result = command_service.execute(raw, PullParameter(("Parameterisation", "Cell", "Thickness [m]"), 2))
     assert result.raw["Parameterisation"]["Cell"] == {"Other [m]": 1, "Thickness [m]": 2}
 
 
@@ -807,24 +776,18 @@ def test_pull_parameter_is_one_undo_step_including_created_ancestors():
     before = copy.deepcopy(session.document.raw)
     path = ("Parameterisation", "Positive electrode", "Radius [m]")
     session.execute_command(PullParameter(path, 5e-6))
-    assert session.document.raw["Parameterisation"]["Positive electrode"] == {
-        "Radius [m]": 5e-6
-    }
+    assert session.document.raw["Parameterisation"]["Positive electrode"] == {"Radius [m]": 5e-6}
     session.undo()
     assert session.document.raw == before
     assert "Positive electrode" not in session.document.raw["Parameterisation"]
     session.redo()
-    assert session.document.raw["Parameterisation"]["Positive electrode"] == {
-        "Radius [m]": 5e-6
-    }
+    assert session.document.raw["Parameterisation"]["Positive electrode"] == {"Radius [m]": 5e-6}
 
 
 def test_pull_section_sets_the_whole_subtree_verbatim():
     raw = {"Parameterisation": {"Cell": {"a": 1}}}
     ref_section = {"b": 2, "c": {"d": 3}}
-    result = command_service.execute(
-        raw, PullSection(("Parameterisation", "Cell"), ref_section)
-    )
+    result = command_service.execute(raw, PullSection(("Parameterisation", "Cell"), ref_section))
     assert result.raw["Parameterisation"]["Cell"] == ref_section
     assert result.raw["Parameterisation"]["Cell"] is not ref_section
     assert result.label == 'Use "Cell"'
@@ -843,9 +806,7 @@ def test_pull_section_with_source_label_names_the_source_in_the_undo_label():
 def test_pull_section_creates_missing_ancestors_and_the_section_itself():
     raw = {"Header": {}}
     ref_section = {"Thickness [m]": 1e-5}
-    result = command_service.execute(
-        raw, PullSection(("Parameterisation", "Separator"), ref_section)
-    )
+    result = command_service.execute(raw, PullSection(("Parameterisation", "Separator"), ref_section))
     assert result.raw["Parameterisation"]["Separator"] == ref_section
     assert "Separator" not in raw.get("Parameterisation", {})
 

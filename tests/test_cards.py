@@ -29,7 +29,7 @@ def _app() -> QApplication:
 
 
 @pytest.mark.parametrize(
-    "kind, value",
+    ("kind", "value"),
     [
         (ParameterKind.SCALAR, 1.0),
         (ParameterKind.INTEGER, 3),
@@ -57,9 +57,7 @@ def test_section_kind_falls_back_to_read_only():
     """A SECTION is a container, not a value: it has no editor and stays
     read-only. (TABLE used to sit here too; it now has a real editor.)"""
     _app()
-    param = ParameterItem(
-        label="T", path=("Header", "T"), kind=ParameterKind.SECTION, value={}
-    )
+    param = ParameterItem(label="T", path=("Header", "T"), kind=ParameterKind.SECTION, value={})
     card = create_card(param, None)
     assert card.is_editable is False
 
@@ -68,9 +66,7 @@ def test_unknown_kind_produces_editable_raw_card():
     """A no-metadata, value-less custom parameter (``UNKNOWN``) gets the
     editable raw fallback card rather than the read-only dead end."""
     _app()
-    param = ParameterItem(
-        label="Custom", path=("Header", "Custom"), kind=ParameterKind.UNKNOWN, value=None
-    )
+    param = ParameterItem(label="Custom", path=("Header", "Custom"), kind=ParameterKind.UNKNOWN, value=None)
     card = create_card(param, None)
     assert card.is_editable
     assert type(card).__name__ == "RawCard"
@@ -82,9 +78,7 @@ def test_unknown_kind_raw_card_commits_and_reverts():
     """Typing into the raw card commits via the normal ``value()``/``reset()``
     contract, and Escape-equivalent ``reset()`` restores the original."""
     _app()
-    param = ParameterItem(
-        label="Custom", path=("Header", "Custom"), kind=ParameterKind.UNKNOWN, value=None
-    )
+    param = ParameterItem(label="Custom", path=("Header", "Custom"), kind=ParameterKind.UNKNOWN, value=None)
     card = create_card(param, None)
     card._edit.setText("5")
     assert card.value() == 5
@@ -123,9 +117,7 @@ def _rendered_text(card) -> str:
         return widget.currentText()
     if isinstance(widget, QLineEdit):
         return widget.text()
-    raise AssertionError(
-        f"{type(widget).__name__} has no single-line text; assert on card.value() instead."
-    )
+    raise AssertionError(f"{type(widget).__name__} has no single-line text; assert on card.value() instead.")
 
 
 @pytest.mark.parametrize(
@@ -145,11 +137,7 @@ def test_none_value_renders_empty_without_crashing(kind):
     and never a fabricated default. The empty draft round-trips back to
     ``None`` -- honest "no value" -- rather than the empty string."""
     _app()
-    meta = (
-        FieldMeta(alias="P", is_enum=True, enum_values=("SPM", "SPMe"))
-        if kind is ParameterKind.ENUM
-        else None
-    )
+    meta = FieldMeta(alias="P", is_enum=True, enum_values=("SPM", "SPMe")) if kind is ParameterKind.ENUM else None
     param = ParameterItem(label="P", path=("Header", "P"), kind=kind, value=None)
     card = create_card(param, meta)
     assert card.is_editable
@@ -162,9 +150,7 @@ def test_enum_none_value_has_no_selection():
     genuine no-selection state, not "the first enum value"."""
     _app()
     meta = FieldMeta(alias="P", is_enum=True, enum_values=("SPM", "SPMe"))
-    param = ParameterItem(
-        label="P", path=("Header", "P"), kind=ParameterKind.ENUM, value=None
-    )
+    param = ParameterItem(label="P", path=("Header", "P"), kind=ParameterKind.ENUM, value=None)
     card = create_card(param, meta)
     assert card._combo.currentIndex() == -1
 
@@ -172,9 +158,7 @@ def test_enum_none_value_has_no_selection():
 def test_enum_none_value_can_be_selected_and_reverted():
     _app()
     meta = FieldMeta(alias="P", is_enum=True, enum_values=("SPM", "SPMe"))
-    param = ParameterItem(
-        label="P", path=("Header", "P"), kind=ParameterKind.ENUM, value=None
-    )
+    param = ParameterItem(label="P", path=("Header", "P"), kind=ParameterKind.ENUM, value=None)
     card = create_card(param, meta)
     card._combo.setCurrentIndex(1)
     assert card.value() == "SPMe"
@@ -185,9 +169,7 @@ def test_enum_none_value_can_be_selected_and_reverted():
 
 def _model_enum_card():
     meta = FieldMeta(alias="Model", is_enum=True, enum_values=("SPM", "SPMe", "DFN"))
-    param = ParameterItem(
-        label="Model", path=("Header", "Model"), kind=ParameterKind.ENUM, value="SPM"
-    )
+    param = ParameterItem(label="Model", path=("Header", "Model"), kind=ParameterKind.ENUM, value="SPM")
     return create_card(param, meta)
 
 
@@ -230,7 +212,7 @@ def test_enum_closed_combo_arrowing_stays_a_draft():
 
 
 @pytest.mark.parametrize(
-    "kind, text, expected_value",
+    ("kind", "text", "expected_value"),
     [
         (ParameterKind.SCALAR, "3.5", 3.5),
         (ParameterKind.FUNCTION, "x + 1", "x + 1"),
@@ -259,9 +241,7 @@ def test_known_alias_with_none_value_opens_proper_editor_end_to_end():
     meta = FieldMeta(alias="Chemistry", is_enum=True, enum_values=("SPM", "SPMe"))
     kind = classify(None, meta)
     assert kind is ParameterKind.ENUM
-    param = ParameterItem(
-        label="Chemistry", path=("Header", "Chemistry"), kind=kind, value=None
-    )
+    param = ParameterItem(label="Chemistry", path=("Header", "Chemistry"), kind=kind, value=None)
     card = create_card(param, meta)
     assert card.is_editable
     assert card._combo.currentIndex() == -1
@@ -285,9 +265,7 @@ def test_text_kind_uses_text_card():
 
 def test_boolean_kind_uses_boolean_card():
     _app()
-    param = ParameterItem(
-        label="P", path=("Header", "P"), kind=ParameterKind.BOOLEAN, value=True
-    )
+    param = ParameterItem(label="P", path=("Header", "P"), kind=ParameterKind.BOOLEAN, value=True)
     card = create_card(param, None)
     assert type(card).__name__ == "BooleanCard"
     assert card.is_editable
@@ -297,9 +275,7 @@ def test_series_kind_uses_series_card():
     """SERIES has a real grid editor; see test_series_card.py
     for its behaviour and for the unrepresentable-value fallback."""
     _app()
-    param = ParameterItem(
-        label="P", path=("Validation", "run", "Time [s]"), kind=ParameterKind.SERIES, value=[0, 1]
-    )
+    param = ParameterItem(label="P", path=("Validation", "run", "Time [s]"), kind=ParameterKind.SERIES, value=[0, 1])
     card = create_card(param, None)
     assert type(card).__name__ == "SeriesCard"
     assert card.is_editable
@@ -365,9 +341,7 @@ def test_integer_none_value_uses_fallback_and_can_be_typed():
     to its free-text widget (the existing invalid-original path) rather than
     crashing a ``QSpinBox`` on ``int(None)``."""
     _app()
-    param = ParameterItem(
-        label="P", path=("Header", "P"), kind=ParameterKind.INTEGER, value=None
-    )
+    param = ParameterItem(label="P", path=("Header", "P"), kind=ParameterKind.INTEGER, value=None)
     card = create_card(param, None)
     assert card._spin is None
     assert card._fallback.text() == ""

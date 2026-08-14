@@ -99,11 +99,15 @@ def _render_png(latex: str, point_size: float, color: str) -> bytes | None:
         buffer = BytesIO()
         # bbox_inches="tight" crops the canvas to the rendered expression.
         figure.savefig(
-            buffer, format="png", dpi=192, transparent=True,
-            bbox_inches="tight", pad_inches=0.02,
+            buffer,
+            format="png",
+            dpi=192,
+            transparent=True,
+            bbox_inches="tight",
+            pad_inches=0.02,
         )
         return buffer.getvalue()
-    except Exception:
+    except Exception:  # noqa: BLE001 - any mathtext failure falls back to plain text
         return None
     finally:
         try:
@@ -113,5 +117,5 @@ def _render_png(latex: str, point_size: float, color: str) -> bytes | None:
 
             pyparsing.ParserElement.reset_cache()
             gc.collect()
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 - best-effort cache guard, never fatal
             pass

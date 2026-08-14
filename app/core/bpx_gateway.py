@@ -24,10 +24,10 @@ import inspect
 import json
 import math
 import warnings
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from functools import lru_cache
+from typing import TYPE_CHECKING
 
 import bpx
 import yaml
@@ -40,6 +40,9 @@ from .validation import (
     issues_from_pydantic,
     warnings_as_diagnostics,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 #: The exact BPX version this application is built and tested against.
 BPX_VERSION: str = bpx.__version__
@@ -396,10 +399,7 @@ def _definition_index() -> dict[str, dict[str, FieldMeta]]:
     :func:`searchable_parameters`).
     """
     return {
-        name: {
-            alias: _field_meta(alias, prop)
-            for alias, prop in definition.get("properties", {}).items()
-        }
+        name: {alias: _field_meta(alias, prop) for alias, prop in definition.get("properties", {}).items()}
         for name, definition in _schema().get("$defs", {}).items()
     }
 
@@ -457,9 +457,7 @@ _ELECTRODE_FAMILY: tuple[str, ...] = (
 )
 
 
-def expected_fields(
-    path: tuple[str, ...], model: str | None = None, value: object = None
-) -> tuple[ExpectedField, ...]:
+def expected_fields(path: tuple[str, ...], model: str | None = None, value: object = None) -> tuple[ExpectedField, ...]:
     """Return the schema-expected parameter fields for a BPX section.
 
     ``path`` identifies the section using the same tuple convention as
@@ -530,9 +528,7 @@ def supported_models() -> tuple[str, ...]:
 _ELECTRODE_NAMES: tuple[str, ...] = ("Negative electrode", "Positive electrode")
 
 
-def _resolve_instance_definition(
-    path: tuple[str, ...], model: str | None, value: object
-) -> str | None:
+def _resolve_instance_definition(path: tuple[str, ...], model: str | None, value: object) -> str | None:
     """Resolve a user-named-key instance path to its schema definition, or
     ``None`` if *path* is not one of these shapes.
 
@@ -550,19 +546,14 @@ def _resolve_instance_definition(
       ``Experiment`` (the schema types ``Validation`` as
       ``Dict[str, Experiment]``), regardless of ``value``.
     """
-    is_electrode = (
-        len(path) == 2 and path[0] == "Parameterisation" and path[1] in _ELECTRODE_NAMES
-    )
+    is_electrode = len(path) == 2 and path[0] == "Parameterisation" and path[1] in _ELECTRODE_NAMES
     if is_electrode:
         is_blended = isinstance(value, dict) and "Particle" in value
         if model == "SPM":
             return "ElectrodeBlendedSPM" if is_blended else "ElectrodeSingleSPM"
         return "ElectrodeBlended" if is_blended else "ElectrodeSingle"
     is_particle_instance = (
-        len(path) == 4
-        and path[0] == "Parameterisation"
-        and path[1] in _ELECTRODE_NAMES
-        and path[2] == "Particle"
+        len(path) == 4 and path[0] == "Parameterisation" and path[1] in _ELECTRODE_NAMES and path[2] == "Particle"
     )
     if is_particle_instance:
         return "Particle"
@@ -572,9 +563,7 @@ def _resolve_instance_definition(
     return None
 
 
-def _resolve_definition(
-    path: tuple[str, ...], model: str | None, value: object = None
-) -> str:
+def _resolve_definition(path: tuple[str, ...], model: str | None, value: object = None) -> str:
     if path == ("Parameterisation",):
         return _PARAMETERISATION_DEFS.get(model, "ParameterisationPartial")
     if path in _SECTION_DEFS:
@@ -636,9 +625,7 @@ def field_meta(path: tuple[str, ...]) -> FieldMeta | None:
     if not definitions:
         return None
     index = _definition_index()
-    candidates = [
-        index[definition][alias] for definition in definitions if alias in index.get(definition, {})
-    ]
+    candidates = [index[definition][alias] for definition in definitions if alias in index.get(definition, {})]
     if not candidates:
         return None
     first = candidates[0]
@@ -671,9 +658,7 @@ def _is_container_link(prop: dict) -> bool:
     ):
         return True
     additional = prop.get("additionalProperties")
-    if isinstance(additional, dict) and "$ref" in additional:
-        return True
-    return False
+    return bool(isinstance(additional, dict) and "$ref" in additional)
 
 
 def _is_parameter_bearing_definition(definition: dict) -> bool:
@@ -861,7 +846,7 @@ def _clear_pyparsing_packrat_cache() -> None:
 
         pyparsing.ParserElement.reset_cache()
         gc.collect()
-    except Exception:  # noqa: BLE001 - mirrors ui_qt/latex.py's own guard
+    except Exception:  # noqa: BLE001, S110 - mirrors ui_qt/latex.py's own guard
         pass
 
 
@@ -881,9 +866,7 @@ def _compiled_function(expression: str) -> Callable[[float], float]:
     return bpx.Function(expression).to_python_function()
 
 
-def sample_function(
-    expression: str, low: float, high: float, samples: int = 200
-) -> FunctionSamples:
+def sample_function(expression: str, low: float, high: float, samples: int = 200) -> FunctionSamples:
     """Evaluate ``bpx.Function`` expression *expression* at *samples* evenly
     spaced x positions across ``[low, high]``, for a chart preview.
 

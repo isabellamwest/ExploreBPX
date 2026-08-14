@@ -27,9 +27,7 @@ def test_selecting_object_shows_parameter_list(valid_spm_bytes):
 def test_selecting_parameter_shows_detail(valid_spm_bytes):
     session = _loaded_session(valid_spm_bytes)
     session.select(("Parameterisation", "Cell"))
-    session.select_parameter(
-        ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
-    )
+    session.select_parameter(("Parameterisation", "Cell", "Nominal cell capacity [A.h]"))
 
     parameter = session.selected_parameter()
     assert parameter is not None
@@ -42,9 +40,7 @@ def test_selecting_parameter_shows_detail(valid_spm_bytes):
 def test_breadcrumb_object_click_clears_parameter(valid_spm_bytes):
     session = _loaded_session(valid_spm_bytes)
     session.select(("Parameterisation", "Cell"))
-    session.select_parameter(
-        ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
-    )
+    session.select_parameter(("Parameterisation", "Cell", "Nominal cell capacity [A.h]"))
     # Re-selecting an object (e.g. clicking a breadcrumb segment) drops the
     # parameter detail and returns to the parameter list.
     session.select(("Parameterisation", "Cell"))
@@ -97,9 +93,7 @@ def test_opening_new_file_resets_selection(valid_spm_path):
     state = AppState()
     state.open(valid_spm_path)
     state.active.select(("Parameterisation", "Cell"))
-    state.active.select_parameter(
-        ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
-    )
+    state.active.select_parameter(("Parameterisation", "Cell", "Nominal cell capacity [A.h]"))
     # Opening a new file creates a fresh DocumentSession; selection is reset.
     state.open(valid_spm_path)
     assert state.active.selected_path is None
@@ -109,6 +103,7 @@ def test_opening_new_file_resets_selection(valid_spm_path):
 # ---------------------------------------------------------------------------
 # Dirty tracking and save
 # ---------------------------------------------------------------------------
+
 
 def test_session_starts_clean(valid_spm_bytes):
     """A freshly created session has dirty=False."""
@@ -126,6 +121,7 @@ def test_apply_value_marks_dirty(valid_spm_bytes):
 def test_execute_command_marks_dirty(valid_spm_bytes):
     """Running a command marks the session dirty."""
     from core.commands import SetValue
+
     session = _loaded_session(valid_spm_bytes)
     session.execute_command(SetValue(("Header", "Model"), "DFN"))
     assert session.dirty
@@ -135,6 +131,7 @@ def test_undo_away_from_save_point_marks_dirty(valid_spm_bytes):
     """Undoing PAST the save point is dirty: the document on screen (the
     pre-edit state) is no longer what was saved (the post-edit state)."""
     from core.commands import SetValue
+
     session = _loaded_session(valid_spm_bytes)
     session.execute_command(SetValue(("Header", "Model"), "DFN"))
     session.dirty = False  # simulate a save at this point
@@ -148,6 +145,7 @@ def test_undo_back_to_save_point_is_clean(valid_spm_bytes):
     Works by identity -- undo restores the exact document object the
     transition recorded, which is the saved one."""
     from core.commands import SetValue
+
     session = _loaded_session(valid_spm_bytes)
     session.execute_command(SetValue(("Header", "Model"), "DFN"))
     assert session.dirty
@@ -158,6 +156,7 @@ def test_undo_back_to_save_point_is_clean(valid_spm_bytes):
 def test_redo_back_to_save_point_is_clean(valid_spm_bytes):
     """Save mid-history, undo past it (dirty), redo back onto it (clean)."""
     from core.commands import SetValue
+
     session = _loaded_session(valid_spm_bytes)
     session.execute_command(SetValue(("Header", "Model"), "DFN"))
     session.dirty = False  # simulate a save at this point
@@ -182,6 +181,7 @@ def test_save_clears_dirty(valid_spm_bytes, tmp_path):
 def test_save_writes_correct_content(valid_spm_bytes, tmp_path):
     """save() persists the current raw document to disk."""
     import json
+
     out = tmp_path / "test.json"
     session = _loaded_session(valid_spm_bytes)
     session.backing_file = out
@@ -207,6 +207,7 @@ def test_app_state_open_starts_clean(valid_spm_path):
 # ---------------------------------------------------------------------------
 # new_document
 # ---------------------------------------------------------------------------
+
 
 def test_new_document_creates_incomplete_scaffold():
     """new_document() builds a document with required fields absent.
@@ -257,7 +258,7 @@ def test_new_document_unknown_model_raises():
     import pytest
 
     state = AppState()
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Unknown model"):
         state.new_document("NotAModel")
     assert state.active is None
 
@@ -269,7 +270,7 @@ def test_new_document_unknown_model_leaves_previous_session_intact(valid_spm_pat
     state = AppState()
     state.open(valid_spm_path)
     first_session = state.active
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Unknown model"):
         state.new_document("NotAModel")
     assert state.active is first_session
 
@@ -277,6 +278,7 @@ def test_new_document_unknown_model_leaves_previous_session_intact(valid_spm_pat
 # ---------------------------------------------------------------------------
 # pin_reference / remove_reference
 # ---------------------------------------------------------------------------
+
 
 def test_pin_reference_pins_a_snapshot(nmc_pouch_cell_path):
     state = AppState()
@@ -382,9 +384,7 @@ def test_close_leaves_the_references_untouched(valid_spm_path, nmc_pouch_cell_pa
     assert state.reference.filename == nmc_pouch_cell_path.name
 
 
-def test_opening_a_new_main_leaves_the_references_untouched(
-    valid_spm_path, nmc_pouch_cell_path, tmp_path
-):
+def test_opening_a_new_main_leaves_the_references_untouched(valid_spm_path, nmc_pouch_cell_path, tmp_path):
     import shutil
 
     state = AppState()
@@ -400,18 +400,14 @@ def test_opening_a_new_main_leaves_the_references_untouched(
     assert state.reference.filename == nmc_pouch_cell_path.name
 
 
-def test_remove_reference_takes_only_the_named_pin(
-    nmc_pouch_cell_path, valid_spm_path
-):
+def test_remove_reference_takes_only_the_named_pin(nmc_pouch_cell_path, valid_spm_path):
     state = AppState()
     state.pin_reference(nmc_pouch_cell_path)
     state.pin_reference(valid_spm_path)
 
     state.remove_reference(state.references[0])
 
-    assert [reference.filename for reference in state.references] == [
-        valid_spm_path.name
-    ]
+    assert [reference.filename for reference in state.references] == [valid_spm_path.name]
 
 
 def test_remove_reference_frees_a_slot_at_the_cap(valid_spm_path, tmp_path):

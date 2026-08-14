@@ -12,13 +12,13 @@ import shutil
 
 import pytest
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtWidgets import QApplication
 
 pytest.importorskip("PySide6")
 
-import ui_qt.main_window as main_window_module
-
 from platform_facts import assert_alert_title
+
+import ui_qt.main_window as main_window_module
 
 _CAPACITY = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
 
@@ -28,9 +28,7 @@ def _fail_if_called(*args, **kwargs):
 
 
 def _stub_open_dialog(monkeypatch, path) -> None:
-    monkeypatch.setattr(
-        main_window_module.QFileDialog, "getOpenFileName", lambda *a, **k: (str(path), "")
-    )
+    monkeypatch.setattr(main_window_module.QFileDialog, "getOpenFileName", lambda *a, **k: (str(path), ""))
 
 
 def test_reference_card_shows_the_empty_state_with_nothing_docked(app_driver):
@@ -40,9 +38,7 @@ def test_reference_card_shows_the_empty_state_with_nothing_docked(app_driver):
     assert app_driver.reference_empty_state_visible()
 
 
-def test_clicking_open_as_reference_docks_and_shows_the_tile(
-    app_driver, valid_spm_path, monkeypatch
-):
+def test_clicking_open_as_reference_docks_and_shows_the_tile(app_driver, valid_spm_path, monkeypatch):
     d = app_driver
     _stub_open_dialog(monkeypatch, valid_spm_path)
 
@@ -58,9 +54,7 @@ def test_clicking_open_as_reference_docks_and_shows_the_tile(
     assert "Checked: Complete · Valid" in text
 
 
-def test_removing_the_reference_returns_the_card_to_its_empty_state(
-    app_driver, valid_spm_path, monkeypatch
-):
+def test_removing_the_reference_returns_the_card_to_its_empty_state(app_driver, valid_spm_path, monkeypatch):
     d = app_driver
     _stub_open_dialog(monkeypatch, valid_spm_path)
     d.click_workspace_open_reference()
@@ -73,9 +67,7 @@ def test_removing_the_reference_returns_the_card_to_its_empty_state(
     assert d._w._state.reference is None
 
 
-def test_reference_tile_validity_line_for_an_invalid_reference(
-    app_driver, valid_spm_path, tmp_path, monkeypatch
-):
+def test_reference_tile_validity_line_for_an_invalid_reference(app_driver, valid_spm_path, tmp_path, monkeypatch):
     """Breaking a copy of a real fixture surfaces the validator's own error
     count on the tile -- never an invented one."""
     raw = json.loads(valid_spm_path.read_text("utf-8"))
@@ -94,9 +86,7 @@ def test_reference_tile_validity_line_for_an_invalid_reference(
     assert "0 warnings" not in tile_text
 
 
-def test_reference_tile_can_be_docked_with_no_main_document_open(
-    app_driver, valid_spm_path, monkeypatch
-):
+def test_reference_tile_can_be_docked_with_no_main_document_open(app_driver, valid_spm_path, monkeypatch):
     """A reference-only workspace is a legal state."""
     d = app_driver
     assert d._w._state.active is None
@@ -117,9 +107,7 @@ def test_toast_shows_pinned_message_after_pinning(app_driver, valid_spm_path, mo
     assert d.toast_text() == f"Pinned {valid_spm_path.name} as reference"
 
 
-def test_toast_shows_already_reference_on_the_same_path_again(
-    app_driver, valid_spm_path, monkeypatch
-):
+def test_toast_shows_already_reference_on_the_same_path_again(app_driver, valid_spm_path, monkeypatch):
     d = app_driver
     _stub_open_dialog(monkeypatch, valid_spm_path)
     d.click_workspace_open_reference()
@@ -129,9 +117,7 @@ def test_toast_shows_already_reference_on_the_same_path_again(
     assert d.toast_text() == "Already pinned as reference"
 
 
-def test_toast_shows_is_main_when_referencing_the_open_main_file(
-    app_driver, valid_spm_path, monkeypatch
-):
+def test_toast_shows_is_main_when_referencing_the_open_main_file(app_driver, valid_spm_path, monkeypatch):
     d = app_driver
     d.open(valid_spm_path)
     _stub_open_dialog(monkeypatch, valid_spm_path)
@@ -142,18 +128,14 @@ def test_toast_shows_is_main_when_referencing_the_open_main_file(
     assert d._w._state.reference is None
 
 
-def test_choice_replace_main_reaches_the_normal_open(
-    app_driver, valid_spm_path, tmp_path, monkeypatch
-):
+def test_choice_replace_main_reaches_the_normal_open(app_driver, valid_spm_path, tmp_path, monkeypatch):
     d = app_driver
     d.open(valid_spm_path)  # a document is already open (clean)
 
     other = tmp_path / "other.json"
     shutil.copy(valid_spm_path, other)
     _stub_open_dialog(monkeypatch, other)
-    monkeypatch.setattr(
-        d._w, "_ask_open_intent", lambda filename: main_window_module.OpenIntent.REPLACE_MAIN
-    )
+    monkeypatch.setattr(d._w, "_ask_open_intent", lambda filename: main_window_module.OpenIntent.REPLACE_MAIN)
 
     d.press_open_shortcut()
 
@@ -169,9 +151,7 @@ def test_choice_add_as_reference_docks_without_touching_the_session(
     original_session = d._w._state.active
 
     _stub_open_dialog(monkeypatch, nmc_pouch_cell_path)
-    monkeypatch.setattr(
-        d._w, "_ask_open_intent", lambda filename: main_window_module.OpenIntent.ADD_REFERENCE
-    )
+    monkeypatch.setattr(d._w, "_ask_open_intent", lambda filename: main_window_module.OpenIntent.ADD_REFERENCE)
 
     d.press_open_shortcut()
 
@@ -187,9 +167,7 @@ def test_choice_cancel_does_nothing(app_driver, valid_spm_path, nmc_pouch_cell_p
     original_session = d._w._state.active
 
     _stub_open_dialog(monkeypatch, nmc_pouch_cell_path)
-    monkeypatch.setattr(
-        d._w, "_ask_open_intent", lambda filename: main_window_module.OpenIntent.CANCEL
-    )
+    monkeypatch.setattr(d._w, "_ask_open_intent", lambda filename: main_window_module.OpenIntent.CANCEL)
     monkeypatch.setattr(main_window_module.QMessageBox, "question", _fail_if_called)
 
     d.press_open_shortcut()
@@ -283,7 +261,5 @@ def test_ask_open_intent_real_dialog_replace_main(app_driver, valid_spm_path):
     intent = d._w._ask_open_intent("incoming.json")
 
     assert_alert_title(captured["title"], "Open incoming.json")
-    assert captured["text"] == (
-        "spm_example_valid.json is already open. Open incoming.json as:"
-    )
+    assert captured["text"] == ("spm_example_valid.json is already open. Open incoming.json as:")
     assert intent is main_window_module.OpenIntent.REPLACE_MAIN

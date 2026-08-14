@@ -23,7 +23,10 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Callable, Sequence
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
 
 #: Fraction of the (transformed) span added as padding beyond the outermost
 #: values, so no mark sits flush against an axis end.
@@ -225,16 +228,13 @@ def _log_transform(v: float) -> float:
 # ── divisions ────────────────────────────────────────────────────────────
 
 
-def _linear_divisions(
-    lo: float, hi: float, position: Callable[[float], float]
-) -> tuple[SpreadDivision, ...]:
+def _linear_divisions(lo: float, hi: float, position: Callable[[float], float]) -> tuple[SpreadDivision, ...]:
     """Nice-step divisions across ``[lo, hi]`` (the padded, linear-space
     range -- identical to ``value_lo``/``value_hi`` padded, since the
     linear transform is the identity)."""
     step = _linear_step(lo, hi)
     return tuple(
-        SpreadDivision(value, position(value), _division_label(value))
-        for value in _multiples_within(lo, hi, step)
+        SpreadDivision(value, position(value), _division_label(value)) for value in _multiples_within(lo, hi, step)
     )
 
 
@@ -347,5 +347,3 @@ def _division_label(value: float) -> str:
     claiming to restate.
     """
     return f"{value:g}"
-
-

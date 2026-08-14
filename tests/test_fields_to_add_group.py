@@ -65,11 +65,7 @@ def _group_header(panel):
 
 def _suggestion_items(panel):
     lst = panel._list
-    return [
-        lst.item(i)
-        for i in range(lst.count())
-        if lst.item(i).data(panel._GROUP_ROW_KIND_ROLE) == "suggestion"
-    ]
+    return [lst.item(i) for i in range(lst.count()) if lst.item(i).data(panel._GROUP_ROW_KIND_ROLE) == "suggestion"]
 
 
 # ---------------------------------------------------------------------------
@@ -102,15 +98,9 @@ def test_group_is_suppressed_for_a_validation_run_node(panel):
     from core.tree_model import ParameterItem
 
     run_path = ("Validation", "My run")
-    real = [
-        ParameterItem(
-            label="Time [s]", path=run_path + ("Time [s]",), kind=ParameterKind.SERIES
-        )
-    ]
+    real = [ParameterItem(label="Time [s]", path=run_path + ("Time [s]",), kind=ParameterKind.SERIES)]
     panel.show_node(
-        _section_node(
-            path=run_path, label="My run", value={"Time [s]": [0, 1]}, parameters=real
-        ),
+        _section_node(path=run_path, label="My run", value={"Time [s]": [0, 1]}, parameters=real),
         model="SPM",
     )
 
@@ -173,16 +163,12 @@ def test_expansion_survives_rebuild_of_the_same_section(panel):
 
     panel.show_node(node, model="SPM")  # simulates the post-add rebuild
 
-    assert _group_header(panel).text().startswith("▾"), (
-        "expansion must survive a rebuild of the same section's path"
-    )
+    assert _group_header(panel).text().startswith("▾"), "expansion must survive a rebuild of the same section's path"
 
 
 def test_navigating_to_a_different_section_resets_expansion_to_collapsed(panel):
     cell = _section_node(value=_CELL_MISSING_TWO_OPTIONAL)
-    other = _section_node(
-        path=("Parameterisation", "Negative electrode"), label="Negative electrode", value={}
-    )
+    other = _section_node(path=("Parameterisation", "Negative electrode"), label="Negative electrode", value={})
 
     panel.show_node(cell, model="SPM")
     panel._list.itemClicked.emit(_group_header(panel))
@@ -398,9 +384,7 @@ def test_fields_to_add_group_absent_for_undeclared_model_end_to_end(app_driver, 
     assert d.fields_to_add_header_text() is None
 
 
-def test_fields_to_add_group_present_with_no_required_tags_under_partial_end_to_end(
-    app_driver, tmp_path
-):
+def test_fields_to_add_group_present_with_no_required_tags_under_partial_end_to_end(app_driver, tmp_path):
     import json
 
     from core import document_factory
@@ -422,9 +406,7 @@ def test_fields_to_add_group_present_with_no_required_tags_under_partial_end_to_
     assert "Required" not in "".join(d.parameter_labels())
 
 
-def test_opening_a_different_document_resets_expansion_end_to_end(
-    app_driver, spm_workfile, tmp_path
-):
+def test_opening_a_different_document_resets_expansion_end_to_end(app_driver, spm_workfile, tmp_path):
     """The panel's expansion dict is keyed by section path only, so a
     previous document's expanded "Cell" group must not leak into a freshly
     opened document's same-named "Cell" section -- "closed by default"
@@ -440,8 +422,7 @@ def test_opening_a_different_document_resets_expansion_end_to_end(
 
     other_path = tmp_path / "second_document.json"
     shutil.copy(spm_workfile, other_path)
-    with open(other_path, encoding="utf-8") as fh:
-        raw = json.load(fh)
+    raw = json.loads(other_path.read_text(encoding="utf-8"))
     raw["Header"]["Title"] = "A different document"
     other_path.write_text(json.dumps(raw), encoding="utf-8")
 

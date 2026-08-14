@@ -31,6 +31,8 @@ names, and the window turns them into commands.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from PySide6.QtCore import QModelIndex, QPoint, QRect, Qt, Signal
 from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import (
@@ -45,8 +47,6 @@ from PySide6.QtWidgets import (
 )
 
 from core import structure
-from core.compare import ComparisonResult
-from core.tree_model import TreeNode
 
 from . import style
 from .name_popup import NamePopup
@@ -59,6 +59,10 @@ from .parameter_row import (
     paint_severity_dot,
 )
 from .tree_model import BpxTreeModel
+
+if TYPE_CHECKING:
+    from core.compare import ComparisonResult
+    from core.tree_model import TreeNode
 
 
 class _TreeItemDelegate(QStyledItemDelegate):
@@ -175,9 +179,7 @@ class TreePanel(QWidget):
         #: a menu action opens it, consumed by ``_on_name_chosen``.
         self._popup_intent: tuple[str, tuple[str, ...]] | None = None
 
-    def set_root(
-        self, root: TreeNode, visible_error_paths: frozenset[tuple[str, ...]] = frozenset()
-    ) -> None:
+    def set_root(self, root: TreeNode, visible_error_paths: frozenset[tuple[str, ...]] = frozenset()) -> None:
         """*visible_error_paths* is the post-absorption dot feed
         (``core.completion.visible_error_section_paths``) -- always computed
         alongside the tree it describes, so it is passed per call rather than
@@ -278,9 +280,7 @@ class TreePanel(QWidget):
         menu = QMenu(self)
         if self._read_only:
             return menu
-        declared_model = (
-            structure.infer_model(self._root.value) if self._root is not None else None
-        )
+        declared_model = structure.infer_model(self._root.value) if self._root is not None else None
 
         additions = structure.addable_child_sections(node.path, node.value, declared_model)
         if additions:
@@ -292,45 +292,31 @@ class TreePanel(QWidget):
             for key in additions:
                 action = submenu.addAction(key)
                 action.triggered.connect(
-                    lambda _checked=False, path=node.path, name=key: self.add_section_requested.emit(
-                        path, name
-                    )
+                    lambda _checked=False, path=node.path, name=key: self.add_section_requested.emit(path, name)
                 )
 
         noun = structure.named_child_noun(node.path)
         if noun is not None:
             action = menu.addAction(f"Add {noun}…")
-            action.triggered.connect(
-                lambda _checked=False, target=node, what=noun: self._open_add_named(
-                    target, what
-                )
-            )
+            action.triggered.connect(lambda _checked=False, target=node, what=noun: self._open_add_named(target, what))
 
         if structure.is_freeform_section(node.path):
             # The open bucket where the user freely names nested sections.
             # (Free-form parameters are added via the parameter list's
             # "+ Add parameter", like anywhere else -- no duplicate here.)
             add_sub = menu.addAction("Add subsection…")
-            add_sub.triggered.connect(
-                lambda _checked=False, target=node: self._open_add_named(
-                    target, "subsection"
-                )
-            )
+            add_sub.triggered.connect(lambda _checked=False, target=node: self._open_add_named(target, "subsection"))
 
         if structure.can_rename(node.path):
             action = menu.addAction("Rename…")
-            action.triggered.connect(
-                lambda _checked=False, target=node: self._open_rename(target)
-            )
+            action.triggered.connect(lambda _checked=False, target=node: self._open_rename(target))
 
         if node.path and structure.can_remove(node.path):
             # Plan vocabulary: user-named children are just "removed"; schema
             # sections read "Remove section".
             label = "Remove" if structure.can_rename(node.path) else "Remove section"
             action = menu.addAction(label)
-            action.triggered.connect(
-                lambda _checked=False, path=node.path: self.remove_requested.emit(path)
-            )
+            action.triggered.connect(lambda _checked=False, path=node.path: self.remove_requested.emit(path))
         return menu
 
     # -- name popup ------------------------------------------------------
@@ -350,9 +336,7 @@ class TreePanel(QWidget):
         validation logic here). Validation runs and User-defined content are
         never referenced by name elsewhere, so they get no note.
         """
-        parent_value = _value_at(
-            self._root.value if self._root is not None else None, node.path[:-1]
-        )
+        parent_value = _value_at(self._root.value if self._root is not None else None, node.path[:-1])
         taken = frozenset(parent_value) if isinstance(parent_value, dict) else frozenset()
         note = (
             "State-section references are not updated; validation will flag mismatches."
@@ -360,9 +344,7 @@ class TreePanel(QWidget):
             else ""
         )
         self._popup_intent = ("rename", node.path)
-        self._popup.open_at(
-            self._anchor_for(node), "New name…", taken, initial=node.path[-1], note=note
-        )
+        self._popup.open_at(self._anchor_for(node), "New name…", taken, initial=node.path[-1], note=note)
 
     def _on_name_chosen(self, name: str) -> None:
         intent, self._popup_intent = self._popup_intent, None

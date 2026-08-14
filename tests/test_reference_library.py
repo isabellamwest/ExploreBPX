@@ -54,8 +54,7 @@ def test_the_curated_short_titles_agree_with_the_files_own_titles():
         cell = reference.short_title.partition("(")[2].rstrip(")")
         for token in cell.split():
             assert token in reference.title, (
-                f"{reference.id}: picker label says {cell!r} but the document "
-                f"is titled {reference.title!r}"
+                f"{reference.id}: picker label says {cell!r} but the document is titled {reference.title!r}"
             )
 
 
@@ -85,10 +84,9 @@ def test_mohtat2020_is_the_nmc532_cell_pybamm_documents():
     """Regression pin: this set was mislabelled NMC111 in the picker, the
     document Title and NOTICE.md. PyBaMM documents it as a graphite/NMC532
     pouch cell (doi:10.1149/1945-7111/aba5d1)."""
-    mohtat = next(
-        s for s in reference_library.list_reference_sets() if s.id.endswith("mohtat2020")
-    )
-    assert "NMC532" in mohtat.title and "NMC532" in mohtat.short_title
+    mohtat = next(s for s in reference_library.list_reference_sets() if s.id.endswith("mohtat2020"))
+    assert "NMC532" in mohtat.title
+    assert "NMC532" in mohtat.short_title
     assert "NMC111" not in mohtat.title
 
 

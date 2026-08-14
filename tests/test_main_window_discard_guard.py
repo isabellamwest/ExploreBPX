@@ -63,14 +63,10 @@ def test_discard_guard_names_the_file(app_driver, spm_workfile, monkeypatch):
     monkeypatch.setattr(main_window_module.QMessageBox, "question", fake_question)
     assert app_driver._w._confirm_discard_if_dirty() is False
     assert seen["title"] == "Unsaved changes"
-    assert seen["text"] == (
-        f"{spm_workfile.name} has unsaved changes. Save before continuing?"
-    )
+    assert seen["text"] == (f"{spm_workfile.name} has unsaved changes. Save before continuing?")
 
 
-def test_open_with_clean_document_does_not_prompt(
-    app_driver, valid_spm_path, spm_workfile, monkeypatch
-):
+def test_open_with_clean_document_does_not_prompt(app_driver, valid_spm_path, spm_workfile, monkeypatch):
     app_driver.open(valid_spm_path)
     _stub_replace_main(app_driver, monkeypatch)
 
@@ -91,9 +87,7 @@ def test_open_dirty_cancel_aborts(app_driver, spm_workfile, valid_spm_path, monk
     _stub_replace_main(app_driver, monkeypatch)
     original_status = app_driver.status_text()
 
-    monkeypatch.setattr(
-        main_window_module.QMessageBox, "question", lambda *a, **k: QMessageBox.Cancel
-    )
+    monkeypatch.setattr(main_window_module.QMessageBox, "question", lambda *a, **k: QMessageBox.Cancel)
     monkeypatch.setattr(
         main_window_module.QFileDialog,
         "getOpenFileName",
@@ -110,9 +104,7 @@ def test_open_dirty_dont_save_proceeds(app_driver, spm_workfile, valid_spm_path,
     _make_dirty(app_driver, spm_workfile)
     _stub_replace_main(app_driver, monkeypatch)
 
-    monkeypatch.setattr(
-        main_window_module.QMessageBox, "question", lambda *a, **k: QMessageBox.Discard
-    )
+    monkeypatch.setattr(main_window_module.QMessageBox, "question", lambda *a, **k: QMessageBox.Discard)
     monkeypatch.setattr(
         main_window_module.QFileDialog,
         "getOpenFileName",
@@ -124,15 +116,11 @@ def test_open_dirty_dont_save_proceeds(app_driver, spm_workfile, valid_spm_path,
     assert app_driver.status_text() == f"{valid_spm_path.name} · Saved"
 
 
-def test_open_dirty_save_succeeds_then_proceeds(
-    app_driver, spm_workfile, valid_spm_path, monkeypatch
-):
+def test_open_dirty_save_succeeds_then_proceeds(app_driver, spm_workfile, valid_spm_path, monkeypatch):
     _make_dirty(app_driver, spm_workfile)
     _stub_replace_main(app_driver, monkeypatch)
 
-    monkeypatch.setattr(
-        main_window_module.QMessageBox, "question", lambda *a, **k: QMessageBox.Save
-    )
+    monkeypatch.setattr(main_window_module.QMessageBox, "question", lambda *a, **k: QMessageBox.Save)
     monkeypatch.setattr(
         main_window_module.QFileDialog,
         "getOpenFileName",
@@ -155,9 +143,7 @@ def test_close_clean_window_does_not_prompt(app_driver, valid_spm_path, monkeypa
 
 def test_close_dirty_cancel_keeps_window_open(app_driver, spm_workfile, monkeypatch):
     _make_dirty(app_driver, spm_workfile)
-    monkeypatch.setattr(
-        main_window_module.QMessageBox, "question", lambda *a, **k: QMessageBox.Cancel
-    )
+    monkeypatch.setattr(main_window_module.QMessageBox, "question", lambda *a, **k: QMessageBox.Cancel)
 
     assert app_driver._w.close() is False
     assert app_driver._w._state.active.dirty is True
@@ -165,38 +151,28 @@ def test_close_dirty_cancel_keeps_window_open(app_driver, spm_workfile, monkeypa
 
 def test_close_dirty_discard_closes(app_driver, spm_workfile, monkeypatch):
     _make_dirty(app_driver, spm_workfile)
-    monkeypatch.setattr(
-        main_window_module.QMessageBox, "question", lambda *a, **k: QMessageBox.Discard
-    )
+    monkeypatch.setattr(main_window_module.QMessageBox, "question", lambda *a, **k: QMessageBox.Discard)
 
     assert app_driver._w.close() is True
 
 
 def test_close_dirty_save_writes_then_closes(app_driver, spm_workfile, monkeypatch):
     _make_dirty(app_driver, spm_workfile)
-    monkeypatch.setattr(
-        main_window_module.QMessageBox, "question", lambda *a, **k: QMessageBox.Save
-    )
+    monkeypatch.setattr(main_window_module.QMessageBox, "question", lambda *a, **k: QMessageBox.Save)
 
     assert app_driver._w.close() is True
     saved = json.loads(spm_workfile.read_text("utf-8"))
     assert saved["Parameterisation"]["Cell"]["Nominal cell capacity [A.h]"] == 6.0
 
 
-def test_open_dirty_save_cancelled_save_as_aborts(
-    app_driver, spm_workfile, valid_spm_path, monkeypatch
-):
+def test_open_dirty_save_cancelled_save_as_aborts(app_driver, spm_workfile, valid_spm_path, monkeypatch):
     _make_dirty(app_driver, spm_workfile)
     _stub_replace_main(app_driver, monkeypatch)
     app_driver._w._state.active.backing_file = None  # force the Save As path
     original_status = app_driver.status_text()
 
-    monkeypatch.setattr(
-        main_window_module.QMessageBox, "question", lambda *a, **k: QMessageBox.Save
-    )
-    monkeypatch.setattr(
-        main_window_module.QFileDialog, "getSaveFileName", lambda *a, **k: ("", "")
-    )
+    monkeypatch.setattr(main_window_module.QMessageBox, "question", lambda *a, **k: QMessageBox.Save)
+    monkeypatch.setattr(main_window_module.QFileDialog, "getSaveFileName", lambda *a, **k: ("", ""))
     # The file picker now always runs before the discard guard (it must know
     # the target filename to show the open-intent choice dialog), so this can
     # no longer stub _fail_if_called the way it did pre-M1.

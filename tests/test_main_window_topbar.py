@@ -35,9 +35,7 @@ def test_identity_shows_title_and_version(app_driver, valid_spm_path):
     assert app_driver.export_enabled() is True
 
 
-def test_identity_falls_back_to_filename_when_title_empty(
-    app_driver, valid_spm_dict, tmp_path
-):
+def test_identity_falls_back_to_filename_when_title_empty(app_driver, valid_spm_dict, tmp_path):
     valid_spm_dict["Header"]["Title"] = ""
     work = tmp_path / "no_title_example.json"
     work.write_text(json.dumps(valid_spm_dict), encoding="utf-8")
@@ -47,9 +45,7 @@ def test_identity_falls_back_to_filename_when_title_empty(
     assert app_driver.identity_text() == "no_title_example.json · BPX v1.0.0"
 
 
-def test_identity_unaffected_by_missing_model(
-    app_driver, valid_spm_dict, tmp_path
-):
+def test_identity_unaffected_by_missing_model(app_driver, valid_spm_dict, tmp_path):
     """The identity label carries no Model segment, so clearing
     ``Header.Model`` changes nothing about it."""
     valid_spm_dict["Header"]["Model"] = ""
@@ -69,9 +65,7 @@ def test_identity_label_omits_model(app_driver, valid_spm_path):
     assert app_driver.identity_text() == "Minimal valid SPM example · BPX v1.0.0"
 
 
-def test_identity_title_only_has_no_dangling_version_or_separator(
-    app_driver, valid_spm_dict, tmp_path
-):
+def test_identity_title_only_has_no_dangling_version_or_separator(app_driver, valid_spm_dict, tmp_path):
     valid_spm_dict["Header"]["BPX"] = ""
     work = tmp_path / "title_only_example.json"
     work.write_text(json.dumps(valid_spm_dict), encoding="utf-8")
@@ -81,9 +75,7 @@ def test_identity_title_only_has_no_dangling_version_or_separator(
     assert app_driver.identity_text() == "Minimal valid SPM example"
 
 
-def test_identity_falls_back_to_filename_when_all_header_fields_empty(
-    app_driver, valid_spm_dict, tmp_path
-):
+def test_identity_falls_back_to_filename_when_all_header_fields_empty(app_driver, valid_spm_dict, tmp_path):
     valid_spm_dict["Header"]["Title"] = ""
     valid_spm_dict["Header"]["Model"] = ""
     valid_spm_dict["Header"]["BPX"] = ""
@@ -146,11 +138,7 @@ def test_no_standalone_shortcut_claims_the_save_key(app_driver):
     from PySide6.QtGui import QKeySequence, QShortcut
 
     save_key = QKeySequence(QKeySequence.Save).toString()
-    claimed = [
-        sc.key().toString()
-        for sc in app_driver._w.findChildren(QShortcut)
-        if sc.key().toString() == save_key
-    ]
+    claimed = [sc.key().toString() for sc in app_driver._w.findChildren(QShortcut) if sc.key().toString() == save_key]
 
     assert claimed == []
 
@@ -171,9 +159,7 @@ def test_open_shortcut_is_the_platform_open_key(app_driver):
     assert app_driver.open_shortcut() == QKeySequence(QKeySequence.Open).toString()
 
 
-def test_open_shortcut_opens_a_file_with_none_loaded(
-    app_driver, valid_spm_path, monkeypatch
-):
+def test_open_shortcut_opens_a_file_with_none_loaded(app_driver, valid_spm_path, monkeypatch):
     monkeypatch.setattr(
         main_window_module.QFileDialog,
         "getOpenFileName",
@@ -185,9 +171,7 @@ def test_open_shortcut_opens_a_file_with_none_loaded(
     assert app_driver.status_text() == f"{valid_spm_path.name} · Saved"
 
 
-def test_open_shortcut_reaches_open_from_the_editor_page(
-    app_driver, valid_spm_path, spm_workfile, monkeypatch
-):
+def test_open_shortcut_reaches_open_from_the_editor_page(app_driver, valid_spm_path, spm_workfile, monkeypatch):
     """The gap the shortcut exists to close: Open's only button is on the
     Workspace page, so from the Editor there was no route to it at all."""
     app_driver.open(spm_workfile).show_view("Editor")
@@ -209,9 +193,7 @@ def test_open_shortcut_reaches_open_from_the_editor_page(
     assert app_driver.status_text() == f"{valid_spm_path.name} · Saved"
 
 
-def test_open_shortcut_reaches_open_from_the_diagnostics_page(
-    app_driver, valid_spm_path, spm_workfile, monkeypatch
-):
+def test_open_shortcut_reaches_open_from_the_diagnostics_page(app_driver, valid_spm_path, spm_workfile, monkeypatch):
     app_driver.open(spm_workfile).show_view("Diagnostics")
     assert app_driver.current_view_name() == "Diagnostics"
 

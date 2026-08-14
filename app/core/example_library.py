@@ -18,7 +18,7 @@ directory -- nothing else here changes.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import cache
 from pathlib import Path
 
 from . import bpx_gateway
@@ -33,9 +33,7 @@ class _Source:
     directory: Path
 
 
-_SOURCES: tuple[_Source, ...] = (
-    _Source("about_energy", "Sample data", _ASSETS / "about_energy"),
-)
+_SOURCES: tuple[_Source, ...] = (_Source("about_energy", "Sample data", _ASSETS / "about_energy"),)
 
 #: One honest sentence of provenance for the bundled samples, shown wherever
 #: they are offered (mirrors ``core.reference_library.PROVENANCE`` for the
@@ -53,10 +51,7 @@ PROVENANCE = (
 #: parameterisation repository, the source ``NOTICE.md`` records and
 #: ``scripts/build_example_library.py`` pins. Stated so a provenance
 #: surface can offer navigation to the data, not just name it.
-SOURCE_URL = (
-    "https://github.com/About-Energy-OpenSource/"
-    "About-Energy-BPX-Parameterisation"
-)
+SOURCE_URL = "https://github.com/About-Energy-OpenSource/About-Energy-BPX-Parameterisation"
 
 #: A short, curated picker label per bundled document stem -- the files'
 #: own ``Header.Title`` values are full sentences ("Parameterisation example
@@ -113,9 +108,7 @@ class ReferenceDocument:
     data: dict[str, dict]  # run_name -> raw array dict
 
 
-def _runs_from_raw(
-    raw: dict, document_id: str, title: str, short_title: str
-) -> tuple[ExampleRun, ...]:
+def _runs_from_raw(raw: dict, document_id: str, title: str, short_title: str) -> tuple[ExampleRun, ...]:
     """Every Validation run in *raw*, as picker metadata. Reads the raw dict
     exactly as the tree does -- a missing/odd ``Validation`` value degrades
     to no runs, never an error (the validator, not this module, judges it)."""
@@ -140,7 +133,7 @@ def _runs_from_raw(
     return tuple(runs)
 
 
-@lru_cache(maxsize=None)
+@cache
 def _load_document_raw(source_id: str, stem: str) -> dict:
     source = next(s for s in _SOURCES if s.id == source_id)
     path = source.directory / f"{stem}.json"
@@ -181,9 +174,7 @@ def load_example_run(run_id: str) -> dict[str, list]:
     return raw["Validation"][run_name]
 
 
-def load_reference_document(
-    data: bytes, filename: str, document_id: str
-) -> ReferenceDocument:
+def load_reference_document(data: bytes, filename: str, document_id: str) -> ReferenceDocument:
     """The Validation slice of a user-chosen BPX file.
 
     *document_id* is the caller's own unique handle for this open (e.g.

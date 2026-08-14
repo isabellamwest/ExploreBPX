@@ -13,4 +13,96 @@ dependencies = [
 dev = [
     "pytest",
     "pytest-qt>=4.5",
+    "ruff>=0.16.3",
 ]
+
+# Lint/format configuration follows the official bpx package (the app's
+# reference for code style), with ignores where a Qt desktop app genuinely
+# differs from a typed pydantic library. Each carve-out says why.
+
+[tool.ruff]
+line-length = 120
+extend-exclude = ["app/data"]
+# The import roots: app/ holds the core/state/ui_qt packages, the repo root
+# holds tests/ and scripts/. Keeps isort grouping first-party imports apart
+# from site-packages.
+src = ["app", "."]
+
+[tool.ruff.format]
+docstring-code-format = true
+docstring-code-line-length = 80
+
+[tool.ruff.lint]
+select = [
+    "F",     # pyflakes
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "I",     # isort
+    "N",     # pep8-naming
+    "UP",    # pyupgrade
+    "YTT",   # flake8-2020
+    "ASYNC", # flake8-async
+    "S",     # flake8-bandit
+    "BLE",   # flake8-blind-except
+    "B",     # flake8-bugbear
+    "A",     # flake8-builtins
+    "C4",    # flake8-comprehensions
+    "EM",    # flake8-errmsg
+    "ICN",   # flake8-import-conventions
+    "PIE",   # flake8-pie
+    "T20",   # flake8-print
+    "PYI",   # flake8-pyi
+    "PT",    # flake8-pytest-style
+    "Q",     # flake8-quotes
+    "RSE",   # flake8-raise
+    "RET",   # flake8-return
+    "SLF",   # flake8-self
+    "SLOT",  # flake8-slots
+    "SIM",   # flake8-simplify
+    "TID",   # flake8-tidy-imports
+    "TC",    # flake8-type-checking
+    "PTH",   # flake8-use-pathlib
+    "TD",    # flake8-todos
+    "FIX",   # flake8-fixme
+    "ERA",   # eradicate
+    "PL",    # pylint
+    "TRY",   # tryceratops
+    "FLY",   # flynt
+    "PERF",  # perflint
+    "RUF",   # ruff-specific rules
+]
+ignore = [
+    "ANN",     # gradual typing: annotations are added where they pay, not by mandate
+    "COM812",  # trailing commas belong to the formatter
+    "FBT",     # Qt's own APIs take positional booleans everywhere
+    "ARG",     # Qt signal/override signatures force unused parameters
+    "EM101",   # exception-message extraction: churn with no reader benefit
+    "EM102",   # (as EM101, for f-strings)
+    "TRY003",  # long messages in `raise` are how diagnostics stay readable here
+    "PLC0415", # non-top-level imports are deliberate (lazy heavy modules, cycle breaks)
+    "DTZ",     # workspace timestamps are deliberately local wall-clock
+    "RUF005",  # `[x] + rest` reads fine; the unpack rewrite adds nothing
+    "PLR2004", # path/tuple arity checks (`len(path) == 2`) read better inline
+    "PLR0911", "PLR0912", "PLR0913", "PLR0915", "PLR0917",
+               # size limits: existing shapes; revisit when a function is touched
+]
+# Deliberate typography, not typos: true minus/multiplication/en-dash in UI
+# strings, the fullwidth ＋ glyph on board cards, › breadcrumbs, en-space
+# spacing in styled text. Tests assert on these strings verbatim.
+allowed-confusables = ["−", "×", "–", "＋", "›", " "]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "S101",    # asserts are the point of tests
+    "SLF001",  # the driver and tests reach into widget internals by design
+    "N802",    # Qt override methods are camelCase
+]
+"scripts/**" = ["T201"] # CLI tools print their output
+# The probe is a subprocess that reports its findings via stdout.
+"tests/shortcut_dispatch_probe.py" = ["T201"]
+"app/ui_qt/**" = [
+    "N802",    # Qt override methods are camelCase
+]
+# Qt's QAbstractItemModel API defaults `parent` to QModelIndex() by contract.
+"app/ui_qt/tree_model.py" = ["B008"]
+"app/ui_qt/cards/grid.py" = ["B008"]

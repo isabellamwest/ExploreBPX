@@ -36,7 +36,7 @@ def _panel_on(qtbot, spm_workfile, path):
 _TITLE = ("Header", "Title")
 
 
-@pytest.fixture()
+@pytest.fixture
 def null_title_workfile(tmp_path, spm_workfile):
     """A document whose ``Header.Title`` is an explicit ``null``.
 
@@ -163,7 +163,7 @@ def test_a_long_grid_takes_the_pages_leftover_height(qtbot, spm_with_validation_
     time above a slab of white. A short one leaves the white tail alone, and
     either way the Issues/Documentation sections stay where they are."""
     time_path = ("Validation", "C/20 discharge", "Time [s]")
-    state, panel = _panel_on(qtbot, spm_with_validation_path, time_path)
+    _state, panel = _panel_on(qtbot, spm_with_validation_path, time_path)
     panel.resize(460, 900)
     panel.show()
     qtbot.waitExposed(panel)
@@ -215,18 +215,14 @@ def test_switching_content_leaves_no_ghost_placeholder(qtbot, spm_workfile):
     panel.show_parameter(state.active.selected_parameter())
     panel.show_placeholder()
 
-    stale = [
-        label
-        for label in panel._content.findChildren(QLabel)
-        if "Select an object" in label.text()
-    ]
+    stale = [label for label in panel._content.findChildren(QLabel) if "Select an object" in label.text()]
     assert len(stale) == 1, f"expected one placeholder, found {len(stale)}"
 
 
 def test_issues_section_appears_live_during_preview(qtbot, spm_workfile):
     """The Issues section updates live while typing an invalid draft, not
     only on commit: it appears with the previewed issue's row and count."""
-    state, panel = _panel_on(qtbot, spm_workfile, _CAPACITY)
+    _state, panel = _panel_on(qtbot, spm_workfile, _CAPACITY)
     assert not panel._issues_section.isVisibleTo(panel)
 
     panel._card._editor._edit.setText("not-a-number")
@@ -238,7 +234,7 @@ def test_issues_section_appears_live_during_preview(qtbot, spm_workfile):
 
 
 def test_issues_section_restores_on_escape(qtbot, spm_workfile):
-    state, panel = _panel_on(qtbot, spm_workfile, _CAPACITY)
+    _state, panel = _panel_on(qtbot, spm_workfile, _CAPACITY)
 
     panel._card._editor._edit.setText("not-a-number")
     panel._validate_draft()
@@ -271,7 +267,7 @@ def test_a_blocked_draft_is_never_committed_even_when_dirty(qtbot, spm_workfile)
     assert session.document.raw["Parameterisation"]["Cell"][_CAPACITY[-1]] == 5
 
     card = panel._card
-    card._editor._edit.setText("999.0")          # a genuinely dirty draft
+    card._editor._edit.setText("999.0")  # a genuinely dirty draft
     assert card.is_dirty is True
     card.commit_blocked_reason = lambda: "Not valid JSON: stubbed"
 
@@ -281,27 +277,23 @@ def test_a_blocked_draft_is_never_committed_even_when_dirty(qtbot, spm_workfile)
     assert session.can_undo is False
 
 
-def test_a_blocked_draft_holds_the_badge_instead_of_previewing_its_value(
-    qtbot, spm_workfile
-):
+def test_a_blocked_draft_holds_the_badge_instead_of_previewing_its_value(qtbot, spm_workfile):
     """While a draft has no representation there is nothing to validate. The
     badge must hold, not report on a value the editor is not showing."""
-    state, panel = _panel_on(qtbot, spm_workfile, _CAPACITY)
+    _state, panel = _panel_on(qtbot, spm_workfile, _CAPACITY)
     card = panel._card
     panel._render_issues([], False, CheckReach.COMPLETE)
     assert card._badge.text() == "Valid"
 
-    card._editor._edit.setText("not-a-number")   # would preview as Invalid
+    card._editor._edit.setText("not-a-number")  # would preview as Invalid
     card.commit_blocked_reason = lambda: "Not valid JSON: stubbed"
 
     panel._validate_draft()
 
-    assert card._badge.text() == "Valid"         # held, not re-validated
+    assert card._badge.text() == "Valid"  # held, not re-validated
 
 
-def test_live_preview_not_checked_hover_names_the_previews_own_abort(
-    qtbot, spm_workfile
-):
+def test_live_preview_not_checked_hover_names_the_previews_own_abort(qtbot, spm_workfile):
     """The draft badge and its hover must describe the same validation run.
 
     A draft can change where bpx's staged run stops (most starkly, a value
@@ -314,7 +306,7 @@ def test_live_preview_not_checked_hover_names_the_previews_own_abort(
     card = panel._card
     assert state.active.document.validation_reach is CheckReach.COMPLETE
 
-    card._editor._edit.setText("999.0")          # representable draft
+    card._editor._edit.setText("999.0")  # representable draft
     state.active.preview_parameter = lambda path, value: ParameterPreview(
         issues=[], validation_reach=CheckReach.NOT_RUN
     )

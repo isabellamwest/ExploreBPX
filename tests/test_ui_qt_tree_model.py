@@ -111,9 +111,7 @@ def test_verbatim_issues_alone_never_light_the_marker():
         parameters=[parameter],
         issues=[_error(("Parameterisation", "Cell"))],
     )
-    parameterisation = TreeNode(
-        label="Parameterisation", path=("Parameterisation",), children=[cell]
-    )
+    parameterisation = TreeNode(label="Parameterisation", path=("Parameterisation",), children=[cell])
     root = TreeNode(label="BPX File", path=(), children=[parameterisation])
     model = _model(root)  # empty visible set; issues attached everywhere
 
@@ -136,9 +134,7 @@ _UD = ("Parameterisation", "User-defined")
 def _user_defined_model(sub_issue: bool = False):
     sub = TreeNode(label="Thermal tweaks", path=_UD + ("Thermal tweaks",))
     bucket = TreeNode(label="User-defined", path=_UD, children=[sub])
-    parameterisation = TreeNode(
-        label="Parameterisation", path=("Parameterisation",), children=[bucket]
-    )
+    parameterisation = TreeNode(label="Parameterisation", path=("Parameterisation",), children=[bucket])
     root = TreeNode(label="BPX File", path=(), children=[parameterisation])
     visible = frozenset({_UD + ("Thermal tweaks",)}) if sub_issue else frozenset()
     model = _model(root, expanded_paths={("Parameterisation",), _UD}, visible_error_paths=visible)

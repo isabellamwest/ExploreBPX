@@ -25,7 +25,7 @@ from ui_qt.cards.paste_dialog import PastePreviewResult
 
 @pytest.fixture(autouse=True)
 def _qapp():
-    yield QApplication.instance() or QApplication([])
+    return QApplication.instance() or QApplication([])
 
 
 def test_bulk_grid_has_paste_affordances():
@@ -132,7 +132,7 @@ class _StubCsvDialog:
     without ever calling exec(), which would block headless."""
 
     #: The most recently constructed stub, for assertions on how it was built.
-    last: "_StubCsvDialog | None" = None
+    last: _StubCsvDialog | None = None
 
     def __init__(self, data, targets, parent=None, **kwargs):
         self.data = data
@@ -160,9 +160,7 @@ def _stub_dialog(monkeypatch, mapping, mode=None):
 
 
 def _stub_file_dialog(monkeypatch, path) -> None:
-    monkeypatch.setattr(
-        grid_module.QFileDialog, "getOpenFileName", lambda *a, **k: (str(path), "")
-    )
+    monkeypatch.setattr(grid_module.QFileDialog, "getOpenFileName", lambda *a, **k: (str(path), ""))
 
 
 def test_import_csv_fills_the_grid_and_emits_changed(monkeypatch, tmp_path):
@@ -181,9 +179,7 @@ def test_import_csv_fills_the_grid_and_emits_changed(monkeypatch, tmp_path):
     assert fired == [1]
 
 
-def test_import_csv_proposes_positional_columns_and_requires_all_targets(
-    monkeypatch, tmp_path
-):
+def test_import_csv_proposes_positional_columns_and_requires_all_targets(monkeypatch, tmp_path):
     """Headed "Capacity,Voltage": a hostile header where ``auto_map(("x", "y"))``
     would propose ``(None, 0)`` -- "y" is a substring of "capacity", so y would
     be filled from the x column and x left unmapped. This only passes if the
@@ -245,9 +241,7 @@ def test_import_csv_non_numeric_cells_survive_as_text_never_zero(monkeypatch, tm
     assert grid.values() == [["oops", 1]]
 
 
-def test_import_csv_three_column_file_proposes_the_first_two_and_honours_an_override(
-    monkeypatch, tmp_path
-):
+def test_import_csv_three_column_file_proposes_the_first_two_and_honours_an_override(monkeypatch, tmp_path):
     """A 3-column file proposes columns 1 and 2 (positionally); overriding
     the mapping to column 3 for ``y`` is what actually gets written."""
     path = tmp_path / "table.csv"
@@ -264,9 +258,7 @@ def test_import_csv_three_column_file_proposes_the_first_two_and_honours_an_over
 
 
 def test_import_csv_no_file_chosen_is_a_no_op(monkeypatch):
-    monkeypatch.setattr(
-        grid_module.QFileDialog, "getOpenFileName", lambda *a, **k: ("", "")
-    )
+    monkeypatch.setattr(grid_module.QFileDialog, "getOpenFileName", lambda *a, **k: ("", ""))
     grid = NumericGrid(("x", "y"), csv_import=True)
     fired = []
     grid.changed.connect(lambda: fired.append(1))

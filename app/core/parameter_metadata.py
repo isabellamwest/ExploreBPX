@@ -16,10 +16,13 @@ under an electrode vs the separator), and only the path can tell them apart.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from . import parameter_descriptions
-from .bpx_gateway import FieldMeta
 from .parameter_types import extract_unit
+
+if TYPE_CHECKING:
+    from .bpx_gateway import FieldMeta
 
 
 @dataclass(frozen=True)
@@ -48,9 +51,7 @@ class ParameterMetadata:
     is_custom: bool = False
 
 
-def resolve_parameter_metadata(
-    path: tuple[str, ...], meta: FieldMeta | None
-) -> ParameterMetadata:
+def resolve_parameter_metadata(path: tuple[str, ...], meta: FieldMeta | None) -> ParameterMetadata:
     """Resolve the unified metadata for the parameter at *path*.
 
     ``FieldMeta`` supplies the schema-derived facts; the descriptions dataset

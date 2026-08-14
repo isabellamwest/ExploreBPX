@@ -70,9 +70,9 @@ from PySide6.QtWidgets import (
 from core.csv_import import positional_map, read_csv_file
 from core.paste import parse_clipboard
 from core.values import format_value, parse_value, values_equal
+from ui_qt import icons, typography
+from ui_qt.style import ACCENT, BORDER, ERROR_TINT, MUTED, NEUTRAL_TINT
 
-from .. import icons, typography
-from ..style import ACCENT, BORDER, ERROR_TINT, MUTED, NEUTRAL_TINT
 from .csv_dialog import CsvImportDialog
 from .paste_dialog import PastePreviewDialog, PastePreviewResult
 
@@ -107,9 +107,7 @@ class _GridModel(QAbstractTableModel):
         #: (series, x/y table) is unchanged.
         self._text_columns = frozenset(text_columns)
         self._editable = len(headers)
-        self._context = tuple(
-            (str(label), tuple(cells)) for label, cells in context_columns
-        )
+        self._context = tuple((str(label), tuple(cells)) for label, cells in context_columns)
         self._headers = tuple(headers) + tuple(label for label, _ in self._context)
         self._rows: list[list[object]] = []
         #: ``{(row, column): validator message}``, editable cells only. The
@@ -121,12 +119,12 @@ class _GridModel(QAbstractTableModel):
         return max((len(cells) for _, cells in self._context), default=0)
 
     # --- Qt model interface -------------------------------------------
-    def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:  # noqa: N802
+    def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:
         if parent.isValid():
             return 0
         return max(len(self._rows), self._context_rows())
 
-    def columnCount(self, parent: QModelIndex = QModelIndex()) -> int:  # noqa: N802
+    def columnCount(self, parent: QModelIndex = QModelIndex()) -> int:
         return 0 if parent.isValid() else len(self._headers)
 
     def data(self, index: QModelIndex, role: int = Qt.DisplayRole):
@@ -157,7 +155,7 @@ class _GridModel(QAbstractTableModel):
             return int(Qt.AlignRight | Qt.AlignVCenter)
         return None
 
-    def setData(self, index: QModelIndex, value, role: int = Qt.EditRole) -> bool:  # noqa: N802
+    def setData(self, index: QModelIndex, value, role: int = Qt.EditRole) -> bool:
         """Store the typed text as a raw object, never as a coerced number."""
         if not index.isValid() or role != Qt.EditRole:
             return False
@@ -193,7 +191,7 @@ class _GridModel(QAbstractTableModel):
             return Qt.ItemIsEnabled  # phantom row below the edited column's end
         return Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable
 
-    def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.DisplayRole):  # noqa: N802
+    def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.DisplayRole):
         if role == Qt.TextAlignmentRole and orientation == Qt.Horizontal:
             # A header sits over its own column, so it aligns the way that
             # column's cells do. Qt's default centres it, which left every
@@ -323,7 +321,7 @@ class _GridView(QTableView):
     (``SubmitModelCache``, what its editor emits for Enter) is redirected.
     """
 
-    def closeEditor(self, editor, hint) -> None:  # noqa: N802
+    def closeEditor(self, editor, hint) -> None:
         if hint == QAbstractItemDelegate.SubmitModelCache:
             super().closeEditor(editor, QAbstractItemDelegate.NoHint)
             index = self.currentIndex()
@@ -373,8 +371,7 @@ class _PendingBar(QWidget):
         # actually paint.
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setStyleSheet(
-            f"#GridPendingBar {{ background: {NEUTRAL_TINT}; "
-            f"border: 1px solid {BORDER}; border-radius: 4px; }}"
+            f"#GridPendingBar {{ background: {NEUTRAL_TINT}; border: 1px solid {BORDER}; border-radius: 4px; }}"
         )
 
         layout = QHBoxLayout(self)
@@ -457,9 +454,7 @@ class NumericGrid(QWidget):
         self._view.setSelectionMode(QAbstractItemView.SingleSelection)
         self._view.setSelectionBehavior(QAbstractItemView.SelectItems)
         self._view.setEditTriggers(
-            QAbstractItemView.DoubleClicked
-            | QAbstractItemView.SelectedClicked
-            | QAbstractItemView.AnyKeyPressed
+            QAbstractItemView.DoubleClicked | QAbstractItemView.SelectedClicked | QAbstractItemView.AnyKeyPressed
         )
         self._view.setCornerButtonEnabled(False)
         self._view.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
@@ -698,10 +693,7 @@ class NumericGrid(QWidget):
         """
         columns = [data.columns[index] if index is not None else () for index in mapping]
         row_count = max((len(column) for column in columns), default=0)
-        rows = [
-            [column[r] if r < len(column) else None for column in columns]
-            for r in range(row_count)
-        ]
+        rows = [[column[r] if r < len(column) else None for column in columns] for r in range(row_count)]
         self.apply_paste(rows, mode)
 
     def _refresh_buttons(self) -> None:
@@ -842,12 +834,12 @@ class _MultiColumnGridModel(QAbstractTableModel):
         self._issues: dict[tuple[int, int], str] = {}
 
     # --- Qt model interface -------------------------------------------
-    def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:  # noqa: N802
+    def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:
         if parent.isValid():
             return 0
         return max((len(column) for column in self._columns), default=0)
 
-    def columnCount(self, parent: QModelIndex = QModelIndex()) -> int:  # noqa: N802
+    def columnCount(self, parent: QModelIndex = QModelIndex()) -> int:
         return 0 if parent.isValid() else len(self._headers)
 
     def data(self, index: QModelIndex, role: int = Qt.DisplayRole):
@@ -870,7 +862,7 @@ class _MultiColumnGridModel(QAbstractTableModel):
             return int(Qt.AlignRight | Qt.AlignVCenter)
         return None
 
-    def setData(self, index: QModelIndex, value, role: int = Qt.EditRole) -> bool:  # noqa: N802
+    def setData(self, index: QModelIndex, value, role: int = Qt.EditRole) -> bool:
         """Write an existing cell, or append past that column's own end.
 
         A valid *index* is only ever handed out for ``row < rowCount()``
@@ -917,7 +909,7 @@ class _MultiColumnGridModel(QAbstractTableModel):
             return Qt.ItemIsEnabled  # deeper phantom cell
         return Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable
 
-    def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.DisplayRole):  # noqa: N802
+    def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.DisplayRole):
         if role == Qt.TextAlignmentRole and orientation == Qt.Horizontal:
             # Every column here is numeric, so every header right-aligns over
             # its own numbers rather than centring between two columns.
@@ -1039,9 +1031,7 @@ class MultiColumnGrid(QWidget):
         self._view.setSelectionMode(QAbstractItemView.SingleSelection)
         self._view.setSelectionBehavior(QAbstractItemView.SelectItems)
         self._view.setEditTriggers(
-            QAbstractItemView.DoubleClicked
-            | QAbstractItemView.SelectedClicked
-            | QAbstractItemView.AnyKeyPressed
+            QAbstractItemView.DoubleClicked | QAbstractItemView.SelectedClicked | QAbstractItemView.AnyKeyPressed
         )
         self._view.setCornerButtonEnabled(False)
         self._view.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)

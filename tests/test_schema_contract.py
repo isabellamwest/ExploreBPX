@@ -73,9 +73,7 @@ def _direct_refs(prop: dict) -> list[str]:
     any_of = prop.get("anyOf")
     if any_of:
         refs = [member for member in any_of if "$ref" in member]
-        if refs and all(
-            "$ref" in member or member.get("type") == "null" for member in any_of
-        ):
+        if refs and all("$ref" in member or member.get("type") == "null" for member in any_of):
             return [member["$ref"].split("/")[-1] for member in refs]
     return []
 
@@ -180,8 +178,7 @@ def test_A1_every_parameter_bearing_leaf_path_resolves(leaves, defs):
     unresolved = [
         path
         for path, (defname, alias, prop) in leaves.items()
-        if bpx_gateway._is_parameter_bearing_definition(defs[defname])
-        and bpx_gateway.field_meta(path) is None
+        if bpx_gateway._is_parameter_bearing_definition(defs[defname]) and bpx_gateway.field_meta(path) is None
     ]
     assert not unresolved, (
         "field_meta(path) returned None for leaf path(s) whose owning schema "
@@ -216,8 +213,7 @@ def test_A2_open_value_type_leaves_resolve_to_none(leaves, defs):
     fabricated = [
         path
         for path, (defname, alias, prop) in leaves.items()
-        if not bpx_gateway._is_parameter_bearing_definition(defs[defname])
-        and bpx_gateway.field_meta(path) is not None
+        if not bpx_gateway._is_parameter_bearing_definition(defs[defname]) and bpx_gateway.field_meta(path) is not None
     ]
     assert not fabricated, (
         "field_meta(path) returned real metadata for leaf path(s) whose "
@@ -303,17 +299,13 @@ def test_A4_family_members_agree_on_every_shared_alias():
             first_member, first_meta = entries[0]
             for member, meta in entries[1:]:
                 if meta != first_meta:
-                    disagreements.append(
-                        (family_name, alias, first_member, first_meta, member, meta)
-                    )
+                    disagreements.append((family_name, alias, first_member, first_meta, member, meta))
     assert not disagreements, (
         "field_meta() treats these schema definitions as one family and "
         "assumes every alias two or more members define carries IDENTICAL "
         "metadata. That assumption just broke for:\n"
         + "\n".join(
-            f"  family={fam!r} alias={alias!r}:\n"
-            f"      {m1}: {meta1!r}\n"
-            f"      {m2}: {meta2!r}"
+            f"  family={fam!r} alias={alias!r}:\n      {m1}: {meta1!r}\n      {m2}: {meta2!r}"
             for fam, alias, m1, meta1, m2, meta2 in disagreements
         )
         + "\n\nbpx has diverged this alias's meaning between the listed "
@@ -341,7 +333,7 @@ def test_A5_description_is_empty_or_exactly_the_schema_propertys_own_text(leaves
     Coefficient [W.M-2.K-1]") while remaining totally indifferent to
     upstream rewording of real descriptions."""
     mismatches = []
-    for path, (defname, alias, prop) in leaves.items():
+    for path, (_defname, _alias, prop) in leaves.items():
         meta = bpx_gateway.field_meta(path)
         if meta is None:
             continue  # A2 already covers the None case.
@@ -351,10 +343,7 @@ def test_A5_description_is_empty_or_exactly_the_schema_propertys_own_text(leaves
     assert not mismatches, (
         "field_meta(path).description was neither empty nor byte-identical "
         "to the schema property's own 'description' for:\n"
-        + "\n".join(
-            f"  {'/'.join(p)}:\n      got:    {got!r}\n      schema: {want!r}"
-            for p, got, want in mismatches
-        )
+        + "\n".join(f"  {'/'.join(p)}:\n      got:    {got!r}\n      schema: {want!r}" for p, got, want in mismatches)
         + "\n\nThis is the exact shape of the old title-fabrication bug: a "
         "pydantic auto-generated 'title' (or any other invented text) "
         "leaking into description. field_meta must only ever surface the "

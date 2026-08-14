@@ -38,17 +38,17 @@ from PySide6.QtWidgets import (
 )
 
 from core.document import BPXDocument
-from state.app_state import MAX_PINNED_REFERENCES
 from core.reference_library import (
     PROVENANCE,
     ReferenceSet,
     list_reference_sets,
     load_reference_raw,
 )
+from state.app_state import MAX_PINNED_REFERENCES
 
+from . import typography
 from .group_box import GroupBox
 from .style import BORDER, MUTED, REFERENCE
-from . import typography
 from .typography import panel_title
 
 #: The picker column's fixed width -- the run-comparison dialog's rail width.
@@ -91,12 +91,12 @@ class _SetRow(QFrame):
 
         self.set_selected(False)
 
-    def mousePressEvent(self, event) -> None:  # noqa: N802 - Qt override
+    def mousePressEvent(self, event) -> None:
         if event.button() == Qt.LeftButton:
             self.clicked.emit()
         super().mousePressEvent(event)
 
-    def keyPressEvent(self, event) -> None:  # noqa: N802 - Qt override
+    def keyPressEvent(self, event) -> None:
         if event.key() in (Qt.Key_Space, Qt.Key_Return, Qt.Key_Enter):
             self.clicked.emit()
             return
@@ -105,9 +105,7 @@ class _SetRow(QFrame):
     def set_selected(self, selected: bool) -> None:
         self._tick.setVisible(selected)
         border = f"2px solid {REFERENCE}" if selected else f"1px solid {BORDER}"
-        self.setStyleSheet(
-            f"QFrame#ReferenceLibraryRow {{ border: {border}; border-radius: 4px; }}"
-        )
+        self.setStyleSheet(f"QFrame#ReferenceLibraryRow {{ border: {border}; border-radius: 4px; }}")
 
 
 class ReferenceLibraryDialog(QDialog):
@@ -215,9 +213,7 @@ class ReferenceLibraryDialog(QDialog):
         # up to MAX_PINNED_REFERENCES. A hint must never promise the
         # single-slot behaviour ("replaces any docked reference") that
         # pinning does not have.
-        hint = QLabel(
-            f"Pins as a read-only reference · up to {MAX_PINNED_REFERENCES} at once"
-        )
+        hint = QLabel(f"Pins as a read-only reference · up to {MAX_PINNED_REFERENCES} at once")
         hint.setObjectName("Hint")
         hint.setWordWrap(True)
         footer.addWidget(hint)
@@ -249,9 +245,7 @@ class ReferenceLibraryDialog(QDialog):
         self._detail_heading.setText(ref_set.short_title)
         self._detail_title.setText(ref_set.title)
         sections, parameters = self._set_counts(set_id)
-        self._detail_meta.setText(
-            f"Model {ref_set.model or '-'} · {sections} sections · {parameters} parameters"
-        )
+        self._detail_meta.setText(f"Model {ref_set.model or '-'} · {sections} sections · {parameters} parameters")
         # An uncurated future file may carry no References at all; show
         # nothing rather than a bare "Source:".
         self._detail_citation.setText(f"Source: {ref_set.references}" if ref_set.references else "")
@@ -260,8 +254,6 @@ class ReferenceLibraryDialog(QDialog):
 
     def _set_counts(self, set_id: str) -> tuple[int, int]:
         if set_id not in self._counts:
-            document = BPXDocument.from_raw(
-                load_reference_raw(set_id), filename=set_id, fmt="json"
-            )
+            document = BPXDocument.from_raw(load_reference_raw(set_id), filename=set_id, fmt="json")
             self._counts[set_id] = (document.section_count, document.parameter_count)
         return self._counts[set_id]

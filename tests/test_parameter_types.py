@@ -55,6 +55,7 @@ def test_looks_like_table():
 # Metadata-authoritative classification: invalid stored values
 # ---------------------------------------------------------------------------
 
+
 def test_classify_invalid_string_in_float_field_stays_scalar():
     """A string stored in a plain float field must remain SCALAR.
 

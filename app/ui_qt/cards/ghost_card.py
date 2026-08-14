@@ -13,18 +13,22 @@ editability reads treat it the same as any other non-``ParameterCard`` card.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
-from core.compare import ValueGroup
 from core.parameter_types import ParameterKind, split_name_and_unit
+from ui_qt.parameter_row import value_preview
+from ui_qt.style import VALUE_INPUT_MAX_WIDTH
 
-from ..parameter_row import value_preview
-from ..reference_identity import ReferencePin
-from ..style import VALUE_INPUT_MAX_WIDTH
 from .page import page_content, page_header
 from .reference_block import ReferenceLedger
 from .spread_scale import scale_for
+
+if TYPE_CHECKING:
+    from core.compare import ValueGroup
+    from ui_qt.reference_identity import ReferencePin
 
 #: The kinds whose main editor would show a unit label are the only ones
 #: whose value box is capped to the standard input width here -- with no main
@@ -96,8 +100,7 @@ class GhostParameterCard(QWidget):
         # which ``compare()`` already set False for these rows.
         monospace = any(isinstance(group.value, str) for group in groups)
         texts = [
-            group.value if isinstance(group.value, str) else value_preview(group.value, kind)[0]
-            for group in groups
+            group.value if isinstance(group.value, str) else value_preview(group.value, kind)[0] for group in groups
         ]
         width = VALUE_INPUT_MAX_WIDTH if kind in _CAPPED_KINDS else None
         self._ledger.set_rows(
@@ -111,8 +114,6 @@ class GhostParameterCard(QWidget):
         # nothing here has a main value to anchor to, so the axis says only
         # how far the references sit from each other. Two references stating
         # one value still hide it, exactly as elsewhere.
-        self._ledger.set_spread(
-            scale_for(None, groups, len(pins), kind), pins, width=width
-        )
+        self._ledger.set_spread(scale_for(None, groups, len(pins), kind), pins, width=width)
 
         layout.addStretch(1)

@@ -121,9 +121,7 @@ def test_yaml_comments_shows_the_comments_fact_with_a_singular_suffix(app_driver
     d.open(work)
 
     assert d.diagnostics_file_facts_header() == "commented.yaml  1 note"
-    assert d.diagnostics_file_fact_texts() == [
-        "Comments will not survive saving\nSaving rewrites the whole file"
-    ]
+    assert d.diagnostics_file_fact_texts() == ["Comments will not survive saving\nSaving rewrites the whole file"]
 
 
 def test_clean_complete_document_shows_no_group(app_driver, spm_workfile):

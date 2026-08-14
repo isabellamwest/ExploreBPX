@@ -19,13 +19,17 @@ they are shown.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import yaml
 
 from . import bpx_gateway
-from .bpx_gateway import CheckReach
-from .document import BPXDocument
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from .bpx_gateway import CheckReach
+    from .document import BPXDocument
 
 
 def _yaml_has_comments(text: str) -> bool:
@@ -40,10 +44,7 @@ def _yaml_has_comments(text: str) -> bool:
     that already parsed (a record is captured after a successful load), so
     scanning cannot fail.
     """
-    spans = [
-        (token.start_mark.index, token.end_mark.index)
-        for token in yaml.scan(text, Loader=yaml.SafeLoader)
-    ]
+    spans = [(token.start_mark.index, token.end_mark.index) for token in yaml.scan(text, Loader=yaml.SafeLoader)]
     position = text.find("#")
     while position != -1:
         if not any(start <= position < end for start, end in spans):
@@ -88,7 +89,7 @@ class LoadRecord:
         data: bytes | str,
         document: BPXDocument,
         path: Path | None = None,
-    ) -> "LoadRecord":
+    ) -> LoadRecord:
         """Capture the record for *document*, freshly loaded from *data*.
 
         *data* is the source content the document was built from (the
@@ -109,10 +110,7 @@ class LoadRecord:
             fmt=document.fmt,
             is_legacy=bpx_gateway.is_legacy(document.raw),
             checked=document.validation_reach,
-            has_yaml_comments=(
-                document.fmt == "yaml"
-                and _yaml_has_comments(bpx_gateway.decode_source(data))
-            ),
+            has_yaml_comments=(document.fmt == "yaml" and _yaml_has_comments(bpx_gateway.decode_source(data))),
             size_bytes=size_bytes,
             mtime=mtime,
             source=str(path) if path is not None else "",

@@ -45,10 +45,10 @@ class ParameterDescription:
 
     alias: str
     sections: tuple[str, ...]
-    symbol: str | None = None          # LaTeX source, no surrounding $
-    battinfo: str | None = None        # ontology URL
+    symbol: str | None = None  # LaTeX source, no surrounding $
+    battinfo: str | None = None  # ontology URL
     content: tuple[tuple[str, str], ...] = ()  # ordered (heading, prose)
-    source: str | None = None          # dataset provenance label
+    source: str | None = None  # dataset provenance label
 
 
 @dataclass(frozen=True)
@@ -94,9 +94,7 @@ def _load() -> _Dataset:
     if raw is None:
         return _Dataset(source=None, entries=())
     source = _compose_source(raw)
-    entries = tuple(
-        _parse_entry(item, source) for item in raw.get("entries", ())
-    )
+    entries = tuple(_parse_entry(item, source) for item in raw.get("entries", ()))
     return _Dataset(source=source, entries=entries)
 
 
@@ -113,8 +111,6 @@ def _parse_entry(item: dict, source: str | None) -> ParameterDescription:
         sections=tuple(str(s) for s in item["sections"]),
         symbol=item.get("symbol") or None,
         battinfo=item.get("battinfo") or None,
-        content=tuple(
-            (str(heading), str(text).strip()) for heading, text in content.items()
-        ),
+        content=tuple((str(heading), str(text).strip()) for heading, text in content.items()),
         source=source,
     )

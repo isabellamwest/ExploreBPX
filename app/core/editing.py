@@ -48,9 +48,7 @@ def set_value(raw: dict, path: tuple[str, ...], value: object) -> dict:
     return updated
 
 
-def set_values(
-    raw: dict, updates: tuple[tuple[tuple[str, ...], object], ...]
-) -> dict:
+def set_values(raw: dict, updates: tuple[tuple[tuple[str, ...], object], ...]) -> dict:
     """Return a copy of ``raw`` with every ``(path, value)`` in *updates* applied.
 
     All-or-nothing: the writes go into a single copy, so if any path fails to

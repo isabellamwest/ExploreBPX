@@ -8,12 +8,15 @@ use is reserved for validity status only.
 from __future__ import annotations
 
 from string import Template
+from typing import TYPE_CHECKING
 
-from core.bpx_gateway import CheckReach
 from core.completion import TaskKind
 from core.validation import Severity
 
 from . import file_facts, typography
+
+if TYPE_CHECKING:
+    from core.bpx_gateway import CheckReach
 
 # ---------------------------------------------------------------------------
 # Spacing scale: shared step values so new layout code picks a rung on the
@@ -310,10 +313,7 @@ def toast_qss() -> str:
     """Inline stylesheet for the app's one toast pill (``ui_qt.toast.Toast``):
     a dark, ink-coloured pill with light text, matching the app's other
     floating surfaces (rounded corners) rather than a flat banner."""
-    return (
-        f"background: {DEFAULT_TEXT}; color: #ffffff; "
-        f"padding: 8px 18px; border-radius: 14px;"
-    )
+    return f"background: {DEFAULT_TEXT}; color: #ffffff; padding: 8px 18px; border-radius: 14px;"
 
 
 #: The global stylesheet, as a ``string.Template``: every font size and weight
@@ -798,10 +798,14 @@ QToolButton#ModeButton {
     border: 1px solid #b9c4ce; border-left-width: 0;
     padding: 3px 10px; background: #e7ecf1; color: #57606a; font-size: ${meta}px;
 }
-QToolButton#ModeButton:first-child { border-left-width: 1px; border-top-left-radius: 4px; border-bottom-left-radius: 4px; }
+QToolButton#ModeButton:first-child {
+    border-left-width: 1px; border-top-left-radius: 4px; border-bottom-left-radius: 4px;
+}
 QToolButton#ModeButton:last-child { border-top-right-radius: 4px; border-bottom-right-radius: 4px; }
 QToolButton#ModeButton:hover { background: #dbe2e9; }
-QToolButton#ModeButton:checked { background: #ffffff; color: #1f2328; font-weight: ${semibold}; border-bottom: 2px solid #1f6feb; }
+QToolButton#ModeButton:checked {
+    background: #ffffff; color: #1f2328; font-weight: ${semibold}; border-bottom: 2px solid #1f6feb;
+}
 
 /* Parameter-list pane's section header: style.NEUTRAL_WASH, spelled as a
    literal (see the constant's own comment), the same full-width tinted-wash

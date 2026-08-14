@@ -23,7 +23,7 @@ import ui_qt.validation_empty_state as empty_state_module
 
 @pytest.fixture(autouse=True)
 def _qapp():
-    yield QApplication.instance() or QApplication([])
+    return QApplication.instance() or QApplication([])
 
 
 @pytest.fixture
@@ -63,15 +63,11 @@ def _stub_cancelled_dialog(monkeypatch):
 
 
 def _stub_file_dialog(monkeypatch, path):
-    monkeypatch.setattr(
-        empty_state_module.QFileDialog, "getOpenFileName", lambda *a, **k: (str(path), "")
-    )
+    monkeypatch.setattr(empty_state_module.QFileDialog, "getOpenFileName", lambda *a, **k: (str(path), ""))
 
 
 def _stub_no_file_chosen(monkeypatch):
-    monkeypatch.setattr(
-        empty_state_module.QFileDialog, "getOpenFileName", lambda *a, **k: ("", "")
-    )
+    monkeypatch.setattr(empty_state_module.QFileDialog, "getOpenFileName", lambda *a, **k: ("", ""))
 
 
 # ----------------------------------------------------------------------
@@ -79,9 +75,7 @@ def _stub_no_file_chosen(monkeypatch):
 # ----------------------------------------------------------------------
 
 
-def test_zero_run_container_shows_the_guided_empty_state(
-    app_driver, spm_with_empty_validation_path
-):
+def test_zero_run_container_shows_the_guided_empty_state(app_driver, spm_with_empty_validation_path):
     d = app_driver
     d.open(spm_with_empty_validation_path).go_to(("Validation",))
 
@@ -92,9 +86,7 @@ def test_zero_run_container_shows_the_guided_empty_state(
     assert widget._import_button.text() == "Import CSV…"
 
 
-def test_container_with_a_run_keeps_todays_placeholder(
-    app_driver, spm_with_validation_path
-):
+def test_container_with_a_run_keeps_todays_placeholder(app_driver, spm_with_validation_path):
     d = app_driver
     d.open(spm_with_validation_path).go_to(("Validation",))
 
@@ -107,9 +99,7 @@ def test_container_with_a_run_keeps_todays_placeholder(
 # ----------------------------------------------------------------------
 
 
-def test_add_experiment_creates_a_run_and_reveals_its_card(
-    app_driver, main_window, spm_with_empty_validation_path
-):
+def test_add_experiment_creates_a_run_and_reveals_its_card(app_driver, main_window, spm_with_empty_validation_path):
     d = app_driver
     d.open(spm_with_empty_validation_path).go_to(("Validation",))
 
@@ -124,9 +114,7 @@ def test_add_experiment_creates_a_run_and_reveals_its_card(
     assert d.experiment_card().run_path == ("Validation", "1C discharge")
 
 
-def test_empty_state_disappears_once_a_run_exists(
-    app_driver, spm_with_empty_validation_path
-):
+def test_empty_state_disappears_once_a_run_exists(app_driver, spm_with_empty_validation_path):
     d = app_driver
     d.open(spm_with_empty_validation_path).go_to(("Validation",))
     d.click_add_experiment()
@@ -138,9 +126,7 @@ def test_empty_state_disappears_once_a_run_exists(
     assert d.showing_placeholder() is True
 
 
-def test_add_experiment_undo_removes_the_run(
-    app_driver, main_window, spm_with_empty_validation_path
-):
+def test_add_experiment_undo_removes_the_run(app_driver, main_window, spm_with_empty_validation_path):
     d = app_driver
     d.open(spm_with_empty_validation_path).go_to(("Validation",))
     d.click_add_experiment()
@@ -207,9 +193,7 @@ def test_import_csv_cancelled_mapping_creates_nothing(
     assert d.validation_empty_state_shown() is True
 
 
-def test_import_csv_no_file_chosen_is_a_noop(
-    app_driver, main_window, spm_with_empty_validation_path, monkeypatch
-):
+def test_import_csv_no_file_chosen_is_a_noop(app_driver, main_window, spm_with_empty_validation_path, monkeypatch):
     _stub_no_file_chosen(monkeypatch)
 
     d = app_driver

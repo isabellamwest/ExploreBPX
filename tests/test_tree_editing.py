@@ -28,7 +28,7 @@ from ui_qt.tree_panel import TreePanel
 def _qapp():
     from PySide6.QtWidgets import QApplication
 
-    yield QApplication.instance() or QApplication([])
+    return QApplication.instance() or QApplication([])
 
 
 @pytest.fixture
@@ -53,9 +53,7 @@ def _panel_with(qtbot, tree) -> TreePanel:
 def _menu_labels(panel, tree, path):
     node = tree if path == () else _find(tree, path)
     menu = panel._build_menu(node)
-    labels = []
-    for action in menu.actions():
-        labels.append(action.text())
+    labels = [action.text() for action in menu.actions()]
     return menu, labels
 
 
@@ -71,9 +69,7 @@ def _find(tree, path):
 # ----------------------------------------------------------------------
 
 
-def test_validation_container_offers_add_experiment_and_remove_section(
-    qtbot, blended_validation_tree
-):
+def test_validation_container_offers_add_experiment_and_remove_section(qtbot, blended_validation_tree):
     panel = _panel_with(qtbot, blended_validation_tree)
     _menu, labels = _menu_labels(panel, blended_validation_tree, ("Validation",))
     assert labels == ["Add experiment…", "Remove section"]
@@ -81,9 +77,7 @@ def test_validation_container_offers_add_experiment_and_remove_section(
 
 def test_a_run_offers_rename_and_remove_only(qtbot, blended_validation_tree):
     panel = _panel_with(qtbot, blended_validation_tree)
-    _menu, labels = _menu_labels(
-        panel, blended_validation_tree, ("Validation", "C/20 discharge")
-    )
+    _menu, labels = _menu_labels(panel, blended_validation_tree, ("Validation", "C/20 discharge"))
     assert labels == ["Rename…", "Remove"]  # user-named: "Remove", not "Remove section"
 
 
@@ -99,7 +93,8 @@ def test_a_material_offers_rename(qtbot, blended_validation_tree):
     panel = _panel_with(qtbot, blended_validation_tree)
     path = ("Parameterisation", "Positive electrode", "Particle", "Primary")
     _menu, labels = _menu_labels(panel, blended_validation_tree, path)
-    assert "Rename…" in labels and "Remove" in labels
+    assert "Rename…" in labels
+    assert "Remove" in labels
 
 
 def test_root_offers_the_absent_optional_top_level_sections(qtbot, valid_spm_dict):
@@ -144,9 +139,7 @@ def test_remove_action_emits_the_request(qtbot, blended_validation_tree):
     panel = _panel_with(qtbot, blended_validation_tree)
     fired = []
     panel.remove_requested.connect(fired.append)
-    menu, _ = _menu_labels(
-        panel, blended_validation_tree, ("Validation", "C/20 discharge")
-    )
+    menu, _ = _menu_labels(panel, blended_validation_tree, ("Validation", "C/20 discharge"))
     next(a for a in menu.actions() if a.text() == "Remove").trigger()
     assert fired == [("Validation", "C/20 discharge")]
 
@@ -240,10 +233,7 @@ def test_particle_material_rename_popup_shows_the_reference_note(qtbot, blended_
         ("Parameterisation", "Positive electrode", "Particle", "Primary"),
     )
     panel._open_rename(node)
-    assert (
-        panel._popup._note.text()
-        == "State-section references are not updated; validation will flag mismatches."
-    )
+    assert panel._popup._note.text() == "State-section references are not updated; validation will flag mismatches."
     assert panel._popup._note.isVisible()
     panel._popup.hide()
 
@@ -313,9 +303,7 @@ def test_rename_moves_the_run_and_navigates_to_the_new_address(window_with_valid
     assert session.selected_path == ("Validation", "C/10 discharge")
 
 
-def test_removing_a_populated_run_asks_first_and_cancel_keeps_it(
-    window_with_validation, monkeypatch
-):
+def test_removing_a_populated_run_asks_first_and_cancel_keeps_it(window_with_validation, monkeypatch):
     window = window_with_validation
     asked = []
     monkeypatch.setattr(
@@ -328,13 +316,9 @@ def test_removing_a_populated_run_asks_first_and_cancel_keeps_it(
     assert "C/20 discharge" in window._state.active.document.raw["Validation"]
 
 
-def test_removing_a_populated_run_confirmed_removes_and_undo_restores(
-    window_with_validation, monkeypatch
-):
+def test_removing_a_populated_run_confirmed_removes_and_undo_restores(window_with_validation, monkeypatch):
     window = window_with_validation
-    monkeypatch.setattr(
-        type(window), "_confirm_populated_removal", lambda self, label: True
-    )
+    monkeypatch.setattr(type(window), "_confirm_populated_removal", lambda self, label: True)
     window._on_remove_section_requested(("Validation", "C/20 discharge"))
     session = window._state.active
     assert "C/20 discharge" not in session.document.raw["Validation"]
@@ -394,7 +378,7 @@ def test_user_defined_subsection_offers_authoring_menu(qtbot, user_defined_tree)
 
 
 def test_add_subsection_routes_through_add_section_request(qtbot, user_defined_tree):
-    """"Add subsection…" is an ordinary AddSection under the bucket."""
+    """ "Add subsection…" is an ordinary AddSection under the bucket."""
     panel = _panel_with(qtbot, user_defined_tree)
     fired = []
     panel.add_section_requested.connect(lambda path, key: fired.append((path, key)))
@@ -454,4 +438,5 @@ def test_rename_a_user_defined_subsection_moves_it(window_with_user_defined):
     window._on_add_section_requested(_USER_DEFINED, "Thermal tweaks")
     window._on_rename_requested(_USER_DEFINED + ("Thermal tweaks",), "Thermal")
     bucket = window._state.active.document.raw["Parameterisation"]["User-defined"]
-    assert "Thermal" in bucket and "Thermal tweaks" not in bucket
+    assert "Thermal" in bucket
+    assert "Thermal tweaks" not in bucket

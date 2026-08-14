@@ -9,13 +9,16 @@ afterwards -- no session, no undo, no dirty state, no file watching.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from core import reference_library
 from core.bpx_gateway import load_raw
 from core.completion import partitioned_counts
 from core.document import BPXDocument
 from core.load_record import LoadRecord
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 @dataclass(frozen=True)
@@ -74,7 +77,7 @@ class ReferenceSnapshot:
     record: LoadRecord | None = None
 
     @classmethod
-    def load(cls, path: Path) -> "ReferenceSnapshot":
+    def load(cls, path: Path) -> ReferenceSnapshot:
         """Load a reference snapshot from *path*.
 
         Raises :class:`core.bpx_gateway.LoadError` for undecodable content
@@ -104,7 +107,7 @@ class ReferenceSnapshot:
         )
 
     @classmethod
-    def from_library(cls, set_id: str) -> "ReferenceSnapshot":
+    def from_library(cls, set_id: str) -> ReferenceSnapshot:
         """Snapshot a bundled reference-library set.
 
         The raw dict comes through :mod:`core.reference_library` (the

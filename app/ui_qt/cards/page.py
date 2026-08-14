@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QFrame, QVBoxLayout, QWidget
 
-from .. import style
+from ui_qt import style
 
 #: The single horizontal gutter every page block shares -- the page rung of
 #: the shared spacing scale, not a width of this module's own.

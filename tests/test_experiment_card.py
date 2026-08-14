@@ -22,7 +22,7 @@ pytest.importorskip("PySide6")
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
-from ui_qt.cards.experiment import ExperimentCard, KNOWN_ALIASES, is_validation_run_path
+from ui_qt.cards.experiment import KNOWN_ALIASES, ExperimentCard, is_validation_run_path
 
 _RUN = ("Validation", "C/20 discharge")
 _TIME = _RUN + ("Time [s]",)
@@ -30,7 +30,7 @@ _TIME = _RUN + ("Time [s]",)
 
 @pytest.fixture(autouse=True)
 def _qapp():
-    yield QApplication.instance() or QApplication([])
+    return QApplication.instance() or QApplication([])
 
 
 def _write_doc(tmp_path, valid_spm_dict, validation: dict, name: str = "doc.json"):
@@ -58,9 +58,7 @@ def test_is_validation_run_path_matches_only_a_run_node():
 # ----------------------------------------------------------------------
 
 
-def test_run_node_selection_shows_one_card_with_no_focused_column(
-    app_driver, spm_with_validation_path
-):
+def test_run_node_selection_shows_one_card_with_no_focused_column(app_driver, spm_with_validation_path):
     d = app_driver
     d.open(spm_with_validation_path).go_to(_RUN)
 
@@ -69,9 +67,7 @@ def test_run_node_selection_shows_one_card_with_no_focused_column(
 
 
 @pytest.mark.parametrize("alias", KNOWN_ALIASES)
-def test_each_array_selection_shows_the_same_card_focused_on_itself(
-    app_driver, spm_with_validation_path, alias
-):
+def test_each_array_selection_shows_the_same_card_focused_on_itself(app_driver, spm_with_validation_path, alias):
     d = app_driver
     d.open(spm_with_validation_path).go_to(_RUN + (alias,))
 
@@ -79,9 +75,7 @@ def test_each_array_selection_shows_the_same_card_focused_on_itself(
     assert d.experiment_focused_column() == alias
 
 
-def test_validation_container_selection_keeps_todays_placeholder(
-    app_driver, spm_with_validation_path
-):
+def test_validation_container_selection_keeps_todays_placeholder(app_driver, spm_with_validation_path):
     """Selecting the ``("Validation",)`` collection itself (not a run) is
     unaffected -- it carries no parameters of its own, exactly like today."""
     d = app_driver
@@ -90,9 +84,7 @@ def test_validation_container_selection_keeps_todays_placeholder(
     assert d.showing_placeholder() is True
 
 
-def test_custom_field_under_a_run_keeps_its_own_single_parameter_card(
-    app_driver, tmp_path, valid_spm_dict
-):
+def test_custom_field_under_a_run_keeps_its_own_single_parameter_card(app_driver, tmp_path, valid_spm_dict):
     """Only a genuine array (SERIES kind) reroutes to ExperimentCard -- a
     custom, non-array field under a run is not one of ``KNOWN_ALIASES`` and
     keeps today's ordinary per-parameter card."""
@@ -144,9 +136,7 @@ def test_custom_series_under_a_run_gets_series_card_and_stays_editable(
     assert run["Impedance [Ohm]"] == [0.05, 0.02]
 
 
-def test_schema_arrays_still_reroute_to_the_experiment_card(
-    app_driver, spm_with_validation_path
-):
+def test_schema_arrays_still_reroute_to_the_experiment_card(app_driver, spm_with_validation_path):
     """The KNOWN_ALIASES gate must not over-narrow: every schema array under a
     run still reaches the unified card (same behaviour as before the fix)."""
     d = app_driver
@@ -214,9 +204,7 @@ def test_escape_reverts_every_edited_column(app_driver, spm_with_validation_path
     assert d.undo_enabled() is False
 
 
-def test_enter_inside_a_cell_editor_confirms_the_cell_not_the_document(
-    app_driver, spm_with_validation_path
-):
+def test_enter_inside_a_cell_editor_confirms_the_cell_not_the_document(app_driver, spm_with_validation_path):
     """The two keyboard layers must not collide: Enter in an open cell editor
     confirms that cell (Qt's delegate) and must NOT commit the document --
     exactly the guarantee ``test_workflows_ui.py`` used to pin against
@@ -234,9 +222,7 @@ def test_enter_inside_a_cell_editor_confirms_the_cell_not_the_document(
     assert d.undo_enabled() is False  # nothing reached the document
 
 
-def test_escape_inside_a_cell_editor_cancels_the_cell_not_the_card(
-    app_driver, spm_with_validation_path
-):
+def test_escape_inside_a_cell_editor_cancels_the_cell_not_the_card(app_driver, spm_with_validation_path):
     """Escape in an open cell editor cancels that cell only; a separate draft
     in another cell survives (it does not reach the card's grid-level revert)."""
     d = app_driver
@@ -252,9 +238,7 @@ def test_escape_inside_a_cell_editor_cancels_the_cell_not_the_card(
     assert d.experiment_column_values("Time [s]") == [0, 555, 200]  # row 0 unchanged, 1 kept
 
 
-def test_editing_two_columns_commits_both_in_one_undo_step(
-    app_driver, main_window, spm_with_validation_path
-):
+def test_editing_two_columns_commits_both_in_one_undo_step(app_driver, main_window, spm_with_validation_path):
     d = app_driver
     d.open(spm_with_validation_path).go_to(_TIME)
 
@@ -285,9 +269,7 @@ def _run_on_disk(path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))["Validation"]["C/20 discharge"]
 
 
-def test_save_commits_a_dirty_experiment_as_one_undo_step(
-    app_driver, main_window, spm_with_validation_path
-):
+def test_save_commits_a_dirty_experiment_as_one_undo_step(app_driver, main_window, spm_with_validation_path):
     d = app_driver
     d.open(spm_with_validation_path).go_to(_TIME)
     d.set_experiment_cell("Time [s]", 1, "999")  # a standing draft, no Enter yet
@@ -304,9 +286,7 @@ def test_save_commits_a_dirty_experiment_as_one_undo_step(
     assert d.undo_enabled() is False
 
 
-def test_save_flushes_a_still_open_experiment_cell_editor(
-    app_driver, main_window, spm_with_validation_path
-):
+def test_save_flushes_a_still_open_experiment_cell_editor(app_driver, main_window, spm_with_validation_path):
     """Save must reach into an open cell editor exactly like the grid's own
     Enter does (``MultiColumnGrid.commit_open_editor``), or the typed
     character never leaves the editor widget at all."""
@@ -326,9 +306,7 @@ def test_save_flushes_a_still_open_experiment_cell_editor(
 # ----------------------------------------------------------------------
 
 
-def test_length_mismatch_renders_each_columns_true_length(
-    app_driver, tmp_path, valid_spm_dict
-):
+def test_length_mismatch_renders_each_columns_true_length(app_driver, tmp_path, valid_spm_dict):
     workfile = _write_doc(
         tmp_path,
         valid_spm_dict,
@@ -353,9 +331,7 @@ def test_length_mismatch_renders_each_columns_true_length(
     assert card._grid._model.rowCount() == 4  # the longest column
 
 
-def test_no_length_mismatch_chip_without_a_bpx_diagnostic(
-    app_driver, tmp_path, valid_spm_dict
-):
+def test_no_length_mismatch_chip_without_a_bpx_diagnostic(app_driver, tmp_path, valid_spm_dict):
     """``bpx.schema.Experiment`` has no cross-array length check at all
     (verified directly against the installed schema) -- so even genuinely
     ragged arrays draw no chip today. This pins that fact: the chip mechanism
@@ -411,17 +387,13 @@ def test_diagnostic_on_an_array_tints_its_own_column(app_driver, tmp_path, valid
 # ----------------------------------------------------------------------
 
 
-def test_csv_import_fills_all_mapped_columns_in_one_undo_step(
-    app_driver, main_window, spm_with_validation_path
-):
+def test_csv_import_fills_all_mapped_columns_in_one_undo_step(app_driver, main_window, spm_with_validation_path):
     from core.csv_import import read_csv_text
 
     d = app_driver
     d.open(spm_with_validation_path).go_to(_RUN)
 
-    data = read_csv_text(
-        "time,current,voltage,temp\n0,-0.5,4.1,298.15\n50,-0.5,4.0,298.15\n"
-    )
+    data = read_csv_text("time,current,voltage,temp\n0,-0.5,4.1,298.15\n50,-0.5,4.0,298.15\n")
     d.experiment_import_csv(data, (0, 1, 2, 3))
 
     run = main_window._state.active.document.raw["Validation"]["C/20 discharge"]
@@ -443,9 +415,7 @@ def test_csv_import_fills_all_mapped_columns_in_one_undo_step(
 # ----------------------------------------------------------------------
 
 
-def test_add_temperature_button_appears_only_when_absent(
-    app_driver, main_window, tmp_path, valid_spm_dict
-):
+def test_add_temperature_button_appears_only_when_absent(app_driver, main_window, tmp_path, valid_spm_dict):
     workfile = _write_doc(
         tmp_path,
         valid_spm_dict,
@@ -472,9 +442,7 @@ def test_add_temperature_button_appears_only_when_absent(
     assert run["Temperature [K]"] == []
 
 
-def test_add_temperature_button_absent_when_already_present(
-    app_driver, spm_with_validation_path
-):
+def test_add_temperature_button_absent_when_already_present(app_driver, spm_with_validation_path):
     d = app_driver
     d.open(spm_with_validation_path).go_to(_RUN)
 
@@ -564,9 +532,7 @@ def test_csv_targets_offer_temperature_before_the_column_exists(valid_spm_dict):
     )
 
 
-def test_unreadable_and_empty_csv_show_a_message_instead_of_doing_nothing(
-    valid_spm_dict, monkeypatch
-):
+def test_unreadable_and_empty_csv_show_a_message_instead_of_doing_nothing(valid_spm_dict, monkeypatch):
     from types import SimpleNamespace
 
     from ui_qt.cards import experiment as experiment_module
@@ -584,9 +550,7 @@ def test_unreadable_and_empty_csv_show_a_message_instead_of_doing_nothing(
     assert not card._import_message.isHidden()
     assert "data.csv" in card._import_message.text()
 
-    monkeypatch.setattr(
-        experiment_module, "read_csv_file", lambda _path: SimpleNamespace(row_count=0)
-    )
+    monkeypatch.setattr(experiment_module, "read_csv_file", lambda _path: SimpleNamespace(row_count=0))
     card._import_csv_from_path("C:/somewhere/empty.csv")
     assert not card._import_message.isHidden()
     assert "empty.csv" in card._import_message.text()

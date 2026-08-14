@@ -73,9 +73,7 @@ def test_editor_splitter_handle_paints_the_hairline_colour(app_driver, valid_spm
     )
 
 
-def test_add_parameter_popup_card_border_is_unaffected_by_the_new_view_rule(
-    app_driver, valid_spm_path
-):
+def test_add_parameter_popup_card_border_is_unaffected_by_the_new_view_rule(app_driver, valid_spm_path):
     """Guards the specificity trap: the new
     ``QTreeView#StructureTree, QListWidget#ParameterListView { border: none; }``
     rule must be scoped by explicit objectName only, and must not strip the

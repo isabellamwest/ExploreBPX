@@ -6,8 +6,8 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit
 
 from core import structure
 from core.values import format_value, parse_value
+from ui_qt.style import FIXED_UNIT_TOOLTIP, VALUE_INPUT_MAX_WIDTH
 
-from ..style import FIXED_UNIT_TOOLTIP, VALUE_INPUT_MAX_WIDTH
 from .base import EditorCard
 
 

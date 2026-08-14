@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import html as _html
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
@@ -20,15 +21,16 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from core.document import BPXDocument
-from core.tree_model import ParameterItem, TreeNode
-
 from . import icons, parameter_row, style, typography
 from .dismissal import OutsideDismissFilter
 from .floating_card import CARD_MARGIN as _CARD_MARGIN
 from .floating_card import SHADOW_MARGIN as _SHADOW_MARGIN
 from .floating_card import floating_card
 from .parameter_row import ParameterRowDelegate
+
+if TYPE_CHECKING:
+    from core.document import BPXDocument
+    from core.tree_model import ParameterItem, TreeNode
 
 _PATH_ROLE = Qt.UserRole
 _MAX_RESULTS = 50
@@ -39,19 +41,14 @@ _MAX_VISIBLE_ROWS = 8
 _MIN_POPUP_WIDTH = 320
 
 
-def _entry_html(entry: "_Entry") -> str:
+def _entry_html(entry: _Entry) -> str:
     """A result row's rich-text fragment: a muted monochrome glyph (folder =
     object, sliders = parameter -- the activity bar's outline family, not
     emoji), the bold name, then the muted full path beneath -- the same
     name-over-secondary language the Diagnostics page's rows use, so search
     results read as part of the same system."""
-    glyph = icons.html_img(
-        icons.SECTION if entry.kind == "object" else icons.PARAMETER
-    )
-    name = (
-        f'<span style="{typography.semibold_qss()} color:{style.DEFAULT_TEXT};">'
-        f"{_html.escape(entry.name)}</span>"
-    )
+    glyph = icons.html_img(icons.SECTION if entry.kind == "object" else icons.PARAMETER)
+    name = f'<span style="{typography.semibold_qss()} color:{style.DEFAULT_TEXT};">{_html.escape(entry.name)}</span>'
     path = (
         f'<span style="color:{style.MUTED}; {typography.size_qss(typography.META)}">'
         f"{_html.escape(entry.path_text)}</span>"
@@ -129,7 +126,7 @@ class SearchPopup(QWidget):
         self._list.setCurrentRow(row)
 
     # -- content -------------------------------------------------------
-    def populate(self, entries: list["_Entry"]) -> None:
+    def populate(self, entries: list[_Entry]) -> None:
         self._list.clear()
         for entry in entries:
             item = QListWidgetItem(f"{entry.name}\n{entry.path_text}")
@@ -184,16 +181,14 @@ class SearchBar(QLineEdit):
 
     def _collect(self, node: TreeNode) -> None:
         if node.path:
-            self._entries.append(
-                _Entry(node.label, tuple(node.path), "object")
-            )
+            self._entries.append(_Entry(node.label, tuple(node.path), "object"))
         for parameter in node.parameters:
             self._entries.append(self._parameter_entry(parameter))
         for child in node.children:
             self._collect(child)
 
     @staticmethod
-    def _parameter_entry(parameter: ParameterItem) -> "_Entry":
+    def _parameter_entry(parameter: ParameterItem) -> _Entry:
         return _Entry(parameter.label, tuple(parameter.path), "parameter")
 
     # -- result flow -----------------------------------------------------
@@ -210,9 +205,7 @@ class SearchBar(QLineEdit):
         self._show_popup()
 
     def _show_popup(self) -> None:
-        self._popup.setFixedWidth(
-            max(self.width(), _MIN_POPUP_WIDTH) + 2 * _SHADOW_MARGIN
-        )
+        self._popup.setFixedWidth(max(self.width(), _MIN_POPUP_WIDTH) + 2 * _SHADOW_MARGIN)
         height = self._popup.sized_height()
         if height:
             self._popup.setFixedHeight(height)

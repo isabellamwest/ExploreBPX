@@ -201,9 +201,7 @@ def test_widening_the_card_refits_wrapped_height():
     card.setFixedWidth(220)
     card.show()
     app.processEvents()
-    card._edit.setPlainText(
-        "a moderately long value that wraps at a narrow width only"
-    )
+    card._edit.setPlainText("a moderately long value that wraps at a narrow width only")
     app.processEvents()
     height_narrow = card._edit.height()
 

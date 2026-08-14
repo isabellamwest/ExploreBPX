@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import Any
 
 import pytest
 
@@ -27,7 +26,7 @@ from ui_qt.cards.grid import NumericGrid
 
 @pytest.fixture(autouse=True)
 def _qapp():
-    yield QApplication.instance() or QApplication([])
+    return QApplication.instance() or QApplication([])
 
 
 @dataclass(frozen=True)

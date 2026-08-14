@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from core import bpx_gateway, completion
 from core.document import BPXDocument
 from state.reference_snapshot import ReferenceSnapshot
@@ -26,9 +28,7 @@ def test_load_round_trip_from_a_real_bundled_example(nmc_pouch_cell_path):
     assert snapshot.parameter_count == 74
     assert snapshot.mtime > 0
 
-    expected_raw, _fmt = bpx_gateway.load_raw(
-        nmc_pouch_cell_path.read_bytes(), nmc_pouch_cell_path.name
-    )
+    expected_raw, _fmt = bpx_gateway.load_raw(nmc_pouch_cell_path.read_bytes(), nmc_pouch_cell_path.name)
     assert snapshot.raw == expected_raw
 
 
@@ -63,9 +63,7 @@ def test_load_reports_errors_for_an_invalid_file(nmc_pouch_cell_path, tmp_path):
     assert snapshot.warning_count == expected_warnings
 
 
-def test_reference_and_main_document_agree_on_a_missing_required_field(
-    valid_spm_path, tmp_path
-):
+def test_reference_and_main_document_agree_on_a_missing_required_field(valid_spm_path, tmp_path):
     """The defect this guards: a required field deleted from a file used to
     read as an "error" when the file was pinned as a reference (raw,
     pre-absorption ``BPXDocument.error_count``) while the very same file, as
@@ -94,8 +92,5 @@ def test_load_raises_load_error_for_unparseable_content(tmp_path):
     path = tmp_path / "broken.json"
     path.write_text("{not valid json", encoding="utf-8")
 
-    try:
+    with pytest.raises(bpx_gateway.LoadError):
         ReferenceSnapshot.load(path)
-        assert False, "expected LoadError"
-    except bpx_gateway.LoadError:
-        pass

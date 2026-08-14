@@ -16,7 +16,7 @@ the registry instead.
 from __future__ import annotations
 
 from .bodies import TableBody
-from .modal import Mode, ModalCard
+from .modal import ModalCard, Mode
 
 INTERPOLATED_TABLE = "InterpolatedTable"
 

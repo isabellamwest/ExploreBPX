@@ -38,18 +38,20 @@ comparison refresh for something that cannot be clicked.
 from __future__ import annotations
 
 import math
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QEvent, QPoint, QRect, Qt
 from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPen
 from PySide6.QtWidgets import QSizePolicy, QToolTip, QWidget
 
-from core.compare import ValueGroup
 from core.parameter_types import ParameterKind
 from core.spread import SpreadScale, build_spread, numeric
 from core.values import format_value
+from ui_qt import style, typography
 
-from .. import style, typography
-from ..reference_identity import ReferencePin
+if TYPE_CHECKING:
+    from core.compare import ValueGroup
+    from ui_qt.reference_identity import ReferencePin
 
 #: The only kinds that get a scale. Read off the kind the rest of the app
 #: already classified this parameter as -- never a fresh look at the value,
@@ -80,6 +82,7 @@ def scale_for(
         for index in group.indices:
             values[index] = number
     return build_spread(numeric(main_value), values)
+
 
 #: Identity dot per pin at a value, and the gap between stacked ones.
 _DOT = 7
@@ -191,9 +194,9 @@ class SpreadScaleView(QWidget):
 
     def _x_for(self, position: float) -> int:
         span = max(self.width() - 2 * _SIDE_INSET, 1)
-        return int(round(_SIDE_INSET + position * span))
+        return round(_SIDE_INSET + position * span)
 
-    def resizeEvent(self, event) -> None:  # noqa: N802 (Qt override)
+    def resizeEvent(self, event) -> None:
         """Re-reserve height: how many dots collide depends on how wide the
         axis ended up, so the strip cannot know its height until it has one.
 
@@ -207,7 +210,7 @@ class SpreadScaleView(QWidget):
 
     # ── painting ────────────────────────────────────────────────────────
 
-    def paintEvent(self, event) -> None:  # noqa: N802 (Qt override)
+    def paintEvent(self, event) -> None:
         scale = self._scale
         if scale is None:
             return
@@ -257,9 +260,7 @@ class SpreadScaleView(QWidget):
         painter.setPen(QPen(QColor(style.BORDER_STRONG), 1))
         painter.drawLine(x, axis_y, x, axis_y + _DIVISION_TICK)
 
-    def _paint_division_labels(
-        self, painter: QPainter, metrics: QFontMetrics, axis_y: int
-    ) -> None:
+    def _paint_division_labels(self, painter: QPainter, metrics: QFontMetrics, axis_y: int) -> None:
         """One label per division, each centred under its own tick -- unless
         the axis is too narrow to fit them all, in which case
         :meth:`_visible_divisions` has already thinned the set. Ticks are
@@ -302,14 +303,12 @@ class SpreadScaleView(QWidget):
         # Divisions arrive in ascending position order (``core.spread``
         # sorts them, the same invariant ``ticks`` keeps), so adjacent
         # pairs in this list are adjacent on the axis too.
-        return any(
-            edges[i][1] + _LABEL_MIN_GAP > edges[i + 1][0] for i in range(len(edges) - 1)
-        )
+        return any(edges[i][1] + _LABEL_MIN_GAP > edges[i + 1][0] for i in range(len(edges) - 1))
 
     # ── reading ─────────────────────────────────────────────────────────
 
     def axis_kind(self) -> str:
-        """"log" or "linear" -- the axis's own read of which kind it chose.
+        """ "log" or "linear" -- the axis's own read of which kind it chose.
 
         Until 2026-08-12 this was painted as a caption; now a log axis's
         decade-style division labels imply it without spelling it out, so

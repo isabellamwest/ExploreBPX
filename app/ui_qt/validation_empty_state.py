@@ -50,12 +50,12 @@ from PySide6.QtWidgets import (
 from core.commands import AddSection, SetValues
 from core.csv_import import CsvData, read_csv_file
 
+from . import typography
 from .cards.csv_dialog import CsvImportDialog
 from .cards.experiment import KNOWN_ALIASES
 from .cards.page import GUTTER
 from .name_popup import NamePopup
 from .style import ERROR, MUTED
-from . import typography
 
 _HEADING = "No experiments yet"
 _COPY = (
@@ -127,9 +127,7 @@ class ValidationEmptyState(QWidget):
         self._import_message.setObjectName("CsvImportMessage")
         self._import_message.setWordWrap(True)
         self._import_message.setAlignment(Qt.AlignCenter)
-        self._import_message.setStyleSheet(
-            f"color: {ERROR}; {typography.size_qss(typography.META)}"
-        )
+        self._import_message.setStyleSheet(f"color: {ERROR}; {typography.size_qss(typography.META)}")
         self._import_message.hide()
         layout.addWidget(self._import_message)
 
@@ -196,9 +194,7 @@ class ValidationEmptyState(QWidget):
         self._import_message.setText(message)
         self._import_message.setVisible(bool(message))
 
-    def _prompt_csv_mapping_then_create(
-        self, data: CsvData, filename: str, name: str
-    ) -> None:
+    def _prompt_csv_mapping_then_create(self, data: CsvData, filename: str, name: str) -> None:
         """Confirm the mapping, then write both commands back to back.
 
         The dialog runs first, while self is still guaranteed to be the

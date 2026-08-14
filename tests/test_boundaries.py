@@ -39,12 +39,8 @@ def test_core_and_state_have_no_ui_framework_imports():
     offenders: list[tuple[str, str]] = []
     for path in _python_files("core", "state"):
         text = path.read_text("utf-8")
-        for pattern in _FRONTEND_FRAMEWORK_IMPORTS:
-            if pattern in text:
-                offenders.append((path.name, pattern))
-    assert not offenders, (
-        f"UI-framework import found in frontend-agnostic layer: {offenders}"
-    )
+        offenders.extend((path.name, pattern) for pattern in _FRONTEND_FRAMEWORK_IMPORTS if pattern in text)
+    assert not offenders, f"UI-framework import found in frontend-agnostic layer: {offenders}"
 
 
 def test_core_does_not_import_frontend_or_state():
@@ -56,6 +52,7 @@ def test_core_does_not_import_frontend_or_state():
         if "import state" in text or "from state" in text:
             offenders.append((path.name, "state"))
     assert not offenders, f"core must not depend on ui_qt/state: {offenders}"
+
 
 def test_dialog_filters_derive_from_the_loader_s_own_extension_list():
     """One source of truth: a dialog can never offer a format the loader
@@ -79,7 +76,6 @@ def test_no_module_spells_the_bpx_extension_list_out_by_hand():
     offenders = [
         path.relative_to(root).as_posix()
         for path in root.rglob("*.py")
-        if path.name != "file_filters.py"
-        and "*.json *.yaml *.yml" in path.read_text(encoding="utf-8")
+        if path.name != "file_filters.py" and "*.json *.yaml *.yml" in path.read_text(encoding="utf-8")
     ]
     assert offenders == []

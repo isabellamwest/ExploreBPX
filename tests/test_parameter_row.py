@@ -29,7 +29,7 @@ from ui_qt.parameter_row import (
 def _qapp():
     """A severity dot renders via ``icons.html_img`` (a real ``QPixmap``),
     so even the plain-function tests below need a live ``QApplication``."""
-    yield QApplication.instance() or QApplication([])
+    return QApplication.instance() or QApplication([])
 
 
 def test_split_name_and_unit_strips_trailing_bracket():
@@ -148,11 +148,7 @@ def test_ref_bar_role_actually_paints_the_gutter_bar(rich_list, qtbot):
     image = rich_list.viewport().grab().toImage()
     # The bar occupies the row's left 3px, inset 4px from top/bottom; its
     # interior pixels carry the solid reference purple exactly.
-    colours = {
-        image.pixelColor(x, y).name()
-        for x in range(0, 3)
-        for y in range(0, min(30, image.height()))
-    }
+    colours = {image.pixelColor(x, y).name() for x in range(3) for y in range(min(30, image.height()))}
     assert style.REFERENCE in colours
 
 

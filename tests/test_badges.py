@@ -13,7 +13,6 @@ pytest.importorskip("PySide6")
 
 from ui_qt import badges, style
 
-
 # --- shared geometry --------------------------------------------------------
 
 

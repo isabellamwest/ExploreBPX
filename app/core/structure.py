@@ -13,7 +13,7 @@ wired, isolated to this module so callers do not change.
 
 from __future__ import annotations
 
-from functools import lru_cache
+from functools import cache
 
 from . import bpx_gateway, parameter_types
 
@@ -36,7 +36,7 @@ def infer_model(raw: dict) -> str | None:
     return header.get("Model") if isinstance(header, dict) else None
 
 
-@lru_cache(maxsize=None)
+@cache
 def _required_parameterisation_children(model: str | None) -> tuple[str, ...]:
     """Child sections the schema's own ``Parameterisation`` shape for *model*
     marks required, in schema declaration order.
@@ -45,11 +45,7 @@ def _required_parameterisation_children(model: str | None) -> tuple[str, ...]:
     undeclared model, and any model this app has never heard of all resolve
     to the partial shape, whose ``required`` list is empty.
     """
-    return tuple(
-        f.alias
-        for f in bpx_gateway.expected_fields(("Parameterisation",), model)
-        if f.required
-    )
+    return tuple(f.alias for f in bpx_gateway.expected_fields(("Parameterisation",), model) if f.required)
 
 
 def required_sections(model: str | None) -> tuple[tuple[str, ...], ...]:
@@ -66,18 +62,14 @@ def required_sections(model: str | None) -> tuple[tuple[str, ...], ...]:
     (the gateway exposes no root-properties query yet).
     """
     children = _required_parameterisation_children(model)
-    return (("Header",), ("Parameterisation",)) + tuple(
-        ("Parameterisation", child) for child in children
-    )
+    return (("Header",), ("Parameterisation",)) + tuple(("Parameterisation", child) for child in children)
 
 
 def can_remove(path: tuple[str, ...]) -> bool:
     """Whether the object at ``path`` may be removed structurally."""
     if not path:
         return False
-    if len(path) == 1 and path[0] in _PROTECTED_TOP_LEVEL:
-        return False
-    return True
+    return not (len(path) == 1 and path[0] in _PROTECTED_TOP_LEVEL)
 
 
 def available_top_level_additions(raw: dict) -> tuple[str, ...]:
@@ -106,9 +98,7 @@ def can_rename(path: tuple[str, ...]) -> bool:
         return True
     if len(path) == 2 and path[0] == "Validation":
         return True
-    if _within_user_defined(path):
-        return True
-    return False
+    return bool(_within_user_defined(path))
 
 
 def can_duplicate(path: tuple[str, ...]) -> bool:
@@ -196,9 +186,7 @@ def named_child_noun(path: tuple[str, ...]) -> str | None:
     return None
 
 
-def addable_child_sections(
-    path: tuple[str, ...], value: object, model: str | None = None
-) -> tuple[str, ...]:
+def addable_child_sections(path: tuple[str, ...], value: object, model: str | None = None) -> tuple[str, ...]:
     """Schema-expected child *sections* absent from the object at ``path``.
 
     The source is the live schema (``bpx_gateway.expected_fields``), so the
@@ -221,8 +209,4 @@ def addable_child_sections(
         fields = bpx_gateway.expected_fields(path, model, value)
     except ValueError:
         return ()
-    return tuple(
-        field.alias
-        for field in fields
-        if field.meta.is_container and field.alias not in present
-    )
+    return tuple(field.alias for field in fields if field.meta.is_container and field.alias not in present)

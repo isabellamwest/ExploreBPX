@@ -302,7 +302,7 @@ def test_synthetic_unresolvable_diagnostic_falls_back_to_document_bucket():
 
 def test_document_bucket_absent_when_unoccupied():
     raw = document_factory.create("SPM", title="probe")
-    _doc, tasks, partition, result = _bucket_page(raw, "SPM")
+    _doc, _tasks, _partition, result = _bucket_page(raw, "SPM")
     assert not any(bucket.path == DOCUMENT_BUCKET_PATH for bucket in result.buckets)
 
 
@@ -311,7 +311,7 @@ def test_document_bucket_first_when_occupied(fixtures_dir):
     all -- nav_path ``()``), which lands in the Document bucket; it must
     render first."""
     raw = json.loads((fixtures_dir / "nmc_pouch_cell_BPX.json").read_text("utf-8"))
-    _doc, tasks, partition, result = _bucket_page(raw)
+    _doc, _tasks, _partition, result = _bucket_page(raw)
     assert result.buckets[0].path == DOCUMENT_BUCKET_PATH
     assert result.buckets[0].issues  # actually occupied, not a stray empty bucket
 
@@ -332,7 +332,7 @@ def test_buckets_are_in_document_order_with_absent_section_at_its_schema_positio
     never scaffolded, so it is not one of the buckets here.)"""
     raw = document_factory.create("SPMe", title="probe")
     del raw["Parameterisation"]["Electrolyte"]
-    _doc, tasks, partition, result = _bucket_page(raw, "SPMe")
+    _doc, _tasks, _partition, result = _bucket_page(raw, "SPMe")
     labels = [bucket.label for bucket in result.buckets]
     assert labels == ["Header", "Cell", "Electrolyte", "Negative electrode", "Positive electrode", "Separator"]
 
@@ -340,7 +340,7 @@ def test_buckets_are_in_document_order_with_absent_section_at_its_schema_positio
 def test_required_total_is_none_for_absent_sections_and_the_document_bucket():
     raw = document_factory.create("SPM", title="probe")
     del raw["Header"]
-    _doc, tasks, partition, result = _bucket_page(raw, None)
+    _doc, _tasks, _partition, result = _bucket_page(raw, None)
     header_bucket = next(b for b in result.buckets if b.path == ("Header",))
     assert header_bucket.absent is True
     assert header_bucket.required_total is None

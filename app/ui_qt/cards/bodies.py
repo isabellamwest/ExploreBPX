@@ -39,9 +39,9 @@ from PySide6.QtWidgets import (
 
 from core import bpx_gateway
 from core.values import format_value, parse_value
+from ui_qt import typography
+from ui_qt.style import ACCENT, ERROR, MUTED, VALUE_INPUT_MAX_WIDTH
 
-from .. import typography
-from ..style import ACCENT, ERROR, MUTED, VALUE_INPUT_MAX_WIDTH
 from .cell_issues import table_cells
 from .grid import NumericGrid
 from .hint import GridHint, WrappedHelp
@@ -78,7 +78,7 @@ class ModeBody(QWidget):
         """This body's grid, for the card to drive its "Unsaved changes" bar
         (``EditorCard._bind_grid_pending``) -- ``None`` for a body without
         one (numbers, expressions, JSON)."""
-        return None
+        return
 
     def reference_value_width(self) -> int | None:
         """See :meth:`~.base.EditorCard.reference_value_width`: the width cap
@@ -205,9 +205,7 @@ class ExpressionBody(ModeBody):
         # Occupies the chart's own place when the expression fails to
         # evaluate -- never shown alongside it (see _set_preview_error).
         self._error_note = WrappedHelp("")
-        self._error_note.setStyleSheet(
-            f"color: {MUTED}; {typography.size_qss(typography.META)}"
-        )
+        self._error_note.setStyleSheet(f"color: {MUTED}; {typography.size_qss(typography.META)}")
         self._error_note.hide()
         layout.addWidget(self._error_note)
 
@@ -241,12 +239,8 @@ class ExpressionBody(ModeBody):
         # multi-line docstring read as a slab of raw text under the input);
         # the words stay bpx's own.
         lines = bpx_gateway.function_syntax_help().splitlines()
-        hint = WrappedHelp(
-            " · ".join(line.strip().lstrip("- ") for line in lines if line.strip())
-        )
-        hint.setStyleSheet(
-            f"color: {MUTED}; {typography.size_qss(typography.META)}"
-        )
+        hint = WrappedHelp(" · ".join(line.strip().lstrip("- ") for line in lines if line.strip()))
+        hint.setStyleSheet(f"color: {MUTED}; {typography.size_qss(typography.META)}")
         layout.addWidget(hint)
 
     def value(self) -> object:
@@ -309,9 +303,7 @@ class ExpressionBody(ModeBody):
             self._chart.remove_series("main")
             self._set_preview_error(None)
             return
-        samples = bpx_gateway.sample_function(
-            self._committed_expression, self._domain_low, self._domain_high
-        )
+        samples = bpx_gateway.sample_function(self._committed_expression, self._domain_low, self._domain_high)
         if samples.error is not None:
             self._chart.remove_series("main")
             self._set_preview_error(samples.error)
@@ -322,15 +314,11 @@ class ExpressionBody(ModeBody):
     def _resample_references(self) -> None:
         for pin, expression in self._reference_functions:
             series_id = _reference_series_id(pin)
-            samples = bpx_gateway.sample_function(
-                expression, self._domain_low, self._domain_high
-            )
+            samples = bpx_gateway.sample_function(expression, self._domain_low, self._domain_high)
             if samples.error is not None:
                 self._chart.remove_series(series_id)
                 continue
-            self._chart.set_series(
-                series_id, list(samples.points), pin.colour, width=1.6, name=pin.name
-            )
+            self._chart.set_series(series_id, list(samples.points), pin.colour, width=1.6, name=pin.name)
 
     def _set_preview_error(self, error: str | None) -> None:
         """Show the chart, or replace it with one muted note -- never both.
@@ -395,7 +383,8 @@ class TableBody(ModeBody):
                 (
                     "Each row is one (x, y) point; the line above plots them in order.",
                     "Click a cell and type, or double-click, to edit it; Enter confirms the cell and moves down.",
-                    "Your edits stay a draft until applied: Enter on the grid (or Apply) writes them to the file, Esc (or Discard) reverts.",
+                    "Your edits stay a draft until applied: Enter on the grid (or Apply) writes them to the file, "
+                    "Esc (or Discard) reverts.",
                     "Paste two columns from a spreadsheet with Ctrl+V, or right-click → Paste.",
                     "Use + and − to add or remove points; the table grows to fill the panel.",
                     "Import CSV… loads x and y from the columns of a file.",
@@ -463,9 +452,7 @@ class MaterialMapBody(ModeBody):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(2)
 
-        self._grid = NumericGrid(
-            ("Material", "Value"), text_columns=frozenset({0}), bulk=False
-        )
+        self._grid = NumericGrid(("Material", "Value"), text_columns=frozenset({0}), bulk=False)
         self._grid.changed.connect(self._on_changed)
         layout.addWidget(self._grid)
 
@@ -533,16 +520,13 @@ class MaterialMapBody(ModeBody):
     def value(self) -> object:
         """The map as a dict. On a duplicate key the later row wins, but such a
         draft is blocked from commit (:meth:`commit_blocked_reason`)."""
-        return {key: value for key, value in self._rows()}
+        return dict(self._rows())
 
     def commit_blocked_reason(self) -> str | None:
         seen: set[str] = set()
         for key, _ in self._rows():
             if key in seen:
-                return (
-                    f'Duplicate material "{key}" - each material may appear '
-                    "only once."
-                )
+                return f'Duplicate material "{key}" - each material may appear only once.'
             seen.add(key)
         return None
 
@@ -717,4 +701,4 @@ def table_rows(value: object) -> list[list[object]]:
     xs, ys = value.get("x"), value.get("y")
     if not isinstance(xs, list) or not isinstance(ys, list) or len(xs) != len(ys):
         return []
-    return [[x, y] for x, y in zip(xs, ys)]
+    return [[x, y] for x, y in zip(xs, ys, strict=False)]

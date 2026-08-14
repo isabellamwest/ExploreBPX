@@ -17,17 +17,15 @@ import pytest
 
 pytest.importorskip("PySide6")
 
+from platform_facts import assert_alert_title
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication
 
-import ui_qt.main_window as main_window_module
 from core.bpx_gateway import BPX_VERSION
 from core.commands import SetValue
 from state.app_state import AppState
 from state.document_session import ReadOnlyDocumentError
 from ui_qt.main_window import LegacyIntent
-
-from platform_facts import assert_alert_title
 
 _LEGACY = "warning_legacy_bpx_float.json"
 _CAPACITY = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
@@ -98,9 +96,7 @@ def test_non_legacy_open_never_asks(app_driver, spm_workfile, monkeypatch):
     assert app_driver._w._state.active is not None
 
 
-def test_legacy_cancel_leaves_everything_unchanged(
-    app_driver, spm_workfile, fixtures_dir, monkeypatch
-):
+def test_legacy_cancel_leaves_everything_unchanged(app_driver, spm_workfile, fixtures_dir, monkeypatch):
     d = app_driver
     d.open(spm_workfile)
     before = d._w._state.active
@@ -128,9 +124,7 @@ def test_legacy_converted_copy_route(app_driver, fixtures_dir, monkeypatch):
 # ----------------------------------------------------------------------
 
 
-def test_as_is_read_only_disables_every_editing_affordance(
-    app_driver, fixtures_dir
-):
+def test_as_is_read_only_disables_every_editing_affordance(app_driver, fixtures_dir):
     d = app_driver
     d.open_as_is(fixtures_dir / _LEGACY)
     w = d._w
@@ -194,9 +188,7 @@ def test_legacy_prompt_real_box_words_and_default(app_driver):
 
     assert intent is LegacyIntent.CANCEL
     assert_alert_title(captured["title"], "Open lgm50_v0.json")
-    assert captured["text"] == (
-        f"lgm50_v0.json is BPX 0.4. Editing and checking here use BPX {BPX_VERSION}."
-    )
+    assert captured["text"] == (f"lgm50_v0.json is BPX 0.4. Editing and checking here use BPX {BPX_VERSION}.")
     assert captured["informative"] == (
         f"Open converted copy starts a new unsaved document in BPX {BPX_VERSION}. "
         "The conversion is approximate: State synthesised, initial SOC set to 1, "

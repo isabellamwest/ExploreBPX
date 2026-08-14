@@ -49,7 +49,8 @@ def test_strip_counts_wording(qtbot):
     qtbot.addWidget(strip)
 
     strip.set_counts(0, 0, 0)
-    assert "0 error" in strip._errors.text() and "0 warning" in strip._warnings.text()
+    assert "0 error" in strip._errors.text()
+    assert "0 warning" in strip._warnings.text()
     assert "0 incomplete" in strip._outstanding.text()
 
     strip.set_counts(1, 0, 0)
@@ -76,9 +77,7 @@ def test_strip_totals_match_the_app_rail_badge(app_driver, many_issues_path):
 # --- stream headers ----------------------------------------------------
 
 
-def test_stream_lists_only_non_clean_buckets_with_the_clear_line_naming_the_rest(
-    app_driver, many_issues_path
-):
+def test_stream_lists_only_non_clean_buckets_with_the_clear_line_naming_the_rest(app_driver, many_issues_path):
     d = app_driver
     d.open(many_issues_path)
     # Cell/Negative electrode/Positive electrode carry errors; Header/State
@@ -155,7 +154,7 @@ def test_document_bucket_issue_with_no_attachment_point_is_a_no_op(app_driver, f
     d.open_as_is(fixtures_dir / "nmc_pouch_cell_BPX.json")
     document_bucket = d.diagnostics_bucket("Document")
     assert document_bucket is not None
-    diagnostic, nav_path = document_bucket.issues[0]
+    _diagnostic, nav_path = document_bucket.issues[0]
     assert nav_path == ()
 
     before = d.tree_selection_label()
@@ -213,7 +212,8 @@ def test_issue_row_splits_location_from_message(app_driver, many_issues_path):
     assert "Lower voltage cut-off" in row
     assert "[V]" in row
     assert "Input should be a valid number" in row
-    assert "[ERROR]" not in row and "[WARN]" not in row
+    assert "[ERROR]" not in row
+    assert "[WARN]" not in row
 
 
 def test_numeric_diagnostic_appends_the_offending_value(app_driver, tmp_path, valid_spm_dict):
@@ -224,9 +224,7 @@ def test_numeric_diagnostic_appends_the_offending_value(app_driver, tmp_path, va
     ``.input``. The row now appends it after the verbatim message, muted,
     on the same line, via the app's " · " separator."""
     raw = json.loads(json.dumps(valid_spm_dict))
-    raw["Parameterisation"]["Cell"][
-        "Number of electrode pairs connected in parallel to make a cell"
-    ] = 1.5
+    raw["Parameterisation"]["Cell"]["Number of electrode pairs connected in parallel to make a cell"] = 1.5
     d = app_driver
     d.open(_write(tmp_path, "fractional_electrode_count.json", raw))
 
@@ -245,7 +243,7 @@ def test_issue_rows_carry_the_severity_role_for_the_delegate_icon(app_driver, ma
     d = app_driver
     d.open(many_issues_path)
     severities = {item.data(parameter_row.SEVERITY_ROLE) for item in d._validation_rows("issue")}
-    assert severities == {"error", "warning"} or severities == {"error"}
+    assert severities in ({"error", "warning"}, {"error"})
     # this fixture's issues are all errors specifically:
     assert severities == {"error"}
 
@@ -291,22 +289,18 @@ def test_fully_clean_document_shows_the_all_clear_row_and_clear_line(app_driver,
     assert d.diagnostics_stream_headers() == []
     total = len(d._w._diagnostics._buckets.buckets)
     assert d.diagnostics_all_clear_text() == (
-        style.all_clear("No issues, nothing incomplete")
-        + f"\n{total} of {total} sections complete and valid"
+        style.all_clear("No issues, nothing incomplete") + f"\n{total} of {total} sections complete and valid"
     )
     assert d.diagnostics_clear_line_text() == f"{total} sections clear"
 
 
-def test_partial_and_fully_clear_all_clear_row_shows_the_partial_notice_as_line_2(
-    app_driver, tmp_path
-):
+def test_partial_and_fully_clear_all_clear_row_shows_the_partial_notice_as_line_2(app_driver, tmp_path):
     """Under Partial there is no completion target, so "N of N sections
     complete and valid" is a false claim even when the page is genuinely
     error/warning/outstanding-free -- line 1 (the plain check + "No
     issues, nothing incomplete") is unchanged, but line 2 becomes the
     Partial notice, and it must not ALSO render as its own separate row."""
     from core import document_factory
-
     from ui_qt import style
     from ui_qt.diagnostics_panel import _MSG_PARTIAL_NO_TARGET
 
@@ -406,9 +400,7 @@ def test_clear_row_is_html_based_muted_no_accent_and_compact(app_driver, tmp_pat
     assert state_height == subhead_height
 
 
-def test_partial_notice_renders_once_above_the_clear_line_when_nothing_outstanding(
-    app_driver, tmp_path
-):
+def test_partial_notice_renders_once_above_the_clear_line_when_nothing_outstanding(app_driver, tmp_path):
     from core import document_factory
 
     raw = document_factory.create("Partial", title="probe")
@@ -469,7 +461,7 @@ def test_only_issue_and_task_rows_are_interactive():
     interaction; activating those rows is a structural no-op."""
     from ui_qt.diagnostics_panel import _DiagnosticsRowDelegate
 
-    assert _DiagnosticsRowDelegate._INTERACTIVE_KINDS == {"issue", "task"}
+    assert {"issue", "task"} == _DiagnosticsRowDelegate._INTERACTIVE_KINDS
 
 
 def test_fold_header_paints_as_a_fixed_height_band(app_driver, many_issues_path):
@@ -553,9 +545,7 @@ def test_fold_does_not_leak_into_a_new_document(app_driver, monkeypatch):
     assert ("Cell", False) in d.all_sections_fold_headers()
 
 
-def test_fold_does_not_leak_into_the_next_opened_document(
-    app_driver, many_issues_path, tmp_path, valid_spm_dict
-):
+def test_fold_does_not_leak_into_the_next_opened_document(app_driver, many_issues_path, tmp_path, valid_spm_dict):
     raw = json.loads(json.dumps(valid_spm_dict))
     raw["Parameterisation"]["Cell"]["Electrode area [m2]"] = "wide"
     other = _write(tmp_path, "other_issues.json", raw)
@@ -765,17 +755,17 @@ def _bucket2(**overrides):
     the fold-header suffix tests need to vary."""
     from core.page_buckets import SectionBucket
 
-    fields = dict(
-        path=("Parameterisation", "Cell"),
-        label="Cell",
-        absent=False,
-        issues=(),
-        required_tasks=(),
-        optional_tasks=(),
-        required_total=0,
-        error_count=0,
-        warning_count=0,
-    )
+    fields = {
+        "path": ("Parameterisation", "Cell"),
+        "label": "Cell",
+        "absent": False,
+        "issues": (),
+        "required_tasks": (),
+        "optional_tasks": (),
+        "required_total": 0,
+        "error_count": 0,
+        "warning_count": 0,
+    }
     fields.update(overrides)
     return SectionBucket(**fields)
 
@@ -896,7 +886,8 @@ def test_filter_column_items_are_flat_text_on_one_left_edge(app_driver, many_iss
         assert item.objectName() in ("DiagnosticsCollapseAll", "DiagnosticsChip")
         # Flat text: nothing in the stylesheet gives these a border or a card.
         rule = style.STYLESHEET.split(f"QLabel#{item.objectName()} {{")[1].split("}")[0]
-        assert "border" not in rule and "background" not in rule
+        assert "border" not in rule
+        assert "background" not in rule
 
     assert {item.x() for item in (*items, side._category)} == {style.SPACING_LG}
 
@@ -950,17 +941,11 @@ def test_strip_chip_tooltips_reflect_counts_and_say_they_filter(app_driver, many
 
     assert strip._errors.toolTip() == f"{style.error_count_tooltip(errors)} · click to hide"
     assert strip._warnings.toolTip() == f"{style.warning_count_tooltip(warnings)} · click to hide"
-    assert (
-        strip._outstanding.toolTip()
-        == f"{style.outstanding_count_tooltip(outstanding)} · click to hide"
-    )
+    assert strip._outstanding.toolTip() == f"{style.outstanding_count_tooltip(outstanding)} · click to hide"
 
     strip._errors.set_on(False)
     strip._on_chip_toggled(False)
-    assert (
-        strip._errors.toolTip()
-        == f"{style.error_count_tooltip(errors)} · hidden · click to show"
-    )
+    assert strip._errors.toolTip() == f"{style.error_count_tooltip(errors)} · hidden · click to show"
 
 
 def test_severity_dots_carry_no_inner_glyph_text_in_the_delegate(app_driver, many_issues_path):
@@ -970,13 +955,14 @@ def test_severity_dots_carry_no_inner_glyph_text_in_the_delegate(app_driver, man
     source rather than pixels, since colour-only circle painting is already
     covered by test_activity_bar.py-style pixel probes elsewhere in this
     suite for the equivalent badge pattern."""
-    from ui_qt.parameter_row import ParameterRowDelegate
-
     import inspect
+
+    from ui_qt.parameter_row import ParameterRowDelegate
 
     source = inspect.getsource(ParameterRowDelegate._paint_severity_icon)
     assert "drawText" not in source
-    assert "✕" not in source and '"!"' not in source
+    assert "✕" not in source
+    assert '"!"' not in source
 
 
 def test_task_glyph_is_muted_grey_not_bold(app_driver):

@@ -12,7 +12,7 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtCore import QMimeData, QPointF, QUrl, Qt
+from PySide6.QtCore import QMimeData, QPointF, Qt, QUrl
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import QLabel, QWidget
 
@@ -69,9 +69,7 @@ def test_the_record_section_is_absent_with_no_document(app_driver):
     assert app_driver.workspace_info_text() == ""
 
 
-def test_workspace_info_shows_identity_and_file_state_once_opened(
-    app_driver, valid_spm_path
-):
+def test_workspace_info_shows_identity_and_file_state_once_opened(app_driver, valid_spm_path):
     app_driver.open(valid_spm_path)
 
     text = app_driver.workspace_info_text()
@@ -99,9 +97,7 @@ def test_workspace_info_returns_to_saved_after_save(app_driver, spm_workfile):
     assert "Status: Saved" in d.workspace_info_text()
 
 
-def test_workspace_info_filename_updates_after_save_as(
-    app_driver, spm_workfile, tmp_path, monkeypatch
-):
+def test_workspace_info_filename_updates_after_save_as(app_driver, spm_workfile, tmp_path, monkeypatch):
     d = app_driver
     d.open(spm_workfile).go_to(_CAPACITY).edit_field(6.0).commit()
     d._w._state.active.backing_file = None  # force the Save As path
@@ -121,9 +117,7 @@ def test_workspace_info_filename_updates_after_save_as(
     assert "Status: Saved" in d.workspace_info_text()
 
 
-def test_opening_from_workspace_page_switches_to_editor_page(
-    app_driver, valid_spm_path, monkeypatch
-):
+def test_opening_from_workspace_page_switches_to_editor_page(app_driver, valid_spm_path, monkeypatch):
     d = app_driver
     assert d.current_view_index() == 2
 
@@ -141,9 +135,7 @@ def test_opening_from_workspace_page_switches_to_editor_page(
     assert d._w._state.active.document.identity.model == "SPM"
 
 
-def test_opening_from_workspace_page_goes_through_discard_guard(
-    app_driver, spm_workfile, valid_spm_path, monkeypatch
-):
+def test_opening_from_workspace_page_goes_through_discard_guard(app_driver, spm_workfile, valid_spm_path, monkeypatch):
     """Open from the Workspace page reuses ``_confirm_discard_if_dirty``,
     the same guard exercised by the toolbar Open in the discard-guard tests.
 
@@ -156,9 +148,7 @@ def test_opening_from_workspace_page_goes_through_discard_guard(
     assert d.status_text() == f"{spm_workfile.name} · Unsaved changes"
     original_status = d.status_text()
 
-    monkeypatch.setattr(
-        d._w, "_ask_open_intent", lambda filename: main_window_module.OpenIntent.REPLACE_MAIN
-    )
+    monkeypatch.setattr(d._w, "_ask_open_intent", lambda filename: main_window_module.OpenIntent.REPLACE_MAIN)
     monkeypatch.setattr(
         main_window_module.QMessageBox, "question", lambda *a, **k: main_window_module.QMessageBox.Cancel
     )
@@ -180,14 +170,11 @@ def test_main_card_shows_validity_and_contents(app_driver, valid_spm_path):
     # section/parameter counts come straight from the document, not invented.
     doc = app_driver._w._state.active.document
     assert (
-        f"Contents: {doc.section_count} sections · {doc.parameter_count} parameters"
-        in app_driver.workspace_info_text()
+        f"Contents: {doc.section_count} sections · {doc.parameter_count} parameters" in app_driver.workspace_info_text()
     )
 
 
-def test_main_card_reports_errors_and_offers_the_route_to_them(
-    app_driver, invalid_bpx_path
-):
+def test_main_card_reports_errors_and_offers_the_route_to_them(app_driver, invalid_bpx_path):
     app_driver.open(invalid_bpx_path)
     doc = app_driver._w._state.active.document
     assert not doc.is_valid
@@ -196,9 +183,7 @@ def test_main_card_reports_errors_and_offers_the_route_to_them(
     assert app_driver.issue_route_text() == "Diagnostics ▸"
 
 
-def test_document_card_badge_matches_partitioned_count_not_raw_diagnostics(
-    warning_only_bpx_path, tmp_path, app_driver
-):
+def test_document_card_badge_matches_partitioned_count_not_raw_diagnostics(warning_only_bpx_path, tmp_path, app_driver):
     """The pill must report the same counts as the Diagnostics rail badge.
 
     ``warning_legacy_bpx_float.json`` with its Electrolyte conductivity
@@ -262,9 +247,7 @@ def test_the_slots_level_with_each_other_not_with_the_start_surface(app_driver):
     assert heights[0] < d._w._workspace._start_surface.height()
 
 
-def test_a_long_main_filename_elides_and_leaves_the_row_level(
-    app_driver, valid_spm_dict, tmp_path
-):
+def test_a_long_main_filename_elides_and_leaves_the_row_level(app_driver, valid_spm_dict, tmp_path):
     """A wrapped filename grew the main card by a line and left the slots
     beside it short, so the card elides and keeps the whole name in reach."""
     import json
@@ -285,9 +268,7 @@ def test_start_surface_offers_exactly_the_supported_models(app_driver):
     assert sorted(app_driver.workspace_new_model_options()) == sorted(SUPPORTED_MODELS)
 
 
-def test_start_surface_offers_the_recent_files_that_still_exist(
-    qtbot, tmp_path, valid_spm_path
-):
+def test_start_surface_offers_the_recent_files_that_still_exist(qtbot, tmp_path, valid_spm_path):
     """A route that cannot be taken is not one, so a recent file that has
     gone is left out rather than shown struck through."""
     panel = workspace_panel_module.WorkspacePanel()
@@ -304,9 +285,7 @@ def test_start_surface_offers_the_recent_files_that_still_exist(
                 exists=True,
                 mtime=valid_spm_path.stat().st_mtime,
             ),
-            workspace_panel_module.RecentEntryView(
-                path=str(gone), name=gone.name, exists=False
-            ),
+            workspace_panel_module.RecentEntryView(path=str(gone), name=gone.name, exists=False),
         ],
     )
 
@@ -314,9 +293,7 @@ def test_start_surface_offers_the_recent_files_that_still_exist(
     assert surface.recent_row_labels() == [valid_spm_path.name]
 
 
-def test_the_start_surface_opens_a_file_through_the_dialog(
-    app_driver, valid_spm_path, monkeypatch
-):
+def test_the_start_surface_opens_a_file_through_the_dialog(app_driver, valid_spm_path, monkeypatch):
     d = app_driver
     monkeypatch.setattr(
         main_window_module.QFileDialog,
@@ -330,9 +307,7 @@ def test_the_start_surface_opens_a_file_through_the_dialog(
     assert not d.start_surface_visible()
 
 
-def test_start_surface_falls_back_to_the_model_name_with_no_descriptor(
-    qtbot, monkeypatch
-):
+def test_start_surface_falls_back_to_the_model_name_with_no_descriptor(qtbot, monkeypatch):
     """A model absent from ``_MODEL_DESCRIPTORS`` must still render (name
     only, blank descriptor), never crash -- the documented graceful-
     degradation fallback."""
@@ -363,9 +338,7 @@ def test_choosing_new_model_creates_document_and_switches_to_editor(app_driver, 
     assert "From:" not in d.workspace_info_text()
 
 
-def test_a_new_document_is_never_offered_over_an_open_one(
-    app_driver, spm_workfile, monkeypatch
-):
+def test_a_new_document_is_never_offered_over_an_open_one(app_driver, spm_workfile, monkeypatch):
     """New has no replace guard because it has nothing to replace: the
     surface that offers it is the empty Main slot, so an open document
     takes the whole route off the board rather than guarding it.
@@ -378,9 +351,7 @@ def test_a_new_document_is_never_offered_over_an_open_one(
     d.open(spm_workfile)
     d.show_view("Workspace")
 
-    monkeypatch.setattr(
-        main_window_module.QMessageBox, "question", _fail_if_called
-    )
+    monkeypatch.setattr(main_window_module.QMessageBox, "question", _fail_if_called)
 
     assert not d.start_surface_visible()
     assert d.workspace_new_model_options() == []
@@ -396,9 +367,7 @@ def test_choosing_a_model_on_a_filled_workspace_is_impossible_to_reach(app_drive
     assert d.workspace_main_name() == "untitled.json"
 
 
-def test_a_long_record_scrolls_rather_than_being_squeezed(
-    app_driver, spm_workfile, valid_spm_path, tmp_path
-):
+def test_a_long_record_scrolls_rather_than_being_squeezed(app_driver, spm_workfile, valid_spm_path, tmp_path):
     """A file's prose decides how tall its record is, so the page has to
     take content taller than the window.
 
@@ -466,9 +435,7 @@ def test_drag_enter_ignores_an_unsupported_extension(qtbot, tmp_path):
     assert not event.isAccepted()
 
 
-def test_drop_emits_file_dropped_for_the_first_supported_file_only(
-    qtbot, valid_spm_path, tmp_path
-):
+def test_drop_emits_file_dropped_for_the_first_supported_file_only(qtbot, valid_spm_path, tmp_path):
     panel = workspace_panel_module.WorkspacePanel()
     qtbot.addWidget(panel)
 
@@ -484,9 +451,7 @@ def test_drop_emits_file_dropped_for_the_first_supported_file_only(
     assert event.isAccepted()
 
 
-def test_drop_skips_a_leading_unsupported_file_to_reach_a_later_supported_one(
-    qtbot, valid_spm_path, tmp_path
-):
+def test_drop_skips_a_leading_unsupported_file_to_reach_a_later_supported_one(qtbot, valid_spm_path, tmp_path):
     panel = workspace_panel_module.WorkspacePanel()
     qtbot.addWidget(panel)
 
@@ -560,9 +525,7 @@ def test_dropping_a_file_goes_through_discard_guard_and_cancel_aborts(
     d.show_view("Workspace")  # starting off the Editor page so a wrongful
     # switch-to-Editor on the abort path would actually move the index
 
-    monkeypatch.setattr(
-        d._w, "_ask_open_intent", lambda filename: main_window_module.OpenIntent.REPLACE_MAIN
-    )
+    monkeypatch.setattr(d._w, "_ask_open_intent", lambda filename: main_window_module.OpenIntent.REPLACE_MAIN)
     monkeypatch.setattr(
         main_window_module.QMessageBox, "question", lambda *a, **k: main_window_module.QMessageBox.Cancel
     )
@@ -575,15 +538,11 @@ def test_dropping_a_file_goes_through_discard_guard_and_cancel_aborts(
     assert d.status_text() == original_status  # dirty state retained, nothing opened
 
 
-def test_dropping_a_file_discard_guard_proceeds_on_discard(
-    app_driver, spm_workfile, valid_spm_path, monkeypatch
-):
+def test_dropping_a_file_discard_guard_proceeds_on_discard(app_driver, spm_workfile, valid_spm_path, monkeypatch):
     d = app_driver
     d.open(spm_workfile).go_to(_CAPACITY).edit_field(6.0).commit()
 
-    monkeypatch.setattr(
-        d._w, "_ask_open_intent", lambda filename: main_window_module.OpenIntent.REPLACE_MAIN
-    )
+    monkeypatch.setattr(d._w, "_ask_open_intent", lambda filename: main_window_module.OpenIntent.REPLACE_MAIN)
     monkeypatch.setattr(
         main_window_module.QMessageBox, "question", lambda *a, **k: main_window_module.QMessageBox.Discard
     )
@@ -606,17 +565,13 @@ def test_dropping_an_unsupported_extension_is_a_no_op(app_driver, tmp_path):
     assert d.workspace_info_text() == ""
 
 
-def test_dropping_an_unparseable_file_shows_the_load_error_dialog(
-    app_driver, tmp_path, monkeypatch
-):
+def test_dropping_an_unparseable_file_shows_the_load_error_dialog(app_driver, tmp_path, monkeypatch):
     d = app_driver
     broken = tmp_path / "broken.json"
     broken.write_text("{not valid json", encoding="utf-8")
 
     calls = []
-    monkeypatch.setattr(
-        main_window_module.QMessageBox, "critical", lambda *a, **k: calls.append(a)
-    )
+    monkeypatch.setattr(main_window_module.QMessageBox, "critical", lambda *a, **k: calls.append(a))
 
     d.drop_file_on_workspace(broken)
 
@@ -638,9 +593,7 @@ def test_document_card_names_what_is_still_outstanding(app_driver):
     assert text.endswith(" incomplete")
 
 
-def test_an_aborted_run_badges_not_checked_never_valid(
-    app_driver, tmp_path, valid_spm_dict
-):
+def test_an_aborted_run_badges_not_checked_never_valid(app_driver, tmp_path, valid_spm_dict):
     """One deleted required field aborts bpx's staged run (State is never
     judged) and the lone "Field required" error is absorbed into the
     incomplete count -- zero errors on show. Zero errors from an aborted run

@@ -30,12 +30,16 @@ comparing values, keeps both halves honest (see ``values.values_equal``).
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from PySide6.QtCore import QEvent, QObject, Qt, Signal
 from PySide6.QtWidgets import QWidget
 
-from core.bpx_gateway import FieldMeta
-from core.tree_model import ParameterItem
 from core.values import values_equal
+
+if TYPE_CHECKING:
+    from core.bpx_gateway import FieldMeta
+    from core.tree_model import ParameterItem
 
 
 def _sub_editor_owns_keys(obj: QObject) -> bool:
@@ -156,7 +160,7 @@ class EditorCard(QWidget):
         without a grid keep the default ``None`` and the page keeps its white
         tail.
         """
-        return None
+        return
 
     def set_cell_issues(self, issues) -> None:
         """Render the validator's per-cell diagnostics, if this card has cells.
@@ -246,7 +250,7 @@ class EditorCard(QWidget):
         self.draft_changed.connect(refresh)
         self.draft_reset.connect(refresh)
 
-    def eventFilter(self, obj: QObject, event: QEvent) -> bool:  # noqa: N802
+    def eventFilter(self, obj: QObject, event: QEvent) -> bool:
         if event.type() == QEvent.KeyPress:
             if _sub_editor_owns_keys(obj):
                 return super().eventFilter(obj, event)
@@ -271,4 +275,3 @@ class EditorCard(QWidget):
         # Inspector and a following Enter would commit it.
         self._touched = False
         self.draft_reset.emit()
-

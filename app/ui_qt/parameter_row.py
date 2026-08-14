@@ -28,11 +28,10 @@ from PySide6.QtWidgets import (
     QStyleOptionViewItem,
 )
 
-from core.parameter_types import ParameterKind, looks_like_table
 # split_name_and_unit lives in core.parameter_types (also used outside ui_qt,
 # e.g. core.editing); re-exported here so existing ``parameter_row.``
 # call sites (this module's own rows, the add-parameter popup) are unchanged.
-from core.parameter_types import split_name_and_unit
+from core.parameter_types import ParameterKind, looks_like_table, split_name_and_unit
 from ui_qt import icons, style, typography
 
 #: Item-data role carrying the HTML fragment :class:`ParameterRowDelegate`
@@ -130,9 +129,7 @@ def paint_ref_bar(painter: QPainter, rect: QRect, variant: str) -> None:
     if variant == "ref_only":
         painter.setPen(QPen(QColor(style.REFERENCE_SOFT)))
         painter.setBrush(Qt.NoBrush)
-        painter.drawRoundedRect(
-            bar.adjusted(0.5, 0.5, -0.5, -0.5), REF_BAR_RADIUS, REF_BAR_RADIUS
-        )
+        painter.drawRoundedRect(bar.adjusted(0.5, 0.5, -0.5, -0.5), REF_BAR_RADIUS, REF_BAR_RADIUS)
     else:
         painter.setPen(Qt.NoPen)
         fill = style.REFERENCE if variant == "differs" else style.REFERENCE_BORDER
@@ -293,8 +290,7 @@ def compose_issue_row_html(location: str, message: str, detail: str | None = Non
         # takes the body rung and the body colour instead.
         return _span(full_message, color=style.DEFAULT_TEXT)
     message_html = (
-        f'<span style="color:{style.MUTED}; {typography.size_qss(typography.META)}">'
-        f"{_html.escape(full_message)}</span>"
+        f'<span style="color:{style.MUTED}; {typography.size_qss(typography.META)}">{_html.escape(full_message)}</span>'
     )
     name, unit = split_name_and_unit(location)
     head = _span(name, color=style.DEFAULT_TEXT, bold=True)
@@ -383,9 +379,7 @@ class ParameterRowDelegate(QStyledItemDelegate):
             width = 300
         return max(width, _MIN_WIDTH)
 
-    def _build_document(
-        self, option: QStyleOptionViewItem, index, text_width: float
-    ) -> QTextDocument | None:
+    def _build_document(self, option: QStyleOptionViewItem, index, text_width: float) -> QTextDocument | None:
         html = index.data(HTML_ROLE)
         if html is None:
             return None
@@ -428,9 +422,7 @@ class ParameterRowDelegate(QStyledItemDelegate):
         action hint's own styling (:func:`compose_row_html`)."""
         return QFont(option.font)
 
-    def _action_reserved(
-        self, option: QStyleOptionViewItem, index, row_width: float
-    ) -> int:
+    def _action_reserved(self, option: QStyleOptionViewItem, index, row_width: float) -> int:
         """Row width the right-aligned call-to-action (:data:`ACTION_ROLE`)
         claims (including its gap), 0 for a row with none. Action strings
         are short by convention ("Go to ▸", "+ Add section", "Choose…"), so
@@ -481,9 +473,7 @@ class ParameterRowDelegate(QStyledItemDelegate):
             self._paint_severity_icon(painter, option, index)
 
         painter.save()
-        painter.translate(
-            option.rect.left() + self._h_pad + icon_reserved, option.rect.top() + self._v_pad
-        )
+        painter.translate(option.rect.left() + self._h_pad + icon_reserved, option.rect.top() + self._v_pad)
         doc.drawContents(painter)
         painter.restore()
 
@@ -518,9 +508,7 @@ class ParameterRowDelegate(QStyledItemDelegate):
         metrics = QFontMetrics(font)
         # Elided into its reserve: past the cap the hint shortens, it does
         # not overrun the name beside it.
-        text = metrics.elidedText(
-            index.data(ACTION_ROLE), Qt.ElideRight, reserved - _VALUE_GAP
-        )
+        text = metrics.elidedText(index.data(ACTION_ROLE), Qt.ElideRight, reserved - _VALUE_GAP)
         x = option.rect.right() - self._h_pad - metrics.horizontalAdvance(text)
         painter.drawText(QPointF(x, self._name_baseline(option)), text)
         painter.restore()
@@ -554,9 +542,7 @@ class ParameterRowDelegate(QStyledItemDelegate):
         if ghost:
             font.setItalic(True)
         metrics = QFontMetrics(font)
-        elided = metrics.elidedText(
-            index.data(VALUE_ROLE), Qt.ElideRight, reserved - _VALUE_GAP
-        )
+        elided = metrics.elidedText(index.data(VALUE_ROLE), Qt.ElideRight, reserved - _VALUE_GAP)
         painter.save()
         painter.setFont(font)
         painter.setPen(QColor(style.GHOST_TEXT if ghost else style.MUTED))

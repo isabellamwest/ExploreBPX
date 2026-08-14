@@ -25,14 +25,14 @@ numeric tolerance, no normalisation.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 
 from . import bpx_gateway
 from .tree_model import is_object_node
 from .values import values_equal
 
 
-class RowState(str, Enum):
+class RowState(StrEnum):
     """The comparison outcome of one key within a section."""
 
     EQUAL = "equal"
@@ -53,7 +53,7 @@ def raw_equal(main_value: object, ref_value: object) -> bool:
         return all(raw_equal(main_value[key], ref_value[key]) for key in main_value)
     if isinstance(main_value, list) and isinstance(ref_value, list):
         return len(main_value) == len(ref_value) and all(
-            raw_equal(a, b) for a, b in zip(main_value, ref_value)
+            raw_equal(a, b) for a, b in zip(main_value, ref_value, strict=False)
         )
     return values_equal(main_value, ref_value)
 
@@ -260,16 +260,12 @@ def compare(main_raw: dict, ref_raw: dict) -> ComparisonResult:
         in_main = path in main_sections
         in_reference = path in ref_sections
         rows = _diff_rows(main_sections.get(path, {}), ref_sections.get(path, {}))
-        sections[path] = SectionDiff(
-            path=path, in_main=in_main, in_reference=in_reference, rows=rows
-        )
+        sections[path] = SectionDiff(path=path, in_main=in_main, in_reference=in_reference, rows=rows)
 
     return ComparisonResult(sections=sections)
 
 
-def matching_table_rows(
-    main_rows: list[list[object]], ref_rows: list[list[object]]
-) -> list[bool]:
+def matching_table_rows(main_rows: list[list[object]], ref_rows: list[list[object]]) -> list[bool]:
     """For each row in *ref_rows*, whether an identical ``(x, y)`` pair
     exists somewhere in *main_rows* -- exact equality per cell
     (:func:`values.values_equal`), the same leaf rule :func:`raw_equal` uses
@@ -282,10 +278,7 @@ def matching_table_rows(
     draft holds, distinct from one that happens to coincide with one.
     Never mutates either input.
     """
-    return [
-        any(values_equal(mx, rx) and values_equal(my, ry) for mx, my in main_rows)
-        for rx, ry in ref_rows
-    ]
+    return [any(values_equal(mx, rx) and values_equal(my, ry) for mx, my in main_rows) for rx, ry in ref_rows]
 
 
 def merged_row_state(rows: list[RowDiff | None]) -> RowState | None:

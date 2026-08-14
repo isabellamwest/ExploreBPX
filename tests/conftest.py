@@ -147,6 +147,7 @@ def main_window(qtbot):
     pytest.importorskip("PySide6")
     from PySide6.QtCore import QEvent
     from PySide6.QtWidgets import QApplication
+
     from ui_qt.main_window import MainWindow
 
     window = MainWindow()
@@ -193,4 +194,3 @@ def app_driver(main_window, qtbot):
     from ui_driver import AppDriver
 
     return AppDriver(main_window, qtbot)
-

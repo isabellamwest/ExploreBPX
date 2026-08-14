@@ -68,11 +68,7 @@ def test_no_font_family_chosen_outside_typography():
 def test_stylesheet_only_ever_states_a_rung():
     """Every size the global stylesheet substitutes is on the scale, so the
     sheet cannot quietly grow a fifth rung."""
-    sizes = {
-        int(value)
-        for key, value in typography.qss_tokens().items()
-        if key not in ("regular", "semibold")
-    }
+    sizes = {int(value) for key, value in typography.qss_tokens().items() if key not in ("regular", "semibold")}
     assert sizes == set(typography.SCALE)
 
 
@@ -90,7 +86,8 @@ def test_stylesheet_substitutes_every_placeholder():
 
 @pytest.mark.parametrize("rung", typography.SCALE)
 def test_every_rung_is_a_distinct_whole_pixel_size(rung):
-    assert isinstance(rung, int) and rung > 0
+    assert isinstance(rung, int)
+    assert rung > 0
     assert typography.SCALE.count(rung) == 1
 
 

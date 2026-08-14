@@ -13,7 +13,7 @@ from __future__ import annotations
 import base64
 from functools import lru_cache
 
-from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QRectF, QSize, Qt
+from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QRectF, Qt
 from PySide6.QtGui import QFontMetrics, QGuiApplication, QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 
@@ -233,8 +233,7 @@ def html_img(svg: str, *, color: str = _MUTED, size: int = 13, lift: int | None 
     pixmap.save(buffer, "PNG")
     encoded = base64.b64encode(bytes(buffer.data())).decode("ascii")
     fragment = (
-        f'<img src="data:image/png;base64,{encoded}" '
-        f'width="{size}" height="{size}" style="vertical-align: middle;">'
+        f'<img src="data:image/png;base64,{encoded}" width="{size}" height="{size}" style="vertical-align: middle;">'
     )
     _HTML_IMG_CACHE[key] = fragment
     return fragment

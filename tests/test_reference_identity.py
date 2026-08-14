@@ -38,7 +38,7 @@ def test_letters_are_the_first_two_alphanumerics():
 
 
 def test_source_capitalisation_survives():
-    """"OKane2022" keeps its own capitals -- an all-caps name is a
+    """ "OKane2022" keeps its own capitals -- an all-caps name is a
     deliberate spelling, not something to flatten to title case."""
     assert badge_letters(["OKane2022"]) == ["OK"]
     assert badge_letters(["my_cell.json"]) == ["My"]

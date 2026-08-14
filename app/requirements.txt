@@ -8,6 +8,7 @@ PyYAML>=6.0
 # also the plotting backend for the future Analysis workspace.
 matplotlib>=3.8
 
-# Test-only dependencies.
+# Development-only dependencies (tests and lint).
 pytest
 pytest-qt>=4.5
+ruff>=0.16

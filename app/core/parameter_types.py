@@ -33,7 +33,7 @@ field describes it.
 from __future__ import annotations
 
 import re
-from enum import Enum
+from enum import StrEnum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -42,7 +42,7 @@ if TYPE_CHECKING:
 _UNIT_RE = re.compile(r"\[([^\]]+)\]\s*$")
 
 
-class ParameterKind(str, Enum):
+class ParameterKind(StrEnum):
     """The kind of a BPX node, used to choose a UI renderer."""
 
     SECTION = "section"
@@ -88,7 +88,7 @@ def looks_like_table(value: object) -> bool:
     )
 
 
-def classify(value: object, meta: "FieldMeta | None" = None) -> ParameterKind:
+def classify(value: object, meta: FieldMeta | None = None) -> ParameterKind:
     """Classify a BPX value into a :class:`ParameterKind`.
 
     ``meta`` is the schema metadata for the value's alias, if known. When

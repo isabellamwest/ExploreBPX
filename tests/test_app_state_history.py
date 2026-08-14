@@ -47,18 +47,14 @@ def test_reference_changes_rewrite_the_current_workspace(tmp_path, spm_workfile)
     )
 
     state.remove_reference(state.references[0])
-    assert state.history.current().references == (
-        ReferenceRecord(kind="file", path=str(ref_file)),
-    )
+    assert state.history.current().references == (ReferenceRecord(kind="file", path=str(ref_file)),)
 
 
 # ---------------------------------------------------------------------------
 # opening a file: swap in place, except beside a named workspace
 
 
-def test_opening_another_file_swaps_the_main_of_an_untitled_workspace(
-    tmp_path, spm_workfile, second_workfile
-):
+def test_opening_another_file_swaps_the_main_of_an_untitled_workspace(tmp_path, spm_workfile, second_workfile):
     state = _state(tmp_path)
     state.open(spm_workfile)
     started = state.workspace_id
@@ -73,9 +69,7 @@ def test_opening_another_file_swaps_the_main_of_an_untitled_workspace(
     assert len(state.history.recent_workspaces) == 1  # nothing piled up
 
 
-def test_opening_a_file_beside_a_named_workspace_leaves_it_alone(
-    tmp_path, spm_workfile, second_workfile
-):
+def test_opening_a_file_beside_a_named_workspace_leaves_it_alone(tmp_path, spm_workfile, second_workfile):
     """Naming a workspace is the act that says "stop rewriting this", so an
     ordinary open starts a fresh untitled workspace instead."""
     state = _state(tmp_path)
@@ -142,14 +136,10 @@ def test_new_workspace_creates_a_real_empty_one(tmp_path, spm_workfile):
     assert state.history.current().references == ()
     # Shelved, not discarded: it is still there to come back to.
     assert state.history.by_id(shelved) is not None
-    assert state.history.by_id(shelved).references == (
-        ReferenceRecord(kind="library", set_id=CHEN2020),
-    )
+    assert state.history.by_id(shelved).references == (ReferenceRecord(kind="library", set_id=CHEN2020),)
 
 
-def test_entering_a_workspace_adopts_its_main_before_anything_opens(
-    tmp_path, spm_workfile
-):
+def test_entering_a_workspace_adopts_its_main_before_anything_opens(tmp_path, spm_workfile):
     state = _state(tmp_path)
     state.open(spm_workfile)
     target = state.workspace_id
@@ -163,9 +153,7 @@ def test_entering_a_workspace_adopts_its_main_before_anything_opens(
     assert state.current_workspace_record().main.path == str(spm_workfile)
 
 
-def test_opens_after_entering_land_in_that_workspace(
-    tmp_path, spm_workfile, second_workfile
-):
+def test_opens_after_entering_land_in_that_workspace(tmp_path, spm_workfile, second_workfile):
     state = _state(tmp_path)
     state.open(spm_workfile)
     target = state.workspace_id
@@ -184,9 +172,7 @@ def test_opens_after_entering_land_in_that_workspace(
 # sessions with no on-disk identity
 
 
-def test_scaffold_does_not_rewrite_the_workspace_it_came_from(
-    tmp_path, spm_workfile
-):
+def test_scaffold_does_not_rewrite_the_workspace_it_came_from(tmp_path, spm_workfile):
     state = _state(tmp_path)
     state.open(spm_workfile)
     state.pin_reference_set(CHEN2020)
@@ -255,9 +241,7 @@ def test_opening_a_file_fills_the_empty_workspace_in_place(tmp_path, spm_workfil
     assert len(state.history.recent_workspaces) == 1
 
 
-def test_filling_a_named_empty_workspace_does_not_branch_away(
-    tmp_path, spm_workfile
-):
+def test_filling_a_named_empty_workspace_does_not_branch_away(tmp_path, spm_workfile):
     """A named workspace refuses to have its main *swapped*, but filling an
     empty one is exactly what it was named for."""
     state = _state(tmp_path)
@@ -271,9 +255,7 @@ def test_filling_a_named_empty_workspace_does_not_branch_away(
     assert state.history.recent_workspaces == []  # no stray untitled entry
 
 
-def test_swapping_a_named_workspaces_recorded_main_still_branches(
-    tmp_path, spm_workfile, second_workfile
-):
+def test_swapping_a_named_workspaces_recorded_main_still_branches(tmp_path, spm_workfile, second_workfile):
     state = _state(tmp_path)
     state.new_workspace()
     kept = state.history.keep(state.workspace_id, "planning")
@@ -286,9 +268,7 @@ def test_swapping_a_named_workspaces_recorded_main_still_branches(
     assert state.history.current().main.path == str(second_workfile)
 
 
-def test_references_pinned_on_an_empty_workspace_are_recorded(
-    tmp_path, spm_workfile
-):
+def test_references_pinned_on_an_empty_workspace_are_recorded(tmp_path, spm_workfile):
     state = _state(tmp_path)
     state.new_workspace()
     created = state.workspace_id
@@ -313,9 +293,7 @@ def test_a_scaffold_beside_an_empty_workspace_still_records_its_pins(
     state.pin_reference_set(CHEN2020)
 
     assert state.history.current().main is None
-    assert state.history.current().references == (
-        ReferenceRecord(kind="library", set_id=CHEN2020),
-    )
+    assert state.history.current().references == (ReferenceRecord(kind="library", set_id=CHEN2020),)
 
 
 def test_no_workspace_current_means_no_record(tmp_path, spm_workfile):

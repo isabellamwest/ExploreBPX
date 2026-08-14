@@ -46,6 +46,8 @@ inline-error convention other cards use for a blocked commit.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtWidgets import (
     QHBoxLayout,
@@ -57,28 +59,30 @@ from PySide6.QtWidgets import (
 )
 
 from core import structure
-from core.bpx_gateway import FieldMeta
 from core.compare import ValueGroup, matching_table_rows
 from core.parameter_metadata import resolve_parameter_metadata
 from core.parameter_types import ParameterKind, split_name_and_unit
-from core.tree_model import ParameterItem
 from core.values import format_value
+from ui_qt import style, typography
+from ui_qt.icons import DOT, PENCIL, hover_icon, html_img
+from ui_qt.latex import symbol_label
+from ui_qt.parameter_info_popover import ParameterInfoPopover
+from ui_qt.parameter_row import value_preview
+from ui_qt.style import ERROR, MUTED
 
-from ..icons import DOT, PENCIL, hover_icon, html_img
-from ..latex import symbol_label
-from ..parameter_info_popover import ParameterInfoPopover
-from ..parameter_row import value_preview
-from ..reference_identity import ReferencePin
-from .. import style, typography
-from ..style import ERROR, MUTED
 from .bodies import table_rows
 from .function import table_is_representable
 from .page import page_content, page_header
 from .reference_block import ReferenceLedger
 from .registry import create_card
-from .unknown import ReadOnlyCard
 from .spread_scale import scale_for
 from .table_preview import ReferenceCurve
+from .unknown import ReadOnlyCard
+
+if TYPE_CHECKING:
+    from core.bpx_gateway import FieldMeta
+    from core.tree_model import ParameterItem
+    from ui_qt.reference_identity import ReferencePin
 
 
 class ParameterCard(QWidget):
@@ -106,16 +110,13 @@ class ParameterCard(QWidget):
     ) -> None:
         super().__init__()
         self.parameter = parameter
-        self._meta = meta
         self._popover: ParameterInfoPopover | None = None
         #: A read-only card (opened via the "Open as-is, read-only" path)
         #: swaps the typed editor for the ReadOnlyCard view, drops the
         #: rename pencil, and builds its ledger without "Use" -- the same
         #: anatomy, no writes.
         self._read_only = read_only
-        self._renamable = not read_only and structure.can_rename_parameter(
-            parameter.path, parameter.value
-        )
+        self._renamable = not read_only and structure.can_rename_parameter(parameter.path, parameter.value)
         # Resolved once and reused by the ( i ) popover: the symbol shown in the
         # header comes from the same source, so both render identical maths and
         # neither invents anything the dataset does not carry.
@@ -180,9 +181,7 @@ class ParameterCard(QWidget):
         self._info_button.setToolTip("Parameter information")
         # The rename pencil's own box, so the header's two icon buttons match.
         self._info_button.setFixedSize(22, 22)
-        self._info_button.setStyleSheet(
-            f"border-radius: 11px; font-style: italic; {typography.semibold_qss()}"
-        )
+        self._info_button.setStyleSheet(f"border-radius: 11px; font-style: italic; {typography.semibold_qss()}")
         self._info_button.clicked.connect(self._toggle_info_popover)
         header.addWidget(self._info_button)
         header_box.addLayout(header)
@@ -216,9 +215,7 @@ class ParameterCard(QWidget):
         # share one label column and their values start at the same x.
         self._main_file_heading: QLabel | None = None
 
-        self._editor = (
-            ReadOnlyCard(parameter, meta) if read_only else create_card(parameter, meta)
-        )
+        self._editor = ReadOnlyCard(parameter, meta) if read_only else create_card(parameter, meta)
         self._editor.draft_changed.connect(self.draft_changed)
         self._editor.draft_reset.connect(self.draft_reset)
         self._editor.commit_requested.connect(self.commit_requested)
@@ -292,8 +289,7 @@ class ParameterCard(QWidget):
         # row to row would read as a difference in the values themselves.
         monospace = any(isinstance(group.value, str) for group in groups)
         texts = [
-            group.value if isinstance(group.value, str) else value_preview(group.value, kind)[0]
-            for group in groups
+            group.value if isinstance(group.value, str) else value_preview(group.value, kind)[0] for group in groups
         ]
         width = self._editor.reference_value_width()
         self._ledger.set_rows(
@@ -335,8 +331,7 @@ class ParameterCard(QWidget):
         for group in groups:
             if group.equals_main or not isinstance(group.value, str):
                 continue
-            for index in group.indices:
-                entries.append((pins[index], group.value))
+            entries.extend((pins[index], group.value) for index in group.indices)
         entries.sort(key=lambda entry: entry[0].index)
         return entries
 
@@ -364,21 +359,15 @@ class ParameterCard(QWidget):
             if group.equals_main or not table_is_representable(group.value):
                 continue
             ref_rows = table_rows(group.value)
-            if main_rows:
-                matches = matching_table_rows(main_rows, ref_rows)
-            else:
-                # A non-table main (e.g. a function expression) cannot diff
-                # row-by-row -- marking every row purple would read as pure
-                # noise, so the whole grid stays quiet instead.
-                matches = [True] * len(ref_rows)
-            for index in group.indices:
-                entries.append((pins[index], ref_rows, matches))
+            # A non-table main (e.g. a function expression) cannot diff
+            # row-by-row -- marking every row purple would read as pure
+            # noise, so the whole grid stays quiet instead.
+            matches = matching_table_rows(main_rows, ref_rows) if main_rows else [True] * len(ref_rows)
+            entries.extend((pins[index], ref_rows, matches) for index in group.indices)
         entries.sort(key=lambda entry: entry[0].index)
         return entries
 
-    def _apply_table_grid(
-        self, groups: tuple[ValueGroup, ...], pins: list[ReferencePin]
-    ) -> None:
+    def _apply_table_grid(self, groups: tuple[ValueGroup, ...], pins: list[ReferencePin]) -> None:
         """Feed the ledger's reference grid and the editor's chart overlay.
 
         The grid shows one reference at a time behind a badge selector,
@@ -389,10 +378,7 @@ class ParameterCard(QWidget):
         entries = self._table_references(groups, pins)
         self._ledger.set_table_references(entries)
         self._editor.set_reference_curves(
-            [
-                ReferenceCurve(pin.letters, pin.colour, pin.name, rows)
-                for pin, rows, _matches in entries
-            ]
+            [ReferenceCurve(pin.letters, pin.colour, pin.name, rows) for pin, rows, _matches in entries]
         )
 
     def growable_grid(self):

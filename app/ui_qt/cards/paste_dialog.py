@@ -11,6 +11,8 @@ discard" rule: a value the parser could not read as a number is shown in place
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
@@ -24,10 +26,11 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from core.paste import ParsedPaste
 from core.values import format_value
+from ui_qt.style import ERROR, MUTED, TABLE_PREVIEW_MAX_HEIGHT
 
-from ..style import ERROR, MUTED, TABLE_PREVIEW_MAX_HEIGHT
+if TYPE_CHECKING:
+    from core.paste import ParsedPaste
 
 #: Rows shown in the preview before it notes "and N more". The parse itself is
 #: complete; only the preview is capped, so a thousand-row paste stays instant.
@@ -103,10 +106,7 @@ def _detail(parsed: ParsedPaste) -> str:
     if parsed.header is not None:
         parts.append(f'header row skipped: "{parsed.header}"')
     if parsed.rejected:
-        parts.append(
-            f"{parsed.rejected} cell{'s' if parsed.rejected != 1 else ''} kept as text "
-            "(not a number)"
-        )
+        parts.append(f"{parsed.rejected} cell{'s' if parsed.rejected != 1 else ''} kept as text (not a number)")
     if parsed.dropped_columns:
         parts.append(f"{parsed.dropped_columns} extra column-value(s) dropped")
     return " · ".join(parts)
