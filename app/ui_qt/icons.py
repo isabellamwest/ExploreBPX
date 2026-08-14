@@ -173,10 +173,11 @@ def _render_pixmap(svg: str, color: str, size: int, *, lift: int = 0) -> QPixmap
     pixmap.setDevicePixelRatio(dpr)
     renderer = QSvgRenderer(QByteArray(svg.format(color=color).encode("utf-8")))
     painter = QPainter(pixmap)
-    if lift:
-        renderer.render(painter, QRectF(0, -lift, size, size))
-    else:
-        renderer.render(painter)
+    # Always render into an explicit logical-coordinate rect: the no-argument
+    # render() targets the painter's device-pixel viewport, which the DPR
+    # scale then doubles -- on HiDPI screens the glyph paints oversized and
+    # clipped to its top-left quadrant.
+    renderer.render(painter, QRectF(0, -lift, size, size))
     painter.end()
     return pixmap
 
