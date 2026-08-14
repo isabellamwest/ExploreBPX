@@ -1,11 +1,11 @@
-# Explore_BPX
+# ExploreBPX
 
 A desktop app that makes [BPX](https://github.com/FaradayInstitution/BPX)
 (Battery Parameter eXchange) files easy to open, understand, validate, edit
 and author.
 
 BPX files are machine-readable JSON/YAML, but can be hard to inspect and navigate by
-hand as they grow. Explore_BPX presents a BPX document as a navigable tree of
+hand as they grow. ExploreBPX presents a BPX document as a navigable tree of
 objects and parameters with continuous validation, a dedicated editor for
 every parameter kind, and authoring support for building new documents from
 model skeletons.
@@ -76,7 +76,7 @@ A few principles shape the whole app:
   BPX dictionary, so invalid and partially edited documents remain fully
   representable. The parsed model, the object tree and all validation issues
   are derived from it.
-- **Validation belongs to `bpx`.** Explore_BPX owns presentation only.
+- **Validation belongs to `bpx`.** ExploreBPX owns presentation only.
   Validation semantics and messages come from the official package and are
   surfaced faithfully, never modified or "corrected".
 - **Completion is distinct from validation.** Validation answers whether the

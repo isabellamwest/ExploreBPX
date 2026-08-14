@@ -1,4 +1,4 @@
-"""Explore_BPX - PySide6 desktop entry point.
+"""ExploreBPX - PySide6 desktop entry point.
 
 Wires the frontend-agnostic state/core layers to the Qt frontend. No BPX or
 business logic lives here.

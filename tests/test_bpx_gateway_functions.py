@@ -1,5 +1,5 @@
 """Tests for ``bpx_gateway.sample_function``: the Inspector's chart-preview
-seam for a ``Function`` expression. Explore_BPX never evaluates an
+seam for a ``Function`` expression. ExploreBPX never evaluates an
 expression itself -- these tests pin that parsing stays ``bpx.Function``'s
 own (``validate`` then ``to_python_function``) and that this seam only
 chooses sample positions and reports the outcome honestly.

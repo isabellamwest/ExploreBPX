@@ -2,7 +2,7 @@
 
 Converts a curated list of PyBaMM's published lithium-ion parameter sets into
 BPX documents under ``app/data/example_documents/pybamm/``, for use as
-read-only *reference artifacts* (comparison and plotting) inside Explore_BPX.
+read-only *reference artifacts* (comparison and plotting) inside ExploreBPX.
 This tool implements the following accepted constraints:
 
 * **Offline, dev-time only.** This script imports ``pybamm``; the application
