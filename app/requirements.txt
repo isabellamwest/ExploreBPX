@@ -1,4 +1,4 @@
-# Explore_BPX dependencies.
+# ExploreBPX dependencies.
 # BPX is pinned exactly: the app is built and tested against this version and
 # all BPX coupling is isolated in app/core/bpx_gateway.py.
 bpx==1.1.1

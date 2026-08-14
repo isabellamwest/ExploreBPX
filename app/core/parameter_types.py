@@ -126,7 +126,7 @@ def classify(value: object, meta: FieldMeta | None = None) -> ParameterKind:
     # --- No-metadata fallback. --------------------------------------------
     # Only reached for parameters whose alias does not appear in the schema
     # index. Two legitimate sources: parameters read from external files that
-    # Explore_BPX did not author, and user-authored custom parameters, whose
+    # ExploreBPX did not author, and user-authored custom parameters, whose
     # metadata is genuinely absent by design (nothing is synthesised or
     # persisted for them). Value shape is the only information available, and
     # this is the one place an undeclared dict/list's topology classifies it.

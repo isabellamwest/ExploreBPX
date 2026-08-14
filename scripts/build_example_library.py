@@ -80,7 +80,7 @@ OUT_DIR = Path(__file__).resolve().parents[1] / "app" / "data" / "example_docume
 
 def fetch(url: str) -> bytes:
     """Download *url* and return its body."""
-    request = urllib.request.Request(url, headers={"User-Agent": "Explore_BPX-build-script"})  # noqa: S310
+    request = urllib.request.Request(url, headers={"User-Agent": "ExploreBPX-build-script"})  # noqa: S310
     with urllib.request.urlopen(request) as response:  # noqa: S310 - fixed https URLs from this script's own constants
         return response.read()
 

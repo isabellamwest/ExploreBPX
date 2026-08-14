@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 
 class Severity(StrEnum):
-    """Presentation-layer severity classification assigned by Explore_BPX."""
+    """Presentation-layer severity classification assigned by ExploreBPX."""
 
     ERROR = "error"
     WARNING = "warning"
