@@ -166,7 +166,7 @@ class ReferenceBadgeButton(QPushButton):
     has to be a bound method of this very QObject, which PySide holds weakly.
     A lambda capturing the button would be a pure-Python cycle that only the
     cyclic GC could break -- the collector this app must never rely on to
-    free widgets (project convention).
+    free widgets.
     """
 
     def __init__(self, letters: str, colour: str, tooltip: str = "", *, checked: bool = True) -> None:

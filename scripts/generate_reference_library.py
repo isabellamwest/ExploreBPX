@@ -7,8 +7,8 @@ This tool implements the following accepted constraints:
 
 * **Offline, dev-time only.** This script imports ``pybamm``; the application
   never does. The app loads the emitted files as ordinary data through
-  ``core``. (The ``import bpx`` here is likewise fine: the gateway rule in
-  the project guide scopes to ``app/``, and this tool *is* the validator check.)
+  ``core``. (The ``import bpx`` here is likewise fine: the single-gateway
+  rule scopes to ``app/``, and this tool *is* the validator check.)
 * **Reference artifact, not simulation-grade.** Only the subset of parameters
   with a BPX home is carried over; each emitted Description says so.
 * **DFN-shaped lithium-ion sets only.** MSMR and lead-acid sets do not map.

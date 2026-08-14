@@ -658,7 +658,7 @@ def test_clicking_pull_emits_its_source_index_and_does_not_dirty_the_card(app_dr
 def test_docking_reference_then_selecting_differing_parameter_leaves_card_untouched(
     app_driver, main_and_ref, monkeypatch
 ):
-    """The _touched regression pin (known Qt pitfall): populating the
+    """The _touched regression pin: populating the
     reference block must never mark the card touched, so a bare Enter after
     selection does not commit."""
     main_path, ref_path = main_and_ref
@@ -838,7 +838,7 @@ def test_copy_up_supersedes_a_dirty_draft_and_undo_restores_the_prior_value(app_
 
 
 def test_bare_enter_after_a_pull_commits_nothing(app_driver, main_and_ref, monkeypatch):
-    """The _touched pin (known Qt pitfall): the card the pull's own refresh
+    """The _touched pin: the card the pull's own refresh
     rebuilds must not read as dirty, so a bare Enter afterwards is a no-op --
     a single undo still reverts the pull alone, not a phantom second commit."""
     main_path, ref_path = main_and_ref

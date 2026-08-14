@@ -134,8 +134,7 @@ def test_ref_bar_role_actually_paints_the_gutter_bar(rich_list, qtbot):
     A styled ``QListWidget::item`` (this app's global stylesheet declares
     one) silently ignores ``QListWidgetItem.setBackground``'s
     ``Qt.BackgroundRole`` -- a genuine Qt/QSS gotcha caught only by grabbing
-    the actual rendered pixmap (an offscreen-suite-misses-native-window-bugs
-    case, the project guide); reading the item's own data back would have looked
+    the actual rendered pixmap; reading the item's own data back would have looked
     correct while painting nothing at all.
     """
     item = QListWidgetItem("Differing row")

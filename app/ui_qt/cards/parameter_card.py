@@ -255,7 +255,7 @@ class ParameterCard(QWidget):
         row width.
 
         Populate-only: this never touches ``self._editor``'s draft/commit
-        signals (known Qt pitfall), so calling it can never trip
+        signals, so calling it can never trip
         ``_touched``, whatever order it is called relative to construction --
         it does, however, always tell the editor which reference curves to
         overlay on its own live preview

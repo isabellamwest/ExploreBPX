@@ -580,7 +580,7 @@ class AppDriver:
     def source_hint_visible(self) -> bool:
         """Whether the "Open a reference to compare…" toolbar hint is shown.
         ``isHidden()``, not ``isVisible()`` -- the window is never shown in
-        the headless suite (known Qt pitfall)."""
+        the headless suite."""
         return not self._w._source._hint.isHidden()
 
     def source_has_input_widget(self) -> bool:

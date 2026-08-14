@@ -238,7 +238,7 @@ def test_choice_dialog_disables_pin_at_the_cap(app_driver, valid_spm_path, tmp_p
 
 
 def test_ask_open_intent_real_dialog_replace_main(app_driver, valid_spm_path):
-    """One real-dialog test (project convention): the actual QMessageBox, driven
+    """One real-dialog test: the actual QMessageBox, driven
     via the zero-delay ``QTimer.singleShot`` + ``activeModalWidget()`` idiom
     (``QMessageBox.exec()`` truly blocks; a Python monkeypatch of ``.exec()``
     does not intercept it)."""
