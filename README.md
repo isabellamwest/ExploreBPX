@@ -70,7 +70,8 @@ a new document for a chosen model from the Workspace board.
 
 ## Design
 
-A few principles shape the whole app:
+A fuller design record, restored from the project's history, lives in
+[docs/design/](docs/design/). A few principles shape the whole app:
 
 - **The raw document is the source of truth.** The editable state is the raw
   BPX dictionary, so invalid and partially edited documents remain fully
@@ -78,7 +79,12 @@ A few principles shape the whole app:
   are derived from it.
 - **Validation belongs to `bpx`.** ExploreBPX owns presentation only.
   Validation semantics and messages come from the official package and are
-  surfaced faithfully, never modified or "corrected".
+  surfaced faithfully, never modified or "corrected". Validation runs with
+  `bpx`'s defaults, including its voltage tolerance `v_tol` (0.001 V), the
+  slack `bpx` allows when checking a document's declared voltage limits
+  against its electrode potentials. The gateway
+  (`app/core/bpx_gateway.py:validate`) takes `v_tol` as a parameter; the UI
+  does not yet expose it.
 - **Completion is distinct from validation.** Validation answers whether the
   data satisfies BPX rules; completion answers whether a document is finished.
   A work-in-progress document is not the same thing as an incorrect one.
@@ -127,6 +133,19 @@ uv run pytest            # or, with the venv active: python -m pytest
 
 The suite runs headless (offscreen Qt) and includes the boundary test that
 keeps `core/` and `state/` free of UI imports.
+
+## Trust boundary
+
+ExploreBPX is a local desktop app: it makes no network requests and reads
+only the files you open (plus its own bundled reference library and saved
+workspace state). Opened documents are parsed as data by the official `bpx`
+package; nothing in a document runs as code, with one deliberate exception:
+to draw chart previews, function-expression parameters are compiled to
+Python callables by `bpx.Function`, whose grammar admits only numeric
+expressions over `x` (arithmetic operators and a fixed set of maths
+functions) — arbitrary identifiers and statements are rejected before
+anything is built. Malformed or hostile files surface as validation issues,
+not execution.
 
 ## License
 

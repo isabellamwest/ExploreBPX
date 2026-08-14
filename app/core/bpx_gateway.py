@@ -352,6 +352,11 @@ def validate(raw: dict, v_tol: float = 0.001) -> ValidationResult:
     Never raises: parsing errors and deprecation warnings are captured and
     returned as :class:`ValidatorDiagnostic` objects so invalid files can
     still be explored.
+
+    ``v_tol`` passes straight through to ``bpx.parse_bpx_obj``: the slack, in
+    volts, that ``bpx`` allows when checking the document's declared voltage
+    limits against its electrode potentials. The default mirrors ``bpx``'s
+    own (0.001 V); no caller currently overrides it.
     """
     issues: list[ValidatorDiagnostic] = []
     reach = CheckReach.COMPLETE
@@ -441,8 +446,9 @@ _PARAMETERISATION_FAMILY: tuple[str, ...] = (
 )
 
 #: The electrode/particle family: for every alias two or more of these share,
-#: the schema metadata is identical (verified against the live BPX schema --
-#: see the ``principal-engineer`` implementation notes for this change).
+#: the schema metadata is identical (verified against the live BPX schema by
+#: ``test_A4_family_members_agree_on_every_shared_alias`` in
+#: ``tests/test_schema_contract.py``).
 #: Electrolyte is the one section that diverges and is deliberately excluded.
 #: Including ``Particle`` lets this same family resolve both single-particle
 #: electrodes (whose particle fields live directly on the electrode) and
