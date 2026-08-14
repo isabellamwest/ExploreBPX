@@ -337,7 +337,7 @@ def test_stale_save_as_copy_still_confirms_comment_loss(app_driver, commented_ya
 
 
 # ----------------------------------------------------------------------
-# one real-dialog test per box (project convention)
+# one real-dialog test per box (the rest monkeypatch them)
 # ----------------------------------------------------------------------
 
 

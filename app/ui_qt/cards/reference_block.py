@@ -28,7 +28,7 @@ side is a comparison the eye cannot make; that is what the chart overlay is
 for.
 
 Plain ``QLabel``s and buttons only -- deliberately outside any editor's
-draft/commit machinery (known Qt pitfall): populating this can never trip
+draft/commit machinery: populating this can never trip
 ``_touched``, since it wires no signal into an editor at all.
 """
 

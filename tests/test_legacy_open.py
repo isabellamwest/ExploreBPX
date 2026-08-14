@@ -162,7 +162,7 @@ def test_save_refuses_on_a_read_only_session(app_driver, fixtures_dir):
 
 
 # ----------------------------------------------------------------------
-# one real-dialog test (project convention)
+# one real-dialog test (the rest monkeypatch the box)
 # ----------------------------------------------------------------------
 
 

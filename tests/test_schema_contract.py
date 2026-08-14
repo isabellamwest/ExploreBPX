@@ -221,8 +221,8 @@ def test_A2_open_value_type_leaves_resolve_to_none(leaves, defs):
         "is not False, e.g. UserDefined):\n"
         + "\n".join(f"  {'/'.join(p)}" for p in sorted(fabricated))
         + "\n\nA custom/user-defined entry must have genuinely absent "
-        "metadata (meta=None is the honest contract from the 3.0 decision -- "
-        "see PROJECT_STATUS.md). If this fires, field_meta is fabricating "
+        "metadata (meta=None is the honest contract). "
+        "If this fires, field_meta is fabricating "
         "metadata for free-form user content; do not add an entry to excuse "
         "it -- fix the fabrication in field_meta/_definitions_for."
     )

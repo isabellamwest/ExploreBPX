@@ -918,8 +918,8 @@ class _StreamView(QWidget):
     #: label -- the label depends on the fold set, and a header click
     #: re-renders only this widget, not the whole panel, so without this
     #: signal the label goes stale (fold every section one by one and it
-    #: still reads "Collapse all"). A Qt signal, not a stored bound method,
-    #: per the project widget-lifetime rule.
+    #: still reads "Collapse all"). A Qt signal, not a stored bound method --
+    #: widgets must die by refcount, never by the cyclic GC.
     folds_changed = Signal()
 
     def __init__(self) -> None:

@@ -820,8 +820,7 @@ class FunctionSamples:
 
 
 def _clear_pyparsing_packrat_cache() -> None:
-    """Defensive mirror of ``ui_qt.latex``'s ``_render_png`` guard (see
-    the project guide's "Qt pitfalls already paid for").
+    """Defensive mirror of ``ui_qt.latex``'s ``_render_png`` guard.
 
     ``bpx``'s own ``ExpressionParser`` never calls pyparsing's
     ``enable_packrat`` -- checked directly against the installed package,
