@@ -18,12 +18,12 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtCore import Qt
 
-from core.parameter_types import ParameterKind
-from core.tree_model import ParameterItem, SiblingSeries
-from core.values import format_value, parse_value, values_equal
-from ui_qt.cards.grid import NumericGrid
-from ui_qt.cards.registry import create_card, series_is_representable
-from ui_qt.cards.series import SeriesCard
+from explore_bpx.core.parameter_types import ParameterKind
+from explore_bpx.core.tree_model import ParameterItem, SiblingSeries
+from explore_bpx.core.values import format_value, parse_value, values_equal
+from explore_bpx.ui_qt.cards.grid import NumericGrid
+from explore_bpx.ui_qt.cards.registry import create_card, series_is_representable
+from explore_bpx.ui_qt.cards.series import SeriesCard
 
 
 @pytest.fixture(autouse=True)
@@ -331,7 +331,7 @@ def test_series_card_omits_a_non_list_sibling():
 
 
 def test_series_card_has_a_collapsed_hint():
-    from ui_qt.cards.hint import GridHint
+    from explore_bpx.ui_qt.cards.hint import GridHint
 
     card = _series([0, 1])
     hint = card.findChild(GridHint)
@@ -344,7 +344,7 @@ def test_series_card_has_a_collapsed_hint():
 def test_hint_mentions_sibling_columns_only_when_there_are_siblings():
     with_siblings = _series_with_siblings([0], [("Voltage [V]", [4.1])])
     plain = _series([0])
-    from ui_qt.cards.hint import GridHint
+    from explore_bpx.ui_qt.cards.hint import GridHint
 
     def body_text(card):
         return card.findChild(GridHint)._body.text()

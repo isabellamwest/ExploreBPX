@@ -5,8 +5,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from core import bpx_gateway
-from core.compare import (
+from explore_bpx.core import bpx_gateway
+from explore_bpx.core.compare import (
     ComparisonResult,
     RowDiff,
     RowState,
@@ -20,7 +20,7 @@ from core.compare import (
     raw_equal,
 )
 
-APP_DIR = Path(__file__).resolve().parents[1] / "app"
+APP_DIR = Path(__file__).resolve().parents[1] / "explore_bpx"
 _ABOUT_ENERGY = APP_DIR / "data" / "example_documents" / "about_energy"
 
 

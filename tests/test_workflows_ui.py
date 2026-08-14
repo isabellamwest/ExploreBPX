@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import pytest
 
-from core.bpx_gateway import CheckReach
-from ui_qt import file_facts
+from explore_bpx.core.bpx_gateway import CheckReach
+from explore_bpx.ui_qt import file_facts
 
 pytest.importorskip("PySide6")
 

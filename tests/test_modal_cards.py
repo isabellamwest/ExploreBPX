@@ -25,12 +25,12 @@ pytest.importorskip("PySide6")
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel
 
-from core import bpx_gateway
-from core.csv_import import read_csv_text
-from core.parameter_types import ParameterKind
-from core.tree_model import ParameterItem
-from ui_qt.cards.bodies import ExpressionBody, MaterialMapBody, NumberBody
-from ui_qt.cards.function import (
+from explore_bpx.core import bpx_gateway
+from explore_bpx.core.csv_import import read_csv_text
+from explore_bpx.core.parameter_types import ParameterKind
+from explore_bpx.core.tree_model import ParameterItem
+from explore_bpx.ui_qt.cards.bodies import ExpressionBody, MaterialMapBody, NumberBody
+from explore_bpx.ui_qt.cards.function import (
     FLOAT_INT,
     FUNCTION,
     INTERPOLATED_TABLE,
@@ -38,17 +38,17 @@ from ui_qt.cards.function import (
     initial_mode,
     table_is_representable,
 )
-from ui_qt.cards.map import (
+from explore_bpx.ui_qt.cards.map import (
     DICT_STR_FLOAT_INT,
     MapCard,
     map_is_representable,
 )
-from ui_qt.cards.map import initial_mode as map_initial_mode
-from ui_qt.cards.modal import RAW_MODE, ModalCard, Mode, RawValueCard
-from ui_qt.cards.multi_series_chart import charts_available
-from ui_qt.cards.paste_dialog import PastePreviewResult
-from ui_qt.cards.registry import create_card
-from ui_qt.cards.table import TableCard
+from explore_bpx.ui_qt.cards.map import initial_mode as map_initial_mode
+from explore_bpx.ui_qt.cards.modal import RAW_MODE, ModalCard, Mode, RawValueCard
+from explore_bpx.ui_qt.cards.multi_series_chart import charts_available
+from explore_bpx.ui_qt.cards.paste_dialog import PastePreviewResult
+from explore_bpx.ui_qt.cards.registry import create_card
+from explore_bpx.ui_qt.cards.table import TableCard
 
 
 @pytest.fixture(autouse=True)
@@ -730,7 +730,7 @@ def test_a_long_expression_reads_from_its_start(qtbot):
     """A QLineEdit scrolls to the cursor, and setText leaves it at the end,
     so a long OCP expression showed only its tail. The modeller must be able
     to see what their own function begins with."""
-    from ui_qt.cards.bodies import ExpressionBody
+    from explore_bpx.ui_qt.cards.bodies import ExpressionBody
 
     body = ExpressionBody()
     qtbot.addWidget(body)
@@ -746,7 +746,7 @@ def test_a_long_expression_reads_from_its_start(qtbot):
 def test_the_expression_hint_is_never_given_less_height_than_it_needs(qtbot):
     """Wrapped help text lost its second line inside the mode strip's
     stacked layout, which does not carry a label's height-for-width."""
-    from ui_qt.cards.hint import WrappedHelp
+    from explore_bpx.ui_qt.cards.hint import WrappedHelp
 
     help_text = WrappedHelp("word " * 60)
     qtbot.addWidget(help_text)

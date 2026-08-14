@@ -18,7 +18,7 @@ pytest.importorskip("PySide6")
 
 from platform_facts import assert_alert_title
 
-import ui_qt.main_window as main_window_module
+import explore_bpx.ui_qt.main_window as main_window_module
 
 _CAPACITY = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
 

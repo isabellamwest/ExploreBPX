@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from core.parameter_types import ParameterKind
-from core.tree_model import (
+from explore_bpx.core.parameter_types import ParameterKind
+from explore_bpx.core.tree_model import (
     NodeType,
     ParameterItem,
     TreeNode,
@@ -13,7 +13,7 @@ from core.tree_model import (
     match_parameter,
     match_path,
 )
-from core.validation import PydanticErrorDiagnostic
+from explore_bpx.core.validation import PydanticErrorDiagnostic
 
 
 def _find(node, label):

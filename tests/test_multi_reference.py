@@ -16,9 +16,9 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-import ui_qt.main_window as main_window_module
-from core.commands import PullParameter
-from state.app_state import MAX_PINNED_REFERENCES
+import explore_bpx.ui_qt.main_window as main_window_module
+from explore_bpx.core.commands import PullParameter
+from explore_bpx.state.app_state import MAX_PINNED_REFERENCES
 
 _CELL_PATH = ("Parameterisation", "Cell")
 _CAPACITY = _CELL_PATH + ("Nominal cell capacity [A.h]",)
@@ -57,8 +57,8 @@ def _write(tmp_path: Path, name: str, raw: dict) -> Path:
 
 def _strip_pins(*names: str) -> list:
     """Pins carrying only what the strip reads: identity and a comparison."""
-    from state.reference_snapshot import ReferenceSnapshot
-    from ui_qt.reference_identity import ReferencePin, badge_colour, badge_letters
+    from explore_bpx.state.reference_snapshot import ReferenceSnapshot
+    from explore_bpx.ui_qt.reference_identity import ReferencePin, badge_colour, badge_letters
 
     letters = badge_letters(list(names))
     return [
@@ -198,7 +198,7 @@ def test_strip_keeps_names_while_they_fit_and_drops_them_together(qtbot):
     names fit is a question of measured width, not a fixed breakpoint. Names
     go all-or-nothing: a row where some chips are named and some are not
     reads as an error, not as a fit."""
-    from ui_qt.comparison_strip import ComparisonStrip
+    from explore_bpx.ui_qt.comparison_strip import ComparisonStrip
 
     strip = ComparisonStrip()
     qtbot.addWidget(strip)
@@ -369,8 +369,8 @@ def test_spread_scale_stacks_dots_that_would_hide_each_other(qtbot):
     """Two stated values a fraction of the span apart are one dot covering
     another at any real width. They step up a level instead; only the level
     moves, never the x."""
-    from core.spread import build_spread
-    from ui_qt.cards.spread_scale import SpreadScaleView
+    from explore_bpx.core.spread import build_spread
+    from explore_bpx.ui_qt.cards.spread_scale import SpreadScaleView
 
     spread = SpreadScaleView()
     qtbot.addWidget(spread)
@@ -393,9 +393,9 @@ def test_spread_scale_thins_division_labels_on_a_narrow_axis(qtbot):
     "10000", "1e+06") cannot all fit, so the visible set shrinks."""
     from PySide6.QtGui import QFontMetrics
 
-    from core.spread import build_spread
-    from ui_qt import typography
-    from ui_qt.cards.spread_scale import SpreadScaleView
+    from explore_bpx.core.spread import build_spread
+    from explore_bpx.ui_qt import typography
+    from explore_bpx.ui_qt.cards.spread_scale import SpreadScaleView
 
     scale = build_spread(None, [1.0, 1e7])
     spread = SpreadScaleView()
@@ -414,9 +414,9 @@ def test_spread_scale_thins_division_labels_on_a_narrow_axis(qtbot):
 def test_spread_scale_shows_every_division_label_with_room_to_spare(qtbot):
     from PySide6.QtGui import QFontMetrics
 
-    from core.spread import build_spread
-    from ui_qt import typography
-    from ui_qt.cards.spread_scale import SpreadScaleView
+    from explore_bpx.core.spread import build_spread
+    from explore_bpx.ui_qt import typography
+    from explore_bpx.ui_qt.cards.spread_scale import SpreadScaleView
 
     scale = build_spread(None, [1.0, 1e7])
     spread = SpreadScaleView()
@@ -696,7 +696,7 @@ def test_library_pin_record_retains_the_provenance_statement(app_driver, tmp_pat
     the pin landed; the record's From row now names the library and states
     the same sentence directly beneath it (always visible -- growing a row
     after the pane has measured is the geometry trap this pane documents)."""
-    from core.reference_library import PROVENANCE, list_reference_sets
+    from explore_bpx.core.reference_library import PROVENANCE, list_reference_sets
 
     d = app_driver
     d.open(_write(tmp_path, "main.json", _MAIN))
@@ -712,7 +712,7 @@ def test_library_pin_record_retains_the_provenance_statement(app_driver, tmp_pat
 
 
 def test_file_pin_slot_tooltip_names_the_path_and_library_pin_names_the_library(app_driver, tmp_path, monkeypatch):
-    from core.reference_library import list_reference_sets
+    from explore_bpx.core.reference_library import list_reference_sets
 
     d = app_driver
     d.open(_write(tmp_path, "main.json", _MAIN))

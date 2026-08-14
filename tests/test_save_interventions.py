@@ -24,12 +24,12 @@ from platform_facts import assert_alert_title
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication
 
-import ui_qt.main_window as main_window_module
-from core.document import BPXDocument
-from core.load_record import LoadRecord
-from state.app_state import AppState
-from state.document_session import DocumentSession
-from ui_qt.main_window import StaleChoice, _format_disk_time
+import explore_bpx.ui_qt.main_window as main_window_module
+from explore_bpx.core.document import BPXDocument
+from explore_bpx.core.load_record import LoadRecord
+from explore_bpx.state.app_state import AppState
+from explore_bpx.state.document_session import DocumentSession
+from explore_bpx.ui_qt.main_window import StaleChoice, _format_disk_time
 
 _CAPACITY = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
 

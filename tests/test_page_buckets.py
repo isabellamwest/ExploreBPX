@@ -15,11 +15,11 @@ import json
 
 import pytest
 
-from core import bpx_gateway, completion, document_factory, page_buckets, structure
-from core.completion import CompletionTask, PartitionedIssues, TaskKind
-from core.document import BPXDocument
-from core.page_buckets import DOCUMENT_BUCKET_PATH
-from core.validation import PydanticErrorDiagnostic, merge_union_pairs_by_location
+from explore_bpx.core import bpx_gateway, completion, document_factory, page_buckets, structure
+from explore_bpx.core.completion import CompletionTask, PartitionedIssues, TaskKind
+from explore_bpx.core.document import BPXDocument
+from explore_bpx.core.page_buckets import DOCUMENT_BUCKET_PATH
+from explore_bpx.core.validation import PydanticErrorDiagnostic, merge_union_pairs_by_location
 
 
 def _bucket_page(raw: dict, model: str | None = None):

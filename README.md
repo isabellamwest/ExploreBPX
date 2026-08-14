@@ -53,7 +53,7 @@ locked dependencies):
 
 ```bash
 uv sync
-uv run python app/main_qt.py
+uv run explore-bpx
 ```
 
 With pip:
@@ -61,8 +61,8 @@ With pip:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate            # Windows: .venv\Scripts\Activate.ps1
-pip install -r app/requirements.txt
-python app/main_qt.py
+pip install -e .
+explore-bpx                          # or: python -m explore_bpx
 ```
 
 Then open your own BPX file, dock a set from the reference library, or start
@@ -83,7 +83,7 @@ A fuller design record, restored from the project's history, lives in
   `bpx`'s defaults, including its voltage tolerance `v_tol` (0.001 V), the
   slack `bpx` allows when checking a document's declared voltage limits
   against its electrode potentials. The gateway
-  (`app/core/bpx_gateway.py:validate`) takes `v_tol` as a parameter; the UI
+  (`explore_bpx/core/bpx_gateway.py:validate`) takes `v_tol` as a parameter; the UI
   does not yet expose it.
 - **Completion is distinct from validation.** Validation answers whether the
   data satisfies BPX rules; completion answers whether a document is finished.
@@ -104,14 +104,14 @@ ui_qt  →  state  →  core  →  bpx
 
 | Layer | Responsibility |
 |---|---|
-| `app/ui_qt/` | PySide6 frontend: renders state, collects input, coordinates navigation. |
-| `app/state/` | Frontend-agnostic session state: active document, selection, undo, workspaces. |
-| `app/core/` | BPX integration, document model, validation, editing primitives, commands. |
+| `explore_bpx/ui_qt/` | PySide6 frontend: renders state, collects input, coordinates navigation. |
+| `explore_bpx/state/` | Frontend-agnostic session state: active document, selection, undo, workspaces. |
+| `explore_bpx/core/` | BPX integration, document model, validation, editing primitives, commands. |
 | `bpx` | The official BPX package, pinned as a dependency. |
 
 `core/` and `state/` never import a UI framework, and
-`core/bpx_gateway.py` is the only module in `app/` that imports `bpx` (pinned
-`bpx==1.1.1`). The UI is driven by the schema metadata `bpx` publishes, so
+`core/bpx_gateway.py` is the only module in `explore_bpx/` that imports `bpx`
+(pinned `bpx==1.1.1`). The UI is driven by the schema metadata `bpx` publishes, so
 new parameters in future BPX versions appear automatically. A boundary test
 (`tests/test_boundaries.py`) enforces the layering.
 
@@ -120,9 +120,9 @@ Every mutation travels one command spine (`core/commands.py` →
 included - are previewed, guarded and undoable in exactly the same way.
 
 ```text
-app/        the application: core / state / ui_qt, plus bundled data
-tests/      headless test suite
-scripts/    offline dev tools (reference- and example-library generators)
+explore_bpx/  the application package: core / state / ui_qt, plus bundled data
+tests/        headless test suite
+scripts/      offline dev tools (reference- and example-library generators)
 ```
 
 ## Testing
@@ -151,7 +151,7 @@ not execution.
 
 BSD 3-Clause (see [LICENSE](LICENSE)). The bundled example parameter sets
 carry their own licenses and attributions - see the `NOTICE.md` files under
-`app/data/example_documents/`.
+`explore_bpx/data/example_documents/`.
 
 ## Linting
 
@@ -160,6 +160,6 @@ for a Qt desktop app (see the carve-outs and their reasons in
 `pyproject.toml`). Both commands must come back clean:
 
 ```bash
-uv run ruff check app tests scripts
-uv run ruff format --check app tests scripts
+uv run ruff check explore_bpx tests scripts
+uv run ruff format --check explore_bpx tests scripts
 ```

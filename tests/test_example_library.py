@@ -8,8 +8,8 @@ import json
 
 import pytest
 
-from core import example_library
-from core.bpx_gateway import LoadError
+from explore_bpx.core import example_library
+from explore_bpx.core.bpx_gateway import LoadError
 
 _RUN_NAMES = {"C/20 discharge", "C/2 discharge", "1C discharge", "2C discharge", "Drive cycle"}
 

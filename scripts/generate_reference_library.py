@@ -1,14 +1,14 @@
 """Generate the bundled PyBaMM-derived BPX reference library.
 
 Converts a curated list of PyBaMM's published lithium-ion parameter sets into
-BPX documents under ``app/data/example_documents/pybamm/``, for use as
+BPX documents under ``explore_bpx/data/example_documents/pybamm/``, for use as
 read-only *reference artifacts* (comparison and plotting) inside ExploreBPX.
 This tool implements the following accepted constraints:
 
 * **Offline, dev-time only.** This script imports ``pybamm``; the application
   never does. The app loads the emitted files as ordinary data through
   ``core``. (The ``import bpx`` here is likewise fine: the single-gateway
-  rule scopes to ``app/``, and this tool *is* the validator check.)
+  rule scopes to ``explore_bpx/``, and this tool *is* the validator check.)
 * **Reference artifact, not simulation-grade.** Only the subset of parameters
   with a BPX home is carried over; each emitted Description says so.
 * **DFN-shaped lithium-ion sets only.** MSMR and lead-acid sets do not map.
@@ -64,7 +64,7 @@ import bpx
 import numpy as np
 import pybamm
 
-OUT_DIR = Path(__file__).resolve().parent.parent / "app" / "data" / "example_documents" / "pybamm"
+OUT_DIR = Path(__file__).resolve().parent.parent / "explore_bpx" / "data" / "example_documents" / "pybamm"
 
 #: Emitted BPX standard version (string form; the float form is deprecated).
 BPX_STANDARD_VERSION = "1.1.0"

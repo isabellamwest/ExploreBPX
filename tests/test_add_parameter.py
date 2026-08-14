@@ -25,16 +25,16 @@ pytest.importorskip("PySide6")
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QWidget
 
-from core.parameter_types import ParameterKind
-from core.tree_model import ParameterItem, TreeNode
-from ui_qt import style
-from ui_qt.add_parameter_popup import (
+from explore_bpx.core.parameter_types import ParameterKind
+from explore_bpx.core.tree_model import ParameterItem, TreeNode
+from explore_bpx.ui_qt import style
+from explore_bpx.ui_qt.add_parameter_popup import (
     _OTHER_HEADER,
     _SUGGESTED_HEADER,
     _TAB_LABELS,
     AddParameterPopup,
 )
-from ui_qt.parameter_list import ParameterListPanel
+from explore_bpx.ui_qt.parameter_list import ParameterListPanel
 
 _CELL = ("Parameterisation", "Cell")
 _NEGATIVE_ELECTRODE = ("Parameterisation", "Negative electrode")
@@ -258,7 +258,7 @@ def test_required_colours_only_the_tag_never_the_name(popup, anchor):
     like every other suggested row; only the "Required" tag carries the
     required colour. Recolouring the name would split one group into two
     visual tiers."""
-    from ui_qt import parameter_row
+    from explore_bpx.ui_qt import parameter_row
 
     popup.open_for_section(anchor, "Cell", set(), _CELL, "SPM")
     row = _row_item(popup, "Electrode area [m2]")
@@ -391,8 +391,8 @@ def test_selecting_a_suggestion_emits_its_known_alias(popup, anchor, qtbot):
     ],
 )
 def test_kind_label_uses_verbatim_bpx_vocabulary(path, expected_label):
-    from core.bpx_gateway import field_meta
-    from ui_qt.add_parameter_popup import _kind_label
+    from explore_bpx.core.bpx_gateway import field_meta
+    from explore_bpx.ui_qt.add_parameter_popup import _kind_label
 
     meta = field_meta(path)
     assert meta is not None, f"no live FieldMeta resolved for {path!r}"
@@ -403,8 +403,8 @@ def test_kind_label_omits_hint_when_nothing_is_known():
     """An alias whose FieldMeta collapses to every flag False, no description
     and no examples (the cross-section-ambiguous case) omits the hint rather
     than guessing "FloatInt"."""
-    from core.bpx_gateway import FieldMeta
-    from ui_qt.add_parameter_popup import _kind_label
+    from explore_bpx.core.bpx_gateway import FieldMeta
+    from explore_bpx.ui_qt.add_parameter_popup import _kind_label
 
     meta = FieldMeta(alias="Conductivity [S.m-1]")
     assert _kind_label(meta) is None
@@ -521,7 +521,7 @@ def test_form_key_composition_with_a_unit(popup, anchor, qtbot):
     ],
 )
 def test_form_type_button_picks_the_matching_seed(popup, anchor, qtbot, type_label, expected_seed):
-    from ui_qt.add_parameter_popup import _CUSTOM_TYPE_LABELS
+    from explore_bpx.ui_qt.add_parameter_popup import _CUSTOM_TYPE_LABELS
 
     _expand_form(popup, anchor)
     popup._form_name.setText("My field")
@@ -607,7 +607,7 @@ def test_editing_unit_after_a_collision_also_clears_the_message(popup, anchor, q
 
 
 def test_scalar_warning_shown_only_for_scalar_type(popup, anchor):
-    from ui_qt.add_parameter_popup import _CUSTOM_TYPE_LABELS
+    from explore_bpx.ui_qt.add_parameter_popup import _CUSTOM_TYPE_LABELS
 
     _expand_form(popup, anchor)
     assert popup._form_warning.isVisible() is True  # Scalar is the default type
@@ -684,7 +684,7 @@ def test_focus_lost_signal_removed():
     """The click-away dismissal now goes through the shared
     ``OutsideDismissFilter`` (see test_outside_click_closes_popup below);
     the old focus-out path is dead code and must not linger."""
-    from ui_qt.add_parameter_popup import _PopupInput
+    from explore_bpx.ui_qt.add_parameter_popup import _PopupInput
 
     assert not hasattr(_PopupInput, "focus_lost")
 
@@ -772,7 +772,7 @@ def test_reopening_for_a_new_section_clears_stale_state(popup, anchor):
 
 
 def test_list_scrolls_when_content_exceeds_the_visible_row_cap(popup, anchor):
-    from ui_qt.add_parameter_popup import _MAX_VISIBLE_ROWS
+    from explore_bpx.ui_qt.add_parameter_popup import _MAX_VISIBLE_ROWS
 
     popup.open_for_section(anchor, "Cell", set(), _CELL, "SPM")
     popup._input.setText("a")  # broad match: well over the visible-row cap
@@ -923,8 +923,8 @@ def test_parameter_list_rows_bold_the_name_and_mute_the_unit(panel, valid_spm_di
     unit. Requiredness is deliberately *not* coloured here -- that tint is the
     add-parameter popup's language, for choosing a field the section does not
     have yet, and a row in this list is already present."""
-    from core.tree_model import build_tree
-    from ui_qt import parameter_row, style
+    from explore_bpx.core.tree_model import build_tree
+    from explore_bpx.ui_qt import parameter_row, style
 
     root = build_tree(valid_spm_dict)
     electrode = _find_node(root, _NEGATIVE_ELECTRODE)

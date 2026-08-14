@@ -14,9 +14,9 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from state.reference_snapshot import ReferenceSnapshot
-from ui_qt import style
-from ui_qt.reference_identity import badge_colour, badge_letters, build_pins
+from explore_bpx.state.reference_snapshot import ReferenceSnapshot
+from explore_bpx.ui_qt import style
+from explore_bpx.ui_qt.reference_identity import badge_colour, badge_letters, build_pins
 
 
 def _snapshot(filename: str) -> ReferenceSnapshot:

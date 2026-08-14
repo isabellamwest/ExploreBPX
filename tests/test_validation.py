@@ -5,7 +5,7 @@ Pure Python, no Qt.
 
 from __future__ import annotations
 
-from core.validation import (
+from explore_bpx.core.validation import (
     BPXExceptionDiagnostic,
     PydanticErrorDiagnostic,
     PythonWarningDiagnostic,

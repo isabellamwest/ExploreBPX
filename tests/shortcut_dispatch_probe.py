@@ -25,13 +25,13 @@ from pathlib import Path
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 _ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(_ROOT / "app"))
+sys.path.insert(0, str(_ROOT))
 
 from PySide6.QtGui import QAction, QKeySequence, QShortcut  # noqa: E402
 from PySide6.QtTest import QTest  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
-import ui_qt.main_window as main_window_module  # noqa: E402
+import explore_bpx.ui_qt.main_window as main_window_module  # noqa: E402
 
 # Ctrl+O reaches the real Open dialog, which would block the probe forever.
 main_window_module.QFileDialog.getOpenFileName = staticmethod(lambda *a, **k: ("", ""))

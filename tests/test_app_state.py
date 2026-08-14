@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from core.document import BPXDocument
-from state.app_state import MAX_PINNED_REFERENCES, AppState, PinReferenceOutcome
-from state.document_session import DocumentSession
+from explore_bpx.core.document import BPXDocument
+from explore_bpx.state.app_state import MAX_PINNED_REFERENCES, AppState, PinReferenceOutcome
+from explore_bpx.state.document_session import DocumentSession
 
 
 def _loaded_session(valid_spm_bytes) -> DocumentSession:
@@ -50,7 +50,7 @@ def test_breadcrumb_object_click_clears_parameter(valid_spm_bytes):
 def test_open_captures_the_load_record(spm_workfile):
     """Opening captures the load-time facts once, from the same bytes the
     document was built from -- the record the file-facts group renders."""
-    from core.bpx_gateway import CheckReach
+    from explore_bpx.core.bpx_gateway import CheckReach
 
     state = AppState()
     state.open(spm_workfile)
@@ -75,7 +75,7 @@ def test_reference_snapshot_carries_the_record_shape(spm_workfile):
     Header identity and its own load record."""
     import json
 
-    from state.reference_snapshot import ReferenceSnapshot
+    from explore_bpx.state.reference_snapshot import ReferenceSnapshot
 
     raw = json.loads(spm_workfile.read_text("utf-8"))
     raw["Header"]["Description"] = "Pouch cell"
@@ -120,7 +120,7 @@ def test_apply_value_marks_dirty(valid_spm_bytes):
 
 def test_execute_command_marks_dirty(valid_spm_bytes):
     """Running a command marks the session dirty."""
-    from core.commands import SetValue
+    from explore_bpx.core.commands import SetValue
 
     session = _loaded_session(valid_spm_bytes)
     session.execute_command(SetValue(("Header", "Model"), "DFN"))
@@ -130,7 +130,7 @@ def test_execute_command_marks_dirty(valid_spm_bytes):
 def test_undo_away_from_save_point_marks_dirty(valid_spm_bytes):
     """Undoing PAST the save point is dirty: the document on screen (the
     pre-edit state) is no longer what was saved (the post-edit state)."""
-    from core.commands import SetValue
+    from explore_bpx.core.commands import SetValue
 
     session = _loaded_session(valid_spm_bytes)
     session.execute_command(SetValue(("Header", "Model"), "DFN"))
@@ -144,7 +144,7 @@ def test_undo_back_to_save_point_is_clean(valid_spm_bytes):
     dirty means "differs from disk", never "an edit happened at some point".
     Works by identity -- undo restores the exact document object the
     transition recorded, which is the saved one."""
-    from core.commands import SetValue
+    from explore_bpx.core.commands import SetValue
 
     session = _loaded_session(valid_spm_bytes)
     session.execute_command(SetValue(("Header", "Model"), "DFN"))
@@ -155,7 +155,7 @@ def test_undo_back_to_save_point_is_clean(valid_spm_bytes):
 
 def test_redo_back_to_save_point_is_clean(valid_spm_bytes):
     """Save mid-history, undo past it (dirty), redo back onto it (clean)."""
-    from core.commands import SetValue
+    from explore_bpx.core.commands import SetValue
 
     session = _loaded_session(valid_spm_bytes)
     session.execute_command(SetValue(("Header", "Model"), "DFN"))
@@ -217,7 +217,7 @@ def test_new_document_creates_incomplete_scaffold():
     an empty scaffold; the concrete models (SPM/SPMe/DFN) have required
     fields and validate as incomplete.
     """
-    from core import document_factory
+    from explore_bpx.core import document_factory
 
     for model in document_factory.SUPPORTED_MODELS:
         state = AppState()
@@ -431,8 +431,8 @@ def test_the_undo_stack_stops_growing_at_its_depth(spm_workfile):
     """Each transition pins a whole document, so an uncapped stack grew
     without limit for the length of a session. The cap drops the oldest
     step; everything within reach still undoes exactly as before."""
-    from core.commands import SetValue
-    from state.document_session import UNDO_DEPTH
+    from explore_bpx.core.commands import SetValue
+    from explore_bpx.state.document_session import UNDO_DEPTH
 
     state = AppState()
     state.open(spm_workfile)

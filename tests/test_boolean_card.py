@@ -13,9 +13,9 @@ from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import QApplication
 
-from core.parameter_types import ParameterKind
-from core.tree_model import ParameterItem
-from ui_qt.cards.boolean import BooleanCard
+from explore_bpx.core.parameter_types import ParameterKind
+from explore_bpx.core.tree_model import ParameterItem
+from explore_bpx.ui_qt.cards.boolean import BooleanCard
 
 
 def _app() -> QApplication:

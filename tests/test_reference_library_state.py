@@ -15,9 +15,9 @@ from pathlib import Path
 
 import pytest
 
-from core.reference_library import list_reference_sets
-from state.app_state import AppState, PinReferenceOutcome
-from state.reference_snapshot import ReferenceSnapshot
+from explore_bpx.core.reference_library import list_reference_sets
+from explore_bpx.state.app_state import AppState, PinReferenceOutcome
+from explore_bpx.state.reference_snapshot import ReferenceSnapshot
 
 _CHEN = "pybamm/chen2020"
 _PRADA = "pybamm/prada2013"

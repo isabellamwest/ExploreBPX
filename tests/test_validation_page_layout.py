@@ -43,7 +43,7 @@ def test_strip_counts_wording(qtbot):
     per side -- the direct descendant of the old page-header count-suffix
     helpers, now rendered as three always-visible chips instead of a
     conditional header suffix."""
-    from ui_qt.diagnostics_panel import _FilterColumn
+    from explore_bpx.ui_qt.diagnostics_panel import _FilterColumn
 
     strip = _FilterColumn()
     qtbot.addWidget(strip)
@@ -113,7 +113,7 @@ def test_stream_header_suffix_matches_the_bucket(app_driver, many_issues_path):
 
 
 def test_absent_required_section_header_reads_section_absent(app_driver, tmp_path):
-    from core import document_factory
+    from explore_bpx.core import document_factory
 
     raw = document_factory.create("SPMe", title="probe")
     del raw["Parameterisation"]["Electrolyte"]
@@ -238,7 +238,7 @@ def test_numeric_diagnostic_appends_the_offending_value(app_driver, tmp_path, va
 
 
 def test_issue_rows_carry_the_severity_role_for_the_delegate_icon(app_driver, many_issues_path):
-    from ui_qt import parameter_row
+    from explore_bpx.ui_qt import parameter_row
 
     d = app_driver
     d.open(many_issues_path)
@@ -251,7 +251,7 @@ def test_issue_rows_carry_the_severity_role_for_the_delegate_icon(app_driver, ma
 def test_declare_model_only_header_shows_no_ratio(app_driver, tmp_path):
     """DECLARE_MODEL is not itself a section-shape fact -- its header must
     show no outstanding ratio at all."""
-    from core import document_factory
+    from explore_bpx.core import document_factory
 
     raw = document_factory.create("SPM", title="probe")
     del raw["Header"]["Model"]
@@ -264,7 +264,7 @@ def test_declare_model_only_header_shows_no_ratio(app_driver, tmp_path):
 
 
 def test_optional_subhead_only_when_optional_tasks_exist(app_driver, tmp_path):
-    from core import document_factory
+    from explore_bpx.core import document_factory
 
     raw = document_factory.create("SPM", title="probe")
     d = app_driver
@@ -281,7 +281,7 @@ def test_optional_subhead_only_when_optional_tasks_exist(app_driver, tmp_path):
 
 
 def test_fully_clean_document_shows_the_all_clear_row_and_clear_line(app_driver, valid_spm_path):
-    from ui_qt import style
+    from explore_bpx.ui_qt import style
 
     d = app_driver
     d.open(valid_spm_path)
@@ -300,9 +300,9 @@ def test_partial_and_fully_clear_all_clear_row_shows_the_partial_notice_as_line_
     error/warning/outstanding-free -- line 1 (the plain check + "No
     issues, nothing incomplete") is unchanged, but line 2 becomes the
     Partial notice, and it must not ALSO render as its own separate row."""
-    from core import document_factory
-    from ui_qt import style
-    from ui_qt.diagnostics_panel import _MSG_PARTIAL_NO_TARGET
+    from explore_bpx.core import document_factory
+    from explore_bpx.ui_qt import style
+    from explore_bpx.ui_qt.diagnostics_panel import _MSG_PARTIAL_NO_TARGET
 
     raw = document_factory.create("Partial", title="probe")
     d = app_driver
@@ -360,7 +360,7 @@ def test_clear_row_is_html_based_muted_no_accent_and_compact(app_driver, tmp_pat
     from PySide6.QtCore import QRect
     from PySide6.QtWidgets import QStyleOptionViewItem
 
-    from ui_qt import parameter_row, style
+    from explore_bpx.ui_qt import parameter_row, style
 
     raw = json.loads(json.dumps(valid_spm_dict))
     raw["Parameterisation"]["Cell"]["Volume [m3]"] = None  # 1 optional task -> Cell's own subhead
@@ -401,7 +401,7 @@ def test_clear_row_is_html_based_muted_no_accent_and_compact(app_driver, tmp_pat
 
 
 def test_partial_notice_renders_once_above_the_clear_line_when_nothing_outstanding(app_driver, tmp_path):
-    from core import document_factory
+    from explore_bpx.core import document_factory
 
     raw = document_factory.create("Partial", title="probe")
     raw["Parameterisation"]["Negative electrode"] = {"Thickness [m]": 1e-4}
@@ -411,7 +411,7 @@ def test_partial_notice_renders_once_above_the_clear_line_when_nothing_outstandi
     assert d._w._diagnostics._buckets.outstanding_count == 0
     assert d.diagnostics_all_clear_text() is None  # errors exist -- not all-clear
     assert d.diagnostics_stream_task_texts() == []
-    from ui_qt.diagnostics_panel import _MSG_PARTIAL_NO_TARGET
+    from explore_bpx.ui_qt.diagnostics_panel import _MSG_PARTIAL_NO_TARGET
 
     messages = d._validation_rows("message")
     assert len(messages) == 1
@@ -430,8 +430,8 @@ def test_stream_hugs_the_left_and_the_filter_column_holds_the_right(qtbot):
     offscreen window reads a default geometry, not the resized one."""
     from PySide6.QtWidgets import QApplication
 
-    from ui_qt import style
-    from ui_qt.diagnostics_panel import _COLUMN_WIDTH, DiagnosticsPanel
+    from explore_bpx.ui_qt import style
+    from explore_bpx.ui_qt.diagnostics_panel import _COLUMN_WIDTH, DiagnosticsPanel
 
     wide = style.PAGE_MEASURE + 400
 
@@ -459,7 +459,7 @@ def test_only_issue_and_task_rows_are_interactive():
     """Headers, sub-heads and messages paint flat -- the delegate strips
     hover/selection for every kind outside this set. A highlight promises
     interaction; activating those rows is a structural no-op."""
-    from ui_qt.diagnostics_panel import _DiagnosticsRowDelegate
+    from explore_bpx.ui_qt.diagnostics_panel import _DiagnosticsRowDelegate
 
     assert {"issue", "task"} == _DiagnosticsRowDelegate._INTERACTIVE_KINDS
 
@@ -469,7 +469,7 @@ def test_fold_header_paints_as_a_fixed_height_band(app_driver, many_issues_path)
     overrides sizeHint for them)."""
     from PySide6.QtWidgets import QStyleOptionViewItem
 
-    from ui_qt.diagnostics_panel import _DiagnosticsRowDelegate
+    from explore_bpx.ui_qt.diagnostics_panel import _DiagnosticsRowDelegate
 
     d = app_driver
     d.open(many_issues_path)
@@ -531,7 +531,7 @@ def test_fold_does_not_leak_into_a_new_document(app_driver, monkeypatch):
     d.diagnostics_fold_section("Cell")
     assert ("Cell", True) in d.all_sections_fold_headers()
 
-    from ui_qt import main_window as main_window_module
+    from explore_bpx.ui_qt import main_window as main_window_module
 
     # take the clean path, then accept its replace confirm
     d._w._state.active.dirty = False
@@ -568,7 +568,7 @@ def test_clear_line_fold_state_and_chips_reset_on_a_new_document(app_driver, man
     d.diagnostics_toggle_clear_line()
     assert d.diagnostics_clear_section_texts() != []
 
-    from ui_qt import main_window as main_window_module
+    from explore_bpx.ui_qt import main_window as main_window_module
 
     # accept the clean-document replace confirm New now shows
     monkeypatch.setattr(
@@ -665,7 +665,7 @@ def _bucket(
     optional_tasks=(),
     required_total=0,
 ):
-    from core.page_buckets import SectionBucket
+    from explore_bpx.core.page_buckets import SectionBucket
 
     return SectionBucket(
         path=path,
@@ -681,15 +681,15 @@ def _bucket(
 
 
 def _task(kind, path):
-    from core.completion import CompletionTask
+    from explore_bpx.core.completion import CompletionTask
 
     return CompletionTask(kind=kind, path=path, alias=path[-1], required=True)
 
 
 def test_ratio_words_document_bucket():
-    from core.completion import TaskKind
-    from core.page_buckets import DOCUMENT_BUCKET_PATH
-    from ui_qt.diagnostics_panel import _ratio_words
+    from explore_bpx.core.completion import TaskKind
+    from explore_bpx.core.page_buckets import DOCUMENT_BUCKET_PATH
+    from explore_bpx.ui_qt.diagnostics_panel import _ratio_words
 
     bucket = _bucket(
         path=DOCUMENT_BUCKET_PATH,
@@ -701,15 +701,15 @@ def test_ratio_words_document_bucket():
 
 
 def test_ratio_words_absent_section():
-    from ui_qt.diagnostics_panel import _ratio_words
+    from explore_bpx.ui_qt.diagnostics_panel import _ratio_words
 
     bucket = _bucket(absent=True, required_total=None)
     assert _ratio_words(bucket) == "section absent"
 
 
 def test_ratio_words_plain_ratio():
-    from core.completion import TaskKind
-    from ui_qt.diagnostics_panel import _ratio_words
+    from explore_bpx.core.completion import TaskKind
+    from explore_bpx.ui_qt.diagnostics_panel import _ratio_words
 
     bucket = _bucket(
         required_tasks=(_task(TaskKind.MISSING_FIELD, ("Parameterisation", "Cell", "X")),),
@@ -723,8 +723,8 @@ def test_ratio_words_absent_children_only():
     its own bucket): no leaf fields required, one or more MISSING_SECTION
     children -- reports "N sections absent", never a misleading "0 of 0
     remaining" (the case the confirmed-live bug came from)."""
-    from core.completion import TaskKind
-    from ui_qt.diagnostics_panel import _ratio_words
+    from explore_bpx.core.completion import TaskKind
+    from explore_bpx.ui_qt.diagnostics_panel import _ratio_words
 
     one_child = _bucket(
         path=("State",),
@@ -753,7 +753,7 @@ def _bucket2(**overrides):
     """Like ``_bucket`` but also lets error/warning counts vary -- ``_bucket``
     pins both at 0, which every pre-existing ``_ratio_words`` test wants but
     the fold-header suffix tests need to vary."""
-    from core.page_buckets import SectionBucket
+    from explore_bpx.core.page_buckets import SectionBucket
 
     fields = {
         "path": ("Parameterisation", "Cell"),
@@ -771,7 +771,7 @@ def _bucket2(**overrides):
 
 
 def test_section_header_suffix_error_and_warning_and_ratio():
-    from ui_qt.diagnostics_panel import _section_header_suffix
+    from explore_bpx.ui_qt.diagnostics_panel import _section_header_suffix
 
     assert _section_header_suffix(_bucket2(error_count=1)) == "1 error"
     assert _section_header_suffix(_bucket2(warning_count=3)) == "3 warnings"
@@ -780,8 +780,8 @@ def test_section_header_suffix_error_and_warning_and_ratio():
 
 
 def test_section_header_suffix_includes_the_outstanding_ratio():
-    from core.completion import CompletionTask, TaskKind
-    from ui_qt.diagnostics_panel import _section_header_suffix
+    from explore_bpx.core.completion import CompletionTask, TaskKind
+    from explore_bpx.ui_qt.diagnostics_panel import _section_header_suffix
 
     task = CompletionTask(kind=TaskKind.MISSING_FIELD, path=("Parameterisation", "Cell", "X"), alias="X", required=True)
     bucket = _bucket2(error_count=1, required_tasks=(task,), required_total=5)
@@ -789,8 +789,8 @@ def test_section_header_suffix_includes_the_outstanding_ratio():
 
 
 def test_section_header_suffix_omits_the_ratio_for_declare_model_only():
-    from core.completion import CompletionTask, TaskKind
-    from ui_qt.diagnostics_panel import _section_header_suffix
+    from explore_bpx.core.completion import CompletionTask, TaskKind
+    from explore_bpx.ui_qt.diagnostics_panel import _section_header_suffix
 
     task = CompletionTask(kind=TaskKind.DECLARE_MODEL, path=("Header", "Model"), alias="Model", required=True)
     bucket = _bucket2(path=("Header",), label="Header", required_tasks=(task,), required_total=2)
@@ -798,13 +798,13 @@ def test_section_header_suffix_omits_the_ratio_for_declare_model_only():
 
 
 def test_clear_row_text_present_bucket_with_a_known_total():
-    from ui_qt.diagnostics_panel import _clear_row_text
+    from explore_bpx.ui_qt.diagnostics_panel import _clear_row_text
 
     assert _clear_row_text(_bucket(required_total=5)) == "Cell · 5 of 5 filled"
 
 
 def test_clear_row_text_present_bucket_without_a_ratio():
-    from ui_qt.diagnostics_panel import _clear_row_text
+    from explore_bpx.ui_qt.diagnostics_panel import _clear_row_text
 
     assert _clear_row_text(_bucket(label="Document", required_total=None)) == "Document"
     assert _clear_row_text(_bucket(label="Header", required_total=0)) == "Header"
@@ -817,7 +817,7 @@ def test_clear_row_text_absent_bucket():
     becomes a bucket at all (core.page_buckets._bucket_order's three passes
     only ever introduce an absent bucket via a required-section task) --
     covered directly on the pure function instead."""
-    from ui_qt.diagnostics_panel import _clear_row_text
+    from explore_bpx.ui_qt.diagnostics_panel import _clear_row_text
 
     assert _clear_row_text(_bucket(label="Electrolyte", absent=True, required_total=None)) == (
         "Electrolyte · section absent"
@@ -825,7 +825,7 @@ def test_clear_row_text_absent_bucket():
 
 
 def test_clear_line_text_singular_and_plural():
-    from ui_qt.diagnostics_panel import _clear_line_text
+    from explore_bpx.ui_qt.diagnostics_panel import _clear_line_text
 
     assert _clear_line_text(1, 0) == "1 section clear"
     assert _clear_line_text(2, 0) == "2 sections clear"
@@ -836,7 +836,7 @@ def test_clear_line_never_says_clear_after_an_aborted_run():
     examined and reads "not checked", while a bucket the run did judge keeps
     its earned "clear" -- the line names both counts when they coexist,
     in both directions."""
-    from ui_qt.diagnostics_panel import _clear_line_text
+    from explore_bpx.ui_qt.diagnostics_panel import _clear_line_text
 
     assert _clear_line_text(0, 1) == "1 section not checked"
     assert _clear_line_text(0, 2) == "2 sections not checked"
@@ -854,8 +854,8 @@ def test_task_row_action_text_is_a_separate_right_aligned_role(app_driver):
     """REQUIRED sits inline after the name; the action text is painted
     separately, right-aligned, in accent colour -- not folded into the same
     parenthetical the way it used to render ("Name (REQUIRED . Go to >)")."""
-    from ui_qt import diagnostics_panel as dp
-    from ui_qt import parameter_row
+    from explore_bpx.ui_qt import diagnostics_panel as dp
+    from explore_bpx.ui_qt import parameter_row
 
     d = app_driver
     d._w._new("SPM")
@@ -874,7 +874,7 @@ def test_filter_column_items_are_flat_text_on_one_left_edge(app_driver, many_iss
     items under a category label, so they carry no chip border and all four
     align on the column's single left gutter (the FILTER label included --
     it labels the group, it does not indent it)."""
-    from ui_qt import style
+    from explore_bpx.ui_qt import style
 
     d = app_driver
     d.open(many_issues_path)  # enough sections that "Collapse all" renders at all
@@ -897,7 +897,7 @@ def test_fold_header_glyph_flips_with_collapsed_state(app_driver):
     plain-text half of that against regression -- the delegate's own
     painted chevron is computed from the same collapsed flag, see
     _DiagnosticsRowDelegate._paint_fold_header)."""
-    from ui_qt import diagnostics_panel as dp
+    from explore_bpx.ui_qt import diagnostics_panel as dp
 
     d = app_driver
     d._w._new("SPM")
@@ -915,9 +915,9 @@ def test_fold_header_glyph_flips_with_collapsed_state(app_driver):
 def test_task_row_tooltip_is_task_kind_derived(app_driver):
     """Drift-safe: the tooltip is looked up from the task's own ``kind``
     enum via ``style.task_kind_tooltip`` -- never from its alias/path text."""
-    from core.completion import TaskKind
-    from ui_qt import diagnostics_panel as dp
-    from ui_qt import style
+    from explore_bpx.core.completion import TaskKind
+    from explore_bpx.ui_qt import diagnostics_panel as dp
+    from explore_bpx.ui_qt import style
 
     d = app_driver
     d._w._new("SPM")
@@ -932,7 +932,7 @@ def test_task_row_tooltip_is_task_kind_derived(app_driver):
 def test_strip_chip_tooltips_reflect_counts_and_say_they_filter(app_driver, many_issues_path):
     """Counts stay truthful, and the suffix is the one place the chips
     admit to being click-to-filter toggles -- including the off state."""
-    from ui_qt import style
+    from explore_bpx.ui_qt import style
 
     d = app_driver
     d.open(many_issues_path)
@@ -957,7 +957,7 @@ def test_severity_dots_carry_no_inner_glyph_text_in_the_delegate(app_driver, man
     suite for the equivalent badge pattern."""
     import inspect
 
-    from ui_qt.parameter_row import ParameterRowDelegate
+    from explore_bpx.ui_qt.parameter_row import ParameterRowDelegate
 
     source = inspect.getsource(ParameterRowDelegate._paint_severity_icon)
     assert "drawText" not in source
@@ -970,8 +970,8 @@ def test_task_glyph_is_muted_grey_not_bold(app_driver):
     (#57606a) family as the issue dots -- the shared dot family, rendered
     muted rather than swept into the bold name span the way a text glyph
     is."""
-    from ui_qt import diagnostics_panel as dp
-    from ui_qt import icons, parameter_row, style
+    from explore_bpx.ui_qt import diagnostics_panel as dp
+    from explore_bpx.ui_qt import icons, parameter_row, style
 
     d = app_driver
     d._w._new("SPM")

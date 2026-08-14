@@ -20,7 +20,7 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtWidgets import QApplication, QPushButton
 
-import ui_qt.cards.experiment as experiment_module
+import explore_bpx.ui_qt.cards.experiment as experiment_module
 
 _RUN = ("Validation", "C/20 discharge")
 
@@ -37,7 +37,7 @@ def _no_exec_database_examples_dialog(monkeypatch):
     instead -- the same non-blocking idiom ``test_database_examples_dialog.py``
     uses for the dialog's own tests (see ``AppDriver.open_database_examples_
     dialog_from_toolbar``)."""
-    from ui_qt.cards.database_examples_dialog import DatabaseExamplesDialog
+    from explore_bpx.ui_qt.cards.database_examples_dialog import DatabaseExamplesDialog
 
     monkeypatch.setattr(DatabaseExamplesDialog, "exec", lambda self: None)
 

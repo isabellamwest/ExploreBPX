@@ -17,14 +17,14 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 pytest.importorskip("PySide6")
 
-from core.csv_import import (
+from explore_bpx.core.csv_import import (
     auto_map,
     positional_map,
     read_csv_file,
     read_csv_text,
 )
-from core.parameter_types import ParameterKind
-from core.tree_model import ParameterItem, SiblingSeries
+from explore_bpx.core.parameter_types import ParameterKind
+from explore_bpx.core.tree_model import ParameterItem, SiblingSeries
 
 _TARGETS = ("Time [s]", "Current [A]", "Voltage [V]", "Temperature [K]")
 
@@ -166,7 +166,7 @@ def _qapp():
 
 
 def _dialog(text="time,voltage\n0,4.1\n100,4.0\n", targets=("Time [s]", "Voltage [V]"), **kwargs):
-    from ui_qt.cards.csv_dialog import CsvImportDialog
+    from explore_bpx.ui_qt.cards.csv_dialog import CsvImportDialog
 
     return CsvImportDialog(read_csv_text(text), targets, filename="data.csv", **kwargs)
 
@@ -268,7 +268,7 @@ def test_default_construction_has_no_append_button():
 
 
 def test_dialog_offer_append_records_the_chosen_mode():
-    from ui_qt.cards.paste_dialog import PastePreviewResult
+    from explore_bpx.ui_qt.cards.paste_dialog import PastePreviewResult
 
     dialog = _dialog(offer_append=True)
     assert dialog._import_button.text() == "Replace"
@@ -281,7 +281,7 @@ def test_dialog_offer_append_records_the_chosen_mode():
 
 
 def test_dialog_offer_append_replace_button_also_records_its_mode():
-    from ui_qt.cards.paste_dialog import PastePreviewResult
+    from explore_bpx.ui_qt.cards.paste_dialog import PastePreviewResult
 
     dialog = _dialog(offer_append=True)
     dialog._import_button.click()
@@ -296,7 +296,7 @@ def test_dialog_offer_append_replace_button_also_records_its_mode():
 
 
 def _validation_card():
-    from ui_qt.cards.registry import create_card
+    from explore_bpx.ui_qt.cards.registry import create_card
 
     run = ("Validation", "C/20 discharge")
     param = ParameterItem(
@@ -325,7 +325,7 @@ def test_import_button_is_always_visible_whatever_the_grid_height():
 
 
 def test_apply_csv_import_emits_one_setvalues_own_parameter_first():
-    from core.commands import SetValues
+    from explore_bpx.core.commands import SetValues
 
     card = _validation_card()
     emitted = []
@@ -371,8 +371,8 @@ def test_apply_csv_import_with_nothing_mapped_emits_nothing():
 
 
 def test_bulk_commit_reaches_the_document_and_undoes_as_one_step(qtbot, spm_with_validation_path):
-    from state.app_state import AppState
-    from ui_qt.inspector import InspectorPanel
+    from explore_bpx.state.app_state import AppState
+    from explore_bpx.ui_qt.inspector import InspectorPanel
 
     state = AppState()
     state.open(spm_with_validation_path)

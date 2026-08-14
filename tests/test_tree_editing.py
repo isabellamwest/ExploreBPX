@@ -19,9 +19,9 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtCore import QPoint
 
-from core.document import BPXDocument
-from ui_qt.name_popup import NamePopup
-from ui_qt.tree_panel import TreePanel
+from explore_bpx.core.document import BPXDocument
+from explore_bpx.ui_qt.name_popup import NamePopup
+from explore_bpx.ui_qt.tree_panel import TreePanel
 
 
 @pytest.fixture(autouse=True)

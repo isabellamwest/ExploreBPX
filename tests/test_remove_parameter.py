@@ -19,9 +19,9 @@ pytest.importorskip("PySide6")
 from PySide6.QtCore import QPoint, Qt, QTimer
 from PySide6.QtWidgets import QApplication
 
-from core.parameter_types import ParameterKind
-from core.tree_model import ParameterItem, TreeNode
-from ui_qt.parameter_list import ParameterListPanel
+from explore_bpx.core.parameter_types import ParameterKind
+from explore_bpx.core.tree_model import ParameterItem, TreeNode
+from explore_bpx.ui_qt.parameter_list import ParameterListPanel
 
 _CELL = ("Parameterisation", "Cell")
 

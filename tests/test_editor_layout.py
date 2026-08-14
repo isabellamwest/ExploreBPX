@@ -19,7 +19,7 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtWidgets import QFrame
 
-from ui_qt import style
+from explore_bpx.ui_qt import style
 
 _CELL = ("Parameterisation", "Cell")
 

@@ -18,9 +18,9 @@ jobs:
       - name: Install locked dependencies
         run: uv sync --locked
       - name: Lint
-        run: uv run ruff check app tests scripts
+        run: uv run ruff check explore_bpx tests scripts
       - name: Format check
-        run: uv run ruff format --check app tests scripts
+        run: uv run ruff format --check explore_bpx tests scripts
       - name: Tests (headless)
         run: uv run pytest
         env:

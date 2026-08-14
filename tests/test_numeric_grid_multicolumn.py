@@ -18,8 +18,8 @@ pytest.importorskip("PySide6")
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
-from ui_qt.cards.grid import VISIBLE_ROWS, MultiColumnGrid
-from ui_qt.cards.paste_dialog import PastePreviewResult
+from explore_bpx.ui_qt.cards.grid import VISIBLE_ROWS, MultiColumnGrid
+from explore_bpx.ui_qt.cards.paste_dialog import PastePreviewResult
 
 
 @pytest.fixture(autouse=True)
@@ -468,7 +468,7 @@ def test_paste_targets_the_focused_column(monkeypatch):
     """``paste()`` reads the clipboard and previews into whichever column
     currently holds the current-cell ring -- confirmed via a stubbed dialog
     so the (modal) preview never blocks."""
-    import ui_qt.cards.grid as grid_module
+    import explore_bpx.ui_qt.cards.grid as grid_module
 
     class _StubClipboard:
         def text(self):
@@ -554,7 +554,7 @@ def test_wants_fill_only_once_rows_outrun_the_compact_window():
 
 
 def test_paste_is_a_noop_when_read_only(monkeypatch):
-    import ui_qt.cards.grid as grid_module
+    import explore_bpx.ui_qt.cards.grid as grid_module
 
     class _StubClipboard:
         def text(self):

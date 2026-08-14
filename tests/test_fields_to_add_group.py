@@ -16,9 +16,9 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtCore import Qt
 
-from core.tree_model import TreeNode
-from ui_qt import style
-from ui_qt.parameter_list import ParameterListPanel
+from explore_bpx.core.tree_model import TreeNode
+from explore_bpx.ui_qt import style
+from explore_bpx.ui_qt.parameter_list import ParameterListPanel
 
 _CELL = ("Parameterisation", "Cell")
 
@@ -74,8 +74,8 @@ def _suggestion_items(panel):
 
 
 def test_group_header_renders_after_real_rows_with_correct_count(panel):
-    from core.parameter_types import ParameterKind
-    from core.tree_model import ParameterItem
+    from explore_bpx.core.parameter_types import ParameterKind
+    from explore_bpx.core.tree_model import ParameterItem
 
     real = [
         ParameterItem(label=alias, path=_CELL + (alias,), kind=ParameterKind.SCALAR)
@@ -94,8 +94,8 @@ def test_group_is_suppressed_for_a_validation_run_node(panel):
     ones as typable columns, Temperature behind its own "+"), so the run
     node gets no "fields to add" group: its "+ Time [s]" suggestion used to
     write [] while the card looked identical before and after."""
-    from core.parameter_types import ParameterKind
-    from core.tree_model import ParameterItem
+    from explore_bpx.core.parameter_types import ParameterKind
+    from explore_bpx.core.tree_model import ParameterItem
 
     run_path = ("Validation", "My run")
     real = [ParameterItem(label="Time [s]", path=run_path + ("Time [s]",), kind=ParameterKind.SERIES)]
@@ -229,7 +229,7 @@ def test_required_tag_present_under_concrete_model(panel):
     row = next(
         item for item in _suggestion_items(panel) if item.data(panel._GROUP_ROW_ALIAS_ROLE) == "Electrode area [m2]"
     )
-    from ui_qt import parameter_row
+    from explore_bpx.ui_qt import parameter_row
 
     html = row.data(parameter_row.HTML_ROLE)
     assert "Required" in html
@@ -239,7 +239,7 @@ def test_required_tag_present_under_concrete_model(panel):
 def test_required_tag_absent_under_partial(panel):
     panel.show_node(_section_node(value={}), model="Partial")
     panel._list.itemClicked.emit(_group_header(panel))
-    from ui_qt import parameter_row
+    from explore_bpx.ui_qt import parameter_row
 
     for row in _suggestion_items(panel):
         html = row.data(parameter_row.HTML_ROLE)
@@ -370,7 +370,7 @@ def test_add_two_suggestions_in_a_row_keeps_group_expanded_end_to_end(app_driver
 def test_fields_to_add_group_absent_for_undeclared_model_end_to_end(app_driver, tmp_path):
     import json
 
-    from core import document_factory
+    from explore_bpx.core import document_factory
 
     raw = document_factory.create("SPM", title="probe")
     del raw["Header"]["Model"]
@@ -387,7 +387,7 @@ def test_fields_to_add_group_absent_for_undeclared_model_end_to_end(app_driver, 
 def test_fields_to_add_group_present_with_no_required_tags_under_partial_end_to_end(app_driver, tmp_path):
     import json
 
-    from core import document_factory
+    from explore_bpx.core import document_factory
 
     raw = document_factory.create("Partial", title="probe")
     # The Partial skeleton scaffolds no sections at all (Parameterisation is

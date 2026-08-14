@@ -15,14 +15,14 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtCore import Qt
 
-from core import completion, page_buckets
-from core.document import BPXDocument
-from core.parameter_types import ParameterKind
-from core.tree_model import ParameterItem
-from core.validation import PydanticErrorDiagnostic
-from ui_qt import diagnostics_panel as vp
-from ui_qt.diagnostics_panel import DiagnosticsPanel
-from ui_qt.issues_view import IssuesView
+from explore_bpx.core import completion, page_buckets
+from explore_bpx.core.document import BPXDocument
+from explore_bpx.core.parameter_types import ParameterKind
+from explore_bpx.core.tree_model import ParameterItem
+from explore_bpx.core.validation import PydanticErrorDiagnostic
+from explore_bpx.ui_qt import diagnostics_panel as vp
+from explore_bpx.ui_qt.diagnostics_panel import DiagnosticsPanel
+from explore_bpx.ui_qt.issues_view import IssuesView
 
 
 @pytest.fixture
@@ -124,8 +124,8 @@ def test_validation_panel_issue_row_tooltips_match_their_severity_role(validatio
     severity ("error"/"warning") already stashed on the row for the dot
     icon, via ``style.severity_tooltip`` -- never from the row's own
     verbatim validator message."""
-    from core.validation import Severity
-    from ui_qt import parameter_row, style
+    from explore_bpx.core.validation import Severity
+    from explore_bpx.ui_qt import parameter_row, style
 
     rows = _issue_rows(validation_panel)
     assert rows  # fixture premise
@@ -139,8 +139,8 @@ def test_issues_view_row_tooltip_is_severity_derived_not_message_derived(issues_
     tooltip were message-derived it would show something unrelated to the
     pinned, generic sentence. It must show the fixed Severity.ERROR text
     regardless."""
-    from core.validation import Severity
-    from ui_qt import style
+    from explore_bpx.core.validation import Severity
+    from explore_bpx.ui_qt import style
 
     item = issues_view._list.item(0)
     assert item.toolTip() == style.severity_tooltip(Severity.ERROR)
@@ -159,7 +159,7 @@ def test_issues_view_row_tooltip_is_severity_derived_not_message_derived(issues_
 def activating_list(qtbot):
     from PySide6.QtWidgets import QListWidgetItem
 
-    from ui_qt.activating_list import ActivatingList
+    from explore_bpx.ui_qt.activating_list import ActivatingList
 
     widget = ActivatingList()
     qtbot.addWidget(widget)
@@ -207,7 +207,7 @@ def test_a_modified_return_is_handed_to_the_base_class(qtbot, activating_list):
     the override passes it down instead of swallowing it."""
     from PySide6.QtWidgets import QListWidgetItem
 
-    from ui_qt.activating_list import ActivatingList
+    from explore_bpx.ui_qt.activating_list import ActivatingList
 
     reached = []
 
@@ -227,7 +227,7 @@ def test_a_modified_return_is_handed_to_the_base_class(qtbot, activating_list):
 
 
 def test_return_on_an_empty_list_does_nothing(qtbot):
-    from ui_qt.activating_list import ActivatingList
+    from explore_bpx.ui_qt.activating_list import ActivatingList
 
     widget = ActivatingList()
     qtbot.addWidget(widget)

@@ -16,7 +16,7 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtWidgets import QApplication
 
-from ui_qt import icons
+from explore_bpx.ui_qt import icons
 
 _ICON_SIZE = 24
 

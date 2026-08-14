@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from core import bpx_gateway
-from core.bpx_gateway import FieldMeta
-from core.parameter_types import ParameterKind, classify, extract_unit, looks_like_table
+from explore_bpx.core import bpx_gateway
+from explore_bpx.core.bpx_gateway import FieldMeta
+from explore_bpx.core.parameter_types import ParameterKind, classify, extract_unit, looks_like_table
 
 
 def test_classify_scalar_float():

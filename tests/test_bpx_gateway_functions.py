@@ -10,8 +10,8 @@ from __future__ import annotations
 import bpx
 import pytest
 
-from core import bpx_gateway
-from core.bpx_gateway import FunctionSamples
+from explore_bpx.core import bpx_gateway
+from explore_bpx.core.bpx_gateway import FunctionSamples
 
 
 def test_sample_function_evaluates_exp_and_tanh_over_the_default_count():

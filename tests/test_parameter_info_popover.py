@@ -18,12 +18,12 @@ pytest.importorskip("PySide6")
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
-from core.bpx_gateway import FieldMeta
-from core.parameter_metadata import ParameterMetadata
-from core.parameter_types import ParameterKind
-from core.tree_model import ParameterItem
-from ui_qt.cards.parameter_card import ParameterCard
-from ui_qt.parameter_info_popover import ParameterInfoPopover
+from explore_bpx.core.bpx_gateway import FieldMeta
+from explore_bpx.core.parameter_metadata import ParameterMetadata
+from explore_bpx.core.parameter_types import ParameterKind
+from explore_bpx.core.tree_model import ParameterItem
+from explore_bpx.ui_qt.cards.parameter_card import ParameterCard
+from explore_bpx.ui_qt.parameter_info_popover import ParameterInfoPopover
 
 
 def _app() -> QApplication:

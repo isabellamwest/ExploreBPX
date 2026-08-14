@@ -17,7 +17,7 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-import ui_qt.main_window as main_window_module
+import explore_bpx.ui_qt.main_window as main_window_module
 
 
 def test_no_document_shows_placeholder_and_disables_actions(app_driver):

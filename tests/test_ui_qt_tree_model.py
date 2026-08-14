@@ -12,11 +12,11 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtCore import Qt
 
-from core.parameter_types import ParameterKind
-from core.tree_model import ParameterItem, TreeNode
-from core.validation import PydanticErrorDiagnostic
-from ui_qt.parameter_row import SEVERITY_ROLE
-from ui_qt.tree_model import BpxTreeModel
+from explore_bpx.core.parameter_types import ParameterKind
+from explore_bpx.core.tree_model import ParameterItem, TreeNode
+from explore_bpx.core.validation import PydanticErrorDiagnostic
+from explore_bpx.ui_qt.parameter_row import SEVERITY_ROLE
+from explore_bpx.ui_qt.tree_model import BpxTreeModel
 
 
 def _error(path: tuple[str, ...]) -> PydanticErrorDiagnostic:

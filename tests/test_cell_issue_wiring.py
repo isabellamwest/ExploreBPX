@@ -21,12 +21,12 @@ pytest.importorskip("PySide6")
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
-from core.parameter_types import ParameterKind
-from core.tree_model import ParameterItem
-from state.app_state import AppState
-from ui_qt.cards.function import FunctionCard
-from ui_qt.cards.registry import create_card
-from ui_qt.inspector import InspectorPanel
+from explore_bpx.core.parameter_types import ParameterKind
+from explore_bpx.core.tree_model import ParameterItem
+from explore_bpx.state.app_state import AppState
+from explore_bpx.ui_qt.cards.function import FunctionCard
+from explore_bpx.ui_qt.cards.registry import create_card
+from explore_bpx.ui_qt.inspector import InspectorPanel
 
 _TIME = ("Validation", "C/20 discharge", "Time [s]")
 _DIFFUSIVITY = ("Parameterisation", "Negative electrode", "Diffusivity [m2.s-1]")

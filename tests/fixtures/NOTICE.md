@@ -8,4 +8,4 @@ the original attribution in its `Header.Description`:
 - `nmc_pouch_cell_BPX.json`
 
 For the full source, license text and modification details, see
-[`app/data/example_documents/about_energy/NOTICE.md`](../../app/data/example_documents/about_energy/NOTICE.md).
+[`explore_bpx/data/example_documents/about_energy/NOTICE.md`](../../explore_bpx/data/example_documents/about_energy/NOTICE.md).

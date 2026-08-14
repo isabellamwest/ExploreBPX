@@ -36,7 +36,7 @@ from __future__ import annotations
 import bpx
 import pytest
 
-from core import bpx_gateway
+from explore_bpx.core import bpx_gateway
 
 # ---------------------------------------------------------------------------
 # Independent structural traversal.

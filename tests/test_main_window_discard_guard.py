@@ -24,7 +24,7 @@ from PySide6.QtWidgets import QMessageBox
 
 pytest.importorskip("PySide6")
 
-import ui_qt.main_window as main_window_module
+import explore_bpx.ui_qt.main_window as main_window_module
 
 _CAPACITY = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
 

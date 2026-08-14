@@ -14,9 +14,9 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from core.bpx_gateway import BPX_VERSION, CheckReach
-from core.load_record import LoadRecord
-from ui_qt.file_facts import FileFact, file_facts
+from explore_bpx.core.bpx_gateway import BPX_VERSION, CheckReach
+from explore_bpx.core.load_record import LoadRecord
+from explore_bpx.ui_qt.file_facts import FileFact, file_facts
 
 
 def _record(*, is_legacy: bool = False, has_yaml_comments: bool = False, fmt: str = "json") -> LoadRecord:

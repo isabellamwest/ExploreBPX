@@ -15,9 +15,9 @@ from pathlib import Path
 
 import pytest
 
-from ui_qt import typography
+from explore_bpx.ui_qt import typography
 
-UI_QT = Path(__file__).resolve().parents[1] / "app" / "ui_qt"
+UI_QT = Path(__file__).resolve().parents[1] / "explore_bpx" / "ui_qt"
 #: The one module allowed to spell a font literal.
 HOME = "typography.py"
 
@@ -77,7 +77,7 @@ def test_stylesheet_substitutes_every_placeholder():
     silently ignored by Qt, leaving that widget at whatever it inherited."""
     from string import Template
 
-    from ui_qt import style
+    from explore_bpx.ui_qt import style
 
     assert "${" not in style.STYLESHEET
     template = Template(style._STYLESHEET_TEMPLATE)

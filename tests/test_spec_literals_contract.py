@@ -21,7 +21,7 @@ from __future__ import annotations
 import bpx
 import pytest
 
-from core import bpx_gateway, completion, document_factory, structure
+from explore_bpx.core import bpx_gateway, completion, document_factory, structure
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -126,7 +126,7 @@ def test_B5_experiment_aliases_and_their_required_split(defs):
     assumption that exactly ONE column is optional -- its '+' affordance is
     built for a single addable column, so a second optional column must
     arrive as a loud design decision, not a quiet extra button."""
-    from ui_qt.cards import database_examples_dialog, experiment
+    from explore_bpx.ui_qt.cards import database_examples_dialog, experiment
 
     experiment_def = defs["Experiment"]
     aliases = tuple(experiment_def["properties"])
@@ -168,7 +168,7 @@ def test_B8_model_descriptors_cover_exactly_the_model_enum(model_enum):
     name for the New-document board; pin its key set to the schema's own
     model enum so a new upstream model (silently rendered with no
     description, per the dict's own comment) fails loudly here instead."""
-    from ui_qt.workspace_panel import _MODEL_DESCRIPTORS
+    from explore_bpx.ui_qt.workspace_panel import _MODEL_DESCRIPTORS
 
     assert set(_MODEL_DESCRIPTORS) == set(model_enum)
 

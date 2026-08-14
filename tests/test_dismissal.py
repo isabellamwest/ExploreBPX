@@ -22,7 +22,7 @@ from PySide6.QtCore import QEvent, QPointF, Qt
 from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import QApplication, QPushButton, QWidget
 
-from ui_qt.dismissal import OutsideDismissFilter
+from explore_bpx.ui_qt.dismissal import OutsideDismissFilter
 
 
 def _app() -> QApplication:

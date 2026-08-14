@@ -19,13 +19,13 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtWidgets import QApplication, QPushButton
 
-from core.example_library import ExampleRun, list_example_runs, load_reference_document
-from ui_qt.cards import database_examples_dialog as dialog_module
-from ui_qt.cards.database_examples_dialog import (
+from explore_bpx.core.example_library import ExampleRun, list_example_runs, load_reference_document
+from explore_bpx.ui_qt.cards import database_examples_dialog as dialog_module
+from explore_bpx.ui_qt.cards.database_examples_dialog import (
     MAX_REFERENCE_RUNS,
     DatabaseExamplesDialog,
 )
-from ui_qt.style import ACCENT
+from explore_bpx.ui_qt.style import ACCENT
 
 _OWN_RUN = {
     "Time [s]": [0, 1, 2],
@@ -696,7 +696,7 @@ def test_opened_file_group_carries_the_opened_file_caption(tmp_path):
 def test_rail_foot_states_sample_provenance_with_the_full_statement_on_hover():
     from PySide6.QtWidgets import QLabel
 
-    from core.example_library import PROVENANCE, SOURCE_URL
+    from explore_bpx.core.example_library import PROVENANCE, SOURCE_URL
 
     dialog = DatabaseExamplesDialog()
     rail = _rail_widget(dialog)

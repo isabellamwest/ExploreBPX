@@ -8,7 +8,7 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtWidgets import QWidget
 
-from ui_qt.toast import DISMISS_DELAY_MS, Toast
+from explore_bpx.ui_qt.toast import DISMISS_DELAY_MS, Toast
 
 
 def test_toast_starts_hidden(qtbot):

@@ -7,7 +7,7 @@ import math
 
 import yaml
 
-from core import export
+from explore_bpx.core import export
 
 
 def test_json_roundtrip_is_lossless(valid_spm_dict):

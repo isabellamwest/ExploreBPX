@@ -6,8 +6,8 @@ import copy
 
 import pytest
 
-from core import editing
-from core.document import BPXDocument
+from explore_bpx.core import editing
+from explore_bpx.core.document import BPXDocument
 
 
 def test_set_value_returns_new_dict_and_leaves_input_untouched(valid_spm_dict):

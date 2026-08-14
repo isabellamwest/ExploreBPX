@@ -4,8 +4,8 @@ no on-disk identity never rewrite the workspace they were started from."""
 
 from __future__ import annotations
 
-from state.app_state import AppState
-from state.workspace_history import ReferenceRecord, WorkspaceHistory
+from explore_bpx.state.app_state import AppState
+from explore_bpx.state.workspace_history import ReferenceRecord, WorkspaceHistory
 
 CHEN2020 = "pybamm/chen2020"
 

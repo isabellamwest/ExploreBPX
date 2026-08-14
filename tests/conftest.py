@@ -1,7 +1,7 @@
 """Shared pytest fixtures and import path setup.
 
-Adds the ``app`` directory to ``sys.path`` so the project packages import the
-same way they do when the application is launched from the repository root.
+Adds the repository root to ``sys.path`` so ``explore_bpx`` imports without
+requiring an installed copy of the package.
 """
 
 from __future__ import annotations
@@ -16,11 +16,10 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-APP_DIR = REPO_ROOT / "app"
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
-if str(APP_DIR) not in sys.path:
-    sys.path.insert(0, str(APP_DIR))
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 
 @pytest.fixture
@@ -97,7 +96,7 @@ def nmc_pouch_cell_path() -> Path:
     """A real bundled About:Energy example file (DFN): valid, but with 3
     warning-severity diagnostics -- used to pin ``ReferenceSnapshot``'s
     load path against a genuine, non-fixture-authored document."""
-    return APP_DIR / "data" / "example_documents" / "about_energy" / "nmc_pouch_cell.json"
+    return REPO_ROOT / "explore_bpx" / "data" / "example_documents" / "about_energy" / "nmc_pouch_cell.json"
 
 
 @pytest.fixture
@@ -148,7 +147,7 @@ def main_window(qtbot):
     from PySide6.QtCore import QEvent
     from PySide6.QtWidgets import QApplication
 
-    from ui_qt.main_window import MainWindow
+    from explore_bpx.ui_qt.main_window import MainWindow
 
     window = MainWindow()
     # qtbot closes registered widgets from its *plugin* teardown hook, which

@@ -1,7 +1,7 @@
 """Build the bundled About:Energy example library.
 
 Downloads pinned upstream sources and regenerates
-``app/data/example_documents/about_energy/``:
+``explore_bpx/data/example_documents/about_energy/``:
 
 * ``nmc_pouch_cell.json`` -- base document is the BPX-1.0-migrated NMC pouch
   cell file published in the pybamm-data v1.0.2 release; its ``Validation``
@@ -72,7 +72,7 @@ PROVENANCE_NOTE = (
     "Validation runs rebuilt from About:Energy full-resolution validation data (downsampled), see NOTICE.md."
 )
 
-OUT_DIR = Path(__file__).resolve().parents[1] / "app" / "data" / "example_documents" / "about_energy"
+OUT_DIR = Path(__file__).resolve().parents[1] / "explore_bpx" / "data" / "example_documents" / "about_energy"
 
 
 # --- Helpers ----------------------------------------------------------------

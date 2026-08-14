@@ -15,9 +15,9 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-import ui_qt.main_window as main_window_module
-from ui_qt import style
-from ui_qt.source_page import SourcePage
+import explore_bpx.ui_qt.main_window as main_window_module
+from explore_bpx.ui_qt import style
+from explore_bpx.ui_qt.source_page import SourcePage
 
 _DOC = {
     "Header": {"BPX": "1.0.0", "Title": "Test cell", "Model": "SPM"},

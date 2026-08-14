@@ -18,9 +18,9 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtWidgets import QApplication
 
-import ui_qt.cards.grid as grid_module
-from ui_qt.cards.grid import VISIBLE_ROWS, NumericGrid
-from ui_qt.cards.paste_dialog import PastePreviewResult
+import explore_bpx.ui_qt.cards.grid as grid_module
+from explore_bpx.ui_qt.cards.grid import VISIBLE_ROWS, NumericGrid
+from explore_bpx.ui_qt.cards.paste_dialog import PastePreviewResult
 
 
 @pytest.fixture(autouse=True)

@@ -11,7 +11,7 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtWidgets import QApplication
 
-from ui_qt.cards.multi_series_chart import MultiSeriesChart
+from explore_bpx.ui_qt.cards.multi_series_chart import MultiSeriesChart
 
 
 @pytest.fixture(autouse=True)
@@ -59,7 +59,7 @@ def test_y_axis_tick_count_matches_the_shared_constant():
     the app's two chart widgets (chart_axes.Y_AXIS_TICK_COUNT) -- this
     widget's own 180px height wasn't observed to elide, but both share one
     fit_axis call so neither drifts from the other."""
-    from ui_qt.cards.chart_axes import Y_AXIS_TICK_COUNT
+    from explore_bpx.ui_qt.cards.chart_axes import Y_AXIS_TICK_COUNT
 
     chart = MultiSeriesChart(height=180)
     if not chart.available:

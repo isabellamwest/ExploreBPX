@@ -17,11 +17,11 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtWidgets import QApplication, QComboBox, QLineEdit, QSpinBox
 
-from core.bpx_gateway import FieldMeta
-from core.parameter_types import ParameterKind, classify
-from core.tree_model import ParameterItem
-from core.values import values_equal
-from ui_qt.cards.registry import create_card
+from explore_bpx.core.bpx_gateway import FieldMeta
+from explore_bpx.core.parameter_types import ParameterKind, classify
+from explore_bpx.core.tree_model import ParameterItem
+from explore_bpx.core.values import values_equal
+from explore_bpx.ui_qt.cards.registry import create_card
 
 
 def _app() -> QApplication:
@@ -458,7 +458,7 @@ def test_no_parameter_kind_falls_back_to_the_read_only_card():
     it gained an editor -- add the editor rather than relaxing the test.
     """
     _app()
-    from ui_qt.cards.unknown import ReadOnlyCard
+    from explore_bpx.ui_qt.cards.unknown import ReadOnlyCard
 
     for kind in ParameterKind:
         if kind is ParameterKind.SECTION:

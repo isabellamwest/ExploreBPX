@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.document import BPXDocument
+from explore_bpx.core.document import BPXDocument
 
 
 def test_valid_document(valid_spm_bytes):
@@ -36,7 +36,7 @@ def test_document_mirrors_validation_reach(valid_spm_dict):
     import copy
     import json
 
-    from core.bpx_gateway import CheckReach
+    from explore_bpx.core.bpx_gateway import CheckReach
 
     complete = BPXDocument.from_raw(valid_spm_dict, filename="a.json", fmt="json")
     assert complete.validation_reach is CheckReach.COMPLETE

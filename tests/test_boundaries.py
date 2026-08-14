@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-APP_DIR = Path(__file__).resolve().parents[1] / "app"
+APP_DIR = Path(__file__).resolve().parents[1] / "explore_bpx"
 
 # Known UI-framework packages that must never appear in the frontend-agnostic
 # layers.  Extend this list if additional frameworks are ever evaluated.
@@ -43,22 +43,30 @@ def test_core_and_state_have_no_ui_framework_imports():
     assert not offenders, f"UI-framework import found in frontend-agnostic layer: {offenders}"
 
 
+def _imports_of(layer: str) -> tuple[str, ...]:
+    """Every spelling that imports ``explore_bpx.<layer>``."""
+    return (
+        f"import explore_bpx.{layer}",
+        f"from explore_bpx.{layer}",
+        f"from explore_bpx import {layer}",
+    )
+
+
 def test_core_does_not_import_frontend_or_state():
     offenders = []
     for path in _python_files("core"):
         text = path.read_text("utf-8")
-        if "import ui_qt" in text or "from ui_qt" in text:
-            offenders.append((path.name, "ui_qt"))
-        if "import state" in text or "from state" in text:
-            offenders.append((path.name, "state"))
+        offenders.extend(
+            (path.name, layer) for layer in ("ui_qt", "state") if any(pattern in text for pattern in _imports_of(layer))
+        )
     assert not offenders, f"core must not depend on ui_qt/state: {offenders}"
 
 
 def test_dialog_filters_derive_from_the_loader_s_own_extension_list():
     """One source of truth: a dialog can never offer a format the loader
     does not read, or hide one it does."""
-    from core.bpx_gateway import SUPPORTED_EXTENSIONS
-    from ui_qt.file_filters import BPX_FILTER, BPX_FILTER_WITH_ALL, export_filter
+    from explore_bpx.core.bpx_gateway import SUPPORTED_EXTENSIONS
+    from explore_bpx.ui_qt.file_filters import BPX_FILTER, BPX_FILTER_WITH_ALL, export_filter
 
     for extension in SUPPORTED_EXTENSIONS:
         assert f"*{extension}" in BPX_FILTER
@@ -72,7 +80,7 @@ def test_no_module_spells_the_bpx_extension_list_out_by_hand():
     ``ui_qt/file_filters.py`` exists to prevent coming back."""
     import pathlib
 
-    root = pathlib.Path(__file__).resolve().parent.parent / "app"
+    root = pathlib.Path(__file__).resolve().parent.parent / "explore_bpx"
     offenders = [
         path.relative_to(root).as_posix()
         for path in root.rglob("*.py")

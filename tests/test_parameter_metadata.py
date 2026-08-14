@@ -9,8 +9,8 @@ descriptions in different sections.
 
 from __future__ import annotations
 
-from core.bpx_gateway import FieldMeta
-from core.parameter_metadata import ParameterMetadata, resolve_parameter_metadata
+from explore_bpx.core.bpx_gateway import FieldMeta
+from explore_bpx.core.parameter_metadata import ParameterMetadata, resolve_parameter_metadata
 
 
 def _path(alias: str, *sections: str) -> tuple[str, ...]:

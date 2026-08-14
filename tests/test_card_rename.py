@@ -14,7 +14,7 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from ui_qt import style
+from explore_bpx.ui_qt import style
 
 _CELL = ("Parameterisation", "Cell")
 _USER_DEFINED = ("Parameterisation", "User-defined")

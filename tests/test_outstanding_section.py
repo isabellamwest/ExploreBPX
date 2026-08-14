@@ -21,8 +21,8 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from core import document_factory
-from core.completion import TaskKind
+from explore_bpx.core import document_factory
+from explore_bpx.core.completion import TaskKind
 
 _CELL = ("Parameterisation", "Cell")
 _CAPACITY = _CELL + ("Nominal cell capacity [A.h]",)
@@ -206,7 +206,7 @@ def test_state3b_partial_null_is_outstanding_not_error(app_driver, tmp_path, val
 
 
 def test_state4_done(app_driver, valid_spm_path):
-    from ui_qt import style
+    from explore_bpx.ui_qt import style
 
     d = app_driver
     d.open(valid_spm_path)

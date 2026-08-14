@@ -80,7 +80,7 @@ class AppDriver:
         legacy-open prompt with "Open as-is, read-only". The prompt seam is
         stubbed for this one call (the ``_ask_open_intent`` monkeypatch
         convention)."""
-        from ui_qt.main_window import LegacyIntent
+        from explore_bpx.ui_qt.main_window import LegacyIntent
 
         self._w._ask_legacy_intent = lambda *args: LegacyIntent.AS_IS_READ_ONLY
         try:
@@ -179,7 +179,7 @@ class AppDriver:
     def activate_outstanding_task(self, task) -> AppDriver:
         """Activate the Outstanding row for *task* (a ``CompletionTask``, as
         returned by :meth:`outstanding_tasks`) in the stream."""
-        from ui_qt import diagnostics_panel as dp
+        from explore_bpx.ui_qt import diagnostics_panel as dp
 
         for item in self._validation_rows("task"):
             if item.data(dp._TASK_ROLE) == task:
@@ -190,14 +190,14 @@ class AppDriver:
     def outstanding_tasks(self) -> list:
         """Every ``CompletionTask`` currently rendered as a task row in the
         stream, in on-screen order."""
-        from ui_qt import diagnostics_panel as dp
+        from explore_bpx.ui_qt import diagnostics_panel as dp
 
         return [item.data(dp._TASK_ROLE) for item in self._validation_rows("task")]
 
     def outstanding_task_row_text(self, task) -> str:
         """Plain text of the task row for *task* -- includes any absorbed
         validator messages appended as secondary text."""
-        from ui_qt import diagnostics_panel as dp
+        from explore_bpx.ui_qt import diagnostics_panel as dp
 
         for item in self._validation_rows("task"):
             if item.data(dp._TASK_ROLE) == task:
@@ -219,7 +219,7 @@ class AppDriver:
         contract), up to (not including) the next such row (a required
         group's stated N must equal this count exactly, never an optional
         row sitting in between)."""
-        from ui_qt import diagnostics_panel as dp
+        from explore_bpx.ui_qt import diagnostics_panel as dp
 
         lst = self._w._diagnostics._stream._list
         start = None
@@ -259,7 +259,7 @@ class AppDriver:
         """``(section_label, collapsed)`` for every rendered SECTION bucket's
         fold header, in display order -- the file-facts group is not a
         section and is excluded, matching this method's own name."""
-        from ui_qt import diagnostics_panel as dp
+        from explore_bpx.ui_qt import diagnostics_panel as dp
 
         return [
             (item.data(dp._FOLD_BUCKET_ROLE).label, bool(item.data(dp._FOLD_COLLAPSED_ROLE)))
@@ -270,7 +270,7 @@ class AppDriver:
     def diagnostics_fold_section(self, label: str) -> AppDriver:
         """Fold/unfold the named bucket in the stream, as a single click on
         its header does."""
-        from ui_qt import diagnostics_panel as dp
+        from explore_bpx.ui_qt import diagnostics_panel as dp
 
         for item in self._validation_rows("fold_header"):
             if item.data(dp._FOLD_BUCKET_ROLE).label == label:
@@ -286,12 +286,12 @@ class AppDriver:
         """The painted HTML of every issue row in the stream, in order --
         lets a test assert the two-line location/message split without
         pixel-reading."""
-        from ui_qt import parameter_row
+        from explore_bpx.ui_qt import parameter_row
 
         return [item.data(parameter_row.HTML_ROLE) for item in self._validation_rows("issue")]
 
     def _validation_rows(self, kind: str) -> list:
-        from ui_qt import diagnostics_panel as dp
+        from explore_bpx.ui_qt import diagnostics_panel as dp
 
         lst = self._w._diagnostics._stream._list
         return [lst.item(i) for i in range(lst.count()) if lst.item(i).data(dp._KIND_ROLE) == kind]
@@ -340,7 +340,7 @@ class AppDriver:
         only -- the file-facts group excluded -- for assertions about
         section-bucket rendering that are unaffected by whether a document
         also happens to carry a file fact."""
-        from ui_qt import diagnostics_panel as dp
+        from explore_bpx.ui_qt import diagnostics_panel as dp
 
         return [
             _strip_chevron(item.text())
@@ -362,7 +362,7 @@ class AppDriver:
         stripped, e.g. "nmc_pouch_cell_BPX.json  1 note" -- or ``None``
         while the group isn't rendered at all (no fact for the open
         document)."""
-        from ui_qt import diagnostics_panel as dp
+        from explore_bpx.ui_qt import diagnostics_panel as dp
 
         for item in self._validation_rows("fold_header"):
             if item.data(dp._FOLD_BUCKET_ROLE).path == dp._FILE_FACTS_PATH:
@@ -396,7 +396,7 @@ class AppDriver:
         return self
 
     def _diagnostics_clear_summary_item(self):
-        from ui_qt import diagnostics_panel as dp
+        from explore_bpx.ui_qt import diagnostics_panel as dp
 
         lst = self._w._diagnostics._stream._list
         for i in range(lst.count()):
@@ -408,7 +408,7 @@ class AppDriver:
     def diagnostics_clear_section_texts(self) -> list[str]:
         """Text of every expanded clear-line row, in order -- empty unless
         the clear line is currently expanded."""
-        from ui_qt import diagnostics_panel as dp
+        from explore_bpx.ui_qt import diagnostics_panel as dp
 
         lst = self._w._diagnostics._stream._list
         return [lst.item(i).text() for i in range(lst.count()) if lst.item(i).data(dp._KIND_ROLE) == "clear_row"]
@@ -416,7 +416,7 @@ class AppDriver:
     def diagnostics_all_clear_text(self) -> str | None:
         """The pinned all-clear row's plain text (both lines, "\\n"
         joined), or ``None`` while it isn't rendered."""
-        from ui_qt import diagnostics_panel as dp
+        from explore_bpx.ui_qt import diagnostics_panel as dp
 
         lst = self._w._diagnostics._stream._list
         for i in range(lst.count()):
@@ -1056,7 +1056,7 @@ class AppDriver:
 
     def reference_row_badges(self) -> list[str]:
         """Badge letters of the reference slots, in pin order."""
-        from ui_qt.reference_identity import badge_letters
+        from explore_bpx.ui_qt.reference_identity import badge_letters
 
         return badge_letters(self.pinned_reference_names())
 
@@ -1222,7 +1222,7 @@ class AppDriver:
         own ``background()``/``setBackground`` is a dead read once a
         stylesheet styles ``::item`` (a real Qt/QSS gotcha; see
         ``test_parameter_row.py``'s pixel-level regression pin)."""
-        from ui_qt import parameter_row
+        from explore_bpx.ui_qt import parameter_row
 
         lst = self._w._params._list
         for i in range(lst.count()):
@@ -1253,7 +1253,7 @@ class AppDriver:
         ]
 
     def ghost_row_ref_bar(self, key: str) -> str | None:
-        from ui_qt import parameter_row
+        from explore_bpx.ui_qt import parameter_row
 
         panel = self._w._params
         lst = panel._list
@@ -1388,7 +1388,7 @@ class AppDriver:
         """The tree node at *path*'s :data:`~ui_qt.parameter_row.
         REF_BAR_ROLE` variant ("differs"/"equal") or ``None`` -- the data
         the tree delegate's gutter rail actually paints from."""
-        from ui_qt.parameter_row import REF_BAR_ROLE
+        from explore_bpx.ui_qt.parameter_row import REF_BAR_ROLE
 
         view = self._w._tree._view
         model = view.model()
@@ -1428,7 +1428,7 @@ class AppDriver:
         is the robust offscreen proxy for "the count actually painted"."""
         from PySide6.QtGui import QColor
 
-        from ui_qt import style
+        from explore_bpx.ui_qt import style
 
         view = self._w._tree._view
         model = view.model()
@@ -1457,7 +1457,7 @@ class AppDriver:
         determines exactly as on screen."""
         from PySide6.QtCore import QModelIndex
 
-        from ui_qt.parameter_row import SEVERITY_ROLE
+        from explore_bpx.ui_qt.parameter_row import SEVERITY_ROLE
 
         model = self._w._tree._view.model()
         marked: list[tuple[str, ...]] = []
@@ -1640,7 +1640,7 @@ class AppDriver:
     def charts_available(self) -> bool:
         """Whether QtCharts could be imported in this build -- every chart
         read below is meaningless without it."""
-        from ui_qt.cards.table_preview import charts_available
+        from explore_bpx.ui_qt.cards.table_preview import charts_available
 
         return charts_available()
 
@@ -1667,7 +1667,7 @@ class AppDriver:
         return self._preview()._ref_series[index].isVisible()
 
     def ghost_card_shown(self) -> bool:
-        from ui_qt.cards.ghost_card import GhostParameterCard
+        from explore_bpx.ui_qt.cards.ghost_card import GhostParameterCard
 
         return isinstance(self._w._inspector._card, GhostParameterCard)
 
@@ -1721,13 +1721,13 @@ class AppDriver:
 
     def add_parameter_custom_form_visible(self) -> bool:
         """True once the popup has switched to its Custom tab."""
-        from ui_qt.add_parameter_popup import _TAB_LABELS
+        from explore_bpx.ui_qt.add_parameter_popup import _TAB_LABELS
 
         return self._w._params._popup._active_tab == _TAB_LABELS[1]
 
     def select_add_parameter_tab(self, label: str) -> AppDriver:
         """Click one of the popup's own "Standard"/"Custom" tab buttons."""
-        from ui_qt.add_parameter_popup import _TAB_LABELS
+        from explore_bpx.ui_qt.add_parameter_popup import _TAB_LABELS
 
         popup = self._w._params._popup
         button = popup._tab_strip._buttons[_TAB_LABELS.index(label)]
@@ -1751,7 +1751,7 @@ class AppDriver:
     def select_custom_parameter_type(self, label: str) -> AppDriver:
         """Click one of the Custom tab's five type buttons (e.g. "Scalar",
         "Table")."""
-        from ui_qt.add_parameter_popup import _CUSTOM_TYPE_LABELS
+        from explore_bpx.ui_qt.add_parameter_popup import _CUSTOM_TYPE_LABELS
 
         popup = self._w._params._popup
         button = popup._form_type_strip._buttons[_CUSTOM_TYPE_LABELS.index(label)]
@@ -2226,7 +2226,7 @@ class AppDriver:
         a naive "is MUTED anywhere in the html" check is always true for any
         row with a unit. Real rows only -- matched by role-256 path presence.
         """
-        from ui_qt import parameter_row, style
+        from explore_bpx.ui_qt import parameter_row, style
 
         lst = self._w._params._list
         for i in range(lst.count()):
@@ -2245,7 +2245,7 @@ class AppDriver:
         painted ``<img>`` in :data:`~ui_qt.parameter_row.HTML_ROLE`), so this
         checks the HTML for either severity colour's dot rather than a
         plain-text glyph."""
-        from ui_qt import icons, parameter_row, style
+        from explore_bpx.ui_qt import icons, parameter_row, style
 
         lst = self._w._params._list
         for i in range(lst.count()):
@@ -2573,7 +2573,7 @@ class AppDriver:
         Asserts loudly (naming the actual card type) rather than returning
         ``None``, since every caller below assumes it exists.
         """
-        from ui_qt.cards.experiment import ExperimentCard
+        from explore_bpx.ui_qt.cards.experiment import ExperimentCard
 
         card = self._w._inspector._card
         assert isinstance(card, ExperimentCard), (
@@ -2715,7 +2715,7 @@ class AppDriver:
         dialog it created -- the caller's own ``.exec()`` must already be
         neutralised (see ``test_database_examples_dialog.py``'s ``_no_exec``
         fixture), or this blocks forever on a real modal loop."""
-        from ui_qt.cards.database_examples_dialog import DatabaseExamplesDialog
+        from explore_bpx.ui_qt.cards.database_examples_dialog import DatabaseExamplesDialog
 
         card = self.experiment_card()
         self.click_experiment_database_examples()
@@ -2728,12 +2728,12 @@ class AppDriver:
     # ------------------------------------------------------------------
 
     def validation_empty_state_shown(self) -> bool:
-        from ui_qt.validation_empty_state import ValidationEmptyState
+        from explore_bpx.ui_qt.validation_empty_state import ValidationEmptyState
 
         return isinstance(self._w._inspector._card, ValidationEmptyState)
 
     def _validation_empty_state(self):
-        from ui_qt.validation_empty_state import ValidationEmptyState
+        from explore_bpx.ui_qt.validation_empty_state import ValidationEmptyState
 
         card = self._w._inspector._card
         assert isinstance(card, ValidationEmptyState), (

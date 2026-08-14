@@ -17,7 +17,7 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 pytest.importorskip("PySide6")
 
-from ui_qt import main_window as main_window_module
+from explore_bpx.ui_qt import main_window as main_window_module
 
 _RUN = ("Validation", "C/20 discharge")
 
@@ -136,7 +136,7 @@ def test_rows_outside_validation_keep_move_actions(app_driver, valid_spm_path):
 
 
 def test_placeholder_rows_anatomy_and_click_focuses_the_column(app_driver, tmp_path, valid_spm_dict):
-    from ui_qt import parameter_row
+    from explore_bpx.ui_qt import parameter_row
 
     workfile = _write_doc(
         tmp_path,
@@ -351,7 +351,7 @@ def test_container_lists_navigable_run_rows_and_count_matches(app_driver, tmp_pa
 
 
 def test_container_run_row_meta_counts_its_arrays(app_driver, tmp_path, valid_spm_dict):
-    from ui_qt import parameter_row
+    from explore_bpx.ui_qt import parameter_row
 
     workfile = _write_doc(
         tmp_path,

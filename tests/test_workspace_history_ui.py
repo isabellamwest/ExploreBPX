@@ -12,7 +12,7 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from ui_qt.workspace_panel import UNTITLED_WORKSPACE
+from explore_bpx.ui_qt.workspace_panel import UNTITLED_WORKSPACE
 
 CHEN2020 = "pybamm/chen2020"
 
@@ -32,8 +32,8 @@ def relaunch(qtbot, history_path):
     def build():
         from ui_driver import AppDriver
 
-        from state.workspace_history import WorkspaceHistory
-        from ui_qt.main_window import MainWindow
+        from explore_bpx.state.workspace_history import WorkspaceHistory
+        from explore_bpx.ui_qt.main_window import MainWindow
 
         window = MainWindow(history=WorkspaceHistory(history_path))
         qtbot.addWidget(
@@ -593,7 +593,7 @@ def test_launch_with_an_unreadable_main_says_so_without_a_modal(relaunch, spm_wo
     """A file that will not parse is not a file that is missing, and the
     banner must not call it one. Nor may it meet the user with a modal
     error before the window has settled."""
-    import ui_qt.main_window as main_window_module
+    import explore_bpx.ui_qt.main_window as main_window_module
 
     first = relaunch()
     first.open(spm_workfile)

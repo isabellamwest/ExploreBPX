@@ -11,7 +11,7 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from ui_qt import badges, style
+from explore_bpx.ui_qt import badges, style
 
 # --- shared geometry --------------------------------------------------------
 

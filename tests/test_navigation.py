@@ -12,8 +12,8 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from state.app_state import AppState
-from ui_qt.navigation import NavigationService
+from explore_bpx.state.app_state import AppState
+from explore_bpx.ui_qt.navigation import NavigationService
 
 _CAPACITY = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
 _CELL = ("Parameterisation", "Cell")

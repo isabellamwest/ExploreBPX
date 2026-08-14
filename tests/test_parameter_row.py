@@ -11,8 +11,8 @@ from PySide6.QtCore import QRect
 from PySide6.QtGui import QFont, QFontMetrics
 from PySide6.QtWidgets import QApplication, QListWidget, QListWidgetItem
 
-from ui_qt import icons, style, typography
-from ui_qt.parameter_row import (
+from explore_bpx.ui_qt import icons, style, typography
+from explore_bpx.ui_qt.parameter_row import (
     HTML_ROLE,
     MARK_BOX,
     REF_BAR_ROLE,

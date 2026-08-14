@@ -7,10 +7,10 @@ import copy
 import bpx
 import pytest
 
-from core import bpx_gateway
-from core.bpx_gateway import LoadError
-from core.parameter_types import ParameterKind, classify
-from core.tree_model import build_parameter_path_map, build_tree
+from explore_bpx.core import bpx_gateway
+from explore_bpx.core.bpx_gateway import LoadError
+from explore_bpx.core.parameter_types import ParameterKind, classify
+from explore_bpx.core.tree_model import build_parameter_path_map, build_tree
 
 
 def test_load_raw_json(valid_spm_bytes):

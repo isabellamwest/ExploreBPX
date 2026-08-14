@@ -14,7 +14,7 @@ import re
 
 import pytest
 
-from core import bpx_gateway, reference_library
+from explore_bpx.core import bpx_gateway, reference_library
 
 #: Chemistry designations, mirroring the generator's ``CHEMISTRY_FAMILIES``.
 #: Repeated rather than imported: ``scripts/`` is a dev-time tool that imports

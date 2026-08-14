@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from ui_qt import style
+from explore_bpx.ui_qt import style
 
 pytest.importorskip("PySide6")
 

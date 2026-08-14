@@ -1,7 +1,7 @@
 """The technical-descriptions dataset, its loader, and the Documentation
 section.
 
-The dataset (``app/data/parameter_descriptions.yaml``) is replaceable data:
+The dataset (``explore_bpx/data/parameter_descriptions.yaml``) is replaceable data:
 these tests pin the loader's contract (section-scoped lookup, graceful
 absence) and the dataset's own integrity (all entries well-formed and
 reachable from real documents), so a future revision of the file fails loudly
@@ -16,7 +16,7 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from core import parameter_descriptions as descriptions
+from explore_bpx.core import parameter_descriptions as descriptions
 
 # ---------------------------------------------------------------------------
 # Loader contract
@@ -46,7 +46,7 @@ def test_every_entry_matches_a_real_parameter(fixtures_dir):
     a typo in an alias or section name cannot silently strand an entry."""
     import json
 
-    from core.document import BPXDocument
+    from explore_bpx.core.document import BPXDocument
 
     matched: set[tuple[str, tuple[str, ...]]] = set()
     for name in (
@@ -148,7 +148,7 @@ def test_every_dataset_symbol_renders_as_maths():
 
 def test_latex_pixmap_renders_and_caches(qtbot):
     pytest.importorskip("PySide6")
-    from ui_qt.latex import latex_pixmap
+    from explore_bpx.ui_qt.latex import latex_pixmap
 
     pixmap = latex_pixmap(r"\theta^\mathrm{min}_{k,m}")
     assert pixmap is not None
@@ -159,7 +159,7 @@ def test_latex_pixmap_renders_and_caches(qtbot):
 
 def test_latex_pixmap_returns_none_for_unparseable_input(qtbot):
     pytest.importorskip("PySide6")
-    from ui_qt.latex import latex_pixmap
+    from explore_bpx.ui_qt.latex import latex_pixmap
 
     assert latex_pixmap(r"\thisisnotlatex{") is None
 
@@ -175,7 +175,7 @@ def docs_view(qtbot):
     from PySide6.QtWidgets import QApplication
 
     QApplication.instance() or QApplication([])
-    from ui_qt.documentation_view import DocumentationView
+    from explore_bpx.ui_qt.documentation_view import DocumentationView
 
     view = DocumentationView()
     qtbot.addWidget(view)
@@ -194,7 +194,7 @@ def test_docs_view_starts_empty(docs_view):
 
 
 def test_docs_view_renders_sections_in_dataset_order(docs_view):
-    from core.parameter_metadata import ParameterMetadata
+    from explore_bpx.core.parameter_metadata import ParameterMetadata
 
     docs_view.show_metadata(
         ParameterMetadata(
@@ -214,7 +214,7 @@ def test_docs_view_renders_sections_in_dataset_order(docs_view):
 
 
 def test_docs_view_placeholder_when_parameter_has_no_documentation(docs_view):
-    from core.parameter_metadata import ParameterMetadata
+    from explore_bpx.core.parameter_metadata import ParameterMetadata
 
     docs_view.show_metadata(ParameterMetadata(physical_meaning="short only"))
     texts = _view_texts(docs_view)
@@ -222,7 +222,7 @@ def test_docs_view_placeholder_when_parameter_has_no_documentation(docs_view):
 
 
 def test_docs_view_clears_back_to_no_selection(docs_view):
-    from core.parameter_metadata import ParameterMetadata
+    from explore_bpx.core.parameter_metadata import ParameterMetadata
 
     docs_view.show_metadata(ParameterMetadata(documentation=(("Description", "x"),)))
     docs_view.show_metadata(None)

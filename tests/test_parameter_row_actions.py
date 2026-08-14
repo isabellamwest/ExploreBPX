@@ -17,9 +17,9 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from core.parameter_types import ParameterKind
-from core.tree_model import ParameterItem, TreeNode
-from ui_qt.parameter_list import ParameterListPanel
+from explore_bpx.core.parameter_types import ParameterKind
+from explore_bpx.core.tree_model import ParameterItem, TreeNode
+from explore_bpx.ui_qt.parameter_list import ParameterListPanel
 
 _CELL = ("Parameterisation", "Cell")
 _USER_DEFINED = ("Parameterisation", "User-defined")

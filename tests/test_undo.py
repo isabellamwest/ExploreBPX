@@ -36,7 +36,7 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtGui import QKeySequence
 
-from core.commands import AddParameter, RemoveParameter, SetValue
+from explore_bpx.core.commands import AddParameter, RemoveParameter, SetValue
 
 _CELL = ("Parameterisation", "Cell")
 _CAPACITY = _CELL + ("Nominal cell capacity [A.h]",)
@@ -56,7 +56,7 @@ def _capacity(session) -> object:
 
 
 def _session(valid_spm_path):
-    from state.app_state import AppState
+    from explore_bpx.state.app_state import AppState
 
     state = AppState()
     state.open(valid_spm_path)
@@ -104,7 +104,7 @@ def test_apply_value_selects_the_edited_parameter(valid_spm_path):
 
 
 def test_apply_value_without_document_still_raises():
-    from state.document_session import DocumentSession
+    from explore_bpx.state.document_session import DocumentSession
 
     with pytest.raises(ValueError, match="No document loaded"):
         DocumentSession().apply_value(_CAPACITY, 1.0)
@@ -448,7 +448,7 @@ def test_can_redo_is_false_on_a_fresh_session(valid_spm_path):
 
 
 def test_can_redo_is_false_with_no_document():
-    from state.document_session import DocumentSession
+    from explore_bpx.state.document_session import DocumentSession
 
     assert DocumentSession().can_redo is False
 

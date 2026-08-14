@@ -8,7 +8,7 @@ from dataclasses import replace
 
 import pytest
 
-from state.workspace_history import (
+from explore_bpx.state.workspace_history import (
     MAX_RECENT_WORKSPACES,
     RECENT_FILES_CAP,
     SCHEMA_VERSION,

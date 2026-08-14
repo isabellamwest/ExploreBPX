@@ -22,7 +22,7 @@ pytest.importorskip("PySide6")
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
-from ui_qt.cards.experiment import KNOWN_ALIASES, ExperimentCard, is_validation_run_path
+from explore_bpx.ui_qt.cards.experiment import KNOWN_ALIASES, ExperimentCard, is_validation_run_path
 
 _RUN = ("Validation", "C/20 discharge")
 _TIME = _RUN + ("Time [s]",)
@@ -388,7 +388,7 @@ def test_diagnostic_on_an_array_tints_its_own_column(app_driver, tmp_path, valid
 
 
 def test_csv_import_fills_all_mapped_columns_in_one_undo_step(app_driver, main_window, spm_with_validation_path):
-    from core.csv_import import read_csv_text
+    from explore_bpx.core.csv_import import read_csv_text
 
     d = app_driver
     d.open(spm_with_validation_path).go_to(_RUN)
@@ -473,7 +473,7 @@ def test_rename_while_open_keeps_the_card_fresh(app_driver, spm_with_validation_
 
 
 def _run_node(raw: dict, run_name: str = "C/20 discharge"):
-    from core.document import BPXDocument
+    from explore_bpx.core.document import BPXDocument
 
     document = BPXDocument.from_raw(raw, filename="probe.json", fmt="json")
     return document.find(("Validation", run_name))
@@ -535,7 +535,7 @@ def test_csv_targets_offer_temperature_before_the_column_exists(valid_spm_dict):
 def test_unreadable_and_empty_csv_show_a_message_instead_of_doing_nothing(valid_spm_dict, monkeypatch):
     from types import SimpleNamespace
 
-    from ui_qt.cards import experiment as experiment_module
+    from explore_bpx.ui_qt.cards import experiment as experiment_module
 
     doc = dict(valid_spm_dict)
     doc["Validation"] = {"C/20 discharge": dict(_PLAIN_RUN)}

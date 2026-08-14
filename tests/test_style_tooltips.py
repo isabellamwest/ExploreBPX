@@ -21,9 +21,9 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from core.completion import TaskKind
-from core.validation import Severity
-from ui_qt import style
+from explore_bpx.core.completion import TaskKind
+from explore_bpx.core.validation import Severity
+from explore_bpx.ui_qt import style
 
 # --- structural proof: the helpers cannot see message/alias text -----------
 

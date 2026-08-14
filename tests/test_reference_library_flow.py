@@ -15,8 +15,8 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-import ui_qt.main_window as main_window_module
-from core.reference_library import list_reference_sets
+import explore_bpx.ui_qt.main_window as main_window_module
+from explore_bpx.core.reference_library import list_reference_sets
 
 _CHEN = "pybamm/chen2020"
 _PRADA = "pybamm/prada2013"

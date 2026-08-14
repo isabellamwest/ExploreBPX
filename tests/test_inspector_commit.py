@@ -10,11 +10,11 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from core.bpx_gateway import CheckReach
-from state.app_state import AppState
-from state.document_session import ParameterPreview
-from ui_qt.inspector import InspectorPanel
-from ui_qt.style import not_checked_tooltip
+from explore_bpx.core.bpx_gateway import CheckReach
+from explore_bpx.state.app_state import AppState
+from explore_bpx.state.document_session import ParameterPreview
+from explore_bpx.ui_qt.inspector import InspectorPanel
+from explore_bpx.ui_qt.style import not_checked_tooltip
 
 _CAPACITY = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
 _MODEL = ("Header", "Model")

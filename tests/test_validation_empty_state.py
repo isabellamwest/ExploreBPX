@@ -18,7 +18,7 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtWidgets import QApplication
 
-import ui_qt.validation_empty_state as empty_state_module
+import explore_bpx.ui_qt.validation_empty_state as empty_state_module
 
 
 @pytest.fixture(autouse=True)

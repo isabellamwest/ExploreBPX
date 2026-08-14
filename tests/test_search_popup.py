@@ -14,8 +14,8 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtCore import Qt
 
-from core.document import BPXDocument
-from ui_qt.search import SearchBar
+from explore_bpx.core.document import BPXDocument
+from explore_bpx.ui_qt.search import SearchBar
 
 _CAPACITY = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
 _CELL = ("Parameterisation", "Cell")

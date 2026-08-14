@@ -23,7 +23,7 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 pytest.importorskip("PySide6")
 
-from ui_qt.cards.chart_axes import (
+from explore_bpx.ui_qt.cards.chart_axes import (
     Y_AXIS_TICK_COUNT,
     ReadoutPoint,
     ReadoutSeries,
@@ -33,7 +33,7 @@ from ui_qt.cards.chart_axes import (
     nearest_readout_point,
     readout_tooltip_text,
 )
-from ui_qt.style import CHART_SERIES
+from explore_bpx.ui_qt.style import CHART_SERIES
 
 
 @pytest.fixture(autouse=True)
@@ -241,7 +241,7 @@ def _build_view():
     from PySide6.QtCharts import QChart, QValueAxis
     from PySide6.QtCore import Qt
 
-    from ui_qt.cards.chart_axes import ReadoutChartView, fit_axis
+    from explore_bpx.ui_qt.cards.chart_axes import ReadoutChartView, fit_axis
 
     chart = QChart()
     axis_x, axis_y = QValueAxis(), QValueAxis()
@@ -290,14 +290,14 @@ def test_readout_chart_view_leave_event_hides_the_marker():
 
 
 def test_responsive_chart_height_never_drops_below_the_floor():
-    from ui_qt.cards.chart_axes import responsive_chart_height
+    from explore_bpx.ui_qt.cards.chart_axes import responsive_chart_height
 
     assert responsive_chart_height(100, floor=140, ceiling=280) == 140
     assert responsive_chart_height(0, floor=140, ceiling=280) == 140
 
 
 def test_responsive_chart_height_never_rises_above_the_ceiling():
-    from ui_qt.cards.chart_axes import responsive_chart_height
+    from explore_bpx.ui_qt.cards.chart_axes import responsive_chart_height
 
     assert responsive_chart_height(2000, floor=140, ceiling=280) == 280
 
@@ -307,7 +307,7 @@ def test_responsive_chart_height_matches_the_measured_inspector_widths():
     (``style.PAGE_MEASURE`` minus ``cards/page.py``'s gutters) reaches the
     ceiling; the old fixed-528px content width lands close to
     TablePreview's own former fixed height, so nothing narrower regresses."""
-    from ui_qt.cards.chart_axes import responsive_chart_height
+    from explore_bpx.ui_qt.cards.chart_axes import responsive_chart_height
 
     assert responsive_chart_height(928, floor=140, ceiling=280) == 280
     assert responsive_chart_height(528, floor=140, ceiling=280) == 165
@@ -319,14 +319,14 @@ def test_responsive_chart_height_matches_the_measured_inspector_widths():
 
 
 def test_tick_count_for_height_stays_compact_up_to_its_threshold():
-    from ui_qt.cards.chart_axes import Y_AXIS_TICK_COUNT, tick_count_for_height
+    from explore_bpx.ui_qt.cards.chart_axes import Y_AXIS_TICK_COUNT, tick_count_for_height
 
     assert tick_count_for_height(140) == Y_AXIS_TICK_COUNT
     assert tick_count_for_height(180) == Y_AXIS_TICK_COUNT
 
 
 def test_tick_count_for_height_steps_up_past_its_threshold():
-    from ui_qt.cards.chart_axes import TALL_Y_AXIS_TICK_COUNT, tick_count_for_height
+    from explore_bpx.ui_qt.cards.chart_axes import TALL_Y_AXIS_TICK_COUNT, tick_count_for_height
 
     assert tick_count_for_height(181) == TALL_Y_AXIS_TICK_COUNT
     assert tick_count_for_height(280) == TALL_Y_AXIS_TICK_COUNT
@@ -338,7 +338,7 @@ def test_tick_count_for_height_never_returns_four():
     a nice-numbers span into three intervals, tick_count=4, produced a
     repeating decimal on 12 of 15 real BPX ranges tested; tick_count=5,
     dividing into four, produced none)."""
-    from ui_qt.cards.chart_axes import tick_count_for_height
+    from explore_bpx.ui_qt.cards.chart_axes import tick_count_for_height
 
     for height in range(50, 400):
         assert tick_count_for_height(height) != 4
@@ -388,7 +388,7 @@ def test_chart_view_tick_count_updates_on_resize_alone_with_no_new_data():
     """A window resize that changes chart height must re-subdivide the y
     axis' already-fitted range even when no new data arrives -- otherwise a
     resize alone leaves a stale tick count from the last data fit."""
-    from ui_qt.cards.chart_axes import TALL_Y_AXIS_TICK_COUNT
+    from explore_bpx.ui_qt.cards.chart_axes import TALL_Y_AXIS_TICK_COUNT
 
     view, _chart = _build_view()
     view.set_height_range(140, 280)
@@ -404,13 +404,13 @@ def test_chart_view_tick_count_updates_on_resize_alone_with_no_new_data():
 
 
 def test_chart_series_palette_is_four_colours_distinct_from_reference_badges():
-    from ui_qt.style import REFERENCE_BADGES
+    from explore_bpx.ui_qt.style import REFERENCE_BADGES
 
     assert len(CHART_SERIES) == 4
     assert set(CHART_SERIES).isdisjoint(REFERENCE_BADGES)
 
 
 def test_database_examples_dialog_uses_the_shared_palette():
-    from ui_qt.cards import database_examples_dialog
+    from explore_bpx.ui_qt.cards import database_examples_dialog
 
     assert database_examples_dialog._REFERENCE_COLORS is CHART_SERIES

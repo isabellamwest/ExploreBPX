@@ -18,12 +18,12 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtCore import Qt
 
-from core.parameter_types import ParameterKind
-from core.tree_model import ParameterItem
-from ui_qt.cards.chart_axes import Y_AXIS_TICK_COUNT
-from ui_qt.cards.registry import create_card
-from ui_qt.cards.table_preview import ReferenceCurve, TablePreview, charts_available
-from ui_qt.style import ACCENT
+from explore_bpx.core.parameter_types import ParameterKind
+from explore_bpx.core.tree_model import ParameterItem
+from explore_bpx.ui_qt.cards.chart_axes import Y_AXIS_TICK_COUNT
+from explore_bpx.ui_qt.cards.registry import create_card
+from explore_bpx.ui_qt.cards.table_preview import ReferenceCurve, TablePreview, charts_available
+from explore_bpx.ui_qt.style import ACCENT
 
 
 @pytest.fixture(autouse=True)
@@ -130,7 +130,7 @@ def test_a_single_point_still_gets_a_sane_axis_range():
 def test_preview_disables_cleanly_when_charts_absent(monkeypatch):
     """Simulate a build without QtCharts: the widget contributes nothing and
     every method is a safe no-op, so the grid still works."""
-    import ui_qt.cards.table_preview as tp
+    import explore_bpx.ui_qt.cards.table_preview as tp
 
     monkeypatch.setattr(tp, "_CHARTS_AVAILABLE", False)
     preview = tp.TablePreview(mode="xy")
@@ -230,7 +230,7 @@ def test_y_axis_tick_count_is_forced_to_the_shared_constant():
 
 @requires_charts
 def test_scatter_dots_are_shown_at_or_under_the_dense_threshold():
-    from ui_qt.cards.table_preview import _MAX_SCATTER_POINTS
+    from explore_bpx.ui_qt.cards.table_preview import _MAX_SCATTER_POINTS
 
     preview = TablePreview(mode="xy")
     rows = [[float(i), float(i)] for i in range(_MAX_SCATTER_POINTS)]
@@ -247,7 +247,7 @@ def test_scatter_dots_are_hidden_above_the_dense_threshold():
     changes); only the dot marks -- which would otherwise overlap into a
     fat band -- are withheld. The hover readout still gives any one
     point's value on demand."""
-    from ui_qt.cards.table_preview import _MAX_SCATTER_POINTS
+    from explore_bpx.ui_qt.cards.table_preview import _MAX_SCATTER_POINTS
 
     preview = TablePreview(mode="xy")
     rows = [[float(i), float(i)] for i in range(_MAX_SCATTER_POINTS + 1)]
@@ -263,7 +263,7 @@ def test_scatter_dots_are_hidden_above_the_dense_threshold():
 def test_scatter_dots_reappear_once_back_under_the_threshold():
     """Visibility tracks the *current* draft, not a one-way trip -- editing
     a dense table back down to a handful of rows restores the dots."""
-    from ui_qt.cards.table_preview import _MAX_SCATTER_POINTS
+    from explore_bpx.ui_qt.cards.table_preview import _MAX_SCATTER_POINTS
 
     preview = TablePreview(mode="xy")
     preview.update_rows([[float(i), float(i)] for i in range(_MAX_SCATTER_POINTS + 1)])

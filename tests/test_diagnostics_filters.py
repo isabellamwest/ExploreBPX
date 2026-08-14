@@ -52,8 +52,8 @@ def two_cell_errors_path(tmp_path, valid_spm_dict):
 
 
 def test_issue_visible_respects_its_own_severity_chip_only():
-    from core.validation import PydanticErrorDiagnostic, Severity
-    from ui_qt.diagnostics_panel import _FilterState, _issue_visible
+    from explore_bpx.core.validation import PydanticErrorDiagnostic, Severity
+    from explore_bpx.ui_qt.diagnostics_panel import _FilterState, _issue_visible
 
     error = PydanticErrorDiagnostic(raw_error={"msg": "bad", "type": "float_type"}, severity=Severity.ERROR)
     warning = PydanticErrorDiagnostic(raw_error={"msg": "meh", "type": "x"}, severity=Severity.WARNING)
@@ -65,8 +65,8 @@ def test_issue_visible_respects_its_own_severity_chip_only():
 
 
 def test_task_visible_respects_the_outstanding_chip():
-    from core.completion import CompletionTask, TaskKind
-    from ui_qt.diagnostics_panel import _FilterState, _task_visible
+    from explore_bpx.core.completion import CompletionTask, TaskKind
+    from explore_bpx.ui_qt.diagnostics_panel import _FilterState, _task_visible
 
     task = CompletionTask(
         kind=TaskKind.MISSING_FIELD,
@@ -102,7 +102,7 @@ def test_error_chip_off_hides_error_rows_but_not_counts(app_driver, two_cell_err
 
 
 def test_outstanding_chip_off_hides_required_and_optional_task_rows(app_driver, tmp_path):
-    from core import document_factory
+    from explore_bpx.core import document_factory
 
     raw = document_factory.create("SPM", title="probe")
     raw["Parameterisation"]["Cell"]["Volume [m3]"] = None
@@ -261,7 +261,7 @@ def test_filter_state_resets_on_a_new_document(app_driver, two_cell_errors_path,
     d.open(two_cell_errors_path)
     d.diagnostics_toggle_chip("errors")
 
-    from ui_qt import main_window as main_window_module
+    from explore_bpx.ui_qt import main_window as main_window_module
 
     # accept the clean-document replace confirm New now shows
     monkeypatch.setattr(
@@ -331,7 +331,7 @@ def test_all_chips_off_buckets_and_badges_still_reconcile(app_driver, two_cell_e
 
 
 def _reconcile(d, filters):
-    from ui_qt.diagnostics_panel import _issue_visible, _task_visible
+    from explore_bpx.ui_qt.diagnostics_panel import _issue_visible, _task_visible
 
     buckets = d._w._diagnostics._buckets
     total_issues = sum(len(b.issues) for b in buckets.buckets)
@@ -382,7 +382,7 @@ def test_chip_toggles_on_left_click_only(qtbot):
     # filter -- only the left button toggles.
     from PySide6.QtCore import Qt
 
-    from ui_qt.diagnostics_panel import _FilterChip
+    from explore_bpx.ui_qt.diagnostics_panel import _FilterChip
 
     chip = _FilterChip()
     qtbot.addWidget(chip)
@@ -406,7 +406,7 @@ def test_a_missing_field_row_does_not_repeat_itself(app_driver):
     describes the same absent field, so printing its message under the row
     said "REQUIRED" and "Field required" on every one of thirty-five rows.
     A structural drop, not a reading of the validator's words."""
-    from ui_qt.diagnostics_panel import _absorbed_messages
+    from explore_bpx.ui_qt.diagnostics_panel import _absorbed_messages
 
     app_driver._w._new("DFN")
     partition = app_driver._w._diagnostics._partition
@@ -421,7 +421,7 @@ def test_stream_rows_stop_at_a_readable_measure(app_driver, tmp_path):
     right-aligned "Go to ▸" ended up a thousand pixels from its own row."""
     from PySide6.QtWidgets import QStyleOptionViewItem
 
-    from ui_qt.diagnostics_panel import _DiagnosticsRowDelegate
+    from explore_bpx.ui_qt.diagnostics_panel import _DiagnosticsRowDelegate
 
     delegate = _DiagnosticsRowDelegate(None)
     option = QStyleOptionViewItem()

@@ -19,16 +19,16 @@ from pathlib import Path
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QWidget
 
-from core import bpx_gateway
-from core.compare import ValueGroup
-from core.parameter_types import ParameterKind
-from core.tree_model import ParameterItem
-from state.reference_snapshot import ReferenceSnapshot
-from ui_qt import style
-from ui_qt.cards.parameter_card import ParameterCard
-from ui_qt.cards.reference_block import _monospace_font
-from ui_qt.cards.table_preview import charts_available
-from ui_qt.reference_identity import ReferencePin
+from explore_bpx.core import bpx_gateway
+from explore_bpx.core.compare import ValueGroup
+from explore_bpx.core.parameter_types import ParameterKind
+from explore_bpx.core.tree_model import ParameterItem
+from explore_bpx.state.reference_snapshot import ReferenceSnapshot
+from explore_bpx.ui_qt import style
+from explore_bpx.ui_qt.cards.parameter_card import ParameterCard
+from explore_bpx.ui_qt.cards.reference_block import _monospace_font
+from explore_bpx.ui_qt.cards.table_preview import charts_available
+from explore_bpx.ui_qt.reference_identity import ReferencePin
 
 
 @pytest.fixture(autouse=True)

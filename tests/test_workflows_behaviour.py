@@ -16,9 +16,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from core.bpx_gateway import CheckReach, section_checked
-from core.parameter_types import ParameterKind
-from state.app_state import AppState
+from explore_bpx.core.bpx_gateway import CheckReach, section_checked
+from explore_bpx.core.parameter_types import ParameterKind
+from explore_bpx.state.app_state import AppState
 
 if TYPE_CHECKING:
     from pathlib import Path

@@ -18,9 +18,9 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtWidgets import QApplication, QLabel
 
-from core.document import BPXDocument
-from core.reference_library import PROVENANCE, list_reference_sets, load_reference_raw
-from ui_qt.reference_library_dialog import ReferenceLibraryDialog
+from explore_bpx.core.document import BPXDocument
+from explore_bpx.core.reference_library import PROVENANCE, list_reference_sets, load_reference_raw
+from explore_bpx.ui_qt.reference_library_dialog import ReferenceLibraryDialog
 
 
 @pytest.fixture(autouse=True)

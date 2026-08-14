@@ -18,17 +18,17 @@ pytest.importorskip("PySide6")
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 
-import ui_qt.main_window as main_window_module
-from core.compare import ComparisonResult, RowDiff, RowState, SectionDiff, compare
-from core.tree_model import build_path_map, build_tree
-from state.reference_snapshot import ReferenceSnapshot
-from ui_qt import parameter_row, style
-from ui_qt.comparison_strip import ComparisonStrip
-from ui_qt.parameter_list import ParameterListPanel
-from ui_qt.reference_identity import ReferencePin, badge_colour, badge_letters
-from ui_qt.tree_model import BpxTreeModel
+import explore_bpx.ui_qt.main_window as main_window_module
+from explore_bpx.core.compare import ComparisonResult, RowDiff, RowState, SectionDiff, compare
+from explore_bpx.core.tree_model import build_path_map, build_tree
+from explore_bpx.state.reference_snapshot import ReferenceSnapshot
+from explore_bpx.ui_qt import parameter_row, style
+from explore_bpx.ui_qt.comparison_strip import ComparisonStrip
+from explore_bpx.ui_qt.parameter_list import ParameterListPanel
+from explore_bpx.ui_qt.reference_identity import ReferencePin, badge_colour, badge_letters
+from explore_bpx.ui_qt.tree_model import BpxTreeModel
 
-APP_DIR = Path(__file__).resolve().parents[1] / "app"
+APP_DIR = Path(__file__).resolve().parents[1] / "explore_bpx"
 _ABOUT_ENERGY = APP_DIR / "data" / "example_documents" / "about_energy"
 
 _CELL_PATH = ("Parameterisation", "Cell")
@@ -329,7 +329,7 @@ def _comparison_with_differ_count(path: tuple[str, ...], count: int) -> Comparis
 def _tree_with_cell():
     """A minimal tree: BPX File > Parameterisation > Cell, plus a sibling
     Header section -- enough to exercise both leaf and container nodes."""
-    from core.tree_model import TreeNode
+    from explore_bpx.core.tree_model import TreeNode
 
     cell = TreeNode(label="Cell", path=_CELL_PATH)
     parameterisation = TreeNode(label="Parameterisation", path=("Parameterisation",), children=[cell])

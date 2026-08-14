@@ -20,8 +20,8 @@ pytest.importorskip("PySide6")
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
-from ui_qt.cards.cell_issues import experiment_cells, series_cells, table_cells
-from ui_qt.cards.grid import NumericGrid
+from explore_bpx.ui_qt.cards.cell_issues import experiment_cells, series_cells, table_cells
+from explore_bpx.ui_qt.cards.grid import NumericGrid
 
 
 @pytest.fixture(autouse=True)

@@ -21,11 +21,11 @@ from platform_facts import assert_alert_title
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication
 
-from core.bpx_gateway import BPX_VERSION
-from core.commands import SetValue
-from state.app_state import AppState
-from state.document_session import ReadOnlyDocumentError
-from ui_qt.main_window import LegacyIntent
+from explore_bpx.core.bpx_gateway import BPX_VERSION
+from explore_bpx.core.commands import SetValue
+from explore_bpx.state.app_state import AppState
+from explore_bpx.state.document_session import ReadOnlyDocumentError
+from explore_bpx.ui_qt.main_window import LegacyIntent
 
 _LEGACY = "warning_legacy_bpx_float.json"
 _CAPACITY = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")

@@ -6,9 +6,9 @@ from __future__ import annotations
 import copy
 import json
 
-from core.bpx_gateway import CheckReach
-from core.document import BPXDocument
-from core.load_record import LoadRecord
+from explore_bpx.core.bpx_gateway import CheckReach
+from explore_bpx.core.document import BPXDocument
+from explore_bpx.core.load_record import LoadRecord
 
 
 def _capture(data, filename, path=None):

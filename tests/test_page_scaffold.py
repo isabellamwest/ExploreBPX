@@ -19,8 +19,8 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 pytest.importorskip("PySide6")
 
-from ui_qt import style
-from ui_qt.cards.page import page_content
+from explore_bpx.ui_qt import style
+from explore_bpx.ui_qt.cards.page import page_content
 
 
 @pytest.fixture(autouse=True)
@@ -47,8 +47,8 @@ def test_inspector_issues_and_documentation_sections_share_the_page_measure(qtbo
     ``PAGE_MEASURE`` cap -- if these two kept the narrower
     ``CONTENT_MEASURE`` default, the page would show two different right
     edges."""
-    from state.app_state import AppState
-    from ui_qt.inspector import InspectorPanel
+    from explore_bpx.state.app_state import AppState
+    from explore_bpx.ui_qt.inspector import InspectorPanel
 
     panel = InspectorPanel(AppState())
     qtbot.addWidget(panel)

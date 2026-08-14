@@ -15,9 +15,9 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from core.parameter_types import ParameterKind
-from ui_qt import parameter_row
-from ui_qt.parameter_row import value_preview, value_tooltip
+from explore_bpx.core.parameter_types import ParameterKind
+from explore_bpx.ui_qt import parameter_row
+from explore_bpx.ui_qt.parameter_row import value_preview, value_tooltip
 
 _CELL = ("Parameterisation", "Cell")
 

@@ -15,7 +15,7 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from core.completion import TaskKind
+from explore_bpx.core.completion import TaskKind
 
 _CELL = ("Parameterisation", "Cell")
 _LOWER_CUTOFF = _CELL + ("Lower voltage cut-off [V]",)
@@ -151,7 +151,7 @@ def test_removing_state_from_a_valid_document_leaves_it_complete(app_driver, tmp
 
 
 def _partial_null_capacity_path(tmp_path):
-    from core import document_factory
+    from explore_bpx.core import document_factory
 
     raw = document_factory.create("Partial", title="probe")
     raw["Parameterisation"]["Cell"] = {"Nominal cell capacity [A.h]": None}
@@ -173,7 +173,7 @@ def _partial_bad_capacity_path(tmp_path):
     into a NULL_FIELD task even under Partial, so a *page-visible* union pair
     needs a value that is wrong rather than empty -- a list raises the same
     ``float_type``/``int_type`` pair but stays a plain, uncalmed Issue."""
-    from core import document_factory
+    from explore_bpx.core import document_factory
 
     raw = document_factory.create("Partial", title="probe")
     raw["Parameterisation"]["Cell"] = {"Nominal cell capacity [A.h]": []}
@@ -196,7 +196,7 @@ def test_union_pair_does_not_merge_across_different_locations(app_driver, tmp_pa
     the SAME location does. Two distinct wrong-typed FloatInt parameters
     must render as two separate rows, not one (wrong-typed, not null --
     see ``_partial_bad_capacity_path``)."""
-    from core import document_factory
+    from explore_bpx.core import document_factory
 
     raw = document_factory.create("Partial", title="probe")
     raw["Parameterisation"]["Cell"] = {
@@ -243,8 +243,8 @@ def test_union_pair_with_matching_numeric_input_still_yields_one_suffix(qtbot):
     (Not reachable through a live document: a genuinely numeric, finite,
     non-bool value always parses as the float branch, so bpx itself never
     raises both halves of the pair for one.)"""
-    from core.validation import PydanticErrorDiagnostic
-    from ui_qt.issues_view import IssuesView
+    from explore_bpx.core.validation import PydanticErrorDiagnostic
+    from explore_bpx.ui_qt.issues_view import IssuesView
 
     float_d = PydanticErrorDiagnostic(
         raw_error={"type": "float_type", "msg": "Input should be a valid number", "input": 5}

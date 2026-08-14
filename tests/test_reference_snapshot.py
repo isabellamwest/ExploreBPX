@@ -6,9 +6,9 @@ import json
 
 import pytest
 
-from core import bpx_gateway, completion
-from core.document import BPXDocument
-from state.reference_snapshot import ReferenceSnapshot
+from explore_bpx.core import bpx_gateway, completion
+from explore_bpx.core.document import BPXDocument
+from explore_bpx.state.reference_snapshot import ReferenceSnapshot
 
 
 def test_load_round_trip_from_a_real_bundled_example(nmc_pouch_cell_path):

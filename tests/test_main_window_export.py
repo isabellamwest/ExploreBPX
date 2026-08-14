@@ -15,7 +15,7 @@ pytest.importorskip("PySide6")
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QApplication
 
-import ui_qt.main_window as main_window_module
+import explore_bpx.ui_qt.main_window as main_window_module
 
 _CAPACITY = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
 

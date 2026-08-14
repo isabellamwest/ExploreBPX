@@ -28,10 +28,10 @@ pytest.importorskip("PySide6")
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
-from core.parameter_types import ParameterKind
-from core.tree_model import ParameterItem
-from ui_qt.cards.grid import MultiColumnGrid, NumericGrid
-from ui_qt.cards.registry import create_card
+from explore_bpx.core.parameter_types import ParameterKind
+from explore_bpx.core.tree_model import ParameterItem
+from explore_bpx.ui_qt.cards.grid import MultiColumnGrid, NumericGrid
+from explore_bpx.ui_qt.cards.registry import create_card
 
 _RUN = ("Validation", "C/20 discharge")
 _TIME = _RUN + ("Time [s]",)

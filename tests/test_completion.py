@@ -14,9 +14,9 @@ import json
 
 import pytest
 
-from core import bpx_gateway, completion, document_factory, validation
-from core.completion import CompletionTask, TaskKind
-from core.document import BPXDocument
+from explore_bpx.core import bpx_gateway, completion, document_factory, validation
+from explore_bpx.core.completion import CompletionTask, TaskKind
+from explore_bpx.core.document import BPXDocument
 
 
 def _diagnostic_tuples(issues):

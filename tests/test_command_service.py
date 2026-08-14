@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from core import bpx_gateway, command_service, document_factory, editing, export, structure
-from core.command_service import CommandError
-from core.commands import (
+from explore_bpx.core import bpx_gateway, command_service, document_factory, editing, export, structure
+from explore_bpx.core.command_service import CommandError
+from explore_bpx.core.commands import (
     AddParameter,
     AddSection,
     ChangeModel,
@@ -163,7 +163,7 @@ def test_change_model_preview_lists_the_model_and_every_addition(valid_spm_dict)
 def test_apply_value_on_header_model_is_one_undoable_model_change(spm_workfile):
     """Committing the Model parameter routes through ChangeModel: the value
     and the added sections arrive together and revert together."""
-    from state.app_state import AppState
+    from explore_bpx.state.app_state import AppState
 
     state = AppState()
     state.open(spm_workfile)
@@ -246,7 +246,7 @@ def test_rename_to_blank_or_unchanged_is_refused():
 
 
 def test_rename_then_undo_restores_the_old_name_and_position():
-    from state.document_session import DocumentSession
+    from explore_bpx.state.document_session import DocumentSession
 
     session = DocumentSession()
     session.execute_command(CreateDocument("SPM", "T"))
@@ -297,7 +297,7 @@ def test_move_parameter_missing_key_is_refused():
 
 
 def test_move_parameter_then_undo_restores_order():
-    from state.document_session import DocumentSession
+    from explore_bpx.state.document_session import DocumentSession
 
     session = DocumentSession()
     session.execute_command(CreateDocument("SPM", "T"))
@@ -372,7 +372,7 @@ def test_duplicate_parameter_gated_like_rename_is_refused_for_schema_keys():
 
 
 def test_duplicate_parameter_then_undo_removes_it():
-    from state.document_session import DocumentSession
+    from explore_bpx.state.document_session import DocumentSession
 
     session = DocumentSession()
     session.execute_command(CreateDocument("SPM", "T"))
@@ -576,7 +576,7 @@ def test_set_values_preview_lists_every_path():
 
 def test_set_values_is_one_undo_step():
     """Four arrays filled by one import revert together with a single undo."""
-    from state.document_session import DocumentSession
+    from explore_bpx.state.document_session import DocumentSession
 
     session = DocumentSession()
     session.execute_command(CreateDocument("SPM", "T"))
@@ -605,7 +605,7 @@ def test_remove_protected_section_raises():
 
 
 def test_document_session_create_then_undo():
-    from state.document_session import DocumentSession
+    from explore_bpx.state.document_session import DocumentSession
 
     session = DocumentSession()
     session.execute_command(CreateDocument("SPM", "T"))
@@ -659,7 +659,7 @@ def test_remove_parameter_missing_alias_is_a_noop():
 
 
 def test_add_parameter_then_undo_removes_it():
-    from state.document_session import DocumentSession
+    from explore_bpx.state.document_session import DocumentSession
 
     session = DocumentSession()
     session.execute_command(CreateDocument("SPM", "T"))
@@ -670,7 +670,7 @@ def test_add_parameter_then_undo_removes_it():
 
 
 def test_remove_parameter_then_undo_restores_exact_prior_value():
-    from state.document_session import DocumentSession
+    from explore_bpx.state.document_session import DocumentSession
 
     session = DocumentSession()
     session.execute_command(CreateDocument("SPM", "T"))
@@ -769,7 +769,7 @@ def test_pull_parameter_is_one_undo_step_including_created_ancestors():
     a single step -- the ancestors it added disappear along with the value."""
     import copy
 
-    from state.document_session import DocumentSession
+    from explore_bpx.state.document_session import DocumentSession
 
     session = DocumentSession()
     session.execute_command(CreateDocument("Partial", "T"))
@@ -814,7 +814,7 @@ def test_pull_section_creates_missing_ancestors_and_the_section_itself():
 def test_pull_section_round_trip_is_one_undo_step():
     import copy
 
-    from state.document_session import DocumentSession
+    from explore_bpx.state.document_session import DocumentSession
 
     session = DocumentSession()
     session.execute_command(CreateDocument("Partial", "T"))

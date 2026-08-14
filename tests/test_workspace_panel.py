@@ -16,9 +16,9 @@ from PySide6.QtCore import QMimeData, QPointF, Qt, QUrl
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import QLabel, QWidget
 
-import ui_qt.main_window as main_window_module
-import ui_qt.workspace_panel as workspace_panel_module
-from core.document_factory import SUPPORTED_MODELS
+import explore_bpx.ui_qt.main_window as main_window_module
+import explore_bpx.ui_qt.workspace_panel as workspace_panel_module
+from explore_bpx.core.document_factory import SUPPORTED_MODELS
 
 _CAPACITY = ("Parameterisation", "Cell", "Nominal cell capacity [A.h]")
 
@@ -729,7 +729,7 @@ def test_record_states_yaml_comments_fact(app_driver, valid_spm_dict, tmp_path, 
 def test_record_states_legacy_conversion_fact(app_driver, fixtures_dir):
     """A v0.x file's Checked row names the conversion bpx judged, and its
     detail names the file and what the conversion did."""
-    from core.bpx_gateway import BPX_VERSION
+    from explore_bpx.core.bpx_gateway import BPX_VERSION
 
     d = app_driver
     d.open_as_is(fixtures_dir / "nmc_pouch_cell_BPX.json")
@@ -763,8 +763,8 @@ def test_the_workspace_page_sections_share_one_wider_measure(app_driver):
 
     ``style.PAGE_MEASURE`` is the shared token (the Inspector page uses it
     too); this page keeps no local copy."""
-    from ui_qt import style
-    from ui_qt.group_box import TintedSection
+    from explore_bpx.ui_qt import style
+    from explore_bpx.ui_qt.group_box import TintedSection
 
     page_measure = style.PAGE_MEASURE
     assert page_measure > style.CONTENT_MEASURE

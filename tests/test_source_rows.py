@@ -3,8 +3,8 @@
 
 from __future__ import annotations
 
-from core.compare import RowState
-from core.source_rows import RowKind, SourceRow, build_rows, format_value
+from explore_bpx.core.compare import RowState
+from explore_bpx.core.source_rows import RowKind, SourceRow, build_rows, format_value
 
 
 def _params(rows: list[SourceRow]) -> list[SourceRow]:
