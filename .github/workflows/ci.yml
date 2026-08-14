@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    # Windows is the development baseline: the suite runs clean here, while
+    # macOS needs real window activation for a handful of tests.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - name: Install locked dependencies
+        run: uv sync --locked
+      - name: Lint
+        run: uv run ruff check app tests scripts
+      - name: Format check
+        run: uv run ruff format --check app tests scripts
+      - name: Tests (headless)
+        run: uv run pytest
+        env:
+          QT_QPA_PLATFORM: offscreen
