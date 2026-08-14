@@ -87,8 +87,6 @@ ignore = [
     "DTZ",     # workspace timestamps are deliberately local wall-clock
     "RUF005",  # `[x] + rest` reads fine; the unpack rewrite adds nothing
     "PLR2004", # path/tuple arity checks (`len(path) == 2`) read better inline
-    "PLR0911", "PLR0912", "PLR0913", "PLR0915", "PLR0917",
-               # size limits: existing shapes; revisit when a function is touched
 ]
 # Deliberate typography, not typos: true minus/multiplication/en-dash in UI
 # strings, the fullwidth ＋ glyph on board cards, › breadcrumbs, en-space
@@ -109,4 +107,27 @@ allowed-confusables = ["−", "×", "–", "＋", "›", " "]
 ]
 # Qt's QAbstractItemModel API defaults `parent` to QModelIndex() by contract.
 "app/ui_qt/tree_model.py" = ["B008"]
-"app/ui_qt/cards/grid.py" = ["B008"]
+
+# Size-limit debt (PLR0911/12/13/15/17), quarantined per file: these functions
+# predate the limits. Shrink an entry when its file is reworked; never let a
+# new file join the list silently.
+"app/core/bpx_gateway.py" = ["PLR0911"]
+"app/core/command_service.py" = ["PLR0911", "PLR0912", "PLR0915"]
+"app/core/parameter_types.py" = ["PLR0911"]
+"app/ui_qt/add_parameter_popup.py" = ["PLR0911", "PLR0913", "PLR0915", "PLR0917"]
+"app/ui_qt/cards/csv_dialog.py" = ["PLR0913", "PLR0915"]
+"app/ui_qt/cards/database_examples_dialog.py" = ["PLR0913", "PLR0915", "PLR0917"]
+"app/ui_qt/cards/experiment.py" = ["PLR0915"]
+"app/ui_qt/cards/ghost_card.py" = ["PLR0913"]
+"app/ui_qt/cards/grid.py" = ["B008", "PLR0911", "PLR0913", "PLR0917"]
+"app/ui_qt/cards/parameter_card.py" = ["PLR0915"]
+"app/ui_qt/cards/reference_block.py" = ["PLR0913"]
+"app/ui_qt/cards/registry.py" = ["PLR0911"]
+"app/ui_qt/diagnostics_panel.py" = ["PLR0913", "PLR0917"]
+"app/ui_qt/group_box.py" = ["PLR0913"]
+"app/ui_qt/main_window.py" = ["PLR0911", "PLR0912"]
+"app/ui_qt/parameter_row.py" = ["PLR0911"]
+"app/ui_qt/source_page.py" = ["PLR0912", "PLR0913", "PLR0915", "PLR0917"]
+"app/ui_qt/workspace_panel.py" = ["PLR0913", "PLR0915", "PLR0917"]
+"scripts/generate_reference_library.py" = ["PLR0913", "PLR0917"]
+"tests/test_validation_page_layout.py" = ["PLR0913", "PLR0917"]
