@@ -42,6 +42,26 @@ def _ink_bbox(svg: str, size: int = _ICON_SIZE) -> tuple[int, int, int, int]:
 @pytest.mark.parametrize(
     ("name", "svg"), [("WORKSPACE", icons.WORKSPACE), ("EDITOR", icons.EDITOR), ("DIAGNOSTICS", icons.DIAGNOSTICS)]
 )
+def test_hidpi_render_matches_dpr1_geometry(name, svg, monkeypatch):
+    """At devicePixelRatio 2 the glyph must be the DPR-1 rendering scaled, not
+    an oversized paint clipped to the canvas (the macOS/Retina regression: an
+    implicit-viewport ``QSvgRenderer.render`` doubled the glyph and cropped it
+    to its top-left quadrant)."""
+    base = _ink_bbox(svg)
+
+    monkeypatch.setattr(icons, "_device_pixel_ratio", lambda: 2.0)
+    x_min, x_max, y_min, y_max = _ink_bbox(svg)
+
+    for got, expected in zip((x_min, x_max, y_min, y_max), (v * 2 for v in base), strict=True):
+        assert abs(got - expected) <= 2, (
+            f"{name}: DPR-2 ink bbox ({x_min}, {x_max}, {y_min}, {y_max}) is not "
+            f"the DPR-1 bbox {base} scaled by 2 -- glyph likely oversized/clipped"
+        )
+
+
+@pytest.mark.parametrize(
+    ("name", "svg"), [("WORKSPACE", icons.WORKSPACE), ("EDITOR", icons.EDITOR), ("DIAGNOSTICS", icons.DIAGNOSTICS)]
+)
 def test_icon_ink_is_optically_centred_and_sized(name, svg):
     x_min, x_max, y_min, y_max = _ink_bbox(svg)
     width = x_max - x_min
