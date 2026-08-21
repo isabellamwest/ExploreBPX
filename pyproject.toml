@@ -102,6 +102,8 @@ allowed-confusables = ["−", "×", "–", "＋", "›", " "]
 "scripts/**" = ["T201"] # CLI tools print their output
 # The probe is a subprocess that reports its findings via stdout.
 "tests/shortcut_dispatch_probe.py" = ["T201"]
+# The screenshot regenerator narrates each capture when run with -s.
+"tests/readme_shots.py" = ["T201"]
 "app/ui_qt/**" = [
     "N802",    # Qt override methods are camelCase
 ]
