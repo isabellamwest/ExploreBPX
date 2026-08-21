@@ -39,7 +39,9 @@ class WrappedHelp(QLabel):
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
-        self.setMinimumHeight(self.heightForWidth(self.width()))
+        # heightForWidth is -1 ("no preference") for an empty label; Qt
+        # rejects negative minimums with a console warning, so clamp.
+        self.setMinimumHeight(max(0, self.heightForWidth(self.width())))
 
 
 class GridHint(QWidget):
