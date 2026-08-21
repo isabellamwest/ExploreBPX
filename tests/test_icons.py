@@ -52,7 +52,7 @@ def test_hidpi_render_matches_dpr1_geometry(name, svg, monkeypatch):
     monkeypatch.setattr(icons, "_device_pixel_ratio", lambda: 2.0)
     x_min, x_max, y_min, y_max = _ink_bbox(svg)
 
-    for got, expected in zip((x_min, x_max, y_min, y_max), (v * 2 for v in base)):
+    for got, expected in zip((x_min, x_max, y_min, y_max), (v * 2 for v in base), strict=True):
         assert abs(got - expected) <= 2, (
             f"{name}: DPR-2 ink bbox ({x_min}, {x_max}, {y_min}, {y_max}) is not "
             f"the DPR-1 bbox {base} scaled by 2 -- glyph likely oversized/clipped"
