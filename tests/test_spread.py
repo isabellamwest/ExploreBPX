@@ -9,7 +9,7 @@ import math
 
 import pytest
 
-from app.core.spread import MAX_DIVISIONS, MIN_DIVISIONS, build_spread, numeric
+from core.spread import MAX_DIVISIONS, MIN_DIVISIONS, build_spread, numeric
 
 # ── hidden / visible ────────────────────────────────────────────────────────
 
