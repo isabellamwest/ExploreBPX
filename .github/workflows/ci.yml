@@ -22,6 +22,18 @@ jobs:
       - name: Format check
         run: uv run ruff format --check app tests scripts
       - name: Tests (headless)
-        run: uv run pytest
+        # On failure, surface the tail of the pytest output as a check-run
+        # annotation: annotations are readable through the public API, while
+        # the raw job log needs an authenticated session.
+        shell: bash
+        run: |
+          set +e
+          uv run pytest -q 2>&1 | tee pytest_out.txt
+          code=${PIPESTATUS[0]}
+          if [ "$code" -ne 0 ]; then
+            msg=$(python -c "import pathlib; s = pathlib.Path('pytest_out.txt').read_text(errors='replace')[-3000:]; print(s.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A'))")
+            echo "::error title=pytest tail (exit $code)::$msg"
+          fi
+          exit "$code"
         env:
           QT_QPA_PLATFORM: offscreen
