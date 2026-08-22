@@ -27,7 +27,10 @@ def test_empty_help_never_requests_a_negative_minimum(qtbot, qtlog):
     label.resize(240, 30)
     qtbot.wait(10)
 
-    assert label.minimumHeight() == 0
+    # The contract is non-negative, not exactly zero: a platform style may
+    # give even an empty label a positive wrapped height. The regression
+    # itself is the rejected setMinimumHeight(-1) and its Qt warning.
+    assert label.minimumHeight() >= 0
     assert not [r for r in qtlog.records if "Negative sizes" in r.message]
 
 
